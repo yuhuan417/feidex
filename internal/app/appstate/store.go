@@ -3,11 +3,10 @@
 package appstate
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/sessionctx"
-	"feidex/internal/state"
 )
 
 // Store provides frontend-scoped access to state.Store.
@@ -23,12 +22,12 @@ func New(a appcore.AppConfig) *Store {
 	return &Store{AppStateFacade: *appcore.NewAppState(a)}
 }
 
-func cloneSession(sess *state.Session) *state.Session {
+func cloneSession(sess *conversation.Session) *conversation.Session {
 	return appcore.StateCloneSession(sess)
 }
 
 // Session returns a session by key.
-func (s *Store) Session(key string) *state.Session {
+func (s *Store) Session(key string) *conversation.Session {
 	if s == nil || s.Store == nil {
 		return nil
 	}
@@ -37,7 +36,7 @@ func (s *Store) Session(key string) *state.Session {
 }
 
 // Sessions returns all sessions.
-func (s *Store) Sessions() []*state.Session {
+func (s *Store) Sessions() []*conversation.Session {
 	if s == nil || s.Store == nil {
 		return nil
 	}
@@ -45,7 +44,7 @@ func (s *Store) Sessions() []*state.Session {
 }
 
 // SaveSession persists a session snapshot.
-func (s *Store) SaveSession(sess *state.Session) error {
+func (s *Store) SaveSession(sess *conversation.Session) error {
 	if s == nil || s.Store == nil || sess == nil {
 		return nil
 	}
@@ -55,23 +54,23 @@ func (s *Store) SaveSession(sess *state.Session) error {
 	}
 	cp.Key = s.canonicalSessionKey(cp.Key)
 	if s.Backend != "" {
-		sessionctx.StoreBackendThread(cp, s.Backend)
+		conversation.StoreBackendThread(cp, s.Backend)
 	}
 	return s.Store.UpsertSession(cp)
 }
 
 // UpdateSession mutates and persists a session.
-func (s *Store) UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error) {
+func (s *Store) UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
 	if s == nil || s.Store == nil {
 		return nil, nil
 	}
-	return s.Store.UpdateSession(s.resolveSessionKey(key), func(sess *state.Session) {
+	return s.Store.UpdateSession(s.resolveSessionKey(key), func(sess *conversation.Session) {
 		if mutate != nil {
 			mutate(sess)
 		}
 		sess.Key = s.canonicalSessionKey(sess.Key)
 		if s.Backend != "" {
-			sessionctx.StoreBackendThread(sess, s.Backend)
+			conversation.StoreBackendThread(sess, s.Backend)
 		}
 	})
 }
@@ -120,7 +119,7 @@ func (s *Store) resolveSessionKey(key string) string {
 	return firstNonEmpty(canonical, key)
 }
 
-func (s *Store) promoteSessionAlias(sess *state.Session, canonical string) string {
+func (s *Store) promoteSessionAlias(sess *conversation.Session, canonical string) string {
 	canonical = strings.TrimSpace(canonical)
 	if sess == nil || canonical == "" || s == nil || s.Store == nil {
 		return canonical

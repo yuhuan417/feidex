@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"time"
@@ -12,7 +13,7 @@ import (
 	"feidex/internal/state"
 )
 
-func forkClaudeActiveConversation(a *App, sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+func forkClaudeActiveConversation(a *App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error) {
 	if a == nil || a.claude == nil {
 		return "", fmt.Errorf("claude backend not initialized")
 	}
@@ -34,7 +35,7 @@ func forkClaudeActiveConversation(a *App, sessionKey string, sess *state.Session
 	return forkedID, nil
 }
 
-func forkCodexActiveConversation(a *App, sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+func forkCodexActiveConversation(a *App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error) {
 	client, err := requireCodexClient(a)
 	if err != nil {
 		return "", err
@@ -70,21 +71,21 @@ func forkCodexActiveConversation(a *App, sessionKey string, sess *state.Session,
 	return forkedID, nil
 }
 
-func persistForkedConversation(a *App, sessionKey string, sess *state.Session, workspaceID, threadID, name, preview string, resetThreadSettings bool) error {
+func persistForkedConversation(a *App, sessionKey string, sess *conversation.Session, workspaceID, threadID, name, preview string, resetThreadSettings bool) error {
 	if sess == nil {
 		return fmt.Errorf("session not found")
 	}
 	if resetThreadSettings {
-		clearSessionThreadContext(sess)
+		conversation.ClearThreadContext(sess)
 	}
-	setSessionThreadContext(sess, workspaceID, threadID, name, preview)
+	conversation.SetThreadContext(sess, workspaceID, threadID, name, preview)
 	sess.ActiveThreadCollaborationMode = nil
 	if strings.TrimSpace(threadID) != "" {
 		markSessionThreadLive(a, sessionKey, threadID)
 	} else {
 		clearSessionLiveThread(a, sessionKey)
 	}
-	sessionResetActiveOperations(sess)
+	conversation.ResetActiveOperations(sess)
 	sess.Status = state.SessionStatusIdle.String()
 	sess.Queue = nil
 	sess.StagedImages = nil

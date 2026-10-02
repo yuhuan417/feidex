@@ -1,6 +1,7 @@
 package appcore
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/state"
@@ -35,14 +36,14 @@ func (s *AppStateFacade) MatchesFrontend(frontendID string) bool {
 }
 
 // StateCloneSession creates a deep copy of a session.
-func StateCloneSession(sess *state.Session) *state.Session {
+func StateCloneSession(sess *conversation.Session) *conversation.Session {
 	if sess == nil {
 		return nil
 	}
 	cp := *sess
 	cp.Queue = append([]string(nil), sess.Queue...)
-	cp.ActiveOperations = append([]state.SessionActiveOperation(nil), sess.ActiveOperations...)
-	cp.StagedImages = append([]state.SessionStagedImage(nil), sess.StagedImages...)
+	cp.ActiveOperations = append([]conversation.SessionActiveOperation(nil), sess.ActiveOperations...)
+	cp.StagedImages = append([]conversation.SessionStagedImage(nil), sess.StagedImages...)
 	if sess.ActiveThreadCollaborationMode != nil {
 		mode := *sess.ActiveThreadCollaborationMode
 		if sess.ActiveThreadCollaborationMode.DeveloperInstructions != nil {
@@ -52,7 +53,7 @@ func StateCloneSession(sess *state.Session) *state.Session {
 		cp.ActiveThreadCollaborationMode = &mode
 	}
 	if len(sess.BackendThreads) > 0 {
-		cp.BackendThreads = make(map[string]state.SessionBackendThread, len(sess.BackendThreads))
+		cp.BackendThreads = make(map[string]conversation.SessionBackendThread, len(sess.BackendThreads))
 		for key, value := range sess.BackendThreads {
 			if value.CollaborationMode != nil {
 				mode := *value.CollaborationMode

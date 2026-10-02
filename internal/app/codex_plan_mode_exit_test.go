@@ -3,10 +3,10 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -307,12 +307,12 @@ func TestCodexPlanModeExitImplementCurrentFollowupReplySteersActiveTurn(t *testi
 func TestClearCodexPlanModeForSessionStoresDefaultCollaborationMode(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.State().SaveSession(&state.Session{
+	if err := a.State().SaveSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",
@@ -357,12 +357,12 @@ func TestClearCodexPlanModeForSessionRestoresConfiguredDefaultEffort(t *testing.
 	a.cfg.Codex.Model = "gpt-5.4"
 	a.cfg.Codex.ReasoningEffort = "xhigh"
 	sessionKey := "sess-1"
-	if err := a.State().SaveSession(&state.Session{
+	if err := a.State().SaveSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.5",
 			ReasoningEffort: "xhigh",
@@ -391,17 +391,17 @@ func TestClearCodexPlanModeForSessionRestoresConfiguredDefaultEffort(t *testing.
 func seedPlanExitActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *state.Submission {
 	t.Helper()
 	sub := seedActiveSubmission(t, a, sessionKey, threadID, turnID)
-	if _, err := a.State().UpdateSession(sessionKey, func(sess *state.Session) {
+	if _, err := a.State().UpdateSession(sessionKey, func(sess *conversation.Session) {
 		if sess == nil {
 			return
 		}
 		sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID
-		sess.ActiveThreadCollaborationMode = &state.SessionCollaborationMode{
+		sess.ActiveThreadCollaborationMode = &conversation.SessionCollaborationMode{
 			Mode:  "plan",
 			Model: "gpt-5.4",
 		}
-		sess.ActiveOperations = []state.SessionActiveOperation{{
-			Kind:         sessionctx.OpKindSubmission,
+		sess.ActiveOperations = []conversation.SessionActiveOperation{{
+			Kind:         conversation.OpKindSubmission,
 			SubmissionID: sub.ID,
 			ThreadID:     threadID,
 			TurnID:       turnID,

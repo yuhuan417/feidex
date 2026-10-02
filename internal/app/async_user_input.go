@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -39,7 +40,7 @@ func sendAsyncUserInputCard(a *App, sub *state.Submission, payload pendingforms.
 	return a.State().Pending(requestID).FeishuMsgID
 }
 
-func asyncUserInputSession(a *App, pending *state.PendingRequest) (*state.Session, error) {
+func asyncUserInputSession(a *App, pending *state.PendingRequest) (*conversation.Session, error) {
 	sess := a.State().Session(pending.SessionKey)
 	if sess == nil || sess.ActiveThreadID != pending.ThreadID || configuredBackend(a) != pending.Backend {
 		return nil, fmt.Errorf("会话已切换，请在当前会话中回答")

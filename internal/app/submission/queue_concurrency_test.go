@@ -3,6 +3,7 @@ package submission
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"sync"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
 		t.Fatalf("Open(store) error = %v", err)
 	}
 	sessionKey := "sess-1"
-	if err := store.UpsertSession(&state.Session{
+	if err := store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: "default",
 		Status:      state.SessionStatusQueued.String(),
@@ -164,7 +165,7 @@ func (a *concurrentStartTestApp) SubmissionQueueInflightAllowsAdditional(QueueIn
 	return false
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueResolveWorkspaceID(_ *feishu.InboundMessage, _ *state.Session, _ bool) string {
+func (a *concurrentStartTestApp) SubmissionQueueResolveWorkspaceID(_ *feishu.InboundMessage, _ *conversation.Session, _ bool) string {
 	return "default"
 }
 
@@ -190,7 +191,8 @@ func (a *concurrentStartTestApp) SubmissionQueueFinishStart(sessionKey string) b
 	return a.guard.finish(sessionKey)
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueLogSessionState(string, string, *state.Session) {}
+func (a *concurrentStartTestApp) SubmissionQueueLogSessionState(string, string, *conversation.Session) {
+}
 
 func (a *concurrentStartTestApp) SubmissionQueueMarkSubmissionQueuedReactions(*state.Submission) {}
 
@@ -211,7 +213,7 @@ func (a *concurrentStartTestApp) SubmissionQueueStartSubmissionReview(context.Co
 	return "", nil
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueBuildThreadStartParams(*config.Workspace, *state.Session, string) codexrpc.ThreadStartParams {
+func (a *concurrentStartTestApp) SubmissionQueueBuildThreadStartParams(*config.Workspace, *conversation.Session, string) codexrpc.ThreadStartParams {
 	return codexrpc.ThreadStartParams{}
 }
 
@@ -235,7 +237,7 @@ type concurrentStartTestState struct {
 	barrierReady      chan struct{}
 }
 
-func (s *concurrentStartTestState) Session(key string) *state.Session {
+func (s *concurrentStartTestState) Session(key string) *conversation.Session {
 	s.mu.Lock()
 	if key == s.barrierSessionKey && s.sessionCalls < 2 {
 		s.sessionCalls++
@@ -257,7 +259,7 @@ func (s *concurrentStartTestState) Submission(id string) *state.Submission {
 	return s.store.GetSubmission(id)
 }
 
-func (s *concurrentStartTestState) SaveSession(sess *state.Session) error {
+func (s *concurrentStartTestState) SaveSession(sess *conversation.Session) error {
 	return s.store.UpsertSession(sess)
 }
 
@@ -288,7 +290,7 @@ func (s *concurrentStartTestState) FinalizeSubmission(id, status string) error {
 	})
 }
 
-func (s *concurrentStartTestState) UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error) {
+func (s *concurrentStartTestState) UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
 	return s.store.UpdateSession(key, mutate)
 }
 
@@ -304,7 +306,7 @@ func (s *concurrentStartTestState) UpdateSubmission(id string, mutate func(*stat
 	return s.store.UpdateSubmission(id, mutate)
 }
 
-func (s *concurrentStartTestState) Sessions() []*state.Session {
+func (s *concurrentStartTestState) Sessions() []*conversation.Session {
 	return s.store.AllSessions()
 }
 
@@ -315,7 +317,7 @@ type concurrentStartBackend struct {
 	release chan struct{}
 }
 
-func (b *concurrentStartBackend) StartQueuedSubmission(string, *state.Session, *state.Submission, *config.Workspace, bool) error {
+func (b *concurrentStartBackend) StartQueuedSubmission(string, *conversation.Session, *state.Submission, *config.Workspace, bool) error {
 	b.mu.Lock()
 	b.count++
 	b.mu.Unlock()
@@ -393,7 +395,7 @@ type concurrentStartNoopPendingQueue struct{}
 func (concurrentStartNoopPendingQueue) PendingInputSessionKey(*feishu.InboundMessage) string {
 	return ""
 }
-func (concurrentStartNoopPendingQueue) CollectPendingStagedImages(string, string) []state.SessionStagedImage {
+func (concurrentStartNoopPendingQueue) CollectPendingStagedImages(string, string) []conversation.SessionStagedImage {
 	return nil
 }
 func (concurrentStartNoopPendingQueue) ClearPendingStagedImages(string, string) error {
@@ -429,7 +431,7 @@ func (concurrentStartNoopTurnStream) DeleteTurnStream(string)                   
 
 type concurrentStartNoopAutoRetry struct{}
 
-func (concurrentStartNoopAutoRetry) ObserveAutoRetryTerminal(string, string, string, *state.Session, *state.Submission, string, string) bool {
+func (concurrentStartNoopAutoRetry) ObserveAutoRetryTerminal(string, string, string, *conversation.Session, *state.Submission, string, string) bool {
 	return false
 }
 

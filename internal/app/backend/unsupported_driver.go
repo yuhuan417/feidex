@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
@@ -8,7 +9,6 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -88,7 +88,7 @@ func (d unsupportedConversationDriver) WorkspaceSwitchBindingNotice(*appworkspac
 	return "。当前 frontend 还没有设置 backend，请先选择。"
 }
 
-func (d unsupportedConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+func (d unsupportedConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
 	return nil, unsupportedBackendError(d.rawKind)
 }
 
@@ -96,7 +96,7 @@ func (d unsupportedConversationDriver) ListWorkspaceThreads(ops WorkspaceThreadO
 	return nil, unsupportedBackendError(d.rawKind)
 }
 
-func (d unsupportedConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+func (d unsupportedConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
 	return nil, unsupportedBackendError(d.rawKind)
 }
 
@@ -112,7 +112,7 @@ func (d unsupportedPermissionDriver) WorkspaceConfigButtons(sessionKey string) [
 	return nil
 }
 
-func (d unsupportedPermissionDriver) AppendStatusLines(app PermissionApp, lines []string, sess *state.Session, ws *config.Workspace) []string {
+func (d unsupportedPermissionDriver) AppendStatusLines(app PermissionApp, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
 	return lines
 }
 

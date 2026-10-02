@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,14 +13,13 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -59,7 +59,7 @@ func TestCommandThreadDirectResume(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -116,7 +116,7 @@ func TestCommandWorkspaceDirectSandboxAndPolicy(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 	}); err != nil {
@@ -160,10 +160,10 @@ func TestCommandWorkspaceDeleteRemovesConfigOnly(t *testing.T) {
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
 		t.Fatalf("UpsertSession(current) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-other",
 		WorkspaceID:             "alt",
 		ActiveThreadID:          "thread-alt",
@@ -199,7 +199,7 @@ func TestCommandWorkspaceDeleteRejectsCurrentWorkspace(t *testing.T) {
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
@@ -429,7 +429,7 @@ func TestCommandHistoryDirectDetail(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "thread-1",

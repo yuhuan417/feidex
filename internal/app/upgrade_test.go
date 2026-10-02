@@ -7,6 +7,7 @@ import (
 	appruntime "feidex/internal/app/runtime"
 	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/daemon"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/release"
 
 	"context"
@@ -642,7 +643,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceRecoversFrontendThreadBindings(t *te
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-refresh-thread-recovery"
 	workspaceID := a.cfg.Workspaces[0].ID
-	if err := a.store.UpsertSession(&appstate.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             workspaceID,
 		ActiveThreadID:          "thread-old",

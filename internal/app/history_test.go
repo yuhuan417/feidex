@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"testing"
@@ -10,13 +11,12 @@ import (
 	appdelivery "feidex/internal/app/delivery"
 	apphistorycmd "feidex/internal/app/historycmd"
 	"feidex/internal/codexrpc"
-	"feidex/internal/state"
 )
 
 func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
@@ -93,7 +93,7 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 func TestHistoryPaginationUsesConfiguredPageSize(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
@@ -178,7 +178,7 @@ func TestHistoryPaginationUsesConfiguredPageSize(t *testing.T) {
 func TestHistoryCardWithConfiguredPageSizeFitsFeishuCardLimits(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",

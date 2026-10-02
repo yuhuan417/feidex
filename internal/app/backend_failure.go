@@ -2,6 +2,7 @@ package app
 
 import (
 	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"encoding/json"
@@ -104,7 +105,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 		return appbackend.NewBackendFailureService(appbackend.FailureDeps{
 			App: a,
 			State: appbackend.FailureStateDeps{
-				AllSessions: func() []*state.Session {
+				AllSessions: func() []*conversation.Session {
 					return a.State().Sessions()
 				},
 				GetSubmission: func(id string) *state.Submission {
@@ -119,7 +120,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 				FinalizeSubmission: func(id, status string) error {
 					return a.State().FinalizeSubmission(id, status)
 				},
-				UpdateSession: func(key string, mutate func(*state.Session)) (*state.Session, error) {
+				UpdateSession: func(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
 					return a.State().UpdateSession(key, mutate)
 				},
 			},
@@ -151,7 +152,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 				},
 			},
 			Cards: appbackend.FailureCardDeps{
-				ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
+				ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
 					return appautoretry.NewService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
 				},
 				ReplaceTurnEventCard: func(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string) {

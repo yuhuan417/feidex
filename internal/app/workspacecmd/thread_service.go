@@ -2,6 +2,7 @@ package workspacecmd
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -20,7 +21,7 @@ import (
 
 // EnsureWorkspaceThreadBinding dispatches to the Claude or Codex
 // implementation based on the configured backend.
-func (s *ThreadService) EnsureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s *ThreadService) EnsureWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	return appbackend.DriverForApp(s.App).Conversation().EnsureWorkspaceThreadBinding(s, sessionKey, sess, ws)
 }
 
@@ -93,7 +94,7 @@ func (s *ThreadService) ListCodexWorkspaceThreads(sessionKey string, ws *config.
 
 // EnsureClaudeWorkspaceThreadBinding ensures a Claude thread binding for
 // the workspace, resuming an existing session if possible.
-func (s *ThreadService) EnsureClaudeWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s *ThreadService) EnsureClaudeWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	if sess == nil {
 		return nil, fmt.Errorf("session not initialized")
 	}
@@ -137,7 +138,7 @@ func (s *ThreadService) EnsureClaudeWorkspaceThreadBinding(sessionKey string, se
 
 // EnsureCodexWorkspaceThreadBinding ensures a Codex thread binding for
 // the workspace, resuming an existing thread if possible.
-func (s *ThreadService) EnsureCodexWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s *ThreadService) EnsureCodexWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	if sess == nil {
 		return nil, fmt.Errorf("session not initialized")
 	}
@@ -171,7 +172,7 @@ func (s *ThreadService) EnsureCodexWorkspaceThreadBinding(sessionKey string, ses
 }
 
 // ResumeCodexWorkspaceThread resumes an existing Codex thread.
-func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace, entry codexrpc.ThreadListEntry) (*ThreadBinding, error) {
+func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, entry codexrpc.ThreadListEntry) (*ThreadBinding, error) {
 	client, err := s.RequireCodexClient()
 	if err != nil {
 		return nil, err
@@ -221,12 +222,12 @@ func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *stat
 }
 
 // StartWorkspaceThread dispatches to the Claude or Codex implementation.
-func (s *ThreadService) StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s *ThreadService) StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	return appbackend.DriverForApp(s.App).Conversation().StartWorkspaceThread(s, sessionKey, sess, ws)
 }
 
 // StartClaudeWorkspaceThread starts a new Claude session for a workspace.
-func (s *ThreadService) StartClaudeWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s *ThreadService) StartClaudeWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	claude, err := s.RequireClaudeCore()
 	if err != nil {
 		return nil, err
@@ -256,7 +257,7 @@ func (s *ThreadService) StartClaudeWorkspaceThread(sessionKey string, sess *stat
 }
 
 // StartCodexWorkspaceThread starts a new Codex thread for a workspace.
-func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	client, err := s.RequireCodexClient()
 	if err != nil {
 		return nil, err
@@ -289,7 +290,7 @@ func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *state
 	}, nil
 }
 
-func (s *ThreadService) effectiveCodexModel(sess *state.Session, ws *config.Workspace) string {
+func (s *ThreadService) effectiveCodexModel(sess *conversation.Session, ws *config.Workspace) string {
 	binding := s.agentBindingForSession(sess)
 	profileModel := ""
 	if provider, ok := s.App.(interface{ BotProfile() *state.BotProfile }); ok {
@@ -305,7 +306,7 @@ func (s *ThreadService) effectiveCodexModel(sess *state.Session, ws *config.Work
 	)
 }
 
-func (s *ThreadService) effectiveClaudeModel(sess *state.Session, ws *config.Workspace) string {
+func (s *ThreadService) effectiveClaudeModel(sess *conversation.Session, ws *config.Workspace) string {
 	binding := s.agentBindingForSession(sess)
 	profileModel := ""
 	if provider, ok := s.App.(interface{ BotProfile() *state.BotProfile }); ok {
@@ -321,7 +322,7 @@ func (s *ThreadService) effectiveClaudeModel(sess *state.Session, ws *config.Wor
 	)
 }
 
-func (s *ThreadService) agentBindingForSession(sess *state.Session) *state.AgentBinding {
+func (s *ThreadService) agentBindingForSession(sess *conversation.Session) *state.AgentBinding {
 	if s == nil || s.App == nil || s.App.Store() == nil || sess == nil {
 		return nil
 	}
@@ -341,7 +342,7 @@ func (s *ThreadService) agentBindingForSession(sess *state.Session) *state.Agent
 	return nil
 }
 
-func sessionModelOverride(sess *state.Session) string {
+func sessionModelOverride(sess *conversation.Session) string {
 	if sess == nil {
 		return ""
 	}

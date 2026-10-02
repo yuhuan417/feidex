@@ -2,6 +2,7 @@ package app
 
 import (
 	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/domain/conversation"
 
 	"context"
 
@@ -10,7 +11,6 @@ import (
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -26,13 +26,13 @@ type threadMenuConversationBackendAdapter struct {
 func (a threadMenuConversationBackendAdapter) RenderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
 	return a.backend.RenderThreadsCard(sessionKey, includeAll)
 }
-func (a threadMenuConversationBackendAdapter) InterruptActiveTurn(ctx context.Context, sessionKey string, sess *state.Session) error {
+func (a threadMenuConversationBackendAdapter) InterruptActiveTurn(ctx context.Context, sessionKey string, sess *conversation.Session) error {
 	return a.backend.InterruptActiveTurn(ctx, sessionKey, sess)
 }
 func (a threadMenuConversationBackendAdapter) ContinueActiveTurn(sessionKey string, text string) error {
 	return a.backend.ContinueActiveTurn(sessionKey, text)
 }
-func (a threadMenuConversationBackendAdapter) ResumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection appthreadmenu.ThreadResumeSelection) (*appthreadmenu.ThreadBinding, error) {
+func (a threadMenuConversationBackendAdapter) ResumeSelectedThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, selection appthreadmenu.ThreadResumeSelection) (*appthreadmenu.ThreadBinding, error) {
 	return a.backend.ResumeSelectedThread(sessionKey, sess, ws, appconvbackend.ThreadResumeSelection{
 		ThreadID: selection.ThreadID,
 		Name:     selection.Name,
@@ -49,14 +49,14 @@ type threadMenuBackendRuntimeAdapter struct {
 	runtime backendRuntimeFacade
 }
 
-func (a threadMenuBackendRuntimeAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session {
+func (a threadMenuBackendRuntimeAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a.runtime == nil {
 		return sess
 	}
 	return a.runtime.reconcileCompletedTurnFromFinalOutput(a.app, sessionKey, sess)
 }
 
-func (a threadMenuBackendRuntimeAdapter) ClearActiveOperationsAfterInterrupt(sessionKey string, sess *state.Session) *state.Session {
+func (a threadMenuBackendRuntimeAdapter) ClearActiveOperationsAfterInterrupt(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a.runtime == nil {
 		return sess
 	}
@@ -156,7 +156,7 @@ type threadMenuWorkspaceConfigAdapter struct {
 	app *App
 }
 
-func (a threadMenuWorkspaceConfigAdapter) CurrentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
+func (a threadMenuWorkspaceConfigAdapter) CurrentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error) {
 	return currentThreadForMessage(a.app, msg)
 }
 

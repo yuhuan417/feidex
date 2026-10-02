@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"sync"
 	"testing"
@@ -234,7 +235,7 @@ func seedActiveSubmissionForInboundMessage(t *testing.T, a *App, msg *feishu.Inb
 	t.Helper()
 
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     threadID,

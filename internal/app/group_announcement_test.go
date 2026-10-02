@@ -2,6 +2,7 @@ package app
 
 import (
 	appfeishuwrap "feidex/internal/app/feishuwrap"
+	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
 
 	"context"
@@ -60,7 +61,7 @@ func seedGroupAnnouncementBinding(t *testing.T, a *App, chatID string) {
 func seedGroupAnnouncementSession(t *testing.T, a *App, chatID, threadID string) {
 	t.Helper()
 	key := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: chatID})
-	if err := a.State().SaveSession(&state.Session{
+	if err := a.State().SaveSession(&conversation.Session{
 		Key:            key,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: threadID,
@@ -415,7 +416,7 @@ func TestKnownGroupAnnouncementChatIDsDoNotTreatUnknownCanonicalSessionAsGroup(t
 	store := newGroupAnnouncementStore(t)
 	ff := &fakeFeishuClient{botOpenID: "bot-open"}
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
-	if err := a.State().SaveSession(&state.Session{
+	if err := a.State().SaveSession(&conversation.Session{
 		Key:            "feishu:frontend:bot-a:chat:chat-p2p",
 		ChatID:         "chat-p2p",
 		ChatType:       "p2p",
@@ -424,7 +425,7 @@ func TestKnownGroupAnnouncementChatIDsDoNotTreatUnknownCanonicalSessionAsGroup(t
 	}); err != nil {
 		t.Fatalf("SaveSession(p2p) error = %v", err)
 	}
-	if err := a.State().SaveSession(&state.Session{
+	if err := a.State().SaveSession(&conversation.Session{
 		Key:            "feishu:frontend:bot-a:chat:chat-unknown",
 		ChatID:         "chat-unknown",
 		ActiveThreadID: "thread-unknown",

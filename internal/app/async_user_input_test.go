@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
@@ -23,7 +24,7 @@ func seedAsyncUserInput(t *testing.T, a *App) (*state.Submission, *state.Pending
 	t.Helper()
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey, sub := seedActiveSubmissionForInboundMessage(t, a, msg, "thread-1", "turn-1")
-	_, err := a.State().UpdateSession(sessionKey, func(s *state.Session) { s.ActiveThreadWorkspaceID = sub.WorkspaceID })
+	_, err := a.State().UpdateSession(sessionKey, func(s *conversation.Session) { s.ActiveThreadWorkspaceID = sub.WorkspaceID })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +219,7 @@ func TestAsyncUserInputRejectsWrongOwnerAndSwitchedThread(t *testing.T) {
 	if resp.Toast.Type != "warning" {
 		t.Fatal("another user could answer")
 	}
-	_, _ = a.State().UpdateSession(sub.SessionKey, func(s *state.Session) { s.ActiveThreadID = "thread-other" })
+	_, _ = a.State().UpdateSession(sub.SessionKey, func(s *conversation.Session) { s.ActiveThreadID = "thread-other" })
 	resp, _ = completeAsyncUserInput(a, asyncAnswerAction(pending), false)
 	if resp.Toast.Type != "warning" {
 		t.Fatal("answer crossed thread boundary")

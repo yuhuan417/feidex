@@ -2,13 +2,13 @@ package app
 
 import (
 	appbackend "feidex/internal/app/backend"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"log/slog"
 	"strings"
 
 	appconvbackend "feidex/internal/app/convbackend"
-	"feidex/internal/state"
 )
 
 type codexRuntimeFacade struct{}
@@ -39,14 +39,14 @@ func (codexRuntimeFacade) beginStartupRecoveryScope(a *App) func() {
 	return beginCodexAutoThreadRecoveryScope(a)
 }
 
-func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session {
+func (codexRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a == nil {
 		return sess
 	}
 	return reconcileCompletedCodexTurnFromFinalOutput(a, sessionKey, sess)
 }
 
-func (codexRuntimeFacade) clearActiveOperationsAfterInterrupt(_ *App, _ string, sess *state.Session) *state.Session {
+func (codexRuntimeFacade) clearActiveOperationsAfterInterrupt(_ *App, _ string, sess *conversation.Session) *conversation.Session {
 	// Codex handles interrupt lifecycle asynchronously via turn/completed
 	// notifications, so we don't clear active operations here.
 	return sess

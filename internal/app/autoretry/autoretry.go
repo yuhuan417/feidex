@@ -2,6 +2,7 @@
 package autoretry
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"sync"
@@ -110,7 +111,7 @@ func StateBlocksQueue(state *RetryState) bool {
 }
 
 // RefreshState updates a RetryState from session and submission data.
-func RefreshState(state *RetryState, sess *state.Session, sub *state.Submission, threadID string) {
+func RefreshState(state *RetryState, sess *conversation.Session, sub *state.Submission, threadID string) {
 	if state == nil {
 		return
 	}

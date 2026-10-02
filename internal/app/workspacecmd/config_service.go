@@ -3,6 +3,7 @@ package workspacecmd
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -85,7 +85,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 			Message:    msg,
 			Args:       args,
 			SessionKey: sessionKey,
-			CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace) {
+			CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *conversation.Session, *config.Workspace) {
 				return s.CurrentWorkspaceForMessage(msg)
 			},
 			ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
@@ -134,7 +134,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		}
 		sess := s.GetSession(sessionKey)
 		if sess == nil {
-			sess = &state.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
+			sess = &conversation.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 		}
 		if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
 			return fmt.Errorf("%s", reason)
@@ -176,7 +176,7 @@ func (s *ConfigService) ShowWorkspaceChooseMenu(msg *feishu.InboundMessage) erro
 }
 
 // CurrentWorkspaceForMessage returns the session key, session, and workspace for a message.
-func (s *ConfigService) CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
+func (s *ConfigService) CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace) {
 	sessionKey = appcore.MakeSessionKey(s.App, msg)
 	sess = s.GetSession(sessionKey)
 	workspaceID := selectedWorkspaceIDForMessage(s.App, msg, sess)

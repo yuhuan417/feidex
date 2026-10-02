@@ -2,12 +2,12 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
 	"time"
 
 	"feidex/internal/codexrpc"
-	"feidex/internal/state"
 )
 
 func isTerminalTurnStatus(status string) bool {
@@ -19,14 +19,14 @@ func isTerminalTurnStatus(status string) bool {
 	}
 }
 
-func reconcileCompletedCodexTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session {
+func reconcileCompletedCodexTurnFromFinalOutput(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a == nil || sess == nil || !newTurnStreamService(a).turnStreamSawFinal(strings.TrimSpace(sess.ActiveTurnID)) {
 		return sess
 	}
 	return reconcileCompletedCodexTurn(a, sessionKey, sess)
 }
 
-func reconcileCompletedCodexTurn(a *App, sessionKey string, sess *state.Session) *state.Session {
+func reconcileCompletedCodexTurn(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a == nil || sess == nil {
 		return sess
 	}
@@ -37,7 +37,7 @@ func reconcileCompletedCodexTurn(a *App, sessionKey string, sess *state.Session)
 	if client == nil {
 		return sess
 	}
-	if !sessionHasInFlightSubmission(sess) {
+	if !conversation.HasInFlightSubmission(sess) {
 		return sess
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)

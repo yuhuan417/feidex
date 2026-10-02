@@ -3,29 +3,29 @@ package app
 import (
 	"feidex/internal/app/appstate"
 	appcompact "feidex/internal/app/compact"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 type compactSessionStoreAdapter struct {
 	store *appstate.Store
 }
 
-func (a compactSessionStoreAdapter) GetSession(key string) *state.Session {
+func (a compactSessionStoreAdapter) GetSession(key string) *conversation.Session {
 	if a.store == nil {
 		return nil
 	}
 	return a.store.Session(key)
 }
 
-func (a compactSessionStoreAdapter) AllSessions() []*state.Session {
+func (a compactSessionStoreAdapter) AllSessions() []*conversation.Session {
 	if a.store == nil {
 		return nil
 	}
 	return a.store.Sessions()
 }
 
-func (a compactSessionStoreAdapter) SaveSession(sess *state.Session) error {
+func (a compactSessionStoreAdapter) SaveSession(sess *conversation.Session) error {
 	if a.store == nil {
 		return nil
 	}

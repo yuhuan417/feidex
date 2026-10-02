@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	appreview "feidex/internal/app/review"
 	appreviewcmd "feidex/internal/app/reviewcmd"
+	"feidex/internal/domain/conversation"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,7 +73,7 @@ func TestCommandReviewWithoutActiveThreadUsesGenericThreadStart(t *testing.T) {
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review-new", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		OwnerUserID: msg.UserID,
@@ -365,7 +366,7 @@ func initReviewGitRepoWithCommits(t *testing.T, dir string) (string, []string) {
 
 func mustUpsertReviewSession(t *testing.T, a *App, sessionKey, chatID, chatType, userID, threadID string) {
 	t.Helper()
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          threadID,

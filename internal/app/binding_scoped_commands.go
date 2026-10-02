@@ -2,6 +2,7 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"fmt"
@@ -94,7 +95,7 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 	if binding != nil {
 		bindingID = strings.TrimSpace(binding.ID)
 	}
-	var best *state.Session
+	var best *conversation.Session
 	for _, sess := range st.Sessions() {
 		if sess == nil || strings.TrimSpace(sess.Key) == "" || strings.TrimSpace(sess.ActiveThreadID) == "" {
 			continue

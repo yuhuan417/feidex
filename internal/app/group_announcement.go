@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"net"
@@ -580,7 +581,7 @@ func groupAnnouncementThreadID(a *App, chatID string) string {
 	if a == nil || strings.TrimSpace(chatID) == "" {
 		return ""
 	}
-	var best *state.Session
+	var best *conversation.Session
 	for _, sess := range a.State().Sessions() {
 		if !sessionMatchesGroupChat(a, sess, chatID) || strings.TrimSpace(sess.ActiveThreadID) == "" {
 			continue
@@ -644,7 +645,7 @@ func knownGroupAnnouncementChatIDs(a *App) []string {
 	return out
 }
 
-func sessionMatchesGroupChat(a *App, sess *state.Session, chatID string) bool {
+func sessionMatchesGroupChat(a *App, sess *conversation.Session, chatID string) bool {
 	chatID = strings.TrimSpace(chatID)
 	if a == nil || sess == nil || chatID == "" || !appcore.SessionBelongsToFrontend(a, sess.Key) {
 		return false

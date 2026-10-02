@@ -2,6 +2,7 @@ package submission
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"testing"
 	"time"
 
@@ -56,12 +57,12 @@ func TestPendingQueueServiceReactionWrappersAndDiscardSession(t *testing.T) {
 	app := newPendingQueueTestApp(t)
 	svc := NewPendingQueueService(app)
 
-	if err := app.store.UpsertSession(&state.Session{
+	if err := app.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: "default",
 		Status:      "queued",
 		Queue:       []string{"sub-1"},
-		StagedImages: []state.SessionStagedImage{
+		StagedImages: []conversation.SessionStagedImage{
 			{SourceMessageID: "img-1", CreatedAt: time.Now().Unix()},
 		},
 	}); err != nil {
@@ -100,7 +101,7 @@ func TestPendingQueueServiceDiscardPendingInputByMessageID(t *testing.T) {
 	svc := NewPendingQueueService(app)
 	sessionKey := "feishu:chat:chat"
 
-	if err := app.store.UpsertSession(&state.Session{
+	if err := app.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: "default",
 		ChatID:      "chat",
@@ -108,7 +109,7 @@ func TestPendingQueueServiceDiscardPendingInputByMessageID(t *testing.T) {
 		OwnerUserID: "user",
 		Status:      "queued",
 		Queue:       []string{"sub-1"},
-		StagedImages: []state.SessionStagedImage{
+		StagedImages: []conversation.SessionStagedImage{
 			{
 				SourceMessageID: "img-staged",
 				Name:            "image.png",
@@ -157,7 +158,7 @@ func TestDiscardQueuedSubmissionFromSessionSnapshotPreservesCurrentSessionState(
 	app := newPendingQueueTestApp(t)
 	svc := NewPendingQueueService(app)
 
-	if err := app.store.UpsertSession(&state.Session{
+	if err := app.store.UpsertSession(&conversation.Session{
 		Key:                "sess-1",
 		WorkspaceID:        "default",
 		ActiveThreadID:     "thread-1",
@@ -165,7 +166,7 @@ func TestDiscardQueuedSubmissionFromSessionSnapshotPreservesCurrentSessionState(
 		ActiveSubmissionID: "sub-running",
 		Status:             "queued",
 		Queue:              []string{"sub-queued"},
-		ActiveOperations: []state.SessionActiveOperation{
+		ActiveOperations: []conversation.SessionActiveOperation{
 			{
 				Kind:         "submission",
 				SubmissionID: "sub-running",
@@ -194,7 +195,7 @@ func TestDiscardQueuedSubmissionFromSessionSnapshotPreservesCurrentSessionState(
 		t.Fatalf("missing stale snapshot or queued submission: %+v / %+v", staleSnapshot, queuedSub)
 	}
 
-	if _, err := app.store.UpdateSession("sess-1", func(current *state.Session) {
+	if _, err := app.store.UpdateSession("sess-1", func(current *conversation.Session) {
 		current.ActiveOperations = nil
 		current.ActiveTurnID = ""
 		current.ActiveSubmissionID = ""
@@ -260,17 +261,17 @@ func (a *pendingQueueTestApp) PendingQueueRemoveReaction(_ context.Context, mess
 	return nil
 }
 
-func (a *pendingQueueTestApp) PendingQueueLogSessionState(_, _ string, _ *state.Session) {}
+func (a *pendingQueueTestApp) PendingQueueLogSessionState(_, _ string, _ *conversation.Session) {}
 
 type pendingQueueTestState struct {
 	store *state.Store
 }
 
-func (s pendingQueueTestState) Session(key string) *state.Session {
+func (s pendingQueueTestState) Session(key string) *conversation.Session {
 	return s.store.GetSession(key)
 }
 
-func (s pendingQueueTestState) Sessions() []*state.Session {
+func (s pendingQueueTestState) Sessions() []*conversation.Session {
 	return s.store.AllSessions()
 }
 
@@ -278,11 +279,11 @@ func (s pendingQueueTestState) Submission(id string) *state.Submission {
 	return s.store.GetSubmission(id)
 }
 
-func (s pendingQueueTestState) SaveSession(sess *state.Session) error {
+func (s pendingQueueTestState) SaveSession(sess *conversation.Session) error {
 	return s.store.UpsertSession(sess)
 }
 
-func (s pendingQueueTestState) UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error) {
+func (s pendingQueueTestState) UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
 	return s.store.UpdateSession(key, mutate)
 }
 

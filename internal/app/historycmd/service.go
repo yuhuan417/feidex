@@ -5,6 +5,7 @@ package historycmd
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strconv"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	appcards "feidex/internal/app/cards"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ const (
 // AppStateProvider narrows app state access to the session lookup used by
 // the history service.
 type AppStateProvider interface {
-	Session(key string) *state.Session
+	Session(key string) *conversation.Session
 }
 
 // ConversationBackendProvider narrows conversation backend access to the
@@ -78,7 +78,7 @@ type App interface {
 	// HistoryMenuCardBody formats a menu card body with breadcrumb navigation.
 	HistoryMenuCardBody(action, body string) string
 	// HistoryCurrentThreadLabel returns the display label for the active thread.
-	HistoryCurrentThreadLabel(sess *state.Session) string
+	HistoryCurrentThreadLabel(sess *conversation.Session) string
 }
 
 // ---------------------------------------------------------------------------
@@ -332,7 +332,7 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 
 // FetchCurrentThreadHistory fetches the current thread history from the Codex
 // backend. Returns the session, thread, turn summaries, and any error.
-func (s Service) FetchCurrentThreadHistory(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []apphistory.TurnSummary, error) {
+func (s Service) FetchCurrentThreadHistory(sessionKey string) (*conversation.Session, *codexrpc.ThreadReadThread, []apphistory.TurnSummary, error) {
 	store := s.app.Store()
 	if store == nil {
 		return nil, nil, nil, fmt.Errorf("store not initialized")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	appthreadmenu "feidex/internal/app/threadmenu"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
@@ -79,7 +80,7 @@ func TestGroupTopLevelCommandInterruptTargetsActiveChatAndClearsQueuedInputs(t *
 	a, ff, fc := newTestApp(t)
 	sessionKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-active", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-active", UserID: "user-1"})
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-active", "turn-active")
-	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
+	if _, err := a.store.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		sess.RootMessageID = "root-active"
 		sess.Status = "turn_in_progress"
 	}); err != nil {
@@ -98,7 +99,7 @@ func TestGroupTopLevelCommandInterruptTargetsActiveChatAndClearsQueuedInputs(t *
 	if err != nil {
 		t.Fatalf("CreateSubmission(queued) error = %v", err)
 	}
-	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
+	if _, err := a.store.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		sess.Queue = []string{queuedID}
 	}); err != nil {
 		t.Fatalf("UpdateSession(queue) error = %v", err)

@@ -6,6 +6,7 @@ package threadmenu
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,12 +15,10 @@ import (
 	appcore "feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 	appconvbackend "feidex/internal/app/convbackend"
-	appsessionctx "feidex/internal/app/sessionctx"
 	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -55,7 +54,7 @@ type App interface {
 	ThreadMenuBackendActions() BackendActionProvider
 
 	// SessionHasActiveWork reports whether the session has active work.
-	SessionHasActiveWork(sess *state.Session) bool
+	SessionHasActiveWork(sess *conversation.Session) bool
 	// CancelAutoRetry cancels auto-retry for a session.
 	CancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice string) bool
 	LockAutoRetryDispatch(sessionKey string) func()
@@ -84,9 +83,9 @@ type App interface {
 
 // AppStateProvider narrows app state access to the methods used by the service.
 type AppStateProvider interface {
-	Session(key string) *state.Session
-	Sessions() []*state.Session
-	SaveSession(sess *state.Session) error
+	Session(key string) *conversation.Session
+	Sessions() []*conversation.Session
+	SaveSession(sess *conversation.Session) error
 }
 
 type effectiveSessionKeyProvider interface {
@@ -97,21 +96,21 @@ type effectiveSessionKeyProvider interface {
 // methods used by the service.
 type ConversationBackendProvider interface {
 	RenderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error)
-	InterruptActiveTurn(ctx context.Context, sessionKey string, sess *state.Session) error
+	InterruptActiveTurn(ctx context.Context, sessionKey string, sess *conversation.Session) error
 	ContinueActiveTurn(sessionKey string, text string) error
-	ResumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error)
+	ResumeSelectedThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error)
 	ForkReplyMessage(forkedID string) string
 }
 
 // BackendRuntimeProvider narrows backend runtime access to the methods used by
 // the service.
 type BackendRuntimeProvider interface {
-	ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session
+	ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session
 	// ClearActiveOperationsAfterInterrupt clears stale active operations after
 	// an interrupt request. For backends where the interrupt response is
 	// asynchronous (e.g. Claude), this prevents the session from getting stuck
 	// in "queuing" state if the interrupt doesn't trigger a turn completion.
-	ClearActiveOperationsAfterInterrupt(sessionKey string, sess *state.Session) *state.Session
+	ClearActiveOperationsAfterInterrupt(sessionKey string, sess *conversation.Session) *conversation.Session
 }
 
 // PendingQueueProvider narrows pending queue access to the methods used by the
@@ -123,13 +122,13 @@ type PendingQueueProvider interface {
 // WorkspaceThreadProvider narrows workspace thread access to the methods used
 // by the service.
 type WorkspaceThreadProvider interface {
-	StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
+	StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
 }
 
 // WorkspaceConfigProvider narrows workspace config access to the methods used
 // by the service.
 type WorkspaceConfigProvider interface {
-	CurrentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error)
+	CurrentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error)
 }
 
 // BackendActionProvider narrows backend action access to the methods used by
@@ -231,8 +230,8 @@ func primaryConversationSummaryLabel(backend string) string {
 	return appbackend.DriverForKind(backend).Conversation().SummaryLabel()
 }
 
-func sessionHasInFlightSubmission(sess *state.Session) bool {
-	return appsessionctx.HasInFlightSubmission(sess)
+func sessionHasInFlightSubmission(sess *conversation.Session) bool {
+	return conversation.HasInFlightSubmission(sess)
 }
 
 // Service manages thread/session menu actions for a single app instance.
@@ -319,7 +318,7 @@ func appendUniqueSessionKey(keys []string, key string) []string {
 	return append(keys, key)
 }
 
-func sessionGroupChat(sessionKey string, sess *state.Session) (chatType, chatID string) {
+func sessionGroupChat(sessionKey string, sess *conversation.Session) (chatType, chatID string) {
 	_, chatType, chatID, _, _ = appcore.ParseSessionKey(sessionKey)
 	if chatType == "" && sess != nil {
 		chatType = strings.TrimSpace(sess.ChatType)
@@ -343,7 +342,7 @@ func (s *Service) discardInterruptSurfacePendingInputs(sessionKeys []string) int
 	return discarded
 }
 
-func (s *Service) interruptTargetSession(sessionKeys []string) (string, *state.Session) {
+func (s *Service) interruptTargetSession(sessionKeys []string) (string, *conversation.Session) {
 	if s == nil || s.app == nil {
 		return "", nil
 	}
@@ -352,7 +351,7 @@ func (s *Service) interruptTargetSession(sessionKeys []string) (string, *state.S
 		return "", nil
 	}
 	var bestKey string
-	var best *state.Session
+	var best *conversation.Session
 	for _, key := range sessionKeys {
 		sess := st.Session(key)
 		if !interruptSessionActive(sess) {
@@ -366,11 +365,11 @@ func (s *Service) interruptTargetSession(sessionKeys []string) (string, *state.S
 	return bestKey, best
 }
 
-func interruptSessionActive(sess *state.Session) bool {
+func interruptSessionActive(sess *conversation.Session) bool {
 	return sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveThreadID) != ""
 }
 
-func (s *Service) cancelInterruptSurfaceAutoRetry(sessionKeys []string, activeSessionKey string, activeSess *state.Session) bool {
+func (s *Service) cancelInterruptSurfaceAutoRetry(sessionKeys []string, activeSessionKey string, activeSess *conversation.Session) bool {
 	if s == nil || s.app == nil {
 		return false
 	}
@@ -405,7 +404,7 @@ func (s *Service) StartFreshThread(sessionKey, userID, chatID, chatType string) 
 		return 0, nil, fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
 	if sess == nil {
-		sess = &state.Session{
+		sess = &conversation.Session{
 			Key:         sessionKey,
 			WorkspaceID: defaultWorkspaceID,
 			ChatID:      chatID,
@@ -419,7 +418,7 @@ func (s *Service) StartFreshThread(sessionKey, userID, chatID, chatType string) 
 	discarded := s.app.ThreadMenuPendingQueue().DiscardSessionPendingInputs(sessionKey)
 	sess = appState.Session(sessionKey)
 	if sess == nil {
-		sess = &state.Session{
+		sess = &conversation.Session{
 			Key:         sessionKey,
 			WorkspaceID: defaultWorkspaceID,
 			ChatID:      chatID,
@@ -530,7 +529,7 @@ func (s *Service) CommandThread(msg *feishu.InboundMessage, args []string) error
 			Message:    msg,
 			Args:       args,
 			SessionKey: sessionKey,
-			CurrentThread: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace, string, error) {
+			CurrentThread: func(msg *feishu.InboundMessage) (string, *conversation.Session, *config.Workspace, string, error) {
 				return s.app.ThreadMenuWorkspaceConfig().CurrentThreadForMessage(msg)
 			},
 			ShowConversationSandboxMenu: func(msg *feishu.InboundMessage) error {
@@ -605,7 +604,7 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 			Message:    msg,
 			Args:       args,
 			SessionKey: sessionKey,
-			CurrentThread: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace, string, error) {
+			CurrentThread: func(msg *feishu.InboundMessage) (string, *conversation.Session, *config.Workspace, string, error) {
 				return s.app.ThreadMenuWorkspaceConfig().CurrentThreadForMessage(msg)
 			},
 			ShowConversationPermissionModeMenu: func(msg *feishu.InboundMessage) error {
@@ -887,7 +886,7 @@ func (s *Service) CompleteThreadResume(action *feishu.CardAction, sessionKey, th
 	appState := s.app.ThreadMenuAppState()
 	sess := appState.Session(sessionKey)
 	if sess == nil {
-		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
+		sess = &conversation.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
 	if sessionHasInFlightSubmission(sess) {
 		return &callback.CardActionTriggerResponse{
@@ -976,7 +975,7 @@ func (s *Service) completeClaudeSessionPermissionModeSet(action *feishu.CardActi
 }
 
 // SessionCurrentThreadLabel returns the current thread label for a session.
-func SessionCurrentThreadLabel(sess *state.Session) string {
+func SessionCurrentThreadLabel(sess *conversation.Session) string {
 	if sess == nil {
 		return "-"
 	}

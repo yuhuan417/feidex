@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +11,6 @@ import (
 
 	"feidex/internal/app/claudesession"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
@@ -36,7 +36,7 @@ func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 
 	msg := &feishu.InboundMessage{MessageID: "m-history", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          sessionID,
@@ -106,7 +106,7 @@ func TestRenderHistoryCardClaudeMarksLatestTurnRunningWhenSessionBusy(t *testing
 	})
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          sessionID,

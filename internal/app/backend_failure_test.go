@@ -2,6 +2,7 @@ package app
 
 import (
 	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/domain/conversation"
 
 	"errors"
 	"strings"
@@ -53,7 +54,7 @@ func TestFailSubmissionWithoutTerminalCompletionMentionsUserWhenQueueEmpty(t *te
 func TestFailSubmissionWithoutTerminalCompletionSkipsMentionWhenQueuePending(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	if _, err := a.store.UpdateSession("sess-1", func(sess *state.Session) {
+	if _, err := a.store.UpdateSession("sess-1", func(sess *conversation.Session) {
 		sess.Queue = []string{"sub-queued"}
 		sess.Status = "queued"
 	}); err != nil {

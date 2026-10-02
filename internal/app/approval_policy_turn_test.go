@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"testing"
 
 	"feidex/internal/codexrpc"
@@ -27,7 +28,7 @@ func TestStartNextSubmissionUsesWorkspaceApprovalPolicyForTurnStart(t *testing.T
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",
@@ -77,7 +78,7 @@ func TestNewThreadInheritsCurrentThreadPermissionOverrides(t *testing.T) {
 	a.cfg.Workspaces[0].ApprovalPolicy = "on-request"
 	a.cfg.Workspaces[0].SandboxMode = "workspace-write"
 	sessionKey := "sess-new-thread-overrides"
-	sess := &state.Session{
+	sess := &conversation.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
 		ActiveThreadID:             "thread-old",
@@ -126,7 +127,7 @@ func TestStartNextSubmissionUsesThreadApprovalOverrideForTurnStart(t *testing.T)
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
 		ActiveThreadID:             "thread-existing",

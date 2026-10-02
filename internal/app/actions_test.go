@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ func TestCompleteMenuInterruptRejectsStaleTurnCard(t *testing.T) {
 	}
 
 	a := &App{store: store, cfg: testCodexConfig()}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		ActiveThreadID: "thread-new",
 		ActiveTurnID:   "turn-new",
@@ -50,7 +51,7 @@ func TestCompleteMenuNewRejectsRunningTurn(t *testing.T) {
 	}
 
 	a := &App{store: store, cfg: testCodexConfig()}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		ActiveThreadID: "thread-1",
 		ActiveTurnID:   "turn-1",
@@ -74,7 +75,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 	}
 
 	a := &App{store: store, cfg: testCodexConfig()}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
@@ -101,7 +102,7 @@ func TestCompleteWorkspaceUseRejectsRunningTurn(t *testing.T) {
 	cfg := testCodexConfig()
 	cfg.Workspaces = append(cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		OwnerUserID:             "u-1",
 		ChatID:                  "c-1",
@@ -143,7 +144,7 @@ func TestCompleteWorkspaceUseRejectsRunningTurn(t *testing.T) {
 func TestCompleteWorkspaceUseAutoResumesLatestThreadWhenIdle(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: "default",
 		OwnerUserID: "u-1",
@@ -189,7 +190,7 @@ func TestCompleteWorkspaceUseAutoResumesLatestThreadWhenIdle(t *testing.T) {
 func TestCompleteWorkspaceUseClearsIdleThreadLineageAndPlanMode(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
 		OwnerUserID:             "u-1",
@@ -197,7 +198,7 @@ func TestCompleteWorkspaceUseClearsIdleThreadLineageAndPlanMode(t *testing.T) {
 		ChatType:                "p2p",
 		ActiveThreadID:          "thread-old",
 		ActiveThreadWorkspaceID: "default",
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.4",
 			ReasoningEffort: "high",
@@ -255,7 +256,7 @@ func TestCompleteWorkspaceUseClearsIdleThreadLineageAndPlanMode(t *testing.T) {
 func TestCompleteWorkspaceUseStartsThreadWhenWorkspaceHasNone(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: "default",
 		OwnerUserID: "u-1",
@@ -296,7 +297,7 @@ func TestCompleteWorkspaceUseStartsThreadWhenWorkspaceHasNone(t *testing.T) {
 func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: "default",
 		OwnerUserID: "u-1",
@@ -343,7 +344,7 @@ func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 func TestCompleteWorkspaceUseKeepsNewWorkspaceWhenBindingFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
 		OwnerUserID:             "u-1",
@@ -351,7 +352,7 @@ func TestCompleteWorkspaceUseKeepsNewWorkspaceWhenBindingFails(t *testing.T) {
 		ChatType:                "p2p",
 		ActiveThreadID:          "thread-old",
 		ActiveThreadWorkspaceID: "default",
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:  "plan",
 			Model: "gpt-5.4",
 		},
@@ -496,7 +497,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 	}
 	cfg := testCodexConfig()
 	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
 		ActiveThreadID:          "thread-1",
@@ -536,7 +537,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 	}
 	cfg := testCodexConfig()
 	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
 		ActiveThreadID:          "thread-1",
@@ -599,7 +600,7 @@ func TestActionHelperBranches(t *testing.T) {
 
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
 		ChatID:                  "chat-1",

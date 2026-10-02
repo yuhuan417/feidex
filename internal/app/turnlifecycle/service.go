@@ -4,13 +4,13 @@ package turnlifecycle
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
 	"time"
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/apputil"
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/app/submission"
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/state"
@@ -46,17 +46,17 @@ type App interface {
 	TurnStopAttentionUserID(sub *state.Submission, turnID string) string
 	SendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string
 	SendFinalMessagesWithReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, reuseMessageID string) []string
-	SessionHasActiveWork(sess *state.Session) bool
+	SessionHasActiveWork(sess *conversation.Session) bool
 	NextQueuedSubmissionSessionKey(sessionKey string) string
 	BindStandaloneCompactTurn(threadID, turnID string) bool
 	BindGoalContinuationTurn(threadID, turnID string) bool
 	FinishStandaloneCompactTurn(threadID, turnID, status string) bool
 	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
 	ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool
-	LogSessionState(event, sessionKey string, sess *state.Session)
+	LogSessionState(event, sessionKey string, sess *conversation.Session)
 }
 
-func recordLegacySessionRootTurnBinding(reply ReplyContinuationProvider, sess *state.Session, sub *state.Submission, sessionKey, threadID, turnID string) {
+func recordLegacySessionRootTurnBinding(reply ReplyContinuationProvider, sess *conversation.Session, sub *state.Submission, sessionKey, threadID, turnID string) {
 	if reply == nil || sess == nil || appcore.SubmissionHasSourceRootMessages(sub) {
 		return
 	}
@@ -69,13 +69,13 @@ func recordLegacySessionRootTurnBinding(reply ReplyContinuationProvider, sess *s
 
 // AppStateProvider narrows app state access to the methods used by the service.
 type AppStateProvider interface {
-	Session(key string) *state.Session
-	Sessions() []*state.Session
+	Session(key string) *conversation.Session
+	Sessions() []*conversation.Session
 	Submission(id string) *state.Submission
-	SaveSession(sess *state.Session) error
+	SaveSession(sess *conversation.Session) error
 	MarkSubmissionRunning(id, threadID, turnID string) error
 	FinalizeSubmission(id, status string) error
-	UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error)
+	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
 }
 
 // RuntimeStateProvider narrows runtime state access to the methods used by
@@ -126,7 +126,7 @@ type SubmissionDispatchProvider interface {
 // AutoRetryProvider narrows auto-retry access to the methods used by the
 // service.
 type AutoRetryProvider interface {
-	ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool
+	ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool
 }
 
 // RuntimeMaintenanceProvider narrows runtime maintenance access to the
@@ -176,11 +176,11 @@ func isReviewSubmission(sub *state.Submission) bool {
 	return sub != nil && strings.TrimSpace(sub.Kind) == "review"
 }
 
-func sessionHasActiveOperations(sess *state.Session) bool {
-	return sessionctx.HasActiveOperations(sess)
+func sessionHasActiveOperations(sess *conversation.Session) bool {
+	return conversation.HasActiveOperations(sess)
 }
 
-func sessionHasActiveWork(sess *state.Session) bool {
+func sessionHasActiveWork(sess *conversation.Session) bool {
 	if sess == nil {
 		return false
 	}
@@ -229,14 +229,14 @@ func (w Service) BindPendingSubmissionTurn(threadID, turnID string, allowReview 
 	if sess == nil {
 		return false
 	}
-	sessionctx.UpsertActiveOperation(sess, state.SessionActiveOperation{
-		Kind:         sessionctx.OpKindSubmission,
+	conversation.UpsertActiveOperation(sess, conversation.SessionActiveOperation{
+		Kind:         conversation.OpKindSubmission,
 		SubmissionID: sub.ID,
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
 	sess.Status = state.SessionStatusTurnInProgress.String()
-	sessionctx.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
+	conversation.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		return false
 	}
@@ -278,10 +278,10 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 		if candidate == nil {
 			continue
 		}
-		if sessionctx.FindActiveOperationByTurn(candidate, turnID) != nil {
+		if conversation.FindActiveOperationByTurn(candidate, turnID) != nil {
 			return
 		}
-		op := sessionctx.FindPendingSubmissionOperationByThread(candidate, threadID)
+		op := conversation.FindPendingSubmissionOperationByThread(candidate, threadID)
 		if op == nil {
 			continue
 		}
@@ -314,14 +314,14 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 		)
 		return
 	}
-	sessionctx.UpsertActiveOperation(sess, state.SessionActiveOperation{
-		Kind:         sessionctx.OpKindSubmission,
+	conversation.UpsertActiveOperation(sess, conversation.SessionActiveOperation{
+		Kind:         conversation.OpKindSubmission,
 		SubmissionID: sub.ID,
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
 	sess.Status = state.SessionStatusTurnInProgress.String()
-	sessionctx.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
+	conversation.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		slog.Error("turn started notification session bind failed",
 			"session_key", sessionKey,
@@ -371,7 +371,7 @@ func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string)
 	if sess == nil {
 		return "", nil
 	}
-	op := sessionctx.FindPendingSubmissionOperationByThread(sess, threadID)
+	op := conversation.FindPendingSubmissionOperationByThread(sess, threadID)
 	if op == nil {
 		return "", nil
 	}
@@ -386,14 +386,14 @@ func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string)
 	w.runtimeState().MarkTurnStartedAt(turnID, time.Now())
 	w.runtimeState().ClearPendingTurnBindingForSubmission(threadID, sub.ID)
 
-	sessionctx.UpsertActiveOperation(sess, state.SessionActiveOperation{
-		Kind:         sessionctx.OpKindSubmission,
+	conversation.UpsertActiveOperation(sess, conversation.SessionActiveOperation{
+		Kind:         conversation.OpKindSubmission,
 		SubmissionID: sub.ID,
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
 	sess.Status = state.SessionStatusTurnInProgress.String()
-	sessionctx.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
+	conversation.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		slog.Error("turn completed fallback session bind failed",
 			"session_key", sessionKey,
@@ -495,11 +495,11 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 	if sess := st.Session(sessionKey); sess != nil {
 		w.app.LogSessionState("finishTurn before session cleanup", sessionKey, sess)
 	}
-	updatedSess, _ := st.UpdateSession(sessionKey, func(sess *state.Session) {
+	updatedSess, _ := st.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		if sess == nil {
 			return
 		}
-		sessionctx.RemoveActiveOperation(sess, sub.ID, turnID)
+		conversation.RemoveActiveOperation(sess, sub.ID, turnID)
 		switch {
 		case sessionHasActiveOperations(sess):
 			sess.Status = state.SessionStatusTurnStarting.String()
@@ -566,11 +566,11 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 			_ = st.FinalizeSubmission(steerSub.ID, "failed")
 		}
 		w.pendingQueue().ClearSubmissionProcessingReactions(steerSub)
-		if _, err := st.UpdateSession(sessionKey, func(s *state.Session) {
+		if _, err := st.UpdateSession(sessionKey, func(s *conversation.Session) {
 			if s == nil {
 				return
 			}
-			sessionctx.RemoveActiveOperation(s, steerSub.ID, opTurnID)
+			conversation.RemoveActiveOperation(s, steerSub.ID, opTurnID)
 			submission.RefreshPendingStatus(s)
 		}); err != nil {
 			slog.Error("finishTurn steer cleanup session update failed",

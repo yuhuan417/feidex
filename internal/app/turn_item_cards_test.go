@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 	"time"
@@ -101,8 +102,8 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 func TestTurnItemCardsPrefixWorkspaceAndPlan(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	if _, err := a.store.UpdateSession("sess-1", func(sess *state.Session) {
-		sess.ActiveThreadCollaborationMode = &state.SessionCollaborationMode{Mode: "plan", Model: "gpt-5.4"}
+	if _, err := a.store.UpdateSession("sess-1", func(sess *conversation.Session) {
+		sess.ActiveThreadCollaborationMode = &conversation.SessionCollaborationMode{Mode: "plan", Model: "gpt-5.4"}
 	}); err != nil {
 		t.Fatalf("UpdateSession(plan mode) error = %v", err)
 	}

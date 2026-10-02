@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
@@ -94,7 +94,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, sessionID, "Claude Session", "continue work", time.Unix(100, 0))
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          sessionID,
@@ -152,7 +152,7 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		OwnerUserID: "user-1",
@@ -197,7 +197,7 @@ func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testi
 	writeClaudeSessionFixture(t, configDir, altCwd, "session-alt-1", "Alt Session", "alt prompt", time.Unix(100, 0))
 
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		OwnerUserID: "user-1",

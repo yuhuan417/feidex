@@ -1,12 +1,11 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"log/slog"
-
-	"feidex/internal/state"
 )
 
-func logSessionState(event, sessionKey string, sess *state.Session) {
+func logSessionState(event, sessionKey string, sess *conversation.Session) {
 	if sess == nil {
 		slog.Debug(event,
 			"session_key", sessionKey,

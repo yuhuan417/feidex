@@ -1,9 +1,9 @@
 package submission
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/state"
 )
 
@@ -22,7 +22,7 @@ func (s SubmissionQueueService) FindSubmissionByTurn(threadID, turnID string) (s
 			if sess == nil {
 				continue
 			}
-			op := sessionctx.FindActiveOperationByTurn(sess, turnID)
+			op := conversation.FindActiveOperationByTurn(sess, turnID)
 			if op == nil || strings.TrimSpace(op.SubmissionID) == "" {
 				continue
 			}
@@ -38,7 +38,7 @@ func (s SubmissionQueueService) FindSubmissionByTurn(threadID, turnID string) (s
 			if sess == nil {
 				continue
 			}
-			op := sessionctx.FindActiveOperationByThread(sess, threadID)
+			op := conversation.FindActiveOperationByThread(sess, threadID)
 			if op == nil || strings.TrimSpace(op.SubmissionID) == "" {
 				continue
 			}

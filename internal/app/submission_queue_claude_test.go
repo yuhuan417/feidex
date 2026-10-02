@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
@@ -12,7 +13,7 @@ func TestStartNextClaudeSubmissionFailsGracefullyWhenRuntimeUnavailable(t *testi
 	a.cfg.Feishu.Backend = backendClaude
 
 	sessionKey := "feishu:frontend:default:chat:chat-1"
-	sess := &state.Session{
+	sess := &conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		OwnerUserID: "user-1",

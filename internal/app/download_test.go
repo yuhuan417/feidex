@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
+	"feidex/internal/domain/conversation"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -119,7 +120,7 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 		t.Fatalf("completeDownloadFileConfirm(processing) = %+v, %v", resp, err)
 	}
 
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-download",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-session",

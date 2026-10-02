@@ -2,14 +2,14 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func renderStatusCard(a *App, sessionKey string) map[string]any {
-	var sess *state.Session
+	var sess *conversation.Session
 	if strings.TrimSpace(sessionKey) != "" {
 		sess = a.State().Session(sessionKey)
 	}

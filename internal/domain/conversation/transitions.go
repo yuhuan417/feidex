@@ -1,23 +1,22 @@
-package sessionctx
+package conversation
 
 import (
+	"feidex/internal/domain/modelconfig"
+	"feidex/internal/textutil"
 	"strings"
 	"time"
-
-	"feidex/internal/app/apputil"
-	appruntime "feidex/internal/app/runtime"
-	"feidex/internal/config"
-	domainmodelconfig "feidex/internal/domain/modelconfig"
-	"feidex/internal/state"
 )
 
-// Thread context lifecycle
+const (
+	OpKindSubmission = "submission"
+	OpKindTurn       = "turn"
+)
 
-func ClearThreadContext(sess *state.Session) {
+func ClearThreadContext(sess *Session) {
 	if sess == nil {
 		return
 	}
-	sess.AppliedModelConfig = domainmodelconfig.Snapshot{}
+	sess.AppliedModelConfig = modelconfig.Snapshot{}
 	sess.ModelConfigError = ""
 	sess.ActiveThreadID = ""
 	sess.ActiveThreadWorkspaceID = ""
@@ -31,7 +30,7 @@ func ClearThreadContext(sess *state.Session) {
 	sess.ActiveThreadPreview = ""
 }
 
-func SetThreadContext(sess *state.Session, workspaceID, threadID, name, preview string) {
+func SetThreadContext(sess *Session, workspaceID, threadID, name, preview string) {
 	if sess == nil {
 		return
 	}
@@ -42,7 +41,7 @@ func SetThreadContext(sess *state.Session, workspaceID, threadID, name, preview 
 	sess.ActiveThreadPreview = strings.TrimSpace(preview)
 }
 
-func SetThreadDefaults(sess *state.Session, approvalPolicy, sandboxMode string) {
+func SetThreadDefaults(sess *Session, approvalPolicy, sandboxMode string) {
 	if sess == nil {
 		return
 	}
@@ -50,13 +49,11 @@ func SetThreadDefaults(sess *state.Session, approvalPolicy, sandboxMode string) 
 	sess.ActiveThreadSandboxMode = strings.TrimSpace(sandboxMode)
 }
 
-// Backend thread snapshots
-
-func BackendThreadSnapshot(sess *state.Session) state.SessionBackendThread {
+func BackendThreadSnapshot(sess *Session) SessionBackendThread {
 	if sess == nil {
-		return state.SessionBackendThread{}
+		return SessionBackendThread{}
 	}
-	return state.SessionBackendThread{
+	return SessionBackendThread{
 		ThreadID:             strings.TrimSpace(sess.ActiveThreadID),
 		WorkspaceID:          strings.TrimSpace(sess.ActiveThreadWorkspaceID),
 		ApprovalPolicy:       strings.TrimSpace(sess.ActiveThreadApprovalPolicy),
@@ -70,7 +67,7 @@ func BackendThreadSnapshot(sess *state.Session) state.SessionBackendThread {
 	}
 }
 
-func StoreBackendThread(sess *state.Session, backend string) {
+func StoreBackendThread(sess *Session, backend string) {
 	if sess == nil {
 		return
 	}
@@ -79,10 +76,10 @@ func StoreBackendThread(sess *state.Session, backend string) {
 		return
 	}
 	if sess.BackendThreads == nil {
-		sess.BackendThreads = map[string]state.SessionBackendThread{}
+		sess.BackendThreads = map[string]SessionBackendThread{}
 	}
 	snapshot := BackendThreadSnapshot(sess)
-	if snapshot == (state.SessionBackendThread{}) {
+	if snapshot == (SessionBackendThread{}) {
 		delete(sess.BackendThreads, backend)
 		if len(sess.BackendThreads) == 0 {
 			sess.BackendThreads = nil
@@ -92,7 +89,7 @@ func StoreBackendThread(sess *state.Session, backend string) {
 	sess.BackendThreads[backend] = snapshot
 }
 
-func ClearBackendThread(sess *state.Session, backend string) {
+func ClearBackendThread(sess *Session, backend string) {
 	if sess == nil {
 		return
 	}
@@ -106,7 +103,7 @@ func ClearBackendThread(sess *state.Session, backend string) {
 	}
 }
 
-func RestoreBackendThread(sess *state.Session, backend string) bool {
+func RestoreBackendThread(sess *Session, backend string) bool {
 	if sess == nil {
 		return false
 	}
@@ -133,55 +130,56 @@ func RestoreBackendThread(sess *state.Session, backend string) bool {
 	return true
 }
 
-func ClearBackendThreads(sess *state.Session) {
+func ClearBackendThreads(sess *Session) {
 	if sess == nil {
 		return
 	}
 	sess.BackendThreads = nil
 }
 
-// Effective value resolution
-
-func EffectiveApprovalPolicy(sess *state.Session, ws *config.Workspace) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
-		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
-	}
-	if ws != nil {
-		return strings.TrimSpace(ws.ApprovalPolicy)
-	}
-	return ""
-}
-
-func EffectiveSandboxMode(sess *state.Session, ws *config.Workspace) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
-		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
-	}
-	if ws != nil {
-		return strings.TrimSpace(ws.SandboxMode)
-	}
-	return ""
-}
-
-func EffectiveServiceTier(sess *state.Session) string {
+func EffectiveServiceTier(sess *Session) string {
 	if sess != nil {
 		return NormalizeServiceTier(sess.ActiveThreadServiceTier)
 	}
 	return ""
 }
 
-func EffectiveMultiAgentMode(sess *state.Session, ws *config.Workspace) string {
+// EffectiveApprovalPolicy resolves the thread override before the workspace
+// default. The workspace value is passed in by the application layer so the
+// domain remains independent of configuration storage types.
+func EffectiveApprovalPolicy(sess *Session, workspacePolicy string) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
+		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
+	}
+	return strings.TrimSpace(workspacePolicy)
+}
+
+func EffectiveSandboxMode(sess *Session, workspaceMode string) string {
+	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
+		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
+	}
+	return strings.TrimSpace(workspaceMode)
+}
+
+func EffectiveMultiAgentMode(sess *Session, workspaceMode string) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadMultiAgentMode) != "" {
 		return strings.TrimSpace(sess.ActiveThreadMultiAgentMode)
 	}
-	if ws != nil && strings.TrimSpace(ws.MultiAgentMode) != "" {
-		return strings.TrimSpace(ws.MultiAgentMode)
+	if strings.TrimSpace(workspaceMode) != "" {
+		return strings.TrimSpace(workspaceMode)
 	}
 	return "explicitRequestOnly"
 }
 
-// Workspace switching
+func CanResumeThreadForWorkspace(sess *Session, workspaceID string) bool {
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return false
+	}
+	activeWorkspace := strings.TrimSpace(sess.ActiveThreadWorkspaceID)
+	return activeWorkspace != "" && activeWorkspace == strings.TrimSpace(workspaceID)
+}
 
-func SwitchSessionWorkspace(sess *state.Session, workspaceID string) {
+func SwitchSessionWorkspace(sess *Session, workspaceID string) {
 	if sess == nil {
 		return
 	}
@@ -198,7 +196,7 @@ func SwitchSessionWorkspace(sess *state.Session, workspaceID string) {
 	}
 }
 
-func trackRecentWorkspace(sess *state.Session, workspaceID string) {
+func trackRecentWorkspace(sess *Session, workspaceID string) {
 	ws := strings.TrimSpace(workspaceID)
 	if ws == "" {
 		return
@@ -212,20 +210,7 @@ func trackRecentWorkspace(sess *state.Session, workspaceID string) {
 	sess.RecentWorkspaceIDs = append([]string{ws}, filtered...)
 }
 
-func CanResumeThreadForSubmission(sess *state.Session, sub *state.Submission) bool {
-	if sess == nil || sub == nil {
-		return false
-	}
-	if strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return false
-	}
-	if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
-		return false
-	}
-	return strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(sub.WorkspaceID)
-}
-
-func cloneSessionCollaborationMode(src *state.SessionCollaborationMode) *state.SessionCollaborationMode {
+func cloneSessionCollaborationMode(src *SessionCollaborationMode) *SessionCollaborationMode {
 	if src == nil {
 		return nil
 	}
@@ -237,14 +222,7 @@ func cloneSessionCollaborationMode(src *state.SessionCollaborationMode) *state.S
 	return &cp
 }
 
-// Active operations
-
-const (
-	OpKindSubmission = "submission"
-	OpKindTurn       = "turn"
-)
-
-func EnsureActiveOperations(sess *state.Session) {
+func EnsureActiveOperations(sess *Session) {
 	if sess == nil || len(sess.ActiveOperations) > 0 {
 		return
 	}
@@ -255,7 +233,7 @@ func EnsureActiveOperations(sess *state.Session) {
 	if strings.TrimSpace(sess.ActiveSubmissionID) != "" {
 		kind = OpKindSubmission
 	}
-	sess.ActiveOperations = append(sess.ActiveOperations, state.SessionActiveOperation{
+	sess.ActiveOperations = append(sess.ActiveOperations, SessionActiveOperation{
 		Kind:         kind,
 		SubmissionID: strings.TrimSpace(sess.ActiveSubmissionID),
 		ThreadID:     strings.TrimSpace(sess.ActiveThreadID),
@@ -263,7 +241,7 @@ func EnsureActiveOperations(sess *state.Session) {
 	})
 }
 
-func ResetActiveOperations(sess *state.Session) {
+func ResetActiveOperations(sess *Session) {
 	if sess == nil {
 		return
 	}
@@ -271,7 +249,7 @@ func ResetActiveOperations(sess *state.Session) {
 	SyncLegacyActiveFields(sess)
 }
 
-func SyncLegacyActiveFields(sess *state.Session) {
+func SyncLegacyActiveFields(sess *Session) {
 	if sess == nil {
 		return
 	}
@@ -288,7 +266,7 @@ func SyncLegacyActiveFields(sess *state.Session) {
 	}
 }
 
-func ForegroundOperation(sess *state.Session) *state.SessionActiveOperation {
+func ForegroundOperation(sess *Session) *SessionActiveOperation {
 	if sess == nil {
 		return nil
 	}
@@ -300,7 +278,7 @@ func ForegroundOperation(sess *state.Session) *state.SessionActiveOperation {
 	return &op
 }
 
-func HasActiveOperations(sess *state.Session) bool {
+func HasActiveOperations(sess *Session) bool {
 	if sess == nil {
 		return false
 	}
@@ -308,7 +286,7 @@ func HasActiveOperations(sess *state.Session) bool {
 	return len(sess.ActiveOperations) > 0
 }
 
-func HasInFlightSubmission(sess *state.Session) bool {
+func HasInFlightSubmission(sess *Session) bool {
 	if sess == nil {
 		return false
 	}
@@ -318,7 +296,7 @@ func HasInFlightSubmission(sess *state.Session) bool {
 	return strings.TrimSpace(sess.ActiveTurnID) != "" || strings.TrimSpace(sess.ActiveSubmissionID) != ""
 }
 
-func UpsertActiveOperation(sess *state.Session, op state.SessionActiveOperation) {
+func UpsertActiveOperation(sess *Session, op SessionActiveOperation) {
 	if sess == nil {
 		return
 	}
@@ -335,7 +313,7 @@ func UpsertActiveOperation(sess *state.Session, op state.SessionActiveOperation)
 		}
 	}
 
-	next := make([]state.SessionActiveOperation, 0, len(sess.ActiveOperations)+1)
+	next := make([]SessionActiveOperation, 0, len(sess.ActiveOperations)+1)
 	updated := false
 	for i := range sess.ActiveOperations {
 		candidate := sess.ActiveOperations[i]
@@ -363,7 +341,7 @@ func UpsertActiveOperation(sess *state.Session, op state.SessionActiveOperation)
 	SyncLegacyActiveFields(sess)
 }
 
-func PrependActiveOperation(sess *state.Session, op state.SessionActiveOperation) {
+func PrependActiveOperation(sess *Session, op SessionActiveOperation) {
 	if sess == nil {
 		return
 	}
@@ -380,7 +358,7 @@ func PrependActiveOperation(sess *state.Session, op state.SessionActiveOperation
 		}
 	}
 
-	next := make([]state.SessionActiveOperation, 0, len(sess.ActiveOperations)+1)
+	next := make([]SessionActiveOperation, 0, len(sess.ActiveOperations)+1)
 	if op.StartedAt == 0 {
 		op.StartedAt = time.Now().Unix()
 	}
@@ -403,7 +381,7 @@ func PrependActiveOperation(sess *state.Session, op state.SessionActiveOperation
 	SyncLegacyActiveFields(sess)
 }
 
-func RemoveActiveOperation(sess *state.Session, submissionID, turnID string) bool {
+func RemoveActiveOperation(sess *Session, submissionID, turnID string) bool {
 	if sess == nil {
 		return false
 	}
@@ -417,7 +395,7 @@ func RemoveActiveOperation(sess *state.Session, submissionID, turnID string) boo
 		return false
 	}
 
-	next := make([]state.SessionActiveOperation, 0, len(sess.ActiveOperations))
+	next := make([]SessionActiveOperation, 0, len(sess.ActiveOperations))
 	removed := false
 	for _, op := range sess.ActiveOperations {
 		if activeOperationMatches(op, submissionID, turnID) {
@@ -434,7 +412,7 @@ func RemoveActiveOperation(sess *state.Session, submissionID, turnID string) boo
 	return true
 }
 
-func FindActiveOperationByTurn(sess *state.Session, turnID string) *state.SessionActiveOperation {
+func FindActiveOperationByTurn(sess *Session, turnID string) *SessionActiveOperation {
 	if sess == nil {
 		return nil
 	}
@@ -453,7 +431,7 @@ func FindActiveOperationByTurn(sess *state.Session, turnID string) *state.Sessio
 	return nil
 }
 
-func FindActiveOperationByThread(sess *state.Session, threadID string) *state.SessionActiveOperation {
+func FindActiveOperationByThread(sess *Session, threadID string) *SessionActiveOperation {
 	if sess == nil {
 		return nil
 	}
@@ -472,7 +450,7 @@ func FindActiveOperationByThread(sess *state.Session, threadID string) *state.Se
 	return nil
 }
 
-func FindPendingSubmissionOperationByThread(sess *state.Session, threadID string) *state.SessionActiveOperation {
+func FindPendingSubmissionOperationByThread(sess *Session, threadID string) *SessionActiveOperation {
 	if sess == nil {
 		return nil
 	}
@@ -498,17 +476,23 @@ func FindPendingSubmissionOperationByThread(sess *state.Session, threadID string
 	return nil
 }
 
-// Helpers
-
 func normalizeBackend(value string) string {
-	return appruntime.NormalizeBackend(value)
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "codex", "claude":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
 }
 
 func NormalizeServiceTier(value string) string {
-	return appruntime.NormalizeServiceTier(value)
+	if strings.EqualFold(strings.TrimSpace(value), "fast") {
+		return "fast"
+	}
+	return ""
 }
 
-func activeOperationMatches(op state.SessionActiveOperation, submissionID, turnID string) bool {
+func activeOperationMatches(op SessionActiveOperation, submissionID, turnID string) bool {
 	submissionID = strings.TrimSpace(submissionID)
 	turnID = strings.TrimSpace(turnID)
 	if submissionID != "" && strings.TrimSpace(op.SubmissionID) == submissionID {
@@ -521,5 +505,5 @@ func activeOperationMatches(op state.SessionActiveOperation, submissionID, turnI
 }
 
 func firstNonEmpty(values ...string) string {
-	return apputil.FirstNonEmpty(values...)
+	return textutil.FirstNonEmpty(values...)
 }

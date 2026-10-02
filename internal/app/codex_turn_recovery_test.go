@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	appthreadmenu "feidex/internal/app/threadmenu"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestEnqueueSubmissionReconcilesCompletedCodexTurnFromThreadRead(t *testing.
 	}
 	sessionKey := makeSessionKey(a, msg1)
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
-	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
+	if _, err := a.store.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID
 	}); err != nil {
 		t.Fatalf("UpdateSession() error = %v", err)

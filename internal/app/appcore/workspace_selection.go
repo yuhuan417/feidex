@@ -1,6 +1,7 @@
 package appcore
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
@@ -56,7 +57,7 @@ func MakeWorkspaceSelectionKeyForMessage(a AppConfig, msg *feishu.InboundMessage
 
 // MakeWorkspaceSelectionKeyForSession derives the workspace-selection session
 // key from a persisted session.
-func MakeWorkspaceSelectionKeyForSession(a AppConfig, sess *state.Session) string {
+func MakeWorkspaceSelectionKeyForSession(a AppConfig, sess *conversation.Session) string {
 	if sess == nil {
 		return ""
 	}
@@ -66,7 +67,7 @@ func MakeWorkspaceSelectionKeyForSession(a AppConfig, sess *state.Session) strin
 // ResolveWorkspaceSelectionForMessage returns the currently selected workspace
 // for a message scope, falling back to the provided session and finally the
 // configured default workspace.
-func ResolveWorkspaceSelectionForMessage(a AppConfig, msg *feishu.InboundMessage, fallback *state.Session) string {
+func ResolveWorkspaceSelectionForMessage(a AppConfig, msg *feishu.InboundMessage, fallback *conversation.Session) string {
 	if a == nil {
 		if fallback != nil {
 			return strings.TrimSpace(fallback.WorkspaceID)
@@ -96,7 +97,7 @@ func ResolveWorkspaceSelectionForMessage(a AppConfig, msg *feishu.InboundMessage
 // ResolveWorkspaceSelectionForSession returns the currently selected workspace
 // for the session's chat/user scope, falling back to the session itself and
 // finally the configured default workspace.
-func ResolveWorkspaceSelectionForSession(a AppConfig, sess *state.Session) string {
+func ResolveWorkspaceSelectionForSession(a AppConfig, sess *conversation.Session) string {
 	if a == nil {
 		if sess != nil {
 			return strings.TrimSpace(sess.WorkspaceID)
@@ -127,7 +128,7 @@ func ResolveWorkspaceSelectionForSession(a AppConfig, sess *state.Session) strin
 // group chat binding, if the app exposes binding lookup for the current
 // frontend. It accepts a session key so group menu cards can resolve binding
 // workspace even before a concrete session has been created.
-func ResolveBindingWorkspaceForSessionKey(a AppConfig, sessionKey string, sess *state.Session) string {
+func ResolveBindingWorkspaceForSessionKey(a AppConfig, sessionKey string, sess *conversation.Session) string {
 	provider, ok := a.(agentBindingsForChatProvider)
 	if a == nil || !ok {
 		return ""
@@ -191,7 +192,7 @@ func SetWorkspaceSelection(a AppConfig, chatType, chatID, userID, workspaceID st
 		selectionOwner = ""
 	}
 	if sess == nil {
-		sess = &state.Session{
+		sess = &conversation.Session{
 			Key:         key,
 			ChatID:      strings.TrimSpace(chatID),
 			ChatType:    strings.TrimSpace(chatType),
@@ -227,14 +228,14 @@ func SetWorkspaceSelectionForMessage(a AppConfig, msg *feishu.InboundMessage, wo
 
 // SetWorkspaceSelectionForSession persists the current workspace selection for
 // the session scope.
-func SetWorkspaceSelectionForSession(a AppConfig, sess *state.Session, workspaceID string) error {
+func SetWorkspaceSelectionForSession(a AppConfig, sess *conversation.Session, workspaceID string) error {
 	if sess == nil {
 		return nil
 	}
 	return SetWorkspaceSelection(a, sess.ChatType, sess.ChatID, sess.OwnerUserID, workspaceID)
 }
 
-func trackWorkspaceSelectionRecent(sess *state.Session, workspaceID string) {
+func trackWorkspaceSelectionRecent(sess *conversation.Session, workspaceID string) {
 	if sess == nil {
 		return
 	}

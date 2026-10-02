@@ -2,6 +2,7 @@ package convbackend
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -23,24 +24,24 @@ type ClaudeSessionClient interface {
 	EnsureSession(ctx context.Context, sessionKey string, ws *config.Workspace, resumeThreadID, model string) (string, error)
 }
 
-type SessionSaveFunc func(sess *state.Session) error
-type SessionLookupFunc func(sessionKey string) *state.Session
-type ThreadContextSetter func(sess *state.Session, workspaceID, threadID, name, preview string)
+type SessionSaveFunc func(sess *conversation.Session) error
+type SessionLookupFunc func(sessionKey string) *conversation.Session
+type ThreadContextSetter func(sess *conversation.Session, workspaceID, threadID, name, preview string)
 
 type ClaudeResumeDeps struct {
 	Context            func() context.Context
 	FindSessionEntry   func(threadID string) (*codexrpc.ThreadListEntry, error)
 	EnsureSession      ClaudeSessionClient
 	SaveSession        SessionSaveFunc
-	ClearThreadContext func(sess *state.Session)
+	ClearThreadContext func(sess *conversation.Session)
 	SetThreadContext   ThreadContextSetter
-	ResetActiveOps     func(sess *state.Session)
+	ResetActiveOps     func(sess *conversation.Session)
 	MarkThreadLive     func(sessionKey, threadID string)
 	DefaultWorkspaceID func() string
-	ResolveModel       func(sess *state.Session, ws *config.Workspace) string
+	ResolveModel       func(sess *conversation.Session, ws *config.Workspace) string
 }
 
-func ResumeClaudeSelectedThread(deps ClaudeResumeDeps, sessionKey string, sess *state.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error) {
+func ResumeClaudeSelectedThread(deps ClaudeResumeDeps, sessionKey string, sess *conversation.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error) {
 	if deps.EnsureSession == nil {
 		return nil, fmt.Errorf("claude backend not initialized")
 	}
@@ -111,15 +112,15 @@ type CodexResumeDeps struct {
 	Context            func() context.Context
 	RequireClient      func() (CodexRPCClient, error)
 	SaveSession        SessionSaveFunc
-	BuildThreadConfig  func(sess *state.Session) map[string]any
+	BuildThreadConfig  func(sess *conversation.Session) map[string]any
 	SetThreadContext   ThreadContextSetter
-	ResetActiveOps     func(sess *state.Session)
+	ResetActiveOps     func(sess *conversation.Session)
 	MarkThreadLive     func(sessionKey, threadID string)
 	DefaultWorkspaceID func() string
 	ConfiguredModel    func() string
 }
 
-func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *state.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error) {
+func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *conversation.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error) {
 	if deps.RequireClient == nil {
 		return nil, fmt.Errorf("codex client not initialized")
 	}
@@ -199,7 +200,7 @@ type CodexInterruptDeps struct {
 	RequireClient func() (CodexRPCClient, error)
 }
 
-func InterruptCodexActiveTurn(deps CodexInterruptDeps, ctx context.Context, sess *state.Session) error {
+func InterruptCodexActiveTurn(deps CodexInterruptDeps, ctx context.Context, sess *conversation.Session) error {
 	if deps.RequireClient == nil {
 		return fmt.Errorf("codex client not initialized")
 	}
@@ -234,7 +235,7 @@ func ContinueCodexActiveTurn(deps CodexContinueDeps, sessionKey, text string) er
 	if text == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	var sess *state.Session
+	var sess *conversation.Session
 	if deps.GetSession != nil {
 		sess = deps.GetSession(sessionKey)
 	}
@@ -257,14 +258,14 @@ type CodexReplyContinuationDeps struct {
 	RequireClient              func() (CodexRPCClient, error)
 	ResolveInboundAttachments  func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error)
 	PendingInputSessionKey     func(msg *feishu.InboundMessage) string
-	CollectPendingStagedImages func(sessionKey, bucketSessionKey string) []state.SessionStagedImage
+	CollectPendingStagedImages func(sessionKey, bucketSessionKey string) []conversation.SessionStagedImage
 	ClearPendingStagedImages   func(sessionKey, bucketSessionKey string) error
 	BuildTurnInputs            func(sub *state.Submission) []map[string]any
 	SaveSession                SessionSaveFunc
 	DefaultWorkspaceID         func() string
 }
 
-func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 	if msg == nil || link == nil {
 		return false, nil
 	}
@@ -274,7 +275,7 @@ func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.Inbo
 		return false, nil
 	}
 	if sess == nil {
-		sess = &state.Session{
+		sess = &conversation.Session{
 			Key:           sessionKey,
 			WorkspaceID:   valueOrEmpty(deps.DefaultWorkspaceID),
 			OwnerUserID:   msg.UserID,
@@ -300,7 +301,7 @@ func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.Inbo
 	if deps.PendingInputSessionKey != nil {
 		bucketSessionKey = deps.PendingInputSessionKey(msg)
 	}
-	var stagedImages []state.SessionStagedImage
+	var stagedImages []conversation.SessionStagedImage
 	if deps.CollectPendingStagedImages != nil {
 		stagedImages = deps.CollectPendingStagedImages(sessionKey, bucketSessionKey)
 	}
@@ -354,7 +355,7 @@ type ClaudeStartupRecoveryDeps struct {
 	MarkThreadLive func(sessionKey, threadID string)
 }
 
-func RecoverClaudeStartupConversation(deps ClaudeStartupRecoveryDeps, sessionKey, workspaceID string, sess *state.Session) {
+func RecoverClaudeStartupConversation(deps ClaudeStartupRecoveryDeps, sessionKey, workspaceID string, sess *conversation.Session) {
 	if sess == nil {
 		return
 	}
@@ -372,16 +373,16 @@ type CodexStartupRecoveryDeps struct {
 	Context                func() context.Context
 	CurrentClient          func() CodexRPCClient
 	RuntimeRecovering      func() bool
-	BuildThreadStartParams func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams
-	BuildThreadConfig      func(sess *state.Session) map[string]any
+	BuildThreadStartParams func(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams
+	BuildThreadConfig      func(sess *conversation.Session) map[string]any
 	SaveSession            SessionSaveFunc
 	SetThreadContext       ThreadContextSetter
-	ClearThreadContext     func(sess *state.Session)
+	ClearThreadContext     func(sess *conversation.Session)
 	MarkThreadLive         func(sessionKey, threadID string)
 	ClearSessionLiveThread func(sessionKey string)
 }
 
-func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
+func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, workspaceID string, sess *conversation.Session, ws *config.Workspace, effectiveModel string) {
 	if sess == nil || ws == nil || deps.CurrentClient == nil {
 		return
 	}

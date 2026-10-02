@@ -3,6 +3,7 @@ package submission
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/attachments"
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -18,14 +18,14 @@ import (
 
 // StartNextClaudeSubmissionWithFailureNotice is a convenience wrapper that
 // starts a non-steer Claude submission.
-func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return s.StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, false)
 }
 
 // StartNextClaudeSubmissionWithFailureNoticeEx handles Claude-specific
 // submission startup: session resume, prompt build, EnsureSession with
 // retry, and startClaudeSubmissionAttempt with fallback.
-func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure, steer bool) error {
+func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure, steer bool) error {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	claude := a.SubmissionQueueClaudeClient()
@@ -56,7 +56,7 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 	}
 
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	if !sessionctx.CanResumeThreadForSubmission(sess, sub) {
+	if !(sub != nil && conversation.CanResumeThreadForWorkspace(sess, sub.WorkspaceID)) {
 		if threadID != "" {
 			slog.Debug("dropping Claude session lineage for new submission",
 				"session_key", sessionKey,
@@ -67,7 +67,7 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 			)
 		}
 		threadID = ""
-		sessionctx.ClearThreadContext(sess)
+		conversation.ClearThreadContext(sess)
 	}
 
 	prompt := buildClaudePrompt(sub)
@@ -106,7 +106,7 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 			"workspace_id", sub.WorkspaceID,
 			"error", err,
 		)
-		sessionctx.ClearThreadContext(sess)
+		conversation.ClearThreadContext(sess)
 		if saveErr := appState.SaveSession(sess); saveErr != nil {
 			return saveErr
 		}
@@ -198,7 +198,7 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 	return nil
 }
 
-func (s SubmissionQueueService) startClaudeSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string, steer bool) (*state.Session, string, error) {
+func (s SubmissionQueueService) startClaudeSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *conversation.Session, sub *state.Submission, claudeThreadID, prompt string, steer bool) (*conversation.Session, string, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 
@@ -232,7 +232,7 @@ func (s SubmissionQueueService) startClaudeSubmissionAttempt(claude QueueClaudeC
 
 // startSteerSubmissionAttempt sends a steer message into the current
 // conversation without creating a separate CLI turn.
-func (s SubmissionQueueService) startSteerSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, prompt string) (*state.Session, string, error) {
+func (s SubmissionQueueService) startSteerSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *conversation.Session, sub *state.Submission, claudeThreadID, prompt string) (*conversation.Session, string, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 
@@ -259,7 +259,7 @@ func (s SubmissionQueueService) startSteerSubmissionAttempt(claude QueueClaudeCl
 	return updatedSess, turnID, nil
 }
 
-func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string, preserveLineage bool) (*state.Session, *state.Submission, error) {
+func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string, preserveLineage bool) (*conversation.Session, *state.Submission, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	submissionID := ""
@@ -267,15 +267,15 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 		submissionID = strings.TrimSpace(sub.ID)
 	}
 
-	updatedSess, err := appState.UpdateSession(sessionKey, func(current *state.Session) {
+	updatedSess, err := appState.UpdateSession(sessionKey, func(current *conversation.Session) {
 		if current == nil {
 			return
 		}
 		if submissionID != "" {
-			sessionctx.RemoveActiveOperation(current, submissionID, turnID)
+			conversation.RemoveActiveOperation(current, submissionID, turnID)
 		}
 		switch {
-		case sessionctx.HasActiveOperations(current):
+		case conversation.HasActiveOperations(current):
 			current.Status = state.SessionStatusTurnStarting.String()
 			for _, op := range current.ActiveOperations {
 				if strings.TrimSpace(op.TurnID) != "" {
@@ -285,12 +285,12 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 			}
 		case len(current.Queue) > 0 || len(current.StagedImages) > 0:
 			if !preserveLineage {
-				sessionctx.ClearThreadContext(current)
+				conversation.ClearThreadContext(current)
 			}
 			current.Status = state.SessionStatusQueued.String()
 		default:
 			if !preserveLineage {
-				sessionctx.ClearThreadContext(current)
+				conversation.ClearThreadContext(current)
 			}
 			current.Status = state.SessionStatusIdle.String()
 		}
@@ -327,31 +327,31 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 		a.SubmissionQueueTurnStream().DeleteTurnStream(turnID)
 	}
 
-	if !preserveLineage && (updatedSess == nil || !sessionctx.HasActiveOperations(updatedSess)) {
+	if !preserveLineage && (updatedSess == nil || !conversation.HasActiveOperations(updatedSess)) {
 		a.SubmissionQueueLiveThread().ClearSessionLiveThread(sessionKey)
 	}
 	return updatedSess, refreshedSub, nil
 }
 
-func (s SubmissionQueueService) bindClaudeSubmissionStartState(sessionKey string, sess *state.Session, sub *state.Submission, claudeThreadID, turnID string) (*state.Session, error) {
+func (s SubmissionQueueService) bindClaudeSubmissionStartState(sessionKey string, sess *conversation.Session, sub *state.Submission, claudeThreadID, turnID string) (*conversation.Session, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
-	sessionctx.SetThreadContext(sess, sub.WorkspaceID, claudeThreadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), truncate(sub.InputText, 48)))
-	updatedSess, err := appState.UpdateSession(sessionKey, func(current *state.Session) {
+	conversation.SetThreadContext(sess, sub.WorkspaceID, claudeThreadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), truncate(sub.InputText, 48)))
+	updatedSess, err := appState.UpdateSession(sessionKey, func(current *conversation.Session) {
 		if current == nil {
 			return
 		}
-		sessionctx.SetThreadContext(current, sub.WorkspaceID, claudeThreadID, firstNonEmpty(strings.TrimSpace(current.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(current.ActiveThreadPreview), truncate(sub.InputText, 48)))
-		op := state.SessionActiveOperation{
-			Kind:         sessionctx.OpKindSubmission,
+		conversation.SetThreadContext(current, sub.WorkspaceID, claudeThreadID, firstNonEmpty(strings.TrimSpace(current.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(current.ActiveThreadPreview), truncate(sub.InputText, 48)))
+		op := conversation.SessionActiveOperation{
+			Kind:         conversation.OpKindSubmission,
 			SubmissionID: sub.ID,
 			ThreadID:     claudeThreadID,
 			TurnID:       turnID,
 		}
-		if sessionctx.HasActiveOperations(current) {
-			sessionctx.PrependActiveOperation(current, op)
+		if conversation.HasActiveOperations(current) {
+			conversation.PrependActiveOperation(current, op)
 		} else {
-			sessionctx.UpsertActiveOperation(current, op)
+			conversation.UpsertActiveOperation(current, op)
 		}
 		current.Status = state.SessionStatusTurnInProgress.String()
 	})
@@ -419,8 +419,8 @@ func (s SubmissionQueueService) deferClaudeModelConfig(sessionKey string, sub *s
 	}); err != nil {
 		return err
 	}
-	_, err := appState.UpdateSession(sessionKey, func(current *state.Session) {
-		sessionctx.RemoveActiveOperation(current, sub.ID, "")
+	_, err := appState.UpdateSession(sessionKey, func(current *conversation.Session) {
+		conversation.RemoveActiveOperation(current, sub.ID, "")
 		queue := []string{sub.ID}
 		for _, id := range current.Queue {
 			if id != sub.ID {
@@ -429,7 +429,7 @@ func (s SubmissionQueueService) deferClaudeModelConfig(sessionKey string, sub *s
 		}
 		current.Queue = queue
 		current.ModelConfigError = applyErr.Error()
-		if !sessionctx.HasActiveOperations(current) {
+		if !conversation.HasActiveOperations(current) {
 			current.Status = state.SessionStatusQueued.String()
 		}
 	})

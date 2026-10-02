@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 
 	appcore "feidex/internal/app/appcore"
@@ -24,32 +25,32 @@ func (a convBackendConversationAdapter) ListCodexThreads(app appconvbackend.App,
 	return newWorkspaceThreadService(app.(*App)).ListCodexWorkspaceThreads(sessionKey, ws, includeAll)
 }
 
-func (a convBackendConversationAdapter) EnsureCodexBinding(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
+func (a convBackendConversationAdapter) EnsureCodexBinding(app appconvbackend.App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
 	return newWorkspaceThreadService(app.(*App)).EnsureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
-func (a convBackendConversationAdapter) StartCodexThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
+func (a convBackendConversationAdapter) StartCodexThread(app appconvbackend.App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
 	return newWorkspaceThreadService(app.(*App)).StartCodexWorkspaceThread(sessionKey, sess, ws)
 }
 
-func (a convBackendConversationAdapter) ResumeCodexThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
+func (a convBackendConversationAdapter) ResumeCodexThread(app appconvbackend.App, sessionKey string, sess *conversation.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
 	root := app.(*App)
 	return appconvbackend.ResumeCodexSelectedThread(appconvbackend.CodexResumeDeps{
 		Context:           root.Context,
 		RequireClient:     func() (appconvbackend.CodexRPCClient, error) { return requireCodexClient(root) },
 		SaveSession:       root.State().SaveSession,
-		BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(root, sess) },
-		SetThreadContext: func(sess *state.Session, workspaceID, threadID, name, preview string) {
-			setSessionThreadContext(sess, workspaceID, threadID, name, preview)
+		BuildThreadConfig: func(sess *conversation.Session) map[string]any { return codexAuxiliaryConfig(root, sess) },
+		SetThreadContext: func(sess *conversation.Session, workspaceID, threadID, name, preview string) {
+			conversation.SetThreadContext(sess, workspaceID, threadID, name, preview)
 		},
-		ResetActiveOps:     sessionResetActiveOperations,
+		ResetActiveOps:     conversation.ResetActiveOperations,
 		MarkThreadLive:     func(sessionKey, threadID string) { markSessionThreadLive(root, sessionKey, threadID) },
 		DefaultWorkspaceID: func() string { return defaultWorkspaceID(root) },
 		ConfiguredModel:    func() string { return effectiveCodexModel(root, sess, ws) },
 	}, sessionKey, sess, ws, sel)
 }
 
-func (a convBackendConversationAdapter) InterruptCodexTurn(app appconvbackend.App, ctx context.Context, sess *state.Session) error {
+func (a convBackendConversationAdapter) InterruptCodexTurn(app appconvbackend.App, ctx context.Context, sess *conversation.Session) error {
 	root := app.(*App)
 	err := appconvbackend.InterruptCodexActiveTurn(appconvbackend.CodexInterruptDeps{
 		Context:       root.Context,
@@ -75,7 +76,7 @@ func (a convBackendConversationAdapter) ContinueCodexTurn(app appconvbackend.App
 	}, sessionKey, text)
 }
 
-func (a convBackendConversationAdapter) TryCodexReplyContinuation(app appconvbackend.App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+func (a convBackendConversationAdapter) TryCodexReplyContinuation(app appconvbackend.App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 	root := app.(*App)
 	replySvc := newReplyContinuationService(root)
 	return appconvbackend.TryCodexReplyContinuation(appconvbackend.CodexReplyContinuationDeps{
@@ -93,11 +94,11 @@ func (a convBackendConversationAdapter) TryCodexReplyContinuation(app appconvbac
 	}, msg, link, sessionKey, sess)
 }
 
-func (a convBackendConversationAdapter) ForkCodexConversation(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+func (a convBackendConversationAdapter) ForkCodexConversation(app appconvbackend.App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error) {
 	return forkCodexActiveConversation(app.(*App), sessionKey, sess, ws)
 }
 
-func (a convBackendConversationAdapter) RecoverCodexStartup(app appconvbackend.App, sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
+func (a convBackendConversationAdapter) RecoverCodexStartup(app appconvbackend.App, sessionKey, workspaceID string, sess *conversation.Session, ws *config.Workspace, effectiveModel string) {
 	root := app.(*App)
 	appconvbackend.RecoverCodexStartupConversation(appconvbackend.CodexStartupRecoveryDeps{
 		Context:       root.Context,
@@ -105,15 +106,15 @@ func (a convBackendConversationAdapter) RecoverCodexStartup(app appconvbackend.A
 		RuntimeRecovering: func() bool {
 			return codexRuntimeRecovering(root)
 		},
-		BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
+		BuildThreadStartParams: func(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
 			return buildThreadStartParams(root, ws, sess, effectiveModel)
 		},
-		BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(root, sess) },
+		BuildThreadConfig: func(sess *conversation.Session) map[string]any { return codexAuxiliaryConfig(root, sess) },
 		SaveSession:       root.State().SaveSession,
-		SetThreadContext: func(sess *state.Session, workspaceID, threadID, name, preview string) {
-			setSessionThreadContext(sess, workspaceID, threadID, name, preview)
+		SetThreadContext: func(sess *conversation.Session, workspaceID, threadID, name, preview string) {
+			conversation.SetThreadContext(sess, workspaceID, threadID, name, preview)
 		},
-		ClearThreadContext:     clearSessionThreadContext,
+		ClearThreadContext:     conversation.ClearThreadContext,
 		MarkThreadLive:         func(sessionKey, threadID string) { markSessionThreadLive(root, sessionKey, threadID) },
 		ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(root, sessionKey) },
 	}, sessionKey, workspaceID, sess, ws, effectiveModel)
@@ -123,31 +124,31 @@ func (a convBackendConversationAdapter) ListClaudeThreads(sessionKey string, ws 
 	return claudesession.ListSessions(sessionKey, ws, includeAll)
 }
 
-func (a convBackendConversationAdapter) EnsureClaudeBinding(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
+func (a convBackendConversationAdapter) EnsureClaudeBinding(app appconvbackend.App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
 	return newWorkspaceThreadService(app.(*App)).EnsureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
-func (a convBackendConversationAdapter) StartClaudeThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
+func (a convBackendConversationAdapter) StartClaudeThread(app appconvbackend.App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appconvbackend.ThreadBinding, error) {
 	return newWorkspaceThreadService(app.(*App)).StartClaudeWorkspaceThread(sessionKey, sess, ws)
 }
 
-func (a convBackendConversationAdapter) ResumeClaudeThread(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
+func (a convBackendConversationAdapter) ResumeClaudeThread(app appconvbackend.App, sessionKey string, sess *conversation.Session, ws *config.Workspace, sel appconvbackend.ThreadResumeSelection) (*appconvbackend.ThreadBinding, error) {
 	root := app.(*App)
 	return appconvbackend.ResumeClaudeSelectedThread(appconvbackend.ClaudeResumeDeps{
 		Context:          root.Context,
 		FindSessionEntry: claudesession.FindSessionEntry,
 		EnsureSession:    root.claude,
 		SaveSession:      root.State().SaveSession,
-		ClearThreadContext: func(sess *state.Session) {
-			clearSessionThreadContext(sess)
+		ClearThreadContext: func(sess *conversation.Session) {
+			conversation.ClearThreadContext(sess)
 		},
-		SetThreadContext: func(sess *state.Session, workspaceID, threadID, name, preview string) {
-			setSessionThreadContext(sess, workspaceID, threadID, name, preview)
+		SetThreadContext: func(sess *conversation.Session, workspaceID, threadID, name, preview string) {
+			conversation.SetThreadContext(sess, workspaceID, threadID, name, preview)
 		},
-		ResetActiveOps:     sessionResetActiveOperations,
+		ResetActiveOps:     conversation.ResetActiveOperations,
 		MarkThreadLive:     func(sessionKey, threadID string) { markSessionThreadLive(root, sessionKey, threadID) },
 		DefaultWorkspaceID: func() string { return defaultWorkspaceID(root) },
-		ResolveModel: func(sess *state.Session, ws *config.Workspace) string {
+		ResolveModel: func(sess *conversation.Session, ws *config.Workspace) string {
 			return effectiveClaudeModel(root, sess, ws)
 		},
 	}, sessionKey, sess, ws, sel)
@@ -165,22 +166,22 @@ func (a convBackendConversationAdapter) ContinueClaudeTurn(app appconvbackend.Ap
 	return newReplyContinuationService(app.(*App)).continueClaudeSessionWithText(sessionKey, text)
 }
 
-func (a convBackendConversationAdapter) TryClaudeReplyContinuation(app appconvbackend.App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+func (a convBackendConversationAdapter) TryClaudeReplyContinuation(app appconvbackend.App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 	return newReplyContinuationService(app.(*App)).tryClaudeReplyContinuation(msg, link, sessionKey, sess)
 }
 
-func (a convBackendConversationAdapter) ForkClaudeConversation(app appconvbackend.App, sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+func (a convBackendConversationAdapter) ForkClaudeConversation(app appconvbackend.App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error) {
 	return forkClaudeActiveConversation(app.(*App), sessionKey, sess, ws)
 }
 
-func (a convBackendConversationAdapter) RecoverClaudeStartup(app appconvbackend.App, sessionKey, workspaceID string, sess *state.Session) {
+func (a convBackendConversationAdapter) RecoverClaudeStartup(app appconvbackend.App, sessionKey, workspaceID string, sess *conversation.Session) {
 	appconvbackend.RecoverClaudeStartupConversation(appconvbackend.ClaudeStartupRecoveryDeps{
 		Context:        app.(*App).Context,
 		MarkThreadLive: func(sessionKey, threadID string) { markSessionThreadLive(app.(*App), sessionKey, threadID) },
 	}, sessionKey, workspaceID, sess)
 }
 
-func (a convBackendConversationAdapter) StartNextSubmission(app appconvbackend.App, sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (a convBackendConversationAdapter) StartNextSubmission(app appconvbackend.App, sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	if appcore.ConfiguredBackend(app) == "claude" {
 		return newSubmissionQueueServiceFromApp(app.(*App)).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 	}
@@ -209,7 +210,7 @@ func (a convBackendWorkspaceConfigAdapter) RenderCodexHistoryDetailCard(app appc
 	return newHistoryService(app.(*App)).RenderCodexHistoryDetailCard(sessionKey, index)
 }
 
-func (a convBackendWorkspaceConfigAdapter) RenderCodexUsageBody(app appconvbackend.App, sess *state.Session) string {
+func (a convBackendWorkspaceConfigAdapter) RenderCodexUsageBody(app appconvbackend.App, sess *conversation.Session) string {
 	return newUsageService(app.(*App)).RenderCodexUsageBody(sess)
 }
 
@@ -225,7 +226,7 @@ func (a convBackendWorkspaceConfigAdapter) RenderClaudeHistoryDetailCard(app app
 	return renderClaudeHistoryDetailCard(app.(*App), sessionKey, index)
 }
 
-func (a convBackendWorkspaceConfigAdapter) RenderClaudeUsageBody(app appconvbackend.App, sess *state.Session) string {
+func (a convBackendWorkspaceConfigAdapter) RenderClaudeUsageBody(app appconvbackend.App, sess *conversation.Session) string {
 	return newUsageService(app.(*App)).RenderClaudeUsageBody(sess)
 }
 

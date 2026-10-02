@@ -5,6 +5,7 @@ package debugviewcmd
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -50,7 +51,7 @@ type FeishuClient interface {
 // AppStateProvider narrows app state access to the session and pending
 // request operations used by these services.
 type AppStateProvider interface {
-	Session(sessionKey string) *state.Session
+	Session(sessionKey string) *conversation.Session
 	NextLocalID(prefix string) (string, error)
 	SavePending(req *state.PendingRequest) error
 	UpdatePending(id string, mutate func(*state.PendingRequest)) error
@@ -79,12 +80,12 @@ type turnbindingClaudeSnapshot = turnbinding.ClaudeThreadUsageSnapshot
 // ConversationBackendProvider narrows conversation backend access to the
 // usage body rendering method.
 type ConversationBackendProvider interface {
-	RenderUsageBody(sess *state.Session) string
+	RenderUsageBody(sess *conversation.Session) string
 }
 
 // WorkspaceConfigProvider narrows workspace config access.
 type WorkspaceConfigProvider interface {
-	CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace)
+	CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace)
 }
 
 // WorkspaceRenderProvider narrows workspace render access.
@@ -129,7 +130,7 @@ type App interface {
 	// DebugCommandLabel formats a command label with its slash command.
 	DebugCommandLabel(label, slash string) string
 	// DebugCurrentThreadLabel returns the display label for the active thread.
-	DebugCurrentThreadLabel(sess *state.Session) string
+	DebugCurrentThreadLabel(sess *conversation.Session) string
 	// DebugPrimaryConversationMissingLabel returns the label for a missing
 	// conversation for the given backend.
 	DebugPrimaryConversationMissingLabel(backend string) string
@@ -517,7 +518,7 @@ func (s UsageService) RenderUsageCard(sessionKey string) map[string]any {
 }
 
 // RenderClaudeUsageBody renders the Claude usage body.
-func (s UsageService) RenderClaudeUsageBody(sess *state.Session) string {
+func (s UsageService) RenderClaudeUsageBody(sess *conversation.Session) string {
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return s.app.DebugPrimaryConversationMissingLabel("claude") + "。"
 	}
@@ -529,7 +530,7 @@ func (s UsageService) RenderClaudeUsageBody(sess *state.Session) string {
 }
 
 // RenderCodexUsageBody renders the Codex usage body.
-func (s UsageService) RenderCodexUsageBody(sess *state.Session) string {
+func (s UsageService) RenderCodexUsageBody(sess *conversation.Session) string {
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return s.app.DebugPrimaryConversationMissingLabel("codex") + "。"
 	}

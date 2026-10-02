@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/app/appcore"
+	"feidex/internal/domain/conversation"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"fmt"
 	"log/slog"
@@ -216,14 +217,14 @@ type InteractiveDeps struct {
 
 type LookupDeps struct {
 	FindSubmissionByTurn func(threadID, turnID string) (string, *state.Submission)
-	GetSession           func(sessionKey string) *state.Session
-	SessionHasActiveOps  func(sess *state.Session) bool
+	GetSession           func(sessionKey string) *conversation.Session
+	SessionHasActiveOps  func(sess *conversation.Session) bool
 	NextLocalID          func(prefix string) (string, error)
 	WorkspaceCwd         func(workspaceID string) string
 }
 
 type PermissionDeps struct {
-	EffectivePermissionMode func(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string
+	EffectivePermissionMode func(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string
 	QuietWorkingCardEnabled func() bool
 }
 
@@ -438,14 +439,14 @@ func (s *Service) FindSubmissionByTurn(threadID, turnID string) (string, *state.
 	return s.deps.Lookup.FindSubmissionByTurn(threadID, turnID)
 }
 
-func (s *Service) GetSession(sessionKey string) *state.Session {
+func (s *Service) GetSession(sessionKey string) *conversation.Session {
 	if s == nil || s.deps.Lookup.GetSession == nil {
 		return nil
 	}
 	return s.deps.Lookup.GetSession(sessionKey)
 }
 
-func (s *Service) SessionHasActiveOps(sess *state.Session) bool {
+func (s *Service) SessionHasActiveOps(sess *conversation.Session) bool {
 	if s == nil || s.deps.Lookup.SessionHasActiveOps == nil {
 		return false
 	}
@@ -466,7 +467,7 @@ func (s *Service) WorkspaceCwd(workspaceID string) string {
 	return s.deps.Lookup.WorkspaceCwd(workspaceID)
 }
 
-func (s *Service) EffectivePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+func (s *Service) EffectivePermissionMode(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
 	if s == nil || s.deps.Permission.EffectivePermissionMode == nil {
 		return ""
 	}
@@ -1174,14 +1175,14 @@ func upsertEnvValue(env []string, key, value string) []string {
 func (s *Service) permissionModeForSession(ctx context.Context, sessionKey string, ws *config.Workspace, cfg config.ClaudeConfig) claudecli.PermissionMode {
 	_ = ctx
 	_ = sessionKey
-	var sess *state.Session
+	var sess *conversation.Session
 	if s != nil {
 		sess = s.GetSession(sessionKey)
 	}
 	return PermissionModeValue(s.effectivePermissionMode(sess, ws, cfg))
 }
 
-func (s *Service) effectivePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+func (s *Service) effectivePermissionMode(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
 	return s.EffectivePermissionMode(sess, ws, cfg)
 }
 

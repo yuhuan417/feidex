@@ -6,6 +6,7 @@ package maintenance
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -74,20 +75,20 @@ type App interface {
 	MaintenanceSessionBelongsToFrontend(sessionKey string) bool
 	// MaintenanceClearSessionThreadContext clears the active thread lineage from
 	// the session.
-	MaintenanceClearSessionThreadContext(sess *state.Session)
+	MaintenanceClearSessionThreadContext(sess *conversation.Session)
 	// MaintenanceResetSessionActiveOperations clears active session operations.
-	MaintenanceResetSessionActiveOperations(sess *state.Session)
+	MaintenanceResetSessionActiveOperations(sess *conversation.Session)
 	// MaintenanceSessionHasInFlightSubmission reports whether the session still
 	// has in-flight submission state.
-	MaintenanceSessionHasInFlightSubmission(sess *state.Session) bool
+	MaintenanceSessionHasInFlightSubmission(sess *conversation.Session) bool
 	// MaintenanceClearSessionLiveThread clears live-thread tracking for the
 	// session.
 	MaintenanceClearSessionLiveThread(sessionKey string)
 	// MaintenanceEffectiveModel resolves startup recovery settings for this session.
-	MaintenanceEffectiveModel(sess *state.Session) string
+	MaintenanceEffectiveModel(sess *conversation.Session) string
 	// MaintenanceRecoverStartupConversation rebuilds backend-specific startup
 	// conversation state for an active thread.
-	MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string)
+	MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *conversation.Session, ws *config.Workspace, effectiveModel string)
 }
 
 // ---------------------------------------------------------------------------
@@ -107,9 +108,9 @@ type AppStateProvider interface {
 	// DeleteSubmission removes a submission by ID.
 	DeleteSubmission(id string)
 	// Sessions returns all sessions in the store.
-	Sessions() []*state.Session
+	Sessions() []*conversation.Session
 	// SaveSession persists a session snapshot.
-	SaveSession(sess *state.Session) error
+	SaveSession(sess *conversation.Session) error
 }
 
 // RuntimeStateProvider narrows runtime state access to the methods used by

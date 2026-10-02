@@ -2,6 +2,7 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"fmt"
@@ -275,7 +276,7 @@ func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
 		return fmt.Errorf("当前群没有已绑定的 workspace")
 	}
 	sess := s.app.State().Session(sessionKey)
-	if reason := appworkspacecmd.WorkspaceSwitchBlockedReason(sess, sessionHasInFlightSubmission(sess)); reason != "" {
+	if reason := appworkspacecmd.WorkspaceSwitchBlockedReason(sess, conversation.HasInFlightSubmission(sess)); reason != "" {
 		return fmt.Errorf("%s", reason)
 	}
 	if _, err := s.updateBinding(binding, func(current *state.AgentBinding) {
@@ -285,7 +286,7 @@ func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
 		return err
 	}
 	if sess != nil {
-		switchSessionWorkspace(sess, "")
+		conversation.SwitchSessionWorkspace(sess, "")
 		clearSessionLiveThread(s.app, sess.Key)
 		if err := s.app.State().SaveSession(sess); err != nil {
 			return err

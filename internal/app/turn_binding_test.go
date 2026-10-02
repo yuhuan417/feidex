@@ -2,6 +2,7 @@ package app
 
 import (
 	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"encoding/json"
@@ -15,7 +16,7 @@ import (
 
 func TestFindSubmissionByTurnPrefersExplicitTurnBinding(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                "sess-1",
 		WorkspaceID:        "default",
 		ActiveThreadID:     "thread-1",

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/feishu"
@@ -16,7 +17,7 @@ func (w *submissionCoordinator) notifySubmissionStartFailure(ctx context.Context
 	newSubmissionQueueServiceFromApp(w.app).NotifySubmissionStartFailure(ctx, sub, err, willContinue)
 }
 
-func sessionShouldStartNextSubmissionAsync(sess *state.Session) bool {
+func sessionShouldStartNextSubmissionAsync(sess *conversation.Session) bool {
 	return appsubmission.ShouldStartNextSubmissionAsync(sess)
 }
 

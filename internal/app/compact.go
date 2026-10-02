@@ -2,8 +2,8 @@ package app
 
 import (
 	appcompact "feidex/internal/app/compact"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 const sessionStatusCompacting = "compacting"
@@ -12,7 +12,7 @@ const sessionStatusCompacting = "compacting"
 // Thin wrappers — canonical logic lives in compact.Service
 // ---------------------------------------------------------------------------
 
-func sessionHasActiveWork(sess *state.Session) bool {
+func sessionHasActiveWork(sess *conversation.Session) bool {
 	return appcompact.SessionHasActiveWork(sess)
 }
 
@@ -36,7 +36,7 @@ func runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) 
 	return appcompact.NewService(a).RunMenuCompactAction(sessionKey, action)
 }
 
-func startThreadCompaction(a *App, sessionKey string) (*state.Session, error) {
+func startThreadCompaction(a *App, sessionKey string) (*conversation.Session, error) {
 	return appcompact.NewService(a).StartThreadCompaction(sessionKey)
 }
 
@@ -68,7 +68,7 @@ func restoreStandaloneCompactSession(a *App, sessionKey, threadID, previousStatu
 	appcompact.NewService(a).RestoreStandaloneCompactSession(sessionKey, threadID, previousStatus)
 }
 
-func sendStandaloneCompactResult(a *App, sess *state.Session, status string) {
+func sendStandaloneCompactResult(a *App, sess *conversation.Session, status string) {
 	text := appcompact.StandaloneCompactResultText(status)
 	if text == "" {
 		return

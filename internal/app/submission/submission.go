@@ -4,6 +4,7 @@
 package submission
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/apputil"
@@ -50,7 +51,7 @@ func RemoveString(values []string, target string) []string {
 
 // StagedImageAttachments converts staged images to submission attachments,
 // skipping any images without a local path.
-func StagedImageAttachments(images []state.SessionStagedImage) []state.SubmissionAttachment {
+func StagedImageAttachments(images []conversation.SessionStagedImage) []state.SubmissionAttachment {
 	if len(images) == 0 {
 		return nil
 	}
@@ -70,7 +71,7 @@ func StagedImageAttachments(images []state.SessionStagedImage) []state.Submissio
 
 // StagedImageSourceMessageIDs extracts unique source message IDs from
 // staged images.
-func StagedImageSourceMessageIDs(images []state.SessionStagedImage) []string {
+func StagedImageSourceMessageIDs(images []conversation.SessionStagedImage) []string {
 	if len(images) == 0 {
 		return nil
 	}
@@ -83,7 +84,7 @@ func StagedImageSourceMessageIDs(images []state.SessionStagedImage) []string {
 
 // StagedImageRootMessageIDs extracts unique root message IDs from staged
 // images, falling back to source message IDs.
-func StagedImageRootMessageIDs(images []state.SessionStagedImage) []string {
+func StagedImageRootMessageIDs(images []conversation.SessionStagedImage) []string {
 	if len(images) == 0 {
 		return nil
 	}

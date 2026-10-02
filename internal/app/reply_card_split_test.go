@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	appdelivery "feidex/internal/app/delivery"
 	"feidex/internal/app/turnitem"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
-
-	"feidex/internal/state"
 )
 
 func markdownTestTable(name string) string {
@@ -82,7 +81,7 @@ func TestSendFinalMessagesWithFooterSkipsAttentionWhenQueuePending(t *testing.T)
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	ff.replyCardIDs = []string{"card-1"}
-	if _, err := a.store.UpdateSession("sess-1", func(sess *state.Session) {
+	if _, err := a.store.UpdateSession("sess-1", func(sess *conversation.Session) {
 		if sess == nil {
 			return
 		}

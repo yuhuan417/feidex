@@ -4,13 +4,13 @@ package compact
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"time"
 
 	appcore "feidex/internal/app/appcore"
 	apputil "feidex/internal/app/apputil"
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/feishu"
@@ -58,9 +58,9 @@ type App interface {
 
 // SessionStore abstracts session persistence for the compact service.
 type SessionStore interface {
-	GetSession(key string) *state.Session
-	AllSessions() []*state.Session
-	SaveSession(sess *state.Session) error
+	GetSession(key string) *conversation.Session
+	AllSessions() []*conversation.Session
+	SaveSession(sess *conversation.Session) error
 }
 
 // ---------------------------------------------------------------------------
@@ -78,11 +78,11 @@ func normalizeWorkingStatus(v any) string {
 
 // SessionHasActiveWork reports whether the session has active work.
 // This is the canonical implementation; app/ provides a thin wrapper.
-func SessionHasActiveWork(sess *state.Session) bool {
+func SessionHasActiveWork(sess *conversation.Session) bool {
 	if sess == nil {
 		return false
 	}
-	if sessionctx.HasActiveOperations(sess) {
+	if conversation.HasActiveOperations(sess) {
 		return true
 	}
 	switch state.NormalizeSessionStatus(sess.Status) {
@@ -192,7 +192,7 @@ func (s Service) RunMenuCompactAction(sessionKey string, action any) error {
 }
 
 // StartThreadCompaction starts a context compaction on the active thread.
-func (s Service) StartThreadCompaction(sessionKey string) (*state.Session, error) {
+func (s Service) StartThreadCompaction(sessionKey string) (*conversation.Session, error) {
 	if s.app == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
@@ -244,23 +244,23 @@ func (s Service) BindStandaloneCompactTurn(threadID, turnID string) bool {
 		if sess == nil {
 			continue
 		}
-		if currentTurn := sessionctx.FindActiveOperationByTurn(sess, turnID); currentTurn != nil && strings.TrimSpace(currentTurn.SubmissionID) == "" {
+		if currentTurn := conversation.FindActiveOperationByTurn(sess, turnID); currentTurn != nil && strings.TrimSpace(currentTurn.SubmissionID) == "" {
 			return true
 		}
-		if sessionctx.HasInFlightSubmission(sess) {
+		if conversation.HasInFlightSubmission(sess) {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
-		if currentTurn := sessionctx.ForegroundOperation(sess); currentTurn != nil && strings.TrimSpace(currentTurn.TurnID) != "" && strings.TrimSpace(currentTurn.TurnID) != turnID {
+		if currentTurn := conversation.ForegroundOperation(sess); currentTurn != nil && strings.TrimSpace(currentTurn.TurnID) != "" && strings.TrimSpace(currentTurn.TurnID) != turnID {
 			continue
 		}
 		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting {
 			continue
 		}
-		sessionctx.UpsertActiveOperation(sess, state.SessionActiveOperation{
-			Kind:     sessionctx.OpKindTurn,
+		conversation.UpsertActiveOperation(sess, conversation.SessionActiveOperation{
+			Kind:     conversation.OpKindTurn,
 			ThreadID: threadID,
 			TurnID:   turnID,
 		})
@@ -293,25 +293,25 @@ func (s Service) CompleteStandaloneCompactTurn(threadID, turnID string) bool {
 		if sess == nil {
 			continue
 		}
-		if op := sessionctx.FindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
+		if op := conversation.FindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
-		if turnID != "" && sessionctx.FindActiveOperationByTurn(sess, turnID) == nil && sessionctx.HasActiveOperations(sess) {
+		if turnID != "" && conversation.FindActiveOperationByTurn(sess, turnID) == nil && conversation.HasActiveOperations(sess) {
 			continue
 		}
-		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting && sessionctx.FindActiveOperationByThread(sess, threadID) == nil {
+		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting && conversation.FindActiveOperationByThread(sess, threadID) == nil {
 			continue
 		}
 		resolvedTurnID := strings.TrimSpace(turnID)
 		if resolvedTurnID == "" {
-			if op := sessionctx.FindActiveOperationByThread(sess, threadID); op != nil && strings.TrimSpace(op.SubmissionID) == "" {
+			if op := conversation.FindActiveOperationByThread(sess, threadID); op != nil && strings.TrimSpace(op.SubmissionID) == "" {
 				resolvedTurnID = strings.TrimSpace(op.TurnID)
 			}
 		}
-		sessionctx.RemoveActiveOperation(sess, "", resolvedTurnID)
+		conversation.RemoveActiveOperation(sess, "", resolvedTurnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 			sess.Status = state.SessionStatusQueued.String()
 		} else {
@@ -358,16 +358,16 @@ func (s Service) FinishStandaloneCompactTurn(threadID, turnID, status string) bo
 		if sess == nil {
 			continue
 		}
-		if op := sessionctx.FindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
+		if op := conversation.FindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
-		if sessionctx.FindActiveOperationByTurn(sess, turnID) == nil {
+		if conversation.FindActiveOperationByTurn(sess, turnID) == nil {
 			continue
 		}
-		sessionctx.RemoveActiveOperation(sess, "", turnID)
+		conversation.RemoveActiveOperation(sess, "", turnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 			sess.Status = state.SessionStatusQueued.String()
 		} else {
@@ -399,25 +399,25 @@ func (s Service) FailStandaloneCompactTurn(threadID, turnID, message string) boo
 		if sess == nil {
 			continue
 		}
-		if op := sessionctx.FindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
+		if op := conversation.FindActiveOperationByTurn(sess, turnID); op != nil && strings.TrimSpace(op.SubmissionID) != "" {
 			continue
 		}
 		if strings.TrimSpace(sess.ActiveThreadID) != threadID {
 			continue
 		}
-		if turnID != "" && sessionctx.FindActiveOperationByTurn(sess, turnID) == nil && sessionctx.HasActiveOperations(sess) {
+		if turnID != "" && conversation.FindActiveOperationByTurn(sess, turnID) == nil && conversation.HasActiveOperations(sess) {
 			continue
 		}
-		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting && sessionctx.FindActiveOperationByThread(sess, threadID) == nil {
+		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting && conversation.FindActiveOperationByThread(sess, threadID) == nil {
 			continue
 		}
 		resolvedTurnID := strings.TrimSpace(turnID)
 		if resolvedTurnID == "" {
-			if op := sessionctx.FindActiveOperationByThread(sess, threadID); op != nil && strings.TrimSpace(op.SubmissionID) == "" {
+			if op := conversation.FindActiveOperationByThread(sess, threadID); op != nil && strings.TrimSpace(op.SubmissionID) == "" {
 				resolvedTurnID = strings.TrimSpace(op.TurnID)
 			}
 		}
-		sessionctx.RemoveActiveOperation(sess, "", resolvedTurnID)
+		conversation.RemoveActiveOperation(sess, "", resolvedTurnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 			sess.Status = state.SessionStatusQueued.String()
 		} else {
@@ -449,7 +449,7 @@ func RestoreSession(store SessionStore, sessionKey, threadID, previousStatus str
 	if strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
 		return
 	}
-	if sessionctx.HasActiveOperations(sess) {
+	if conversation.HasActiveOperations(sess) {
 		return
 	}
 	if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting {
@@ -491,7 +491,7 @@ func StandaloneCompactResultText(status string) string {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-func (s Service) sendStandaloneCompactResult(sess *state.Session, status string) {
+func (s Service) sendStandaloneCompactResult(sess *conversation.Session, status string) {
 	text := StandaloneCompactResultText(status)
 	if text == "" {
 		return
@@ -500,7 +500,7 @@ func (s Service) sendStandaloneCompactResult(sess *state.Session, status string)
 }
 
 // SendSessionTextNotice sends a text notice to the session's chat.
-func (s Service) SendSessionTextNotice(sess *state.Session, text string) {
+func (s Service) SendSessionTextNotice(sess *conversation.Session, text string) {
 	if s.app == nil || s.app.Feishu() == nil || sess == nil {
 		return
 	}

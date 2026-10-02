@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"sort"
 	"strings"
@@ -138,7 +139,7 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 	}
 }
 
-func StartupReadyChatIDs(sessions []*state.Session) []string {
+func StartupReadyChatIDs(sessions []*conversation.Session) []string {
 	seen := map[string]struct{}{}
 	chatIDs := make([]string, 0, len(sessions))
 	for _, sess := range sessions {
@@ -172,11 +173,11 @@ func StartupReadyChatIDs(sessions []*state.Session) []string {
 	return chatIDs
 }
 
-func (s RuntimeMaintenanceService) FrontendStartupReadyChatIDs(sessions []*state.Session) []string {
+func (s RuntimeMaintenanceService) FrontendStartupReadyChatIDs(sessions []*conversation.Session) []string {
 	if s.app == nil {
 		return StartupReadyChatIDs(sessions)
 	}
-	filtered := make([]*state.Session, 0, len(sessions))
+	filtered := make([]*conversation.Session, 0, len(sessions))
 	for _, sess := range sessions {
 		if sess == nil || !s.app.MaintenanceSessionBelongsToFrontend(sess.Key) {
 			continue

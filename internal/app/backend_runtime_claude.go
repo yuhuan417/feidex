@@ -2,6 +2,7 @@ package app
 
 import (
 	appbackend "feidex/internal/app/backend"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"log/slog"
@@ -36,11 +37,11 @@ func (claudeRuntimeFacade) beginStartupRecoveryScope(*App) func() {
 	return func() {}
 }
 
-func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session {
+func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a == nil || sess == nil {
 		return sess
 	}
-	if !sessionHasInFlightSubmission(sess) {
+	if !conversation.HasInFlightSubmission(sess) {
 		return sess
 	}
 	turnID := strings.TrimSpace(sess.ActiveTurnID)
@@ -60,11 +61,11 @@ func (claudeRuntimeFacade) reconcileCompletedTurnFromFinalOutput(a *App, session
 	return a.State().Session(sessionKey)
 }
 
-func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *state.Session) *state.Session {
+func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a == nil || sess == nil {
 		return sess
 	}
-	if !sessionHasActiveOperations(sess) {
+	if !conversation.HasActiveOperations(sess) {
 		return sess
 	}
 	slog.Debug("clearing Claude active operations after interrupt",
@@ -87,11 +88,11 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 			}
 		}
 	}
-	updatedSess, err := a.State().UpdateSession(sessionKey, func(current *state.Session) {
+	updatedSess, err := a.State().UpdateSession(sessionKey, func(current *conversation.Session) {
 		if current == nil {
 			return
 		}
-		sessionResetActiveOperations(current)
+		conversation.ResetActiveOperations(current)
 		current.Status = state.SessionStatusIdle.String()
 	})
 	if err != nil {

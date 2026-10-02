@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,7 +22,7 @@ import (
 func modelBoundaryQueuedSubmission(t *testing.T, a *App, key, thread, text string) *state.Submission {
 	t.Helper()
 	if a.store.GetSession(key) == nil {
-		if err := a.store.UpsertSession(&state.Session{Key: key, WorkspaceID: a.cfg.Workspaces[0].ID,
+		if err := a.store.UpsertSession(&conversation.Session{Key: key, WorkspaceID: a.cfg.Workspaces[0].ID,
 			ActiveThreadID: thread, ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID, ChatID: "chat", Status: "idle"}); err != nil {
 			t.Fatal(err)
 		}
@@ -44,8 +45,8 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Codex.Model, a.cfg.Codex.ReasoningEffort = "old", "low"
 	sub := modelBoundaryQueuedSubmission(t, a, "sess-config", "thread-config", "queued")
-	_, err := a.store.UpdateSession(sub.SessionKey, func(sess *state.Session) {
-		sess.ActiveThreadCollaborationMode = &state.SessionCollaborationMode{Mode: "plan", Model: "old-plan", ReasoningEffort: "low"}
+	_, err := a.store.UpdateSession(sub.SessionKey, func(sess *conversation.Session) {
+		sess.ActiveThreadCollaborationMode = &conversation.SessionCollaborationMode{Mode: "plan", Model: "old-plan", ReasoningEffort: "low"}
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +186,7 @@ func TestModelConfigStartupRecoveryUsesSessionScope(t *testing.T) {
 				"group-b": "gpt-6.1-sol", "session": "session-model",
 			}
 			for chat, model := range models {
-				sess := &state.Session{
+				sess := &conversation.Session{
 					Key: "feishu:frontend:bot-a:chat:" + chat, ChatID: chat, ChatType: "group",
 					WorkspaceID: a.cfg.Workspaces[0].ID, ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
 					ActiveThreadID: chat, Status: "idle",
@@ -212,7 +213,7 @@ func TestModelConfigStartupRecoveryUsesSessionScope(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			foreign := &state.Session{
+			foreign := &conversation.Session{
 				Key: "feishu:frontend:bot-b:chat:foreign", WorkspaceID: a.cfg.Workspaces[0].ID,
 				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID, ActiveThreadID: "foreign", Status: "idle",
 			}
@@ -284,7 +285,7 @@ func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 	if err := a.State().SaveAgentBinding(binding); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.State().SaveSession(&state.Session{
+	if err := a.State().SaveSession(&conversation.Session{
 		Key: key, ChatID: binding.ChatID, ChatType: "group", BindingID: binding.ID,
 		WorkspaceID: a.cfg.Workspaces[0].ID, ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "group-thread", Status: "idle",
@@ -335,7 +336,7 @@ func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
 	fake := &fakeClaudeCore{ensureSessionErr: errors.New("must not initialize while steering")}
 	a.claude = fake
 	sub := seedActiveSubmission(t, a, "sess-steer", "original-thread", "turn-original")
-	if _, err := a.store.UpdateSession(sub.SessionKey, func(sess *state.Session) { sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID }); err != nil {
+	if _, err := a.store.UpdateSession(sub.SessionKey, func(sess *conversation.Session) { sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID }); err != nil {
 		t.Fatal(err)
 	}
 	follow := modelBoundaryQueuedSubmission(t, a, sub.SessionKey, "original-thread", "answer")
@@ -411,11 +412,11 @@ func TestModelConfigGroupWritesDuringWorkPreservePending(t *testing.T) {
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: "binding", ChatID: msg.ChatID, ChatType: "group", WorkspaceID: a.cfg.Workspaces[0].ID, Status: "active"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.State().UpdateSession(key, func(s *state.Session) {
+	if _, err := a.State().UpdateSession(key, func(s *conversation.Session) {
 		s.BindingID = "binding"
 		s.ChatID = msg.ChatID
 		s.ChatType = "group"
-		s.StagedImages = []state.SessionStagedImage{{}}
+		s.StagedImages = []conversation.SessionStagedImage{{}}
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +468,7 @@ func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T)
 	a.claude = r
 	t.Cleanup(func() { _ = r.Close() })
 	for _, key := range []string{"one", "two"} {
-		if err := a.store.UpsertSession(&state.Session{Key: key, ActiveThreadID: "thread-" + key, WorkspaceID: a.cfg.Workspaces[0].ID, Status: "idle"}); err != nil {
+		if err := a.store.UpsertSession(&conversation.Session{Key: key, ActiveThreadID: "thread-" + key, WorkspaceID: a.cfg.Workspaces[0].ID, Status: "idle"}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := r.EnsureSession(context.Background(), key, &a.cfg.Workspaces[0], "thread-"+key, ""); err != nil {
@@ -517,7 +518,7 @@ func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T)
 
 func TestModelConfigPlanDefaultUsesPresetAfterClearingOverride(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	sess := &state.Session{ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+	sess := &conversation.Session{ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 		Mode: "plan", Model: "plan", ReasoningEffort: "high", PresetReasoningEffort: "medium",
 	}}
 	a.cfg.Codex.PlanReasoningEffort = "high"

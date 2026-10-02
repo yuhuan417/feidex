@@ -1,12 +1,12 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *testing.T) {
@@ -20,7 +20,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-session-1",
@@ -58,7 +58,7 @@ func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *t
 	a.cfg.Claude.DangerouslySkipPermissions = true
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-session-1",
@@ -100,7 +100,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-session-1",
@@ -138,7 +138,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *tes
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-session-1",

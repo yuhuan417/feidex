@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	appreviewcmd "feidex/internal/app/reviewcmd"
+	"feidex/internal/domain/conversation"
 	"os"
 	"strings"
 	"sync"
@@ -415,7 +416,7 @@ func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testi
 	a.claude = claude
 
 	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-1", UserID: "user-1"})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		OwnerUserID:    "user-1",

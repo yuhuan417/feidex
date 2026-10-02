@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"time"
 
@@ -137,11 +138,11 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
 				return newSubmissionQueueServiceFromApp(app).FindSubmissionByTurn(threadID, turnID)
 			},
-			GetSession: func(sessionKey string) *state.Session {
+			GetSession: func(sessionKey string) *conversation.Session {
 				return app.State().Session(sessionKey)
 			},
-			SessionHasActiveOps: func(sess *state.Session) bool {
-				return sessionHasActiveOperations(sess)
+			SessionHasActiveOps: func(sess *conversation.Session) bool {
+				return conversation.HasActiveOperations(sess)
 			},
 			NextLocalID: func(prefix string) (string, error) {
 				return app.State().NextLocalID(prefix)
@@ -151,7 +152,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			},
 		},
 		Permission: appclauderuntime.PermissionDeps{
-			EffectivePermissionMode: func(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+			EffectivePermissionMode: func(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
 				return effectiveBindingClaudePermissionMode(app, sess, ws, cfg)
 			},
 			QuietWorkingCardEnabled: func() bool {
@@ -166,7 +167,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			return modelConfigSnapshot(app, sess, backendClaude)
 		},
 		ModelSettingsApplied: func(sessionKey string, settings domainmodelconfig.Snapshot) {
-			_, err := app.State().UpdateSession(sessionKey, func(sess *state.Session) {
+			_, err := app.State().UpdateSession(sessionKey, func(sess *conversation.Session) {
 				sess.AppliedModelConfig = settings
 				sess.ModelConfigError = ""
 			})

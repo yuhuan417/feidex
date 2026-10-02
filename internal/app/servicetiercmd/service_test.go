@@ -1,6 +1,7 @@
 package servicetiercmd
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 	"sync"
 	"testing"
@@ -35,14 +36,14 @@ type appStateProvider struct {
 	store *state.Store
 }
 
-func (p appStateProvider) Session(key string) *state.Session {
+func (p appStateProvider) Session(key string) *conversation.Session {
 	if p.store == nil {
 		return nil
 	}
 	return p.store.GetSession(key)
 }
 
-func (p appStateProvider) SaveSession(sess *state.Session) error {
+func (p appStateProvider) SaveSession(sess *conversation.Session) error {
 	if p.store == nil || sess == nil {
 		return nil
 	}
@@ -85,7 +86,7 @@ func TestServiceTierHelpersAndMenu(t *testing.T) {
 		t.Fatalf("RenderMenuCard(no thread) = %q", body)
 	}
 
-	if err := store.UpsertSession(&state.Session{
+	if err := store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
 		ActiveThreadID:          "thread-1",
@@ -128,7 +129,7 @@ func TestSetThreadServiceTierAndCommandFastValidation(t *testing.T) {
 	if _, err := svc.SetThreadServiceTier("sess-1", "thread-1", ServiceTierFast); err == nil || !strings.Contains(err.Error(), "没有活动线程") {
 		t.Fatalf("SetThreadServiceTier(no thread) error = %v", err)
 	}
-	if err := store.UpsertSession(&state.Session{
+	if err := store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",

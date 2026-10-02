@@ -3,11 +3,11 @@ package clauderuntime
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"reflect"
 	"testing"
 
 	domainmodelconfig "feidex/internal/domain/modelconfig"
-	"feidex/internal/state"
 )
 
 type recordingModelClient struct {
@@ -70,8 +70,8 @@ func TestModelConfigSafeBoundaryIncludesApprovalsAndBackgroundWork(t *testing.T)
 			case "background_count":
 				current.PendingBackgroundAgentCount = 1
 			case "app_operation":
-				s.deps.Lookup.GetSession = func(string) *state.Session { return &state.Session{} }
-				s.deps.Lookup.SessionHasActiveOps = func(*state.Session) bool { return true }
+				s.deps.Lookup.GetSession = func(string) *conversation.Session { return &conversation.Session{} }
+				s.deps.Lookup.SessionHasActiveOps = func(*conversation.Session) bool { return true }
 			case "idle":
 				s.pending["other"] = &PendingInteraction{Session: &SessionState{SessionKey: "other"}}
 				current.BackgroundTasks["done"] = &BackgroundTaskState{Live: false, Notified: true}

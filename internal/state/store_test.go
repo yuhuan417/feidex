@@ -3,6 +3,7 @@ package state
 import (
 	"encoding/json"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -157,11 +158,11 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 		t.Fatalf("UpsertSession(nil) error = %v", err)
 	}
 
-	original := &Session{
+	original := &conversation.Session{
 		Key:          "session-1",
 		Status:       "busy",
 		Queue:        []string{"sub-1"},
-		StagedImages: []SessionStagedImage{{SourceMessageID: "m-1", Name: "shot.png"}},
+		StagedImages: []conversation.SessionStagedImage{{SourceMessageID: "m-1", Name: "shot.png"}},
 	}
 	if err := store.UpsertSession(original); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
@@ -268,7 +269,7 @@ func TestSessionQueueAndCloneBehavior(t *testing.T) {
 func TestSessionContextAndExplicitBindingMetadata(t *testing.T) {
 	store := openTestStore(t)
 	key := "feishu:frontend:frontend-a:chat:chat-1"
-	if err := store.UpsertSession(&Session{Key: key, BindingID: "binding-1", WorkspaceID: "workspace-1", ChatID: "chat-1", ChatType: "group"}); err != nil {
+	if err := store.UpsertSession(&conversation.Session{Key: key, BindingID: "binding-1", WorkspaceID: "workspace-1", ChatID: "chat-1", ChatType: "group"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 	sess := store.GetSession(key)
@@ -372,7 +373,7 @@ func TestSessionContextIsRecoveredFromSessionKey(t *testing.T) {
 	}
 
 	groupKey := "feishu:group:chat-1:root:root-1"
-	if err := store.UpsertSession(&Session{
+	if err := store.UpsertSession(&conversation.Session{
 		Key:                     groupKey,
 		WorkspaceID:             "ws",
 		ActiveThreadID:          "thread-1",
@@ -401,7 +402,7 @@ func TestSessionContextIsRecoveredFromSessionKey(t *testing.T) {
 	}
 
 	p2pKey := "feishu:p2p:chat-2:user-9"
-	if err := reopened.UpsertSession(&Session{
+	if err := reopened.UpsertSession(&conversation.Session{
 		Key:      p2pKey,
 		ChatID:   "chat-2",
 		ChatType: "p2p",

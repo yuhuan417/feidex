@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
@@ -49,12 +50,12 @@ func TestPlanModeSessionCardsPrefixWorkspaceAndPlan(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sessionKey := "feishu:chat:chat"
 	workspaceID := a.cfg.Workspaces[0].ID
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             workspaceID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: workspaceID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:  "plan",
 			Model: "gpt-5.4",
 		},

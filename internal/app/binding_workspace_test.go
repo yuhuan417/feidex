@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"path/filepath"
 	"testing"
 
@@ -24,7 +25,7 @@ func TestResolveSubmissionWorkspaceUsesLocalBindingOnly(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	sess := &state.Session{
+	sess := &conversation.Session{
 		Key:       "feishu:frontend:frontend-a:chat:chat-1",
 		BindingID: "binding-client",
 	}
@@ -39,7 +40,7 @@ func TestResolveSubmissionWorkspaceUsesLocalBindingOnly(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding(empty) error = %v", err)
 	}
-	emptySession := &state.Session{
+	emptySession := &conversation.Session{
 		Key:         "feishu:frontend:frontend-a:chat:chat-2",
 		BindingID:   "binding-empty",
 		WorkspaceID: "",

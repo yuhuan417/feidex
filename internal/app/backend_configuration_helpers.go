@@ -4,8 +4,8 @@ import (
 	appbackend "feidex/internal/app/backend"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -36,7 +36,7 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 						Message:    msg,
 						Args:       args[1:],
 						SessionKey: sessionKey,
-						CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace) {
+						CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *conversation.Session, *config.Workspace) {
 							return currentWorkspaceForMessage(app, msg)
 						},
 						ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
@@ -143,6 +143,6 @@ func (s backendConfigurationService) completeGlobalReasoningEffortSet(action *fe
 	return s.inner.CompleteGlobalReasoningEffortSet(action, reasoningEffort)
 }
 
-func (s backendConfigurationService) statusCardBody(sess *state.Session) string {
+func (s backendConfigurationService) statusCardBody(sess *conversation.Session) string {
 	return s.inner.StatusCardBody(sess)
 }

@@ -4,6 +4,7 @@ package workspacecmd
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/appcore"
@@ -108,9 +109,9 @@ type CodexClient interface {
 
 // State access callbacks.
 type (
-	GetSessionFn    func(key string) *state.Session
-	SessionsFn      func() []*state.Session
-	SaveSessionFn   func(sess *state.Session) error
+	GetSessionFn    func(key string) *conversation.Session
+	SessionsFn      func() []*conversation.Session
+	SaveSessionFn   func(sess *conversation.Session) error
 	NextLocalIDFn   func(prefix string) (string, error)
 	PendingFn       func(id string) *state.PendingRequest
 	SavePendingFn   func(req *state.PendingRequest) error
@@ -120,19 +121,19 @@ type (
 // Thread callbacks.
 type (
 	ListWorkspaceThreadsFn         func(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
-	EnsureWorkspaceThreadBindingFn func(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
-	StartWorkspaceThreadFn         func(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
+	EnsureWorkspaceThreadBindingFn func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
+	StartWorkspaceThreadFn         func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
 	MarkSessionThreadLiveFn        func(sessionKey, threadID string)
 	ClearSessionLiveThreadFn       func(sessionKey string)
 )
 
 // Session context callbacks.
 type (
-	SessionHasInFlightFn     func(sess *state.Session) bool
-	SwitchSessionWorkspaceFn func(sess *state.Session, workspaceID string)
-	ClearSessionThreadCtxFn  func(sess *state.Session)
-	SetSessionThreadCtxFn    func(sess *state.Session, workspaceID, threadID, name, preview string)
-	SessionResetActiveOpsFn  func(sess *state.Session)
+	SessionHasInFlightFn     func(sess *conversation.Session) bool
+	SwitchSessionWorkspaceFn func(sess *conversation.Session, workspaceID string)
+	ClearSessionThreadCtxFn  func(sess *conversation.Session)
+	SetSessionThreadCtxFn    func(sess *conversation.Session, workspaceID, threadID, name, preview string)
+	SessionResetActiveOpsFn  func(sess *conversation.Session)
 )
 
 // Clone operation callbacks.
@@ -147,7 +148,7 @@ type (
 // Codex client callbacks.
 type (
 	RequireCodexClientFn     func() (CodexClient, error)
-	BuildThreadStartParamsFn func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams
+	BuildThreadStartParamsFn func(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams
 )
 
 // Backend configuration callbacks.
@@ -189,8 +190,8 @@ type (
 	RenderWorkspaceMultiAgentMenuCardFn func(sessionKey string) (map[string]any, error)
 	RenderWorkspaceDeleteMenuCardFn     func(sessionKey string) (map[string]any, error)
 	RenderWorkspaceDeleteConfirmCardFn  func(sessionKey, workspaceID string) (map[string]any, error)
-	WorkspaceIDForSessionFn             func(sessionKey string, sess *state.Session) string
-	WorkspaceMenuBodyLinesFn            func(sessionKey string, sess *state.Session, lines []string) []string
+	WorkspaceIDForSessionFn             func(sessionKey string, sess *conversation.Session) string
+	WorkspaceMenuBodyLinesFn            func(sessionKey string, sess *conversation.Session, lines []string) []string
 )
 
 // ---------------------------------------------------------------------------
@@ -235,7 +236,7 @@ type CloneDeps struct {
 type CodexDeps struct {
 	RequireCodexClient     RequireCodexClientFn
 	BuildThreadStartParams BuildThreadStartParamsFn
-	BuildThreadConfig      func(sess *state.Session) map[string]any
+	BuildThreadConfig      func(sess *conversation.Session) map[string]any
 }
 
 type BackendConfigDeps struct {
@@ -367,19 +368,19 @@ func NewConfigService(deps ConfigDeps) *ConfigService {
 	return &ConfigService{App: deps.App, deps: deps}
 }
 
-func (s ConfigService) GetSession(key string) *state.Session {
+func (s ConfigService) GetSession(key string) *conversation.Session {
 	if s.deps.State.GetSession == nil {
 		return nil
 	}
 	return s.deps.State.GetSession(key)
 }
-func (s ConfigService) Sessions() []*state.Session {
+func (s ConfigService) Sessions() []*conversation.Session {
 	if s.deps.State.Sessions == nil {
 		return nil
 	}
 	return s.deps.State.Sessions()
 }
-func (s ConfigService) SaveSession(sess *state.Session) error {
+func (s ConfigService) SaveSession(sess *conversation.Session) error {
 	if s.deps.State.SaveSession == nil {
 		return nil
 	}
@@ -409,18 +410,18 @@ func (s ConfigService) UpdatePending(id string, mutate func(*state.PendingReques
 	}
 	return s.deps.State.UpdatePending(id, mutate)
 }
-func (s ConfigService) SessionHasInFlight(sess *state.Session) bool {
+func (s ConfigService) SessionHasInFlight(sess *conversation.Session) bool {
 	if s.deps.SessionContext.SessionHasInFlight == nil {
 		return false
 	}
 	return s.deps.SessionContext.SessionHasInFlight(sess)
 }
-func (s ConfigService) SwitchSessionWorkspace(sess *state.Session, workspaceID string) {
+func (s ConfigService) SwitchSessionWorkspace(sess *conversation.Session, workspaceID string) {
 	if s.deps.SessionContext.SwitchSessionWorkspace != nil {
 		s.deps.SessionContext.SwitchSessionWorkspace(sess, workspaceID)
 	}
 }
-func (s ConfigService) ClearSessionThreadCtx(sess *state.Session) {
+func (s ConfigService) ClearSessionThreadCtx(sess *conversation.Session) {
 	if s.deps.SessionContext.ClearSessionThreadCtx != nil {
 		s.deps.SessionContext.ClearSessionThreadCtx(sess)
 	}
@@ -434,7 +435,7 @@ func (s ConfigService) ClearSessionLiveThread(sessionKey string) {
 		clearFn(sessionKey)
 	}
 }
-func (s ConfigService) EnsureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s ConfigService) EnsureWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	if s.deps.Threads.EnsureWorkspaceThreadBinding == nil {
 		return nil, nil
 	}
@@ -571,19 +572,19 @@ func NewManagementService(deps ManagementDeps) *ManagementService {
 	return &ManagementService{App: deps.App, deps: deps}
 }
 
-func (s ManagementService) GetSession(key string) *state.Session {
+func (s ManagementService) GetSession(key string) *conversation.Session {
 	if s.deps.State.GetSession == nil {
 		return nil
 	}
 	return s.deps.State.GetSession(key)
 }
-func (s ManagementService) Sessions() []*state.Session {
+func (s ManagementService) Sessions() []*conversation.Session {
 	if s.deps.State.Sessions == nil {
 		return nil
 	}
 	return s.deps.State.Sessions()
 }
-func (s ManagementService) SaveSession(sess *state.Session) error {
+func (s ManagementService) SaveSession(sess *conversation.Session) error {
 	if s.deps.State.SaveSession == nil {
 		return nil
 	}
@@ -613,33 +614,33 @@ func (s ManagementService) UpdatePending(id string, mutate func(*state.PendingRe
 	}
 	return s.deps.State.UpdatePending(id, mutate)
 }
-func (s ManagementService) SessionHasInFlight(sess *state.Session) bool {
+func (s ManagementService) SessionHasInFlight(sess *conversation.Session) bool {
 	if s.deps.SessionContext.SessionHasInFlight == nil {
 		return false
 	}
 	return s.deps.SessionContext.SessionHasInFlight(sess)
 }
-func (s ManagementService) SwitchSessionWorkspace(sess *state.Session, workspaceID string) {
+func (s ManagementService) SwitchSessionWorkspace(sess *conversation.Session, workspaceID string) {
 	if s.deps.SessionContext.SwitchSessionWorkspace != nil {
 		s.deps.SessionContext.SwitchSessionWorkspace(sess, workspaceID)
 	}
 }
-func (s ManagementService) ClearSessionThreadCtx(sess *state.Session) {
+func (s ManagementService) ClearSessionThreadCtx(sess *conversation.Session) {
 	if s.deps.SessionContext.ClearSessionThreadCtx != nil {
 		s.deps.SessionContext.ClearSessionThreadCtx(sess)
 	}
 }
-func (s ManagementService) SetSessionThreadCtx(sess *state.Session, workspaceID, threadID, name, preview string) {
+func (s ManagementService) SetSessionThreadCtx(sess *conversation.Session, workspaceID, threadID, name, preview string) {
 	if s.deps.SessionContext.SetSessionThreadCtx != nil {
 		s.deps.SessionContext.SetSessionThreadCtx(sess, workspaceID, threadID, name, preview)
 	}
 }
-func (s ManagementService) SessionResetActiveOps(sess *state.Session) {
+func (s ManagementService) SessionResetActiveOps(sess *conversation.Session) {
 	if s.deps.SessionContext.SessionResetActiveOps != nil {
 		s.deps.SessionContext.SessionResetActiveOps(sess)
 	}
 }
-func (s ManagementService) EnsureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s ManagementService) EnsureWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	if s.deps.Threads.EnsureWorkspaceThreadBinding == nil {
 		return nil, nil
 	}
@@ -659,7 +660,7 @@ func (s ManagementService) ClearSessionLiveThread(sessionKey string) {
 		clearFn(sessionKey)
 	}
 }
-func (s ManagementService) StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (s ManagementService) StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	if s.deps.Threads.StartWorkspaceThread == nil {
 		return nil, nil
 	}
@@ -699,7 +700,7 @@ func (s ManagementService) RequireCodexClient() (CodexClient, error) {
 	}
 	return s.deps.Codex.RequireCodexClient()
 }
-func (s ManagementService) BuildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
+func (s ManagementService) BuildThreadStartParams(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
 	if s.deps.Codex.BuildThreadStartParams == nil {
 		return codexrpc.ThreadStartParams{}
 	}
@@ -875,21 +876,21 @@ func NewRenderService(deps RenderDeps) *RenderService {
 	return &RenderService{App: deps.App, deps: deps}
 }
 
-func (s RenderService) GetSession(key string) *state.Session {
+func (s RenderService) GetSession(key string) *conversation.Session {
 	if s.deps.State.GetSession == nil {
 		return nil
 	}
 	return s.deps.State.GetSession(key)
 }
 
-func (s RenderService) WorkspaceIDForSession(sessionKey string, sess *state.Session) string {
+func (s RenderService) WorkspaceIDForSession(sessionKey string, sess *conversation.Session) string {
 	if s.deps.WorkspaceIDForSession != nil {
 		return strings.TrimSpace(s.deps.WorkspaceIDForSession(sessionKey, sess))
 	}
 	return selectedWorkspaceIDForSession(s.App, sess)
 }
 
-func (s RenderService) WorkspaceMenuBodyLines(sessionKey string, sess *state.Session, lines []string) []string {
+func (s RenderService) WorkspaceMenuBodyLines(sessionKey string, sess *conversation.Session, lines []string) []string {
 	if s.deps.WorkspaceMenuBodyLines == nil {
 		return lines
 	}
@@ -949,13 +950,13 @@ func NewThreadService(deps ThreadServiceDeps) *ThreadService {
 	return &ThreadService{App: deps.App, deps: deps}
 }
 
-func (s ThreadService) GetSession(key string) *state.Session {
+func (s ThreadService) GetSession(key string) *conversation.Session {
 	if s.deps.State.GetSession == nil {
 		return nil
 	}
 	return s.deps.State.GetSession(key)
 }
-func (s ThreadService) SaveSession(sess *state.Session) error {
+func (s ThreadService) SaveSession(sess *conversation.Session) error {
 	if s.deps.State.SaveSession == nil {
 		return nil
 	}
@@ -966,28 +967,28 @@ func (s ThreadService) MarkSessionThreadLive(sessionKey, threadID string) {
 		s.deps.Threads.MarkSessionThreadLive(sessionKey, threadID)
 	}
 }
-func (s ThreadService) SessionHasInFlight(sess *state.Session) bool {
+func (s ThreadService) SessionHasInFlight(sess *conversation.Session) bool {
 	if s.deps.SessionContext.SessionHasInFlight == nil {
 		return false
 	}
 	return s.deps.SessionContext.SessionHasInFlight(sess)
 }
-func (s ThreadService) SwitchSessionWorkspace(sess *state.Session, workspaceID string) {
+func (s ThreadService) SwitchSessionWorkspace(sess *conversation.Session, workspaceID string) {
 	if s.deps.SessionContext.SwitchSessionWorkspace != nil {
 		s.deps.SessionContext.SwitchSessionWorkspace(sess, workspaceID)
 	}
 }
-func (s ThreadService) ClearSessionThreadCtx(sess *state.Session) {
+func (s ThreadService) ClearSessionThreadCtx(sess *conversation.Session) {
 	if s.deps.SessionContext.ClearSessionThreadCtx != nil {
 		s.deps.SessionContext.ClearSessionThreadCtx(sess)
 	}
 }
-func (s ThreadService) SetSessionThreadCtx(sess *state.Session, workspaceID, threadID, name, preview string) {
+func (s ThreadService) SetSessionThreadCtx(sess *conversation.Session, workspaceID, threadID, name, preview string) {
 	if s.deps.SessionContext.SetSessionThreadCtx != nil {
 		s.deps.SessionContext.SetSessionThreadCtx(sess, workspaceID, threadID, name, preview)
 	}
 }
-func (s ThreadService) SessionResetActiveOps(sess *state.Session) {
+func (s ThreadService) SessionResetActiveOps(sess *conversation.Session) {
 	if s.deps.SessionContext.SessionResetActiveOps != nil {
 		s.deps.SessionContext.SessionResetActiveOps(sess)
 	}
@@ -998,14 +999,14 @@ func (s ThreadService) RequireCodexClient() (CodexClient, error) {
 	}
 	return s.deps.Codex.RequireCodexClient()
 }
-func (s ThreadService) BuildThreadStartParams(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
+func (s ThreadService) BuildThreadStartParams(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
 	if s.deps.Codex.BuildThreadStartParams == nil {
 		return codexrpc.ThreadStartParams{}
 	}
 	return s.deps.Codex.BuildThreadStartParams(ws, sess, effectiveModel)
 }
 
-func (s ThreadService) BuildThreadConfig(sess *state.Session) map[string]any {
+func (s ThreadService) BuildThreadConfig(sess *conversation.Session) map[string]any {
 	if s.deps.Codex.BuildThreadConfig == nil {
 		return nil
 	}

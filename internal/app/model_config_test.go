@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -114,7 +115,7 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 	cfg.Feishu.Backend = backendCodex
 	cfg.Codex.Model = "gpt-5.4"
 	cfg.Codex.ReasoningEffort = "high"
-	sess := &state.Session{
+	sess := &conversation.Session{
 		WorkspaceID:                "default",
 		ActiveThreadID:             "thread-1",
 		ActiveThreadSandboxMode:    "read-only",
@@ -336,7 +337,7 @@ func TestStatusCardBodyUsesClaudeModelAndEffortOnClaudeBackend(t *testing.T) {
 	cfg.Claude.Effort = "max"
 	a := &App{cfg: cfg, backend: backendClaude}
 
-	body := newBackendConfigurationService(a).statusCardBody(&state.Session{WorkspaceID: "default"})
+	body := newBackendConfigurationService(a).statusCardBody(&conversation.Session{WorkspaceID: "default"})
 	if !strings.Contains(body, "Claude model: `mimo-v2-pro`") {
 		t.Fatalf("status body missing Claude model: %q", body)
 	}
@@ -436,7 +437,7 @@ func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-thread-1",
@@ -610,7 +611,7 @@ func TestUpdateClaudeModelConfigAllowsActiveFrontend(t *testing.T) {
 	sub := seedActiveSubmission(t, a, sessionKey, "claude-thread-1", "claude-turn-1")
 	newRuntimeStateService(a).bindTurnSubmission("claude-thread-1", "claude-turn-1", sessionKey, sub.ID)
 
-	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
+	if _, err := a.store.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID
 	}); err != nil {
 		t.Fatalf("UpdateSession() error = %v", err)
@@ -643,7 +644,7 @@ func TestClaudeModelCardShowsSessionScopedSmallModel(t *testing.T) {
 	a.cfg.Feishu.Backend = backendClaude
 
 	sessionKey := "feishu:chat:chat-p2p"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		OwnerUserID:        "user",

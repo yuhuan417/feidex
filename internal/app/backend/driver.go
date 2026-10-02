@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/appcore"
@@ -9,7 +10,6 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -44,12 +44,12 @@ type RuntimeDriver interface {
 }
 
 type WorkspaceThreadOps interface {
-	EnsureCodexWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
-	EnsureClaudeWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
+	EnsureCodexWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
+	EnsureClaudeWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
 	ListCodexWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
 	ListClaudeWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
-	StartCodexWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
-	StartClaudeWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
+	StartCodexWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
+	StartClaudeWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
 }
 
 type ConversationDriver interface {
@@ -59,9 +59,9 @@ type ConversationDriver interface {
 	WorkspaceSwitchInFlightNotice() string
 	WorkspaceSwitchBindingFailureNotice() string
 	WorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string
-	EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
+	EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
 	ListWorkspaceThreads(ops WorkspaceThreadOps, sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
-	StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
+	StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
 }
 
 type PermissionApp interface {
@@ -73,7 +73,7 @@ type WorkspacePermissionCommandRequest struct {
 	Message                            *feishu.InboundMessage
 	Args                               []string
 	SessionKey                         string
-	CurrentWorkspace                   func(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace)
+	CurrentWorkspace                   func(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace)
 	ShowWorkspaceSandboxMenu           func(msg *feishu.InboundMessage) error
 	ShowWorkspacePolicyMenu            func(msg *feishu.InboundMessage) error
 	ShowWorkspacePermissionModeMenu    func(msg *feishu.InboundMessage) error
@@ -90,7 +90,7 @@ type ConversationPermissionCommandRequest struct {
 	Message                               *feishu.InboundMessage
 	Args                                  []string
 	SessionKey                            string
-	CurrentThread                         func(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error)
+	CurrentThread                         func(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error)
 	ShowConversationSandboxMenu           func(msg *feishu.InboundMessage) error
 	ShowConversationPolicyMenu            func(msg *feishu.InboundMessage) error
 	ShowConversationPermissionModeMenu    func(msg *feishu.InboundMessage) error
@@ -110,7 +110,7 @@ type WorkspacePermissionRenderDeps struct {
 
 type ConversationPermissionRenderDeps struct {
 	App            PermissionApp
-	Session        func(sessionKey string) *state.Session
+	Session        func(sessionKey string) *conversation.Session
 	FormatMenuBody func(action, body string) string
 }
 
@@ -123,15 +123,15 @@ type WorkspacePermissionUpdateDeps struct {
 
 type WorkspacePermissionModeUpdateDeps struct {
 	App                     PermissionApp
-	Session                 func(sessionKey string) *state.Session
+	Session                 func(sessionKey string) *conversation.Session
 	UpdateWorkspaceDefaults func(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error)
 	ApplyRuntime            func(sessionKey, mode string) error
 	RenderPermissionMenu    func(sessionKey string) (map[string]any, error)
 }
 
 type ConversationPermissionUpdateDeps struct {
-	Session              func(sessionKey string) *state.Session
-	SaveSession          func(sess *state.Session) error
+	Session              func(sessionKey string) *conversation.Session
+	SaveSession          func(sess *conversation.Session) error
 	RenderSandboxMenu    func(sessionKey string) (map[string]any, error)
 	RenderPolicyMenu     func(sessionKey string) (map[string]any, error)
 	RenderMultiAgentMenu func(sessionKey string) (map[string]any, error)
@@ -139,8 +139,8 @@ type ConversationPermissionUpdateDeps struct {
 
 type ConversationPermissionModeUpdateDeps struct {
 	App                  PermissionApp
-	Session              func(sessionKey string) *state.Session
-	SaveSession          func(sess *state.Session) error
+	Session              func(sessionKey string) *conversation.Session
+	SaveSession          func(sess *conversation.Session) error
 	NormalizeRequested   func(raw string) (mode string, warning string, err error)
 	ApplyRuntime         func(sessionKey, mode string) error
 	RenderPermissionMenu func(sessionKey string) (map[string]any, error)
@@ -151,7 +151,7 @@ type PermissionDriver interface {
 	WorkspaceCommandUsage() string
 	AppendWorkspaceSummaryLines(app PermissionApp, lines []string, currentWS *config.Workspace) []string
 	WorkspaceConfigButtons(sessionKey string) []feishu.Button
-	AppendStatusLines(app PermissionApp, lines []string, sess *state.Session, ws *config.Workspace) []string
+	AppendStatusLines(app PermissionApp, lines []string, sess *conversation.Session, ws *config.Workspace) []string
 	HandleWorkspaceCommand(req WorkspacePermissionCommandRequest) error
 	RenderWorkspaceSandboxMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)
 	RenderWorkspacePolicyMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)

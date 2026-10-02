@@ -1,6 +1,7 @@
 package workspacecmd
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -68,11 +68,11 @@ func submenuCommandLabel(label, slash string) string {
 	return submenuLabel(commandLabel(label, slash))
 }
 
-func selectedWorkspaceIDForMessage(app appcore.AppConfig, msg *feishu.InboundMessage, sess *state.Session) string {
+func selectedWorkspaceIDForMessage(app appcore.AppConfig, msg *feishu.InboundMessage, sess *conversation.Session) string {
 	return appcore.ResolveWorkspaceSelectionForMessage(app, msg, sess)
 }
 
-func selectedWorkspaceIDForSession(app appcore.AppConfig, sess *state.Session) string {
+func selectedWorkspaceIDForSession(app appcore.AppConfig, sess *conversation.Session) string {
 	return appcore.ResolveWorkspaceSelectionForSession(app, sess)
 }
 
@@ -80,13 +80,13 @@ func setSelectedWorkspaceForMessage(app appcore.AppConfig, msg *feishu.InboundMe
 	return appcore.SetWorkspaceSelectionForMessage(app, msg, workspaceID)
 }
 
-func setSelectedWorkspaceForSession(app appcore.AppConfig, sess *state.Session, workspaceID string) error {
+func setSelectedWorkspaceForSession(app appcore.AppConfig, sess *conversation.Session, workspaceID string) error {
 	return appcore.SetWorkspaceSelectionForSession(app, sess, workspaceID)
 }
 
 type workspaceSwitchSessionService interface {
-	SaveSession(sess *state.Session) error
-	SwitchSessionWorkspace(sess *state.Session, workspaceID string)
+	SaveSession(sess *conversation.Session) error
+	SwitchSessionWorkspace(sess *conversation.Session, workspaceID string)
 	ClearSessionLiveThread(sessionKey string)
 }
 
@@ -95,7 +95,7 @@ const (
 	workspaceSwitchPendingWorkBlockedText = "当前还有待处理消息，请先处理完成后再切换工作区"
 )
 
-func workspaceSwitchBlockedReason(sess *state.Session, hasInFlight bool) string {
+func workspaceSwitchBlockedReason(sess *conversation.Session, hasInFlight bool) string {
 	if sess == nil {
 		return ""
 	}
@@ -110,11 +110,11 @@ func workspaceSwitchBlockedReason(sess *state.Session, hasInFlight bool) string 
 
 // WorkspaceSwitchBlockedReason reports whether a workspace binding can be
 // changed for the given session.
-func WorkspaceSwitchBlockedReason(sess *state.Session, hasInFlight bool) string {
+func WorkspaceSwitchBlockedReason(sess *conversation.Session, hasInFlight bool) string {
 	return workspaceSwitchBlockedReason(sess, hasInFlight)
 }
 
-func applyWorkspaceSwitch(s workspaceSwitchSessionService, sessionKey string, sess *state.Session, workspaceID string) error {
+func applyWorkspaceSwitch(s workspaceSwitchSessionService, sessionKey string, sess *conversation.Session, workspaceID string) error {
 	if s == nil || sess == nil {
 		return nil
 	}

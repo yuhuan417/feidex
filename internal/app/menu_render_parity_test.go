@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"reflect"
 	"strings"
@@ -19,7 +20,7 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 	groupMsg := &feishu.InboundMessage{ChatID: "group-menu-parity", ChatType: "group", UserID: "user-1", RootMessageID: "root-1"}
 	p2pKey := makeSessionKey(a, p2pMsg)
 	groupKey := makeSessionKey(a, groupMsg)
-	for _, sess := range []*state.Session{
+	for _, sess := range []*conversation.Session{
 		{Key: p2pKey, ChatID: p2pMsg.ChatID, ChatType: p2pMsg.ChatType, WorkspaceID: "default", ActiveThreadID: "thread-p2p", ActiveThreadWorkspaceID: "default"},
 		{Key: groupKey, ChatID: groupMsg.ChatID, ChatType: groupMsg.ChatType, WorkspaceID: "default", ActiveThreadID: "thread-group", ActiveThreadWorkspaceID: "default"},
 	} {

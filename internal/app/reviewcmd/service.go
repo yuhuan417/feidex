@@ -6,6 +6,7 @@ package reviewcmd
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"time"
@@ -41,8 +42,8 @@ const (
 // AppStateProvider narrows app state access to the session and submission
 // operations used by the review service.
 type AppStateProvider interface {
-	Session(key string) *state.Session
-	SaveSession(sess *state.Session) error
+	Session(key string) *conversation.Session
+	SaveSession(sess *conversation.Session) error
 	CreateSubmission(sub *state.Submission) (string, error)
 	QueueSubmission(sessionKey, submissionID string) error
 	Pending(id string) *state.PendingRequest
@@ -101,10 +102,10 @@ type App interface {
 	// ReviewCommandMessageFromAction builds an InboundMessage from a card action.
 	ReviewCommandMessageFromAction(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage
 	// ReviewSessionHasActiveWork reports whether the session has active work.
-	ReviewSessionHasActiveWork(sess *state.Session) bool
+	ReviewSessionHasActiveWork(sess *conversation.Session) bool
 	// ReviewSessionHasInFlightSubmission reports whether the session has an
 	// in-flight submission.
-	ReviewSessionHasInFlightSubmission(sess *state.Session) bool
+	ReviewSessionHasInFlightSubmission(sess *conversation.Session) bool
 	// ReviewStartNextSubmission starts the next queued submission for the
 	// given session.
 	ReviewStartNextSubmission(sessionKey string) error
@@ -336,7 +337,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 	}
 	sess := stateProvider.Session(sessionKey)
 	if sess == nil {
-		sess = &state.Session{
+		sess = &conversation.Session{
 			Key:           sessionKey,
 			WorkspaceID:   ws.ID,
 			OwnerUserID:   msg.UserID,

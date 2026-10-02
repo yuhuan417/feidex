@@ -2,6 +2,7 @@ package planmode
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -28,9 +29,9 @@ type CodexClient interface {
 }
 
 type StateProvider interface {
-	Session(key string) *state.Session
-	SaveSession(sess *state.Session) error
-	UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error)
+	Session(key string) *conversation.Session
+	SaveSession(sess *conversation.Session) error
+	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
 	Pending(id string) *state.PendingRequest
 	PendingRequests() []*state.PendingRequest
 	SavePending(req *state.PendingRequest) error
@@ -53,17 +54,17 @@ type App interface {
 	CodexClient() (CodexClient, error)
 	MakeSessionKey(msg *feishu.InboundMessage) string
 	ReplyInThreadEnabled(chatType string) bool
-	SessionHasActiveWork(sess *state.Session) bool
+	SessionHasActiveWork(sess *conversation.Session) bool
 	ActionStringValue(action *feishu.CardAction, key string) string
 	RunAsync(fn func())
 	ReplyInThreadForSubmission(sub *state.Submission) bool
 	SendLocalTurnFollowupCard(ctx context.Context, parentMessageID string, card map[string]any, replyInThread bool, sub *state.Submission, kind string) (string, error)
 	StartNextSubmission(sessionKey string) error
-	StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
+	StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
 }
 
 type PlanSettingsProvider interface {
-	EffectivePlanSettings(sess *state.Session) (model, effort string)
+	EffectivePlanSettings(sess *conversation.Session) (model, effort string)
 }
 
 func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
@@ -134,7 +135,7 @@ func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 	}
 }
 
-func RenderPlanModeStatusText(mode *state.SessionCollaborationMode) string {
+func RenderPlanModeStatusText(mode *conversation.SessionCollaborationMode) string {
 	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil {
 		return "当前 thread 未开启 `plan` collaboration mode。"
@@ -151,11 +152,11 @@ func RenderPlanModeStatusText(mode *state.SessionCollaborationMode) string {
 	return strings.Join(lines, "\n")
 }
 
-func ResolvePlanModeForActiveThread(a App) (*state.SessionCollaborationMode, error) {
+func ResolvePlanModeForActiveThread(a App) (*conversation.SessionCollaborationMode, error) {
 	return ResolvePlanModeForSession(a, nil)
 }
 
-func ResolvePlanModeForSession(a App, sess *state.Session) (*state.SessionCollaborationMode, error) {
+func ResolvePlanModeForSession(a App, sess *conversation.Session) (*conversation.SessionCollaborationMode, error) {
 	if a == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
@@ -181,7 +182,7 @@ func ResolvePlanModeForSession(a App, sess *state.Session) (*state.SessionCollab
 	if err != nil {
 		return nil, err
 	}
-	mode := &state.SessionCollaborationMode{
+	mode := &conversation.SessionCollaborationMode{
 		Mode:  "plan",
 		Model: model,
 	}
@@ -194,7 +195,7 @@ func ResolvePlanModeForSession(a App, sess *state.Session) (*state.SessionCollab
 	return NormalizeThreadCollaborationMode(mode), nil
 }
 
-func PlanModeForSession(a App, sessionKey string) *state.SessionCollaborationMode {
+func PlanModeForSession(a App, sessionKey string) *conversation.SessionCollaborationMode {
 	if a == nil || strings.TrimSpace(sessionKey) == "" {
 		return nil
 	}
@@ -205,21 +206,21 @@ func PlanModeForSession(a App, sessionKey string) *state.SessionCollaborationMod
 	return NormalizeThreadCollaborationMode(sess.ActiveThreadCollaborationMode)
 }
 
-func sessionActiveThreadIDForLog(sess *state.Session) string {
+func sessionActiveThreadIDForLog(sess *conversation.Session) string {
 	if sess == nil {
 		return ""
 	}
 	return strings.TrimSpace(sess.ActiveThreadID)
 }
 
-func sessionActiveCollaborationModeForLog(sess *state.Session) *state.SessionCollaborationMode {
+func sessionActiveCollaborationModeForLog(sess *conversation.Session) *conversation.SessionCollaborationMode {
 	if sess == nil {
 		return nil
 	}
 	return sess.ActiveThreadCollaborationMode
 }
 
-func sessionBackendCollaborationModeForLog(sess *state.Session, backend string) *state.SessionCollaborationMode {
+func sessionBackendCollaborationModeForLog(sess *conversation.Session, backend string) *conversation.SessionCollaborationMode {
 	if sess == nil || len(sess.BackendThreads) == 0 {
 		return nil
 	}
@@ -230,7 +231,7 @@ func sessionBackendCollaborationModeForLog(sess *state.Session, backend string) 
 	return snapshot.CollaborationMode
 }
 
-func ResolveDefaultCodexCollaborationModeForSession(a App, sess *state.Session) (*state.SessionCollaborationMode, error) {
+func ResolveDefaultCodexCollaborationModeForSession(a App, sess *conversation.Session) (*conversation.SessionCollaborationMode, error) {
 	if mode := defaultCodexCollaborationModeForSession(a, sess); mode != nil {
 		return mode, nil
 	}
@@ -247,7 +248,7 @@ func ResolveDefaultCodexCollaborationModeForSession(a App, sess *state.Session) 
 	if err != nil {
 		return nil, fmt.Errorf("无法解析 default collaboration mode model: %w", err)
 	}
-	mode := &state.SessionCollaborationMode{
+	mode := &conversation.SessionCollaborationMode{
 		Mode:  "default",
 		Model: model,
 	}
@@ -257,7 +258,7 @@ func ResolveDefaultCodexCollaborationModeForSession(a App, sess *state.Session) 
 	return NormalizeThreadCollaborationMode(mode), nil
 }
 
-func defaultCodexCollaborationModeForSession(a App, sess *state.Session) *state.SessionCollaborationMode {
+func defaultCodexCollaborationModeForSession(a App, sess *conversation.Session) *conversation.SessionCollaborationMode {
 	model := ""
 	effort := ""
 	if a != nil && a.Config() != nil {
@@ -297,7 +298,7 @@ func defaultCodexCollaborationModeForSession(a App, sess *state.Session) *state.
 		)
 		return nil
 	}
-	mode := &state.SessionCollaborationMode{
+	mode := &conversation.SessionCollaborationMode{
 		Mode:  "default",
 		Model: model,
 	}
@@ -307,7 +308,7 @@ func defaultCodexCollaborationModeForSession(a App, sess *state.Session) *state.
 	return NormalizeThreadCollaborationMode(mode)
 }
 
-func canReuseCollaborationModeModelForDefault(a App, mode *state.SessionCollaborationMode) bool {
+func canReuseCollaborationModeModelForDefault(a App, mode *conversation.SessionCollaborationMode) bool {
 	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil {
 		return false
@@ -457,7 +458,7 @@ func splitLeadingTitlePrefixes(title string) (prefixes []string, rest string) {
 	return prefixes, rest
 }
 
-func resolvePlanModeSettings(ctx context.Context, a App, client CodexClient, preset *codexrpc.CollaborationModeMask, sess *state.Session) (model string, effort string, err error) {
+func resolvePlanModeSettings(ctx context.Context, a App, client CodexClient, preset *codexrpc.CollaborationModeMask, sess *conversation.Session) (model string, effort string, err error) {
 	if provider, ok := a.(PlanSettingsProvider); ok {
 		model, effort = provider.EffectivePlanSettings(sess)
 	}
@@ -531,7 +532,7 @@ func CodexCollaborationModeForTurnStart(a App, sessionKey, threadID string) *cod
 	return CodexCollaborationModeFromState(mode)
 }
 
-func CodexCollaborationModeFromState(mode *state.SessionCollaborationMode) *codexrpc.CollaborationMode {
+func CodexCollaborationModeFromState(mode *conversation.SessionCollaborationMode) *codexrpc.CollaborationMode {
 	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil {
 		return nil
@@ -550,7 +551,7 @@ func CodexCollaborationModeFromState(mode *state.SessionCollaborationMode) *code
 	}
 }
 
-func DefaultCollaborationModeWithConfiguredEffort(a App, mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
+func DefaultCollaborationModeWithConfiguredEffort(a App, mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
 	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil || !strings.EqualFold(mode.Mode, "default") || strings.TrimSpace(mode.ReasoningEffort) != "" {
 		return mode
@@ -567,7 +568,7 @@ func DefaultCollaborationModeWithConfiguredEffort(a App, mode *state.SessionColl
 	return NormalizeThreadCollaborationMode(&cp)
 }
 
-func NormalizeThreadCollaborationMode(mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
+func NormalizeThreadCollaborationMode(mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
 	if mode == nil {
 		return nil
 	}

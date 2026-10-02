@@ -3,6 +3,7 @@ package app
 import (
 	appautoretry "feidex/internal/app/autoretry"
 	appbackend "feidex/internal/app/backend"
+	"feidex/internal/domain/conversation"
 
 	"path/filepath"
 	"testing"
@@ -40,13 +41,13 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "idle ignores other frontend state",
 			seed: func(t *testing.T, a *App, store *state.Store) {
 				t.Helper()
-				if err := store.UpsertSession(&state.Session{
+				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
 					Status: "idle",
 				}); err != nil {
 					t.Fatalf("UpsertSession(current) error = %v", err)
 				}
-				if err := store.UpsertSession(&state.Session{
+				if err := store.UpsertSession(&conversation.Session{
 					Key:    foreignSessionKey,
 					Status: "idle",
 					Queue:  []string{"sub-foreign"},
@@ -101,7 +102,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "active work blocks idle",
 			seed: func(t *testing.T, _ *App, store *state.Store) {
 				t.Helper()
-				if err := store.UpsertSession(&state.Session{
+				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
 					Status: sessionStatusCompacting,
 				}); err != nil {
@@ -114,7 +115,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "queued submissions block idle",
 			seed: func(t *testing.T, _ *App, store *state.Store) {
 				t.Helper()
-				if err := store.UpsertSession(&state.Session{
+				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
 					Status: "idle",
 					Queue:  []string{"sub-1"},
@@ -128,10 +129,10 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "staged images block idle",
 			seed: func(t *testing.T, _ *App, store *state.Store) {
 				t.Helper()
-				if err := store.UpsertSession(&state.Session{
+				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
 					Status: "idle",
-					StagedImages: []state.SessionStagedImage{{
+					StagedImages: []conversation.SessionStagedImage{{
 						SourceMessageID: "img-1",
 						Name:            "image.png",
 						LocalPath:       "/tmp/image.png",
@@ -146,7 +147,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "non idle status blocks idle",
 			seed: func(t *testing.T, _ *App, store *state.Store) {
 				t.Helper()
-				if err := store.UpsertSession(&state.Session{
+				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
 					Status: "queued",
 				}); err != nil {
@@ -173,7 +174,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "pending auto retry blocks idle",
 			seed: func(t *testing.T, a *App, store *state.Store) {
 				t.Helper()
-				if err := store.UpsertSession(&state.Session{
+				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
 					Status: "idle",
 				}); err != nil {
@@ -193,7 +194,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "running auto retry blocks idle",
 			seed: func(t *testing.T, a *App, store *state.Store) {
 				t.Helper()
-				if err := store.UpsertSession(&state.Session{
+				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
 					Status: "idle",
 				}); err != nil {

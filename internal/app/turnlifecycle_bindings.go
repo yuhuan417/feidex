@@ -2,6 +2,7 @@ package app
 
 import (
 	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/domain/conversation"
 
 	"context"
 
@@ -103,6 +104,6 @@ func (a *App) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *st
 	return processCodexPlanModeExitOnTurnCompleted(a, sessionKey, sub, threadID, turnID, status, flush)
 }
 
-func (a *App) LogSessionState(event, sessionKey string, sess *state.Session) {
+func (a *App) LogSessionState(event, sessionKey string, sess *conversation.Session) {
 	logSessionState(event, sessionKey, sess)
 }

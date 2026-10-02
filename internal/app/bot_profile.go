@@ -2,6 +2,7 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"fmt"
@@ -127,7 +128,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 			}
 			backend := configuredBackend(a)
 			if sess := a.State().Session(makeSessionKey(a, msg)); sess != nil {
-				if _, err := a.State().UpdateSession(sess.Key, func(current *state.Session) {
+				if _, err := a.State().UpdateSession(sess.Key, func(current *conversation.Session) {
 					switch role {
 					case "plan":
 						current.PlanModelOverride = value
@@ -174,7 +175,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 		}
 		value := clearableArg(args[2])
 		if sess := a.State().Session(makeSessionKey(a, msg)); sess != nil {
-			_, err := a.State().UpdateSession(sess.Key, func(current *state.Session) { current.SubagentReasoningEffortOverride = value })
+			_, err := a.State().UpdateSession(sess.Key, func(current *conversation.Session) { current.SubagentReasoningEffortOverride = value })
 			if err != nil {
 				return err
 			}
@@ -192,7 +193,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 		}
 		value := clearableArg(args[2])
 		if sess := a.State().Session(makeSessionKey(a, msg)); sess != nil {
-			_, err := a.State().UpdateSession(sess.Key, func(current *state.Session) { current.PlanReasoningEffortOverride = value })
+			_, err := a.State().UpdateSession(sess.Key, func(current *conversation.Session) { current.PlanReasoningEffortOverride = value })
 			if err != nil {
 				return err
 			}
@@ -332,7 +333,7 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 	value = clearableArg(value)
 	backend := configuredBackend(a)
 	if sess := a.State().Session(sessionKey); sess != nil {
-		if _, err := a.State().UpdateSession(sess.Key, func(current *state.Session) {
+		if _, err := a.State().UpdateSession(sess.Key, func(current *conversation.Session) {
 			switch role {
 			case "plan":
 				current.PlanModelOverride = value

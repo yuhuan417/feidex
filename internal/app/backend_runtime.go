@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"time"
 
 	appconvbackend "feidex/internal/app/convbackend"
-	"feidex/internal/state"
 )
 
 type backendRuntimeHandle struct {
@@ -50,12 +50,12 @@ type backendRuntimeFacade interface {
 	isActive(a *App) bool
 	runtimeReady(a *App) bool
 	beginStartupRecoveryScope(a *App) func()
-	reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *state.Session) *state.Session
+	reconcileCompletedTurnFromFinalOutput(a *App, sessionKey string, sess *conversation.Session) *conversation.Session
 	// clearActiveOperationsAfterInterrupt clears stale active operations after
 	// an interrupt request. For backends where the interrupt response is
 	// asynchronous (e.g. Claude), this prevents the session from getting stuck
 	// in "queuing" state if the interrupt doesn't trigger a turn completion.
-	clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *state.Session) *state.Session
+	clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *conversation.Session) *conversation.Session
 	conversationBackend(a *App) appconvbackend.ConversationBackendFacade
 	buildRuntime(a *App) *backendRuntimeHandle
 	startRuntime(ctx context.Context, a *App, handle *backendRuntimeHandle) error

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -83,7 +84,7 @@ func TestFinishTurnStatuses(t *testing.T) {
 
 func TestStandaloneCompactItemLifecycleTracksSessionState(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-compact",
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-compact",
@@ -113,7 +114,7 @@ func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-compact", ChatID: "chat-compact", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-compact",
@@ -149,7 +150,7 @@ func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 
 func TestStandaloneCompactSuccessIgnoresLaterFailedCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-compact",
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-compact",
@@ -172,7 +173,7 @@ func TestStandaloneCompactSuccessIgnoresLaterFailedCompletion(t *testing.T) {
 
 func TestStandaloneCompactErrorReportsRealMessage(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-compact",
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-compact",

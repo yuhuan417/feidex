@@ -2,6 +2,7 @@ package submission
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"testing"
 	"time"
 
@@ -69,7 +70,7 @@ func TestStagedImageAttachments(t *testing.T) {
 		}
 	})
 	t.Run("skips empty local path", func(t *testing.T) {
-		images := []state.SessionStagedImage{
+		images := []conversation.SessionStagedImage{
 			{Name: "a", LocalPath: "/path/a"},
 			{Name: "b", LocalPath: "  "},
 			{Name: "c", LocalPath: "/path/c"},
@@ -91,7 +92,7 @@ func TestStagedImageSourceMessageIDs(t *testing.T) {
 		}
 	})
 	t.Run("deduplicates", func(t *testing.T) {
-		images := []state.SessionStagedImage{
+		images := []conversation.SessionStagedImage{
 			{SourceMessageID: "msg-1"},
 			{SourceMessageID: "msg-2"},
 			{SourceMessageID: "msg-1"},
@@ -110,7 +111,7 @@ func TestStagedImageRootMessageIDs(t *testing.T) {
 		}
 	})
 	t.Run("falls back to source message ID", func(t *testing.T) {
-		images := []state.SessionStagedImage{
+		images := []conversation.SessionStagedImage{
 			{RootMessageID: "root-1", SourceMessageID: "src-1"},
 			{RootMessageID: "", SourceMessageID: "src-2"},
 		}
@@ -213,28 +214,28 @@ func TestRefreshPendingStatus(t *testing.T) {
 		RefreshPendingStatus(nil) // should not panic
 	})
 	t.Run("queued when queue has items", func(t *testing.T) {
-		sess := &state.Session{Queue: []string{"sub-1"}}
+		sess := &conversation.Session{Queue: []string{"sub-1"}}
 		RefreshPendingStatus(sess)
 		if sess.Status != state.SessionStatusQueued.String() {
 			t.Fatalf("expected queued, got %q", sess.Status)
 		}
 	})
 	t.Run("queued when staged images", func(t *testing.T) {
-		sess := &state.Session{StagedImages: []state.SessionStagedImage{{SourceMessageID: "img-1"}}}
+		sess := &conversation.Session{StagedImages: []conversation.SessionStagedImage{{SourceMessageID: "img-1"}}}
 		RefreshPendingStatus(sess)
 		if sess.Status != state.SessionStatusQueued.String() {
 			t.Fatalf("expected queued, got %q", sess.Status)
 		}
 	})
 	t.Run("idle when empty", func(t *testing.T) {
-		sess := &state.Session{Status: state.SessionStatusQueued.String()}
+		sess := &conversation.Session{Status: state.SessionStatusQueued.String()}
 		RefreshPendingStatus(sess)
 		if sess.Status != state.SessionStatusIdle.String() {
 			t.Fatalf("expected idle, got %q", sess.Status)
 		}
 	})
 	t.Run("no change when in flight", func(t *testing.T) {
-		sess := &state.Session{
+		sess := &conversation.Session{
 			ActiveSubmissionID: "sub-running",
 			Status:             "turn_in_progress",
 			Queue:              []string{"sub-1"},
@@ -253,8 +254,8 @@ func TestDiscardStagedImageByMessageID(t *testing.T) {
 		}
 	})
 	t.Run("discards matching image", func(t *testing.T) {
-		sess := &state.Session{
-			StagedImages: []state.SessionStagedImage{
+		sess := &conversation.Session{
+			StagedImages: []conversation.SessionStagedImage{
 				{SourceMessageID: "msg-1", LocalPath: "/a"},
 				{SourceMessageID: "msg-2", LocalPath: "/b"},
 			},
@@ -267,8 +268,8 @@ func TestDiscardStagedImageByMessageID(t *testing.T) {
 		}
 	})
 	t.Run("no match returns false", func(t *testing.T) {
-		sess := &state.Session{
-			StagedImages: []state.SessionStagedImage{
+		sess := &conversation.Session{
+			StagedImages: []conversation.SessionStagedImage{
 				{SourceMessageID: "msg-1"},
 			},
 		}
@@ -394,24 +395,24 @@ func TestParseStructuredLines(t *testing.T) {
 func TestShouldStartNextSubmissionAsync(t *testing.T) {
 	tests := []struct {
 		name string
-		sess *state.Session
+		sess *conversation.Session
 		want bool
 	}{
 		{"nil session", nil, false},
-		{"empty session", &state.Session{}, false},
-		{"staged images only", &state.Session{
-			StagedImages: []state.SessionStagedImage{{SourceMessageID: "img-1"}},
+		{"empty session", &conversation.Session{}, false},
+		{"staged images only", &conversation.Session{
+			StagedImages: []conversation.SessionStagedImage{{SourceMessageID: "img-1"}},
 		}, false},
-		{"queued submission only", &state.Session{
+		{"queued submission only", &conversation.Session{
 			Queue: []string{"sub-1"},
 		}, true},
-		{"active submission blocks", &state.Session{
+		{"active submission blocks", &conversation.Session{
 			Queue:              []string{"sub-1"},
 			ActiveSubmissionID: "sub-running",
 		}, false},
-		{"active operations block", &state.Session{
+		{"active operations block", &conversation.Session{
 			Queue: []string{"sub-1"},
-			ActiveOperations: []state.SessionActiveOperation{{
+			ActiveOperations: []conversation.SessionActiveOperation{{
 				Kind:         "submission",
 				SubmissionID: "sub-running",
 				TurnID:       "turn-1",

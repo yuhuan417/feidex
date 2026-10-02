@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/codexrpc"
@@ -79,12 +80,12 @@ func finishSteerSubmission(a *App, submissionID, status string) {
 	sessionKey := strings.TrimSpace(sub.SessionKey)
 	if sessionKey != "" {
 		turnID := strings.TrimSpace(sub.TurnID)
-		st.UpdateSession(sessionKey, func(sess *state.Session) {
+		st.UpdateSession(sessionKey, func(sess *conversation.Session) {
 			if sess == nil {
 				return
 			}
-			sessionRemoveActiveOperation(sess, submissionID, turnID)
-			if !sessionHasActiveOperations(sess) {
+			conversation.RemoveActiveOperation(sess, submissionID, turnID)
+			if !conversation.HasActiveOperations(sess) {
 				sess.Status = state.SessionStatusIdle.String()
 			}
 		})

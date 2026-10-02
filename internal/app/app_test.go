@@ -20,6 +20,7 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 	"feidex/internal/logcontrol"
 	"feidex/internal/release"
@@ -107,21 +108,21 @@ func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
 	if err := a.store.UpsertPending(&state.PendingRequest{ID: "req-1", Status: "pending", ExpiresAt: time.Now().Add(time.Hour).Unix()}); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		Status:         "idle",
 		ActiveThreadID: "thread-1",
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-1) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-2",
 		Status:                  "running",
 		ActiveThreadID:          "thread-2",
 		ActiveSubmissionID:      "sub-1",
 		ActiveTurnID:            "turn-1",
 		Queue:                   []string{"sub-2"},
-		StagedImages:            []state.SessionStagedImage{{Name: "img"}},
+		StagedImages:            []conversation.SessionStagedImage{{Name: "img"}},
 		ActiveThreadWorkspaceID: "",
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-2) error = %v", err)
@@ -148,7 +149,7 @@ func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
 func TestRecoverRuntimeStateResumesActiveThreadOnStartup(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-startup-resume"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -192,7 +193,7 @@ func TestRecoverRuntimeStateResumesActiveThreadOnStartup(t *testing.T) {
 func TestRecoverRuntimeStateStartsFreshThreadWhenResumeFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-startup-fresh"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
 		ActiveThreadID:             "thread-old",
@@ -301,16 +302,16 @@ func TestSendCommandMenuAndStartupReadyNotifications(t *testing.T) {
 		t.Fatalf("expected one reply card, got %d", len(ff.replyCards))
 	}
 
-	if err := a.store.UpsertSession(&state.Session{Key: "s1", ChatID: "chat-2", ChatType: "p2p"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: "s1", ChatID: "chat-2", ChatType: "p2p"}); err != nil {
 		t.Fatalf("UpsertSession(s1) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{Key: "s2", ChatID: "chat-1", ChatType: "p2p"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: "s2", ChatID: "chat-1", ChatType: "p2p"}); err != nil {
 		t.Fatalf("UpsertSession(s2) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{Key: "s3", ChatID: "chat-1", ChatType: "p2p"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: "s3", ChatID: "chat-1", ChatType: "p2p"}); err != nil {
 		t.Fatalf("UpsertSession(s3) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{Key: "s4", ChatID: "chat-group", ChatType: "group"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: "s4", ChatID: "chat-group", ChatType: "group"}); err != nil {
 		t.Fatalf("UpsertSession(s4) error = %v", err)
 	}
 	sendStartupReadyNotifications(a)
@@ -756,7 +757,7 @@ func TestHandleServerRequestAndAppNotificationsErrorPaths(t *testing.T) {
 func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sessionKey := "sess-p2p"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     "thread-p2p",
@@ -857,7 +858,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
 			const downloadSessionKey = "feishu:chat:chat-1"
-			if err := a.store.UpsertSession(&state.Session{
+			if err := a.store.UpsertSession(&conversation.Session{
 				Key:         downloadSessionKey,
 				WorkspaceID: a.cfg.Workspaces[0].ID,
 				ChatID:      "chat-1",
@@ -874,7 +875,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		},
 		"menu.fork": func() (*callback.CardActionTriggerResponse, error) {
 			const forkSessionKey = "feishu:chat:chat-1"
-			if err := a.store.UpsertSession(&state.Session{
+			if err := a.store.UpsertSession(&conversation.Session{
 				Key:                     forkSessionKey,
 				WorkspaceID:             a.cfg.Workspaces[0].ID,
 				ChatID:                  "chat-1",
@@ -892,7 +893,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		},
 		"menu.compact": func() (*callback.CardActionTriggerResponse, error) {
 			const compactSessionKey = "feishu:chat:chat-1"
-			if err := a.store.UpsertSession(&state.Session{
+			if err := a.store.UpsertSession(&conversation.Session{
 				Key:                     compactSessionKey,
 				WorkspaceID:             a.cfg.Workspaces[0].ID,
 				ChatID:                  "chat-1",
@@ -1016,7 +1017,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
@@ -1085,7 +1086,7 @@ func TestWorkspaceDeleteMenuUsesSelectStatic(t *testing.T) {
 		{ID: "drop", Name: "Drop", Cwd: dropDir, ApprovalPolicy: "on-request", SandboxMode: "workspace-write"},
 	}
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
@@ -1232,12 +1233,12 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                           sessionKey,
 		WorkspaceID:                   a.cfg.Workspaces[0].ID,
 		ActiveThreadID:                "thread-1",
 		ActiveThreadWorkspaceID:       a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{Mode: "plan", Model: "gpt-5.4"},
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{Mode: "plan", Model: "gpt-5.4"},
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -1636,7 +1637,7 @@ func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
 
 func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 	}); err != nil {
@@ -1681,7 +1682,7 @@ func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
 func TestCompleteApprovalActionPreservesNumericRequestID(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     "thread-1",
@@ -1732,7 +1733,7 @@ func TestCompleteApprovalActionPreservesNumericRequestID(t *testing.T) {
 func TestCompleteApprovalActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     "thread-1",
@@ -2292,7 +2293,7 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",
@@ -2449,7 +2450,7 @@ func TestNotificationHelpers(t *testing.T) {
 func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	targetSessionKey := "feishu:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ChatID:         "chat-1",
@@ -2508,7 +2509,7 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	targetSessionKey := "feishu:chat:chat-1"
 	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ChatID:         "chat-1",
@@ -2520,14 +2521,14 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(target) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         bucketSessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",
 		ChatType:    "group",
 		OwnerUserID: "user-1",
 		Status:      "queued",
-		StagedImages: []state.SessionStagedImage{
+		StagedImages: []conversation.SessionStagedImage{
 			{SourceMessageID: "img-1", RootMessageID: "img-1", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
 			{SourceMessageID: "img-2", RootMessageID: "img-2", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
 		},
@@ -2582,7 +2583,7 @@ func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	targetSessionKey := "feishu:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ChatID:         "chat-1",
@@ -2660,7 +2661,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 		MessageID:     "root-a",
 		RootMessageID: "root-a",
 	})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     rootASessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ChatID:                  "chat-1",
@@ -2807,7 +2808,7 @@ func TestHandleFeishuMessageP2PQueuesSubmissionOnSelectedWorkspace(t *testing.T)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ChatID:                  "chat-1",
@@ -2882,14 +2883,14 @@ func TestStartNextSubmissionRefreshesRootTurnBinding(t *testing.T) {
 func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",
 		ChatType:    "group",
 		OwnerUserID: "user-1",
 		Status:      "queued",
-		StagedImages: []state.SessionStagedImage{
+		StagedImages: []conversation.SessionStagedImage{
 			{SourceMessageID: "a", RootMessageID: "a", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
 			{SourceMessageID: "b", RootMessageID: "b", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
 		},
@@ -2946,7 +2947,7 @@ func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	replySessionKey := "feishu:chat:chat-1"
 	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         replySessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",
@@ -2956,14 +2957,14 @@ func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(reply session) error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         bucketSessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",
 		ChatType:    "group",
 		OwnerUserID: "user-1",
 		Status:      "queued",
-		StagedImages: []state.SessionStagedImage{
+		StagedImages: []conversation.SessionStagedImage{
 			{SourceMessageID: "a", RootMessageID: "a", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
 			{SourceMessageID: "b", RootMessageID: "b", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
 		},
@@ -3031,7 +3032,7 @@ func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 func TestAdditionalCommandHelpers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1"})
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
 		ActiveThreadID:             "thread-1",
@@ -3096,7 +3097,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	sess := a.store.GetSession(sessionKey)
-	sessionResetActiveOperations(sess)
+	conversation.ResetActiveOperations(sess)
 	sess.Status = "idle"
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset) error = %v", err)
@@ -3175,7 +3176,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}
 
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                 sessionKey,
 		WorkspaceID:         a.cfg.Workspaces[0].ID,
 		ActiveThreadID:      "thread-9",
@@ -3252,7 +3253,7 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        sessionKey,
 		BindingID:                  bindingID,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
@@ -3345,7 +3346,7 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		t.Fatalf("CreateSubmission(queued) error = %v", err)
 	}
 	sess := a.store.GetSession(sessionKey)
-	sess.StagedImages = []state.SessionStagedImage{{SourceMessageID: "staged-msg", Name: "image.png"}}
+	sess.StagedImages = []conversation.SessionStagedImage{{SourceMessageID: "staged-msg", Name: "image.png"}}
 	sess.Queue = []string{subID}
 	sess.Status = "queued"
 	if err := a.store.UpsertSession(sess); err != nil {
@@ -3392,7 +3393,7 @@ func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-history", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "thread-1",
@@ -3464,7 +3465,7 @@ func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
 func TestCompleteHistoryDetailShowsInputs(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "thread-1",
@@ -3523,7 +3524,7 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
 		ActiveThreadID:             "thread-current",
@@ -3565,7 +3566,7 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
 		ActiveThreadID:             "12345678abcdef",
@@ -3618,7 +3619,7 @@ func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *t
 func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 	}); err != nil {
@@ -3657,7 +3658,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 	}); err != nil {
@@ -3713,7 +3714,7 @@ func TestCompleteThreadResumeRejectsThreadFromDifferentWorkspace(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		OwnerUserID: "user-1",

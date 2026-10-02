@@ -679,3 +679,10 @@
 - interaction 的纯状态规则迁到 `internal/domain/interaction`，reply/resolved 用例迁到 `internal/application/interaction`，frontend-scoped DTO 读写位于 `internal/adapter/storage/json`。SM-09/10/11/22/23 仍按 pending → replied → serverRequest/resolved 推进；用户回复成功不提前恢复 submission。
 - authoritative resolve 使用 repository 原子转换，并发重复通知只有第一次返回状态，避免重复恢复；async question 和 Claude control response 的独立终点仍保留。
 - frontend cancellation/drain 和 submission start 串行协调迁到 `internal/runtime`；未修改 turn/interrupt、turn/completed、review、compaction 和 goal continuation 的协议绑定规则。
+
+## 2026-10-02 Conversation domain 迁移核对
+
+- session 类型、backend lineage、workspace 恢复条件和活动操作转换迁入 `internal/domain/conversation`；存储 JSON 字段不变。
+- 核对 SM-04～SM-08、SM-09～SM-11、SM-14、SM-22～SM-26：thread/turn started 与 completed、review/compaction、goal continuation 的调用顺序和 owner 绑定规则不变。
+- `serverRequest/resolved` 仍是 Codex interaction 的权威终点，reply 成功仍仅推进到 replied；本次不改 approval/input 的协议行为。
+- 领域测试覆盖 backend lineage 隔离、活动操作合并/移除、workspace 恢复匹配和运行中 workspace 切换保留 lineage；原有 app 状态机契约测试继续运行。

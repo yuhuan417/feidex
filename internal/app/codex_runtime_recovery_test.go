@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 
 	sessionKey := "sess-transport-recovery"
 	activeSub := seedActiveSubmission(t, a, sessionKey, "thread-dead", "turn-dead")
-	if _, err := a.store.UpdateSession(sessionKey, func(sess *state.Session) {
+	if _, err := a.store.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID
 	}); err != nil {
 		t.Fatalf("UpdateSession(active) error = %v", err)
@@ -146,7 +147,7 @@ func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 	defer func() { codexRecoveryState = appcodexruntime.NewRecoveryState() }()
 
 	sessionKey := "sess-recovering"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		Status:      "queued",
@@ -192,7 +193,7 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 	configureCodexClientRuntime(a, fc)
 
 	sessionKey := "sess-auto-thread-recovery"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",

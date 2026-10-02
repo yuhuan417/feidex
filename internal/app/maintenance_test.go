@@ -2,6 +2,7 @@ package app
 
 import (
 	appmaintenance "feidex/internal/app/maintenance"
+	"feidex/internal/domain/conversation"
 
 	"os"
 	"path/filepath"
@@ -91,7 +92,7 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 
 func TestMiscAppFunctions(t *testing.T) {
 	logSessionState("test", "sess", nil)
-	logSessionState("test", "sess", &state.Session{WorkspaceID: "ws", Queue: []string{"a"}})
+	logSessionState("test", "sess", &conversation.Session{WorkspaceID: "ws", Queue: []string{"a"}})
 
 	started := time.Now()
 	app := &App{started: started}

@@ -3,6 +3,7 @@ package app
 import (
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"os/exec"
@@ -100,7 +101,7 @@ func TestWorkspaceUnbindReturnsGroupToOnboarding(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	if err := a.State().SaveSession(&state.Session{
+	if err := a.State().SaveSession(&conversation.Session{
 		Key:                     sessionKey,
 		ChatType:                msg.ChatType,
 		ChatID:                  msg.ChatID,
@@ -709,7 +710,7 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:           sessionKey,
 		BindingID:     "binding-client",
 		WorkspaceID:   "",
@@ -926,7 +927,7 @@ func TestGroupThreadMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *test
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	for _, sess := range []*state.Session{
+	for _, sess := range []*conversation.Session{
 		{Key: activeKey, BindingID: bindingID, WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-active", ActiveThreadID: "12345678abcdef", ActiveThreadWorkspaceID: "default", ActiveThreadName: "Active Thread", ActiveThreadPreview: "active preview", ActiveThreadSandboxMode: "workspace-write", ActiveThreadApprovalPolicy: "on-request", ActiveThreadMultiAgentMode: "proactive", Status: state.SessionStatusIdle.String()},
 		{Key: foreignFrontendKey, BindingID: bindingID, WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-foreign-frontend", ActiveThreadID: "eeeeeeeeeeeeeeee", ActiveThreadWorkspaceID: "default", Status: state.SessionStatusIdle.String()},
 	} {
@@ -1001,7 +1002,7 @@ func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: bindingID, FrontendID: "bot-a", ChatID: chatID, ChatType: "group", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	for _, sess := range []*state.Session{
+	for _, sess := range []*conversation.Session{
 		{Key: activeKey, BindingID: bindingID, WorkspaceID: "default", ChatID: chatID, ChatType: "group", RootMessageID: "root-active", ActiveThreadID: sessionID, ActiveThreadWorkspaceID: "default", ActiveThreadName: "Claude Session", ActiveThreadPreview: "continue work", Status: state.SessionStatusIdle.String()},
 	} {
 		if err := a.store.UpsertSession(sess); err != nil {
@@ -1184,7 +1185,7 @@ func TestGroupBindingScopedCardActionsUpdateBindingNotSession(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{Key: sessionKey, ChatID: "chat-card", ChatType: "group", WorkspaceID: "default"}); err != nil {
+	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, ChatID: "chat-card", ChatType: "group", WorkspaceID: "default"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
@@ -1260,7 +1261,7 @@ func TestGroupModelSetSavesClaudeModelForNextTurn(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		BindingID:   bindingID,
 		ChatID:      chatID,

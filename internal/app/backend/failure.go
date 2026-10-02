@@ -3,10 +3,10 @@ package backend
 import (
 	"context"
 	"feidex/internal/app/appcore"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"time"
 
-	appsessionctx "feidex/internal/app/sessionctx"
 	appturnlifecycle "feidex/internal/app/turnlifecycle"
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/state"
@@ -20,12 +20,12 @@ type BackendFailureService struct {
 }
 
 type FailureStateDeps struct {
-	AllSessions        func() []*state.Session
+	AllSessions        func() []*conversation.Session
 	GetSubmission      func(id string) *state.Submission
 	AllPendingRequests func() []*state.PendingRequest
 	UpdatePending      func(id string, mutate func(*state.PendingRequest)) error
 	FinalizeSubmission func(id, status string) error
-	UpdateSession      func(key string, mutate func(*state.Session)) (*state.Session, error)
+	UpdateSession      func(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
 }
 
 type FailureSessionDeps struct {
@@ -41,7 +41,7 @@ type FailureRuntimeDeps struct {
 }
 
 type FailureCardDeps struct {
-	ObserveAutoRetryTerminal func(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool
+	ObserveAutoRetryTerminal func(sessionKey, threadID, status string, sess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool
 	ReplaceTurnEventCard     func(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string)
 	PrependAttentionMention  func(text, userID string) string
 	TurnStopAttentionUserID  func(sub *state.Submission, turnID string) string
@@ -69,7 +69,7 @@ func NewBackendFailureService(deps FailureDeps) BackendFailureService {
 	return BackendFailureService{App: deps.App, deps: deps}
 }
 
-func (s BackendFailureService) AllSessions() []*state.Session {
+func (s BackendFailureService) AllSessions() []*conversation.Session {
 	if s.deps.State.AllSessions == nil {
 		return nil
 	}
@@ -104,7 +104,7 @@ func (s BackendFailureService) FinalizeSubmission(id, status string) error {
 	return s.deps.State.FinalizeSubmission(id, status)
 }
 
-func (s BackendFailureService) UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error) {
+func (s BackendFailureService) UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
 	if s.deps.State.UpdateSession == nil {
 		return nil, nil
 	}
@@ -151,7 +151,7 @@ func (s BackendFailureService) BackendRuntimeHandleTransportFailure(backend, ses
 	}
 }
 
-func (s BackendFailureService) ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
+func (s BackendFailureService) ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
 	if s.deps.Cards.ObserveAutoRetryTerminal == nil {
 		return false
 	}
@@ -223,7 +223,7 @@ func ErrorText(err error) string {
 
 // BackendFailureScopeMatches reports whether a session matches the given
 // failure scope (session key and thread ID).
-func BackendFailureScopeMatches(sess *state.Session, scopeSessionKey, scopeThreadID string) bool {
+func BackendFailureScopeMatches(sess *conversation.Session, scopeSessionKey, scopeThreadID string) bool {
 	if sess == nil {
 		return false
 	}
@@ -276,7 +276,7 @@ func (s BackendFailureService) FailBackendActiveWork(backend, scopeSessionKey, s
 		if !BackendFailureScopeMatches(sess, scopeSessionKey, scopeThreadID) {
 			continue
 		}
-		appsessionctx.EnsureActiveOperations(sess)
+		conversation.EnsureActiveOperations(sess)
 		if len(sess.ActiveOperations) == 0 && state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting {
 			continue
 		}
@@ -380,13 +380,13 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 	s.ClearSubmissionProcessingReactions(sub)
 	terminalText := appturnlifecycle.TurnCompletionTerminalText(sub.Status, firstNonEmpty(strings.TrimSpace(message), strings.TrimSpace(flush.LastError)))
 	reuseMessageID := strings.TrimSpace(flush.WorkingMessageID)
-	updatedSess, _ := s.UpdateSession(sessionKey, func(sess *state.Session) {
+	updatedSess, _ := s.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		if sess == nil {
 			return
 		}
-		appsessionctx.RemoveActiveOperation(sess, sub.ID, turnID)
+		conversation.RemoveActiveOperation(sess, sub.ID, turnID)
 		switch {
-		case appsessionctx.HasActiveOperations(sess):
+		case conversation.HasActiveOperations(sess):
 			sess.Status = state.SessionStatusTurnStarting.String()
 			for _, op := range sess.ActiveOperations {
 				if strings.TrimSpace(op.TurnID) != "" {

@@ -3,19 +3,19 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 	"time"
 
 	"feidex/internal/claudecli"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
@@ -58,7 +58,7 @@ func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 	a.backend = backendClaude
 	a.cfg.Feishu.Backend = backendClaude
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",

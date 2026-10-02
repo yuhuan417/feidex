@@ -3,6 +3,7 @@ package state
 import (
 	"encoding/json"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"os"
@@ -35,7 +36,7 @@ type Snapshot struct {
 }
 
 type runtimeState struct {
-	Sessions        map[string]*Session
+	Sessions        map[string]*conversation.Session
 	Submissions     map[string]*Submission
 	PendingRequests map[string]*PendingRequest
 	MessageLinks    map[string]*MessageLink
@@ -48,33 +49,33 @@ type Counters struct {
 }
 
 type storedSession struct {
-	Key                             string                          `json:"key"`
-	BindingID                       string                          `json:"binding_id,omitempty"`
-	WorkspaceID                     string                          `json:"workspace_id"`
-	ChatID                          string                          `json:"chat_id,omitempty"`
-	ChatType                        string                          `json:"chat_type,omitempty"`
-	RootMessageID                   string                          `json:"root_message_id,omitempty"`
-	ActiveThreadID                  string                          `json:"active_thread_id"`
-	ActiveThreadWorkspaceID         string                          `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy      string                          `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode         string                          `json:"active_thread_sandbox_mode"`
-	ActiveThreadMultiAgentMode      string                          `json:"active_thread_multi_agent_mode,omitempty"`
-	ActiveClaudePermissionMode      string                          `json:"active_claude_permission_mode,omitempty"`
-	ActiveThreadServiceTier         string                          `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadCollaborationMode   *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
-	ActiveThreadName                string                          `json:"active_thread_name"`
-	ActiveThreadPreview             string                          `json:"active_thread_preview"`
-	BackendThreads                  map[string]SessionBackendThread `json:"backend_threads,omitempty"`
-	OwnerUserID                     string                          `json:"owner_user_id"`
-	ModelOverride                   string                          `json:"model_override"`
-	PlanModelOverride               string                          `json:"plan_model_override,omitempty"`
-	PlanReasoningEffortOverride     string                          `json:"plan_reasoning_effort_override,omitempty"`
-	ReviewModelOverride             string                          `json:"review_model_override,omitempty"`
-	SubagentModelOverride           string                          `json:"subagent_model_override,omitempty"`
-	SubagentReasoningEffortOverride string                          `json:"subagent_reasoning_effort_override,omitempty"`
-	SmallModelOverride              string                          `json:"small_model_override,omitempty"`
-	RecentWorkspaceIDs              []string                        `json:"recent_workspace_ids,omitempty"`
-	UpdatedAt                       int64                           `json:"updated_at"`
+	Key                             string                                       `json:"key"`
+	BindingID                       string                                       `json:"binding_id,omitempty"`
+	WorkspaceID                     string                                       `json:"workspace_id"`
+	ChatID                          string                                       `json:"chat_id,omitempty"`
+	ChatType                        string                                       `json:"chat_type,omitempty"`
+	RootMessageID                   string                                       `json:"root_message_id,omitempty"`
+	ActiveThreadID                  string                                       `json:"active_thread_id"`
+	ActiveThreadWorkspaceID         string                                       `json:"active_thread_workspace_id"`
+	ActiveThreadApprovalPolicy      string                                       `json:"active_thread_approval_policy"`
+	ActiveThreadSandboxMode         string                                       `json:"active_thread_sandbox_mode"`
+	ActiveThreadMultiAgentMode      string                                       `json:"active_thread_multi_agent_mode,omitempty"`
+	ActiveClaudePermissionMode      string                                       `json:"active_claude_permission_mode,omitempty"`
+	ActiveThreadServiceTier         string                                       `json:"active_thread_service_tier,omitempty"`
+	ActiveThreadCollaborationMode   *conversation.SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
+	ActiveThreadName                string                                       `json:"active_thread_name"`
+	ActiveThreadPreview             string                                       `json:"active_thread_preview"`
+	BackendThreads                  map[string]conversation.SessionBackendThread `json:"backend_threads,omitempty"`
+	OwnerUserID                     string                                       `json:"owner_user_id"`
+	ModelOverride                   string                                       `json:"model_override"`
+	PlanModelOverride               string                                       `json:"plan_model_override,omitempty"`
+	PlanReasoningEffortOverride     string                                       `json:"plan_reasoning_effort_override,omitempty"`
+	ReviewModelOverride             string                                       `json:"review_model_override,omitempty"`
+	SubagentModelOverride           string                                       `json:"subagent_model_override,omitempty"`
+	SubagentReasoningEffortOverride string                                       `json:"subagent_reasoning_effort_override,omitempty"`
+	SmallModelOverride              string                                       `json:"small_model_override,omitempty"`
+	RecentWorkspaceIDs              []string                                     `json:"recent_workspace_ids,omitempty"`
+	UpdatedAt                       int64                                        `json:"updated_at"`
 }
 
 type FrontendCardNotification struct {
@@ -207,81 +208,6 @@ type AgentBindingPendingAttachment struct {
 	SourceMessageID string `json:"source_message_id,omitempty"`
 }
 
-type SessionBackendThread struct {
-	ThreadID             string                    `json:"thread_id,omitempty"`
-	WorkspaceID          string                    `json:"workspace_id,omitempty"`
-	ApprovalPolicy       string                    `json:"approval_policy,omitempty"`
-	SandboxMode          string                    `json:"sandbox_mode,omitempty"`
-	MultiAgentMode       string                    `json:"multi_agent_mode,omitempty"`
-	ClaudePermissionMode string                    `json:"claude_permission_mode,omitempty"`
-	ServiceTier          string                    `json:"service_tier,omitempty"`
-	CollaborationMode    *SessionCollaborationMode `json:"collaboration_mode,omitempty"`
-	Name                 string                    `json:"name,omitempty"`
-	Preview              string                    `json:"preview,omitempty"`
-}
-
-type SessionCollaborationMode struct {
-	PresetReasoningEffort string  `json:"preset_reasoning_effort,omitempty"`
-	Mode                  string  `json:"mode"`
-	Model                 string  `json:"model"`
-	ReasoningEffort       string  `json:"reasoning_effort,omitempty"`
-	DeveloperInstructions *string `json:"developer_instructions"`
-}
-
-type Session struct {
-	AppliedModelConfig              domainmodelconfig.Snapshot      `json:"applied_model_config,omitempty"`
-	ModelConfigError                string                          `json:"model_config_error,omitempty"`
-	Key                             string                          `json:"key"`
-	BindingID                       string                          `json:"binding_id,omitempty"`
-	WorkspaceID                     string                          `json:"workspace_id"`
-	ActiveThreadID                  string                          `json:"active_thread_id"`
-	ActiveThreadWorkspaceID         string                          `json:"active_thread_workspace_id"`
-	ActiveThreadApprovalPolicy      string                          `json:"active_thread_approval_policy"`
-	ActiveThreadSandboxMode         string                          `json:"active_thread_sandbox_mode"`
-	ActiveThreadMultiAgentMode      string                          `json:"active_thread_multi_agent_mode,omitempty"`
-	ActiveClaudePermissionMode      string                          `json:"active_claude_permission_mode,omitempty"`
-	ActiveThreadServiceTier         string                          `json:"active_thread_service_tier,omitempty"`
-	ActiveThreadCollaborationMode   *SessionCollaborationMode       `json:"active_thread_collaboration_mode,omitempty"`
-	ActiveThreadName                string                          `json:"active_thread_name"`
-	ActiveThreadPreview             string                          `json:"active_thread_preview"`
-	BackendThreads                  map[string]SessionBackendThread `json:"backend_threads,omitempty"`
-	ActiveTurnID                    string                          `json:"active_turn_id"`
-	ActiveSubmissionID              string                          `json:"active_submission_id"`
-	OwnerUserID                     string                          `json:"owner_user_id"`
-	ChatID                          string                          `json:"chat_id"`
-	ChatType                        string                          `json:"chat_type"`
-	RootMessageID                   string                          `json:"root_message_id"`
-	ModelOverride                   string                          `json:"model_override"`
-	PlanModelOverride               string                          `json:"plan_model_override,omitempty"`
-	PlanReasoningEffortOverride     string                          `json:"plan_reasoning_effort_override,omitempty"`
-	ReviewModelOverride             string                          `json:"review_model_override,omitempty"`
-	SubagentModelOverride           string                          `json:"subagent_model_override,omitempty"`
-	SubagentReasoningEffortOverride string                          `json:"subagent_reasoning_effort_override,omitempty"`
-	SmallModelOverride              string                          `json:"small_model_override,omitempty"`
-	Status                          string                          `json:"status"`
-	Queue                           []string                        `json:"queue"`
-	ActiveOperations                []SessionActiveOperation        `json:"active_operations,omitempty"`
-	StagedImages                    []SessionStagedImage            `json:"staged_images,omitempty"`
-	RecentWorkspaceIDs              []string                        `json:"recent_workspace_ids,omitempty"`
-	UpdatedAt                       int64                           `json:"updated_at"`
-}
-
-type SessionActiveOperation struct {
-	Kind         string `json:"kind,omitempty"`
-	SubmissionID string `json:"submission_id,omitempty"`
-	ThreadID     string `json:"thread_id,omitempty"`
-	TurnID       string `json:"turn_id,omitempty"`
-	StartedAt    int64  `json:"started_at,omitempty"`
-}
-
-type SessionStagedImage struct {
-	SourceMessageID string `json:"source_message_id"`
-	RootMessageID   string `json:"root_message_id,omitempty"`
-	Name            string `json:"name"`
-	LocalPath       string `json:"local_path"`
-	CreatedAt       int64  `json:"created_at"`
-}
-
 type SubmissionAttachment struct {
 	Kind      string `json:"kind"`
 	Name      string `json:"name"`
@@ -367,7 +293,7 @@ func Open(path string) (*Store, error) {
 			FrontendCardNotifications: map[string][]FrontendCardNotification{},
 		},
 		runtime: runtimeState{
-			Sessions:        map[string]*Session{},
+			Sessions:        map[string]*conversation.Session{},
 			Submissions:     map[string]*Submission{},
 			PendingRequests: map[string]*PendingRequest{},
 			MessageLinks:    map[string]*MessageLink{},
@@ -797,7 +723,7 @@ func (s *Store) UpsertScopedGroupPrimary(frontendID string, primary *GroupPrimar
 	return s.UpsertGroupPrimary(cp)
 }
 
-func (s *Store) GetSession(key string) *Session {
+func (s *Store) GetSession(key string) *conversation.Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if sess, ok := s.runtime.Sessions[key]; ok {
@@ -816,7 +742,7 @@ func (s *Store) CanonicalizeSessionKeys(canonical func(key, chatType, chatID, fr
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	changed := false
-	nextRuntime := make(map[string]*Session, len(s.runtime.Sessions))
+	nextRuntime := make(map[string]*conversation.Session, len(s.runtime.Sessions))
 	for key, sess := range s.runtime.Sessions {
 		if sess == nil {
 			continue
@@ -891,7 +817,7 @@ func (s *Store) CanonicalizeSessionKeys(canonical func(key, chatType, chatID, fr
 	return s.saveLocked()
 }
 
-func (s *Store) UpsertSession(sess *Session) error {
+func (s *Store) UpsertSession(sess *conversation.Session) error {
 	if sess == nil {
 		return nil
 	}
@@ -908,7 +834,7 @@ func (s *Store) UpsertSession(sess *Session) error {
 	return s.saveLocked()
 }
 
-func (s *Store) UpdateSession(key string, mutate func(*Session)) (*Session, error) {
+func (s *Store) UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return nil, os.ErrNotExist
@@ -1089,10 +1015,10 @@ func (s *Store) DeletePendingRequests(match func(*PendingRequest) bool) {
 	}
 }
 
-func (s *Store) AllSessions() []*Session {
+func (s *Store) AllSessions() []*conversation.Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := make([]*Session, 0, len(s.runtime.Sessions))
+	out := make([]*conversation.Session, 0, len(s.runtime.Sessions))
 	for _, sess := range s.runtime.Sessions {
 		out = append(out, cloneSession(sess))
 	}
@@ -1606,21 +1532,21 @@ func frontendCardNotificationKey(note FrontendCardNotification) string {
 	return strings.Join([]string{note.Kind, note.Title, note.Color, note.Body}, "|")
 }
 
-func cloneSession(sess *Session) *Session {
+func cloneSession(sess *conversation.Session) *conversation.Session {
 	if sess == nil {
 		return nil
 	}
 	cp := *sess
 	normalizeSessionValues(&cp)
 	cp.Queue = append([]string(nil), sess.Queue...)
-	cp.ActiveOperations = append([]SessionActiveOperation(nil), sess.ActiveOperations...)
-	cp.StagedImages = append([]SessionStagedImage(nil), sess.StagedImages...)
+	cp.ActiveOperations = append([]conversation.SessionActiveOperation(nil), sess.ActiveOperations...)
+	cp.StagedImages = append([]conversation.SessionStagedImage(nil), sess.StagedImages...)
 	cp.ActiveThreadCollaborationMode = cloneSessionCollaborationMode(sess.ActiveThreadCollaborationMode)
 	cp.BackendThreads = cloneSessionBackendThreads(sess.BackendThreads)
 	return &cp
 }
 
-func normalizeSessionValues(sess *Session) bool {
+func normalizeSessionValues(sess *conversation.Session) bool {
 	if sess == nil {
 		return false
 	}
@@ -1671,7 +1597,7 @@ func normalizePendingRequestValues(req *PendingRequest) {
 	req.Status = NormalizePendingRequestStatus(req.Status).String()
 }
 
-func storedSessionFromSession(sess *Session) *storedSession {
+func storedSessionFromSession(sess *conversation.Session) *storedSession {
 	if sess == nil {
 		return nil
 	}
@@ -1711,11 +1637,11 @@ func storedSessionFromSession(sess *Session) *storedSession {
 	}
 }
 
-func sessionFromStored(sess *storedSession) *Session {
+func sessionFromStored(sess *storedSession) *conversation.Session {
 	if sess == nil {
 		return nil
 	}
-	cp := &Session{
+	cp := &conversation.Session{
 		Key:                             sess.Key,
 		BindingID:                       strings.TrimSpace(sess.BindingID),
 		WorkspaceID:                     sess.WorkspaceID,
@@ -1783,11 +1709,11 @@ func normalizeStoredSession(sess *storedSession) *storedSession {
 	return &cp
 }
 
-func cloneSessionBackendThreads(src map[string]SessionBackendThread) map[string]SessionBackendThread {
+func cloneSessionBackendThreads(src map[string]conversation.SessionBackendThread) map[string]conversation.SessionBackendThread {
 	if len(src) == 0 {
 		return nil
 	}
-	dst := make(map[string]SessionBackendThread, len(src))
+	dst := make(map[string]conversation.SessionBackendThread, len(src))
 	for key, value := range src {
 		dst[key] = normalizeSessionBackendThread(value)
 	}
@@ -1803,7 +1729,7 @@ func cloneStringSlice(src []string) []string {
 	return dst
 }
 
-func cloneSessionCollaborationMode(src *SessionCollaborationMode) *SessionCollaborationMode {
+func cloneSessionCollaborationMode(src *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
 	if src == nil {
 		return nil
 	}
@@ -1815,7 +1741,7 @@ func cloneSessionCollaborationMode(src *SessionCollaborationMode) *SessionCollab
 	return &cp
 }
 
-func normalizeSessionCollaborationMode(mode *SessionCollaborationMode) *SessionCollaborationMode {
+func normalizeSessionCollaborationMode(mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
 	if mode == nil {
 		return nil
 	}
@@ -1833,7 +1759,7 @@ func normalizeSessionCollaborationMode(mode *SessionCollaborationMode) *SessionC
 	return &cp
 }
 
-func sessionCollaborationModeEqual(a, b *SessionCollaborationMode) bool {
+func sessionCollaborationModeEqual(a, b *conversation.SessionCollaborationMode) bool {
 	switch {
 	case a == nil && b == nil:
 		return true
@@ -1853,7 +1779,7 @@ func sessionCollaborationModeEqual(a, b *SessionCollaborationMode) bool {
 	}
 }
 
-func normalizeSessionBackendThread(thread SessionBackendThread) SessionBackendThread {
+func normalizeSessionBackendThread(thread conversation.SessionBackendThread) conversation.SessionBackendThread {
 	thread.ThreadID = strings.TrimSpace(thread.ThreadID)
 	thread.WorkspaceID = strings.TrimSpace(thread.WorkspaceID)
 	thread.ApprovalPolicy = strings.TrimSpace(thread.ApprovalPolicy)
@@ -1867,18 +1793,18 @@ func normalizeSessionBackendThread(thread SessionBackendThread) SessionBackendTh
 	return thread
 }
 
-func normalizeSessionBackendThreads(src map[string]SessionBackendThread) map[string]SessionBackendThread {
+func normalizeSessionBackendThreads(src map[string]conversation.SessionBackendThread) map[string]conversation.SessionBackendThread {
 	if len(src) == 0 {
 		return nil
 	}
-	dst := make(map[string]SessionBackendThread, len(src))
+	dst := make(map[string]conversation.SessionBackendThread, len(src))
 	for key, value := range src {
 		key = strings.ToLower(strings.TrimSpace(key))
 		if key == "" {
 			continue
 		}
 		normalized := normalizeSessionBackendThread(value)
-		if normalized == (SessionBackendThread{}) {
+		if normalized == (conversation.SessionBackendThread{}) {
 			continue
 		}
 		dst[key] = normalized
@@ -1889,7 +1815,7 @@ func normalizeSessionBackendThreads(src map[string]SessionBackendThread) map[str
 	return dst
 }
 
-func sessionBackendThreadsEqual(a, b map[string]SessionBackendThread) bool {
+func sessionBackendThreadsEqual(a, b map[string]conversation.SessionBackendThread) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -2058,7 +1984,7 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
-func mergeSessions(a, b *Session) *Session {
+func mergeSessions(a, b *conversation.Session) *conversation.Session {
 	if a == nil {
 		return cloneSession(b)
 	}
@@ -2079,7 +2005,7 @@ func mergeSessions(a, b *Session) *Session {
 	return primary
 }
 
-func fillSessionBlanks(dst, src *Session) {
+func fillSessionBlanks(dst, src *conversation.Session) {
 	if dst == nil || src == nil {
 		return
 	}
@@ -2168,13 +2094,13 @@ func appendUniqueStrings(values []string, more ...string) []string {
 	return out
 }
 
-func mergeSessionBackendThreadMaps(base, overlay map[string]SessionBackendThread) map[string]SessionBackendThread {
+func mergeSessionBackendThreadMaps(base, overlay map[string]conversation.SessionBackendThread) map[string]conversation.SessionBackendThread {
 	if len(base) == 0 && len(overlay) == 0 {
 		return nil
 	}
 	out := cloneSessionBackendThreads(base)
 	if out == nil {
-		out = map[string]SessionBackendThread{}
+		out = map[string]conversation.SessionBackendThread{}
 	}
 	for key, value := range overlay {
 		out[key] = value
@@ -2182,7 +2108,7 @@ func mergeSessionBackendThreadMaps(base, overlay map[string]SessionBackendThread
 	return out
 }
 
-func (s *Store) ensureSessionLocked(key string) *Session {
+func (s *Store) ensureSessionLocked(key string) *conversation.Session {
 	if sess, ok := s.runtime.Sessions[key]; ok {
 		return sess
 	}
@@ -2191,13 +2117,13 @@ func (s *Store) ensureSessionLocked(key string) *Session {
 		s.runtime.Sessions[key] = sess
 		return sess
 	}
-	sess := &Session{Key: key, Status: SessionStatusIdle.String(), UpdatedAt: time.Now().Unix()}
+	sess := &conversation.Session{Key: key, Status: SessionStatusIdle.String(), UpdatedAt: time.Now().Unix()}
 	s.runtime.Sessions[key] = sess
 	s.syncPersistentSessionLocked(sess)
 	return sess
 }
 
-func (s *Store) syncPersistentSessionLocked(sess *Session) {
+func (s *Store) syncPersistentSessionLocked(sess *conversation.Session) {
 	if sess == nil || strings.TrimSpace(sess.Key) == "" {
 		return
 	}

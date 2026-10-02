@@ -3,8 +3,8 @@ package app
 import (
 	appskillscmd "feidex/internal/app/skillscmd"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 // newSkillsService creates a skillscmd.Service with callbacks wired to *App.
@@ -15,7 +15,7 @@ func newSkillsService(a *App) *appskillscmd.Service {
 		s.RequireCodexClient = func() (appskillscmd.CodexClient, error) {
 			return requireCodexClient(a)
 		}
-		s.AppStateSession = func(sessionKey string) *state.Session {
+		s.AppStateSession = func(sessionKey string) *conversation.Session {
 			return a.State().Session(sessionKey)
 		}
 		s.DefaultWorkspaceID = func() string {

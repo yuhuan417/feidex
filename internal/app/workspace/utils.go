@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"net/url"
 	"path"
@@ -257,7 +258,7 @@ func NewTakeoverPayloadWithNotice(workspaceID, targetDir, notice string) NewPayl
 }
 
 // SessionReferencesWorkspace checks if a session references a given workspace ID.
-func SessionReferencesWorkspace(sess *state.Session, workspaceID string) bool {
+func SessionReferencesWorkspace(sess *conversation.Session, workspaceID string) bool {
 	if sess == nil {
 		return false
 	}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/apputil"
@@ -44,8 +45,8 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 	if workspaceID == "" {
 		workspaceID = strings.TrimSpace(sess.WorkspaceID)
 	}
-	targetOps := make([]state.SessionActiveOperation, 0, len(sess.ActiveOperations))
-	sessionEnsureActiveOperations(sess)
+	targetOps := make([]conversation.SessionActiveOperation, 0, len(sess.ActiveOperations))
+	conversation.EnsureActiveOperations(sess)
 	for _, op := range sess.ActiveOperations {
 		if strings.TrimSpace(op.TurnID) == "" {
 			continue
@@ -73,20 +74,20 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 			newReplyContinuationService(a).recordSubmissionSourceLinks(updated)
 		}
 	}
-	updatedSess, _ := appState.UpdateSession(sessionKey, func(current *state.Session) {
+	updatedSess, _ := appState.UpdateSession(sessionKey, func(current *conversation.Session) {
 		if current == nil {
 			return
 		}
-		sessionEnsureActiveOperations(current)
+		conversation.EnsureActiveOperations(current)
 		for _, op := range targetOps {
-			sessionUpsertActiveOperation(current, state.SessionActiveOperation{
-				Kind:         apputil.FirstNonEmpty(strings.TrimSpace(op.Kind), sessionOpKindSubmission),
+			conversation.UpsertActiveOperation(current, conversation.SessionActiveOperation{
+				Kind:         apputil.FirstNonEmpty(strings.TrimSpace(op.Kind), conversation.OpKindSubmission),
 				SubmissionID: strings.TrimSpace(op.SubmissionID),
 				ThreadID:     threadID,
 				TurnID:       strings.TrimSpace(op.TurnID),
 			})
 		}
-		setSessionThreadContext(current, workspaceID, threadID, current.ActiveThreadName, current.ActiveThreadPreview)
+		conversation.SetThreadContext(current, workspaceID, threadID, current.ActiveThreadName, current.ActiveThreadPreview)
 		if strings.TrimSpace(current.ActiveThreadName) == "" {
 			current.ActiveThreadName = "Claude"
 		}

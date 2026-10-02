@@ -6,6 +6,7 @@ import (
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	appthreadmenu "feidex/internal/app/threadmenu"
+	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
 	"strings"
@@ -333,7 +334,7 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-prev",
@@ -404,7 +405,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-thread-1",
@@ -416,8 +417,8 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 		ChatType:                "p2p",
 		RootMessageID:           "root-1",
 		Status:                  "turn_in_progress",
-		ActiveOperations: []state.SessionActiveOperation{{
-			Kind:         sessionOpKindSubmission,
+		ActiveOperations: []conversation.SessionActiveOperation{{
+			Kind:         conversation.OpKindSubmission,
 			SubmissionID: "sub-running",
 			ThreadID:     "claude-thread-1",
 			TurnID:       "claude-turn-current",
@@ -502,7 +503,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-stale",
@@ -582,7 +583,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     "claude-stale",
@@ -592,8 +593,8 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 		ChatID:             "chat",
 		ChatType:           "p2p",
 		Status:             "turn_in_progress",
-		ActiveOperations: []state.SessionActiveOperation{{
-			Kind:         sessionOpKindSubmission,
+		ActiveOperations: []conversation.SessionActiveOperation{{
+			Kind:         conversation.OpKindSubmission,
 			SubmissionID: "sub-1",
 			ThreadID:     "claude-stale",
 			TurnID:       "claude-turn-1",
@@ -655,7 +656,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:           sessionKey,
 		WorkspaceID:   a.cfg.Workspaces[0].ID,
 		OwnerUserID:   "user",
@@ -747,7 +748,7 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:           sessionKey,
 		WorkspaceID:   a.cfg.Workspaces[0].ID,
 		OwnerUserID:   "user",
@@ -755,8 +756,8 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 		ChatType:      "group",
 		RootMessageID: "root-1",
 		Status:        "turn_in_progress",
-		ActiveOperations: []state.SessionActiveOperation{{
-			Kind:         sessionOpKindSubmission,
+		ActiveOperations: []conversation.SessionActiveOperation{{
+			Kind:         conversation.OpKindSubmission,
 			SubmissionID: subID,
 			TurnID:       "claude-turn-1",
 		}},
@@ -787,7 +788,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-thread-1",
@@ -1159,7 +1160,7 @@ func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	a.feishu = ff
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "claude-thread-1",
@@ -1227,7 +1228,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 	}); err != nil {
@@ -1279,7 +1280,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 	a.codex = nil
 	claude := &fakeClaudeCore{}
 	a.claude = claude
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 	}); err != nil {
@@ -1374,7 +1375,7 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	a.claude = claude
 
 	targetSessionKey := "feishu:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                targetSessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ChatID:             "chat-1",
@@ -1440,7 +1441,7 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	}
 }
 
-func dumpSessionState(t *testing.T, label string, sess *state.Session) {
+func dumpSessionState(t *testing.T, label string, sess *conversation.Session) {
 	t.Helper()
 	if sess == nil {
 		t.Logf("[%s] session = nil", label)
@@ -1462,7 +1463,7 @@ func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ChatID:                  "chat-1",
@@ -1474,8 +1475,8 @@ func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 		ActiveTurnID:            "claude-turn-1",
 		ActiveSubmissionID:      "sub-1",
 		Status:                  "turn_in_progress",
-		ActiveOperations: []state.SessionActiveOperation{{
-			Kind:         sessionOpKindSubmission,
+		ActiveOperations: []conversation.SessionActiveOperation{{
+			Kind:         conversation.OpKindSubmission,
 			SubmissionID: "sub-1",
 			ThreadID:     "claude-thread-1",
 			TurnID:       "claude-turn-1",
@@ -1580,7 +1581,7 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	steerTurnID := "claude-turn-steer"
 
 	// Set up session with two active operations: original + steer
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     "claude-thread-1",
@@ -1590,15 +1591,15 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 		ChatID:             "chat",
 		ChatType:           "p2p",
 		Status:             "turn_in_progress",
-		ActiveOperations: []state.SessionActiveOperation{
+		ActiveOperations: []conversation.SessionActiveOperation{
 			{
-				Kind:         sessionOpKindSubmission,
+				Kind:         conversation.OpKindSubmission,
 				SubmissionID: steerSubID,
 				ThreadID:     "claude-thread-1",
 				TurnID:       steerTurnID,
 			},
 			{
-				Kind:         sessionOpKindSubmission,
+				Kind:         conversation.OpKindSubmission,
 				SubmissionID: "sub-1",
 				ThreadID:     "claude-thread-1",
 				TurnID:       "claude-turn-1",
@@ -1694,7 +1695,7 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 	sessionKey := "feishu:chat:chat-1"
 
 	// Set up session with 2 active operations (original + steer)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ChatID:                  "chat-1",
@@ -1706,15 +1707,15 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 		ActiveTurnID:            "claude-turn-steer",
 		ActiveSubmissionID:      "sub-steer",
 		Status:                  "turn_in_progress",
-		ActiveOperations: []state.SessionActiveOperation{
+		ActiveOperations: []conversation.SessionActiveOperation{
 			{
-				Kind:         sessionOpKindSubmission,
+				Kind:         conversation.OpKindSubmission,
 				SubmissionID: "sub-steer",
 				ThreadID:     "claude-thread-1",
 				TurnID:       "claude-turn-steer",
 			},
 			{
-				Kind:         sessionOpKindSubmission,
+				Kind:         conversation.OpKindSubmission,
 				SubmissionID: "sub-1",
 				ThreadID:     "claude-thread-1",
 				TurnID:       "claude-turn-1",
@@ -1754,7 +1755,7 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 	}
 
 	// Verify that new messages can be submitted (should not be stuck in "queuing")
-	hasInFlight := sessionHasInFlightSubmission(sess)
+	hasInFlight := conversation.HasInFlightSubmission(sess)
 	t.Logf("after clear: hasInFlight = %v, status = %q", hasInFlight, sess.Status)
 
 	if hasInFlight {
@@ -1785,7 +1786,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ChatID:                  "chat-1",
@@ -1861,7 +1862,7 @@ func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 		RootMessageID: "root-msg",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ChatID:                  "chat-1",

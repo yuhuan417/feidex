@@ -2,6 +2,7 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"encoding/json"
@@ -49,7 +50,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		config.Workspace{ID: "alt", Cwd: t.TempDir()},
 		config.Workspace{ID: "drop", Cwd: t.TempDir()},
 	)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
 		ChatID:                  "chat-1",
@@ -63,7 +64,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-2",
 		WorkspaceID:             "default",
 		ChatID:                  "chat-1",

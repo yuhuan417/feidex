@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ func TestEnqueueSubmissionBindsStagedImagesToNextText(t *testing.T) {
 	a := &App{cfg: cfg, store: store}
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        "default",
 		ChatID:             "chat",
@@ -27,7 +28,7 @@ func TestEnqueueSubmissionBindsStagedImagesToNextText(t *testing.T) {
 		OwnerUserID:        "user",
 		ActiveSubmissionID: "sub-running",
 		Status:             "queued",
-		StagedImages: []state.SessionStagedImage{
+		StagedImages: []conversation.SessionStagedImage{
 			{
 				SourceMessageID: "img-1",
 				Name:            "image.png",

@@ -2,8 +2,8 @@ package app
 
 import (
 	appmaintenance "feidex/internal/app/maintenance"
+	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
-	"feidex/internal/state"
 )
 
 func recoverRuntimeState(a *App) {
@@ -25,7 +25,7 @@ func resetLiveThreadState(a *App) {
 	a.liveThreads = frontendruntime.NewLiveThreads()
 }
 
-func startupReadyChatIDs(sessions []*state.Session) []string {
+func startupReadyChatIDs(sessions []*conversation.Session) []string {
 	return appmaintenance.StartupReadyChatIDs(sessions)
 }
 

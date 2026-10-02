@@ -4,8 +4,8 @@ import (
 	appcore "feidex/internal/app/appcore"
 	apphistorycmd "feidex/internal/app/historycmd"
 	appthreadmenu "feidex/internal/app/threadmenu"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 type historyAppAdapter struct{ *App }
@@ -50,7 +50,7 @@ func (a historyAppAdapter) HistoryMenuCardBody(action, body string) string {
 	return menuCardBody(action, body)
 }
 
-func (a historyAppAdapter) HistoryCurrentThreadLabel(sess *state.Session) string {
+func (a historyAppAdapter) HistoryCurrentThreadLabel(sess *conversation.Session) string {
 	return appthreadmenu.SessionCurrentThreadLabel(sess)
 }
 

@@ -2,27 +2,27 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 
 	"testing"
 
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
 func TestSwitchSessionWorkspaceClearsIdleThreadContext(t *testing.T) {
-	sess := &state.Session{
+	sess := &conversation.Session{
 		WorkspaceID:             "ws-old",
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: "ws-old",
 		ActiveThreadName:        "thread name",
 		ActiveThreadPreview:     "thread preview",
-		BackendThreads: map[string]state.SessionBackendThread{
+		BackendThreads: map[string]conversation.SessionBackendThread{
 			backendCodex: {ThreadID: "thread-1", WorkspaceID: "ws-old"},
 		},
 	}
 
-	switchSessionWorkspace(sess, "ws-new")
+	conversation.SwitchSessionWorkspace(sess, "ws-new")
 
 	if sess.WorkspaceID != "ws-new" {
 		t.Fatalf("workspace = %q, want ws-new", sess.WorkspaceID)
@@ -39,14 +39,14 @@ func TestSwitchSessionWorkspaceClearsIdleThreadContext(t *testing.T) {
 }
 
 func TestSwitchSessionWorkspacePreservesRunningTurnLineage(t *testing.T) {
-	sess := &state.Session{
+	sess := &conversation.Session{
 		WorkspaceID:        "ws-old",
 		ActiveThreadID:     "thread-1",
 		ActiveTurnID:       "turn-1",
 		ActiveSubmissionID: "sub-1",
 	}
 
-	switchSessionWorkspace(sess, "ws-new")
+	conversation.SwitchSessionWorkspace(sess, "ws-new")
 
 	if sess.WorkspaceID != "ws-new" {
 		t.Fatalf("workspace = %q, want ws-new", sess.WorkspaceID)
@@ -63,7 +63,7 @@ func TestSwitchSessionWorkspacePreservesRunningTurnLineage(t *testing.T) {
 }
 
 func TestSessionCanResumeThreadForSubmissionRequiresMatchingWorkspace(t *testing.T) {
-	sess := &state.Session{
+	sess := &conversation.Session{
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: "ws-a",
 	}
@@ -95,13 +95,13 @@ func TestSessionLiveThreadMarkers(t *testing.T) {
 }
 
 func TestSessionHasInFlightSubmission(t *testing.T) {
-	if sessionHasInFlightSubmission(&state.Session{}) {
+	if conversation.HasInFlightSubmission(&conversation.Session{}) {
 		t.Fatal("expected empty session to be idle")
 	}
-	if !sessionHasInFlightSubmission(&state.Session{ActiveSubmissionID: "sub-1"}) {
+	if !conversation.HasInFlightSubmission(&conversation.Session{ActiveSubmissionID: "sub-1"}) {
 		t.Fatal("expected active submission to count as in-flight")
 	}
-	if !sessionHasInFlightSubmission(&state.Session{ActiveTurnID: "turn-1"}) {
+	if !conversation.HasInFlightSubmission(&conversation.Session{ActiveTurnID: "turn-1"}) {
 		t.Fatal("expected active turn to count as in-flight")
 	}
 }
@@ -111,7 +111,7 @@ func TestEffectiveThreadDefaultsPreferThreadOverride(t *testing.T) {
 		ApprovalPolicy: "on-request",
 		SandboxMode:    "workspace-write",
 	}
-	sess := &state.Session{
+	sess := &conversation.Session{
 		ActiveThreadApprovalPolicy: "untrusted",
 		ActiveThreadSandboxMode:    "read-only",
 	}
@@ -124,14 +124,14 @@ func TestEffectiveThreadDefaultsPreferThreadOverride(t *testing.T) {
 }
 
 func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
-	sess := &state.Session{
+	sess := &conversation.Session{
 		WorkspaceID:                "ws-codex",
 		ActiveThreadID:             "codex-thread-1",
 		ActiveThreadWorkspaceID:    "ws-codex",
 		ActiveThreadApprovalPolicy: "never",
 		ActiveThreadSandboxMode:    "read-only",
 		ActiveThreadServiceTier:    appservicetiercmd.ServiceTierFast,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",
@@ -140,11 +140,11 @@ func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
 		ActiveThreadPreview: "preview",
 	}
 
-	sessionStoreBackendThread(sess, backendCodex)
-	clearSessionThreadContext(sess)
+	conversation.StoreBackendThread(sess, backendCodex)
+	conversation.ClearThreadContext(sess)
 	sess.WorkspaceID = "ws-claude"
 
-	if !sessionctx.RestoreBackendThread(sess, backendCodex) {
+	if !conversation.RestoreBackendThread(sess, backendCodex) {
 		t.Fatal("expected codex backend thread snapshot to restore")
 	}
 	if sess.WorkspaceID != "ws-codex" || sess.ActiveThreadID != "codex-thread-1" {

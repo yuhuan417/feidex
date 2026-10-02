@@ -2,6 +2,7 @@ package app
 
 import (
 	appfeishuwrap "feidex/internal/app/feishuwrap"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"fmt"
@@ -267,7 +268,7 @@ func runAsync(a *App, fn func()) {
 	a.frontendRuntime.Run(fn, a.asyncRunner)
 }
 
-func buildThreadStartParams(a *App, ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
+func buildThreadStartParams(a *App, ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
 	if strings.TrimSpace(effectiveModel) == "" {
 		effectiveModel = modelConfigSnapshot(a, sess, backendCodex).Model
 	}
@@ -380,7 +381,7 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 				selectedModel, selectedEffort = snapshot.PlanModel, snapshot.PlanEffort
 			}
 			if selectedModel != "" {
-				turnParams["collaborationMode"] = codexCollaborationModeFromState(&state.SessionCollaborationMode{
+				turnParams["collaborationMode"] = codexCollaborationModeFromState(&conversation.SessionCollaborationMode{
 					Mode: snapshot.CollaborationMode, Model: selectedModel, ReasoningEffort: selectedEffort,
 				})
 			}

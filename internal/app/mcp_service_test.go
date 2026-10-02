@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -125,7 +126,7 @@ func TestFeidexMCPFailsClosedOnAmbiguousMatch(t *testing.T) {
 	}
 
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                "sess-2",
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     "thread-2",
@@ -239,7 +240,7 @@ func TestFeidexMCPFallbackWithoutSessionKeyFailsClosedWhenMultipleActiveSubmissi
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                "sess-2",
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     "thread-2",

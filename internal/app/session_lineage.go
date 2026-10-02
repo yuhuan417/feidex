@@ -1,10 +1,10 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
 	"strings"
 
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -52,36 +52,28 @@ func clearSessionLiveThread(a *App, sessionKey string) {
 	tracker.Clear(sessionKey)
 }
 
-func sessionHasInFlightSubmission(sess *state.Session) bool {
-	return sessionctx.HasInFlightSubmission(sess)
+func effectiveThreadApprovalPolicy(sess *conversation.Session, ws *config.Workspace) string {
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.ApprovalPolicy
+	}
+	return conversation.EffectiveApprovalPolicy(sess, workspaceValue)
 }
 
-func clearSessionThreadContext(sess *state.Session) {
-	sessionctx.ClearThreadContext(sess)
+func effectiveThreadSandboxMode(sess *conversation.Session, ws *config.Workspace) string {
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.SandboxMode
+	}
+	return conversation.EffectiveSandboxMode(sess, workspaceValue)
 }
 
-func sessionStoreBackendThread(sess *state.Session, backend string) {
-	sessionctx.StoreBackendThread(sess, backend)
-}
-
-func setSessionThreadContext(sess *state.Session, workspaceID, threadID, name, preview string) {
-	sessionctx.SetThreadContext(sess, workspaceID, threadID, name, preview)
-}
-
-func effectiveThreadApprovalPolicy(sess *state.Session, ws *config.Workspace) string {
-	return sessionctx.EffectiveApprovalPolicy(sess, ws)
-}
-
-func effectiveThreadSandboxMode(sess *state.Session, ws *config.Workspace) string {
-	return sessionctx.EffectiveSandboxMode(sess, ws)
-}
-
-func effectiveThreadServiceTier(sess *state.Session) string {
-	return sessionctx.EffectiveServiceTier(sess)
-}
-
-func effectiveThreadMultiAgentMode(sess *state.Session, ws *config.Workspace) string {
-	return sessionctx.EffectiveMultiAgentMode(sess, ws)
+func effectiveThreadMultiAgentMode(sess *conversation.Session, ws *config.Workspace) string {
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.MultiAgentMode
+	}
+	return conversation.EffectiveMultiAgentMode(sess, workspaceValue)
 }
 
 func normalizeClaudePermissionModeValue(value string) string {
@@ -99,7 +91,7 @@ func normalizeClaudePermissionModeValue(value string) string {
 	}
 }
 
-func effectiveClaudePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+func effectiveClaudePermissionMode(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
 		return normalizeClaudePermissionModeValue(sess.ActiveClaudePermissionMode)
 	}
@@ -109,10 +101,6 @@ func effectiveClaudePermissionMode(sess *state.Session, ws *config.Workspace, cf
 	return normalizeClaudePermissionModeValue(cfg.PermissionMode)
 }
 
-func switchSessionWorkspace(sess *state.Session, workspaceID string) {
-	sessionctx.SwitchSessionWorkspace(sess, workspaceID)
-}
-
-func sessionCanResumeThreadForSubmission(sess *state.Session, sub *state.Submission) bool {
-	return sessionctx.CanResumeThreadForSubmission(sess, sub)
+func sessionCanResumeThreadForSubmission(sess *conversation.Session, sub *state.Submission) bool {
+	return (sub != nil && conversation.CanResumeThreadForWorkspace(sess, sub.WorkspaceID))
 }

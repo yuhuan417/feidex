@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,7 @@ func newWorkspaceRenderService(a *App) *appworkspacecmd.RenderService {
 		return appworkspacecmd.NewRenderService(appworkspacecmd.RenderDeps{
 			App: a,
 			State: appworkspacecmd.StateDeps{
-				GetSession: func(key string) *state.Session { return a.State().Session(key) },
+				GetSession: func(key string) *conversation.Session { return a.State().Session(key) },
 			},
 			Backend: appworkspacecmd.BackendConfigDeps{
 				BackendWorkspaceSummaryLines:  bcfg.appendBackendWorkspaceSummaryLines,
@@ -45,7 +46,7 @@ func newWorkspaceRenderService(a *App) *appworkspacecmd.RenderService {
 					return "."
 				},
 			},
-			WorkspaceIDForSession: func(sessionKey string, sess *state.Session) string {
+			WorkspaceIDForSession: func(sessionKey string, sess *conversation.Session) string {
 				if groupBindingSessionScopeActive(a, sessionKey) {
 					if binding := bindingForSessionKey(a, sessionKey); binding != nil {
 						return strings.TrimSpace(binding.WorkspaceID)
@@ -57,7 +58,7 @@ func newWorkspaceRenderService(a *App) *appworkspacecmd.RenderService {
 			WorkspaceMenuIsGroup: func(sessionKey string) bool {
 				return groupBindingSessionScopeActive(a, sessionKey)
 			},
-			WorkspaceMenuBodyLines: func(sessionKey string, sess *state.Session, lines []string) []string {
+			WorkspaceMenuBodyLines: func(sessionKey string, sess *conversation.Session, lines []string) []string {
 				if !groupBindingSessionScopeActive(a, sessionKey) {
 					return lines
 				}

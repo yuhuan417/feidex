@@ -2,6 +2,7 @@ package app
 
 import (
 	appfeishuwrap "feidex/internal/app/feishuwrap"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/appstate"
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -25,7 +25,7 @@ func TestAppStateStoreBranches(t *testing.T) {
 	if got := nilFacade.Sessions(); got != nil {
 		t.Fatalf("nil Sessions() = %+v, want nil", got)
 	}
-	if err := nilFacade.SaveSession(&state.Session{}); err != nil {
+	if err := nilFacade.SaveSession(&conversation.Session{}); err != nil {
 		t.Fatalf("nil SaveSession() error = %v", err)
 	}
 	if id, err := nilFacade.CreateSubmission(&state.Submission{}); id != "" || err != nil {
@@ -73,7 +73,7 @@ func TestAppStateStoreBranches(t *testing.T) {
 	if facade == nil || facade.Store != a.store {
 		t.Fatalf(".State() = %+v", facade)
 	}
-	if err := facade.SaveSession(&state.Session{Key: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID}); err != nil {
+	if err := facade.SaveSession(&conversation.Session{Key: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID}); err != nil {
 		t.Fatalf("SaveSession() error = %v", err)
 	}
 	if got := facade.Session(" sess-1 "); got == nil || got.Key != "sess-1" {
@@ -376,7 +376,7 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1", MessageID: "msg-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ChatID:         "chat-1",
@@ -431,9 +431,9 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("renderUpgradeFailedCard() body = %q", body)
 	}
 
-	sessionctx.SetThreadDefaults(nil, "never", "read-only")
-	sess := &state.Session{}
-	sessionctx.SetThreadDefaults(sess, " never ", " read-only ")
+	conversation.SetThreadDefaults(nil, "never", "read-only")
+	sess := &conversation.Session{}
+	conversation.SetThreadDefaults(sess, " never ", " read-only ")
 	if sess.ActiveThreadApprovalPolicy != "never" || sess.ActiveThreadSandboxMode != "read-only" {
 		t.Fatalf("setSessionThreadDefaults() = %+v", sess)
 	}

@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 	"time"
 
 	"feidex/internal/app/turnitem"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 type blockingClaudeCompactCore struct {
@@ -44,7 +44,7 @@ func (f *blockingClaudeCompactCore) StartTurn(_ context.Context, sessionKey, thr
 func TestStandaloneCompactionLifecycle(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sessionKey := "sess-compact"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "thread-1",
@@ -105,13 +105,13 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	if sessionHasActiveWork(nil) {
 		t.Fatal("sessionHasActiveWork(nil) should be false")
 	}
-	if !sessionHasActiveWork(&state.Session{Status: sessionStatusCompacting}) {
+	if !sessionHasActiveWork(&conversation.Session{Status: sessionStatusCompacting}) {
 		t.Fatal("sessionHasActiveWork(compacting) should be true")
 	}
-	if !sessionHasActiveWork(&state.Session{ActiveSubmissionID: "sub-1"}) {
+	if !sessionHasActiveWork(&conversation.Session{ActiveSubmissionID: "sub-1"}) {
 		t.Fatal("sessionHasActiveWork(active submission) should be true")
 	}
-	if sessionHasActiveWork(&state.Session{Status: "idle"}) {
+	if sessionHasActiveWork(&conversation.Session{Status: "idle"}) {
 		t.Fatal("sessionHasActiveWork(idle) should be false")
 	}
 	if got := standaloneCompactResultText("unknown"); got != "" {
@@ -123,7 +123,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("startThreadCompaction(missing) error = %v", err)
 	}
 
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                "sess-busy",
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     "thread-busy",
@@ -136,7 +136,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("startThreadCompaction(busy) error = %v", err)
 	}
 
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-restore",
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "thread-restore",
@@ -153,7 +153,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("session after restore = %+v", updated)
 	}
 
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-fail",
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "thread-fail",
@@ -178,7 +178,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("failStandaloneCompactTurn() reply notices = %#v, want none", ff.replyTexts)
 	}
 
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-complete",
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "thread-complete",
@@ -198,10 +198,10 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("completeStandaloneCompactTurn() sentTexts = %#v", ff.sentTexts)
 	}
 
-	sendStandaloneCompactResult(a, &state.Session{
+	sendStandaloneCompactResult(a, &conversation.Session{
 		ChatID: "chat-interrupted",
 	}, "interrupted")
-	sendStandaloneCompactResult(a, &state.Session{
+	sendStandaloneCompactResult(a, &conversation.Session{
 		ChatID: "chat-failed",
 	}, "failed")
 	if len(ff.sentTexts) < 3 || ff.sentTexts[len(ff.sentTexts)-2] != "当前线程上下文压缩已中断。" || ff.sentTexts[len(ff.sentTexts)-1] != "当前线程上下文压缩失败。" {
@@ -215,7 +215,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
 		ActiveThreadID: "thread-1",
@@ -321,7 +321,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat",
@@ -385,7 +385,7 @@ func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
 	a.backend = backendCodex
 	a.cfg.Feishu.Backend = backendCodex
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat",

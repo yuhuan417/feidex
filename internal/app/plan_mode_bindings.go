@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
 
@@ -53,11 +54,11 @@ func codexCollaborationModeForTurnStart(a *App, sessionKey, threadID string) *co
 	return planmode.CodexCollaborationModeForTurnStart(newPlanModeAppAdapter(a), sessionKey, threadID)
 }
 
-func codexCollaborationModeFromState(mode *state.SessionCollaborationMode) *codexrpc.CollaborationMode {
+func codexCollaborationModeFromState(mode *conversation.SessionCollaborationMode) *codexrpc.CollaborationMode {
 	return planmode.CodexCollaborationModeFromState(mode)
 }
 
-func normalizeThreadCollaborationMode(mode *state.SessionCollaborationMode) *state.SessionCollaborationMode {
+func normalizeThreadCollaborationMode(mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
 	return planmode.NormalizeThreadCollaborationMode(mode)
 }
 
@@ -166,11 +167,11 @@ func (a planModeAppAdapter) ReplyInThreadEnabled(chatType string) bool {
 	return replyInThreadEnabled(a.App, chatType)
 }
 
-func (a planModeAppAdapter) SessionHasActiveWork(sess *state.Session) bool {
+func (a planModeAppAdapter) SessionHasActiveWork(sess *conversation.Session) bool {
 	return sessionHasActiveWork(sess)
 }
 
-func (a planModeAppAdapter) EffectivePlanSettings(sess *state.Session) (string, string) {
+func (a planModeAppAdapter) EffectivePlanSettings(sess *conversation.Session) (string, string) {
 	if a.App == nil {
 		return "", ""
 	}
@@ -197,6 +198,6 @@ func (a planModeAppAdapter) StartNextSubmission(sessionKey string) error {
 	return startNextSubmission(a.App, sessionKey)
 }
 
-func (a planModeAppAdapter) StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+func (a planModeAppAdapter) StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
 	return conversationBackend(a.App).StartWorkspaceThread(sessionKey, sess, ws)
 }

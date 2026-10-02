@@ -4,6 +4,7 @@ import (
 	appautoretry "feidex/internal/app/autoretry"
 	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -30,7 +31,7 @@ type conversationBackendAdapter struct {
 	backend appconvbackend.ConversationBackendFacade
 }
 
-func (a conversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (a conversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return a.backend.StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
 }
 
@@ -71,7 +72,7 @@ func (a *App) MenuCardBody(action, body string) string {
 	return menuCardBody(action, body)
 }
 
-func (a *App) SessionHasActiveWork(sess *state.Session) bool {
+func (a *App) SessionHasActiveWork(sess *conversation.Session) bool {
 	return sessionHasActiveWork(sess)
 }
 

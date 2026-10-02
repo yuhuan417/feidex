@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
 
@@ -29,7 +30,7 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		SavePending:     func(req *state.PendingRequest) error { return a.State().SavePending(req) },
 		SetSubStatus:    func(id, status string) error { return a.State().SetSubmissionStatus(id, status) },
 		Submission:      func(id string) *state.Submission { return a.State().Submission(id) },
-		Session:         func(key string) *state.Session { return a.State().Session(key) },
+		Session:         func(key string) *conversation.Session { return a.State().Session(key) },
 		SessionKeysEqual: func(left, right string) bool {
 			return sessionKeysEqual(a, left, right)
 		},

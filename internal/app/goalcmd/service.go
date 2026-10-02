@@ -2,6 +2,7 @@ package goalcmd
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"feidex/internal/app/appcore"
 	appcards "feidex/internal/app/cards"
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -30,11 +30,11 @@ type CodexClient interface {
 }
 
 type StateProvider interface {
-	Session(key string) *state.Session
-	Sessions() []*state.Session
-	SaveSession(sess *state.Session) error
+	Session(key string) *conversation.Session
+	Sessions() []*conversation.Session
+	SaveSession(sess *conversation.Session) error
 	CreateSubmission(sub *state.Submission) (string, error)
-	UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error)
+	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
 	DeleteSubmission(id string)
 }
 
@@ -966,7 +966,7 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 	if sess == nil || sessionKey == "" {
 		return false
 	}
-	if sessionctx.HasActiveOperations(sess) {
+	if conversation.HasActiveOperations(sess) {
 		return false
 	}
 	anchor, ok := s.sendGoalContinuationAnchor(sessionKey, threadID, turnID, sess, goal)
@@ -994,18 +994,18 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 		return false
 	}
 	sub.ID = id
-	updatedSess, err := s.app.State().UpdateSession(sessionKey, func(current *state.Session) {
+	updatedSess, err := s.app.State().UpdateSession(sessionKey, func(current *conversation.Session) {
 		if current == nil {
 			return
 		}
-		sessionctx.UpsertActiveOperation(current, state.SessionActiveOperation{
-			Kind:         sessionctx.OpKindSubmission,
+		conversation.UpsertActiveOperation(current, conversation.SessionActiveOperation{
+			Kind:         conversation.OpKindSubmission,
 			SubmissionID: id,
 			ThreadID:     threadID,
 			TurnID:       turnID,
 		})
 		current.Status = state.SessionStatusTurnInProgress.String()
-		sessionctx.SetThreadContext(current, workspaceID, threadID, current.ActiveThreadName, current.ActiveThreadPreview)
+		conversation.SetThreadContext(current, workspaceID, threadID, current.ActiveThreadName, current.ActiveThreadPreview)
 	})
 	if err != nil || updatedSess == nil {
 		s.app.State().DeleteSubmission(id)
@@ -1020,7 +1020,7 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 	return true
 }
 
-func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string, sess *state.Session, goal codexrpc.ThreadGoal) (Anchor, bool) {
+func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string, sess *conversation.Session, goal codexrpc.ThreadGoal) (Anchor, bool) {
 	if s.app == nil || s.app.Feishu() == nil || sess == nil {
 		return Anchor{}, false
 	}
@@ -1092,7 +1092,7 @@ func formatGoalTokenProgress(goal codexrpc.ThreadGoal) string {
 	return used + " / " + formatGoalTokens(*goal.TokenBudget)
 }
 
-func (s Service) findGoalContinuationSession(threadID string) (string, *state.Session) {
+func (s Service) findGoalContinuationSession(threadID string) (string, *conversation.Session) {
 	if anchor, ok := s.app.Tracker().Anchor(threadID); ok {
 		if sess := s.app.State().Session(anchor.SessionKey); sess != nil && strings.TrimSpace(sess.ActiveThreadID) == threadID {
 			return anchor.SessionKey, sess

@@ -2,6 +2,7 @@ package serverrequest
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -19,7 +20,7 @@ type Service struct {
 	SavePending      func(req *state.PendingRequest) error
 	SetSubStatus     func(id, status string) error
 	Submission       func(id string) *state.Submission
-	Session          func(key string) *state.Session
+	Session          func(key string) *conversation.Session
 	SessionKeysEqual func(a, b string) bool
 
 	// Feishu

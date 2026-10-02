@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
 	"path/filepath"
 	"strings"
@@ -211,7 +212,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 	}
 
 	sessionKey := "feishu:chat:chat-1"
-	if err := store.UpsertSession(&state.Session{
+	if err := store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             "default",
 		ActiveThreadID:          "codex-thread-1",
@@ -342,7 +343,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 	}()
 
 	sessionKey := "feishu:chat:chat-1"
-	if err := store.UpsertSession(&state.Session{
+	if err := store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             "default",
 		ActiveThreadID:          "claude-session-1",
@@ -350,7 +351,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		ActiveThreadName:        "Claude Session",
 		ActiveThreadPreview:     "claude preview",
 		Status:                  "idle",
-		BackendThreads: map[string]state.SessionBackendThread{
+		BackendThreads: map[string]conversation.SessionBackendThread{
 			backendCodex: {
 				ThreadID:    "codex-thread-1",
 				WorkspaceID: "default",
@@ -394,7 +395,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 	a := &App{cfg: cfg, store: store, backend: backendClaude}
 
 	sessionKey := "feishu:chat:chat-1"
-	if err := store.UpsertSession(&state.Session{
+	if err := store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ActiveThreadID: "claude-thread-1",
@@ -418,7 +419,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 	}
 
 	a.backend = backendCodex
-	if err := store.UpsertSession(&state.Session{
+	if err := store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ActiveThreadID: "codex-thread-1",

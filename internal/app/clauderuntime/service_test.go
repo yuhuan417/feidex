@@ -2,6 +2,7 @@ package clauderuntime
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"sync"
 	"testing"
@@ -366,8 +367,8 @@ func TestHandlePermissionDeliversDetachedCardAfterTurnCleanup(t *testing.T) {
 		},
 		Lookup: LookupDeps{
 			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
-			GetSession: func(string) *state.Session {
-				return &state.Session{
+			GetSession: func(string) *conversation.Session {
+				return &conversation.Session{
 					Key:            "session-1",
 					ChatID:         "chat-1",
 					RootMessageID:  "root-1",
@@ -488,8 +489,8 @@ func TestCleanupStaleSessionOpsReleasesPendingCards(t *testing.T) {
 			},
 		},
 		Lookup: LookupDeps{
-			GetSession:          func(string) *state.Session { return &state.Session{Key: "session-1"} },
-			SessionHasActiveOps: func(*state.Session) bool { return false },
+			GetSession:          func(string) *conversation.Session { return &conversation.Session{Key: "session-1"} },
+			SessionHasActiveOps: func(*conversation.Session) bool { return false },
 		},
 	})
 	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
@@ -525,7 +526,7 @@ func TestHandlePermissionWithdrawnRequestExpiresCard(t *testing.T) {
 		},
 		Lookup: LookupDeps{
 			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
-			GetSession:           func(string) *state.Session { return &state.Session{Key: "session-1", ChatID: "chat-1"} },
+			GetSession:           func(string) *conversation.Session { return &conversation.Session{Key: "session-1", ChatID: "chat-1"} },
 		},
 	})
 	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
@@ -613,7 +614,7 @@ func TestHandlePermissionAttributesSubagentRequestToItsTask(t *testing.T) {
 		Lookup: LookupDeps{
 			// The spawning turn is gone: the task target must still be used.
 			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
-			GetSession:           func(string) *state.Session { return &state.Session{Key: "session-1", ChatID: "chat-new"} },
+			GetSession:           func(string) *conversation.Session { return &conversation.Session{Key: "session-1", ChatID: "chat-new"} },
 		},
 	})
 	runtimeState := newSubagentSessionState()
@@ -763,8 +764,8 @@ func TestBackgroundTaskRegisteredWithoutTurnKeepsSessionAnchors(t *testing.T) {
 		Lookup: LookupDeps{
 			// The resumed task has no submission of its own.
 			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
-			GetSession: func(string) *state.Session {
-				return &state.Session{
+			GetSession: func(string) *conversation.Session {
+				return &conversation.Session{
 					Key:            "session-1",
 					WorkspaceID:    "ws-1",
 					ChatID:         "chat-1",

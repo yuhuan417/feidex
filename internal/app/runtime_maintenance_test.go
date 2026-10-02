@@ -3,6 +3,7 @@ package app
 import (
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	appmaintenance "feidex/internal/app/maintenance"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"errors"
@@ -90,7 +91,7 @@ func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "default"
 	a.feishu = appfeishuwrap.WrapFeishuClient(ff)
-	for _, sess := range []*state.Session{
+	for _, sess := range []*conversation.Session{
 		{Key: "feishu:frontend:default:chat:chat-b", ChatID: "chat-b", ChatType: "p2p"},
 		{Key: "feishu:frontend:default:chat:chat-a", ChatID: "chat-a", ChatType: "p2p"},
 		{Key: "feishu:frontend:default:chat:chat-a", ChatID: "chat-a", ChatType: "p2p"},

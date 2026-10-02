@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"testing"
 
 	appturnstream "feidex/internal/app/turnstream"
@@ -9,14 +10,14 @@ import (
 )
 
 func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelectorBlocks(t *testing.T) {
-	sess := &state.Session{
+	sess := &conversation.Session{
 		Key:                "sess-1",
 		ActiveThreadID:     "thread-1",
 		ActiveSubmissionID: "sub-1",
 		ActiveTurnID:       "turn-1",
 		Status:             state.SessionStatusTurnInProgress.String(),
 		Queue:              []string{"queued-1"},
-		ActiveOperations: []state.SessionActiveOperation{{
+		ActiveOperations: []conversation.SessionActiveOperation{{
 			SubmissionID: "sub-1",
 			ThreadID:     "thread-1",
 			TurnID:       "turn-1",
@@ -47,7 +48,7 @@ func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelecto
 				}
 				return nil
 			},
-			UpdateSession: func(key string, mutate func(*state.Session)) (*state.Session, error) {
+			UpdateSession: func(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
 				if key != sess.Key {
 					return nil, nil
 				}
@@ -56,7 +57,7 @@ func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelecto
 				}
 				cp := *sess
 				cp.Queue = append([]string(nil), sess.Queue...)
-				cp.ActiveOperations = append([]state.SessionActiveOperation(nil), sess.ActiveOperations...)
+				cp.ActiveOperations = append([]conversation.SessionActiveOperation(nil), sess.ActiveOperations...)
 				return &cp, nil
 			},
 		},
@@ -66,7 +67,7 @@ func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelecto
 			},
 		},
 		Cards: FailureCardDeps{
-			ObserveAutoRetryTerminal: func(string, string, string, *state.Session, *state.Submission, string, string) bool {
+			ObserveAutoRetryTerminal: func(string, string, string, *conversation.Session, *state.Submission, string, string) bool {
 				return true
 			},
 		},

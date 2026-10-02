@@ -1,13 +1,13 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -20,13 +20,13 @@ func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 			App:   a,
 			State: workspaceStateDeps(st),
 			SessionContext: appworkspacecmd.SessionContextDeps{
-				SessionHasInFlight:     sessionHasInFlightSubmission,
-				SwitchSessionWorkspace: switchSessionWorkspace,
-				ClearSessionThreadCtx:  clearSessionThreadContext,
+				SessionHasInFlight:     conversation.HasInFlightSubmission,
+				SwitchSessionWorkspace: conversation.SwitchSessionWorkspace,
+				ClearSessionThreadCtx:  conversation.ClearThreadContext,
 				ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
 			},
 			Threads: appworkspacecmd.ThreadDeps{
-				EnsureWorkspaceThreadBinding: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
+				EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
 					return newWorkspaceThreadService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 				},
 			},
@@ -81,11 +81,11 @@ func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 	})
 }
 
-func currentWorkspaceForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
+func currentWorkspaceForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace) {
 	return newWorkspaceConfigService(a).CurrentWorkspaceForMessage(msg)
 }
 
-func currentThreadForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace, threadID string, err error) {
+func currentThreadForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error) {
 	sessionKey, sess, ws = currentWorkspaceForMessage(a, msg)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(configuredBackend(a)))

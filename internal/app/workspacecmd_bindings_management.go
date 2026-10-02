@@ -1,13 +1,13 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -26,20 +26,20 @@ func newWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService {
 			App:   a,
 			State: workspaceStateDeps(st),
 			SessionContext: appworkspacecmd.SessionContextDeps{
-				SessionHasInFlight:     sessionHasInFlightSubmission,
-				SwitchSessionWorkspace: switchSessionWorkspace,
-				ClearSessionThreadCtx:  clearSessionThreadContext,
-				SetSessionThreadCtx:    setSessionThreadContext,
-				SessionResetActiveOps:  sessionResetActiveOperations,
+				SessionHasInFlight:     conversation.HasInFlightSubmission,
+				SwitchSessionWorkspace: conversation.SwitchSessionWorkspace,
+				ClearSessionThreadCtx:  conversation.ClearThreadContext,
+				SetSessionThreadCtx:    conversation.SetThreadContext,
+				SessionResetActiveOps:  conversation.ResetActiveOperations,
 				ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
 			},
 			Threads: appworkspacecmd.ThreadDeps{
-				EnsureWorkspaceThreadBinding: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
+				EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
 					return newWorkspaceThreadService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 				},
 				MarkSessionThreadLive:  func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
 				ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
-				StartWorkspaceThread: func(sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
+				StartWorkspaceThread: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
 					return newWorkspaceThreadService(a).StartWorkspaceThread(sessionKey, sess, ws)
 				},
 			},
@@ -51,10 +51,10 @@ func newWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService {
 			},
 			Codex: appworkspacecmd.CodexDeps{
 				RequireCodexClient: func() (appworkspacecmd.CodexClient, error) { return requireCodexClient(a) },
-				BuildThreadStartParams: func(ws *config.Workspace, sess *state.Session, effectiveModel string) codexrpc.ThreadStartParams {
+				BuildThreadStartParams: func(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
 					return buildThreadStartParams(a, ws, sess, effectiveModel)
 				},
-				BuildThreadConfig: func(sess *state.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
+				BuildThreadConfig: func(sess *conversation.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
 			},
 			Backend: appworkspacecmd.BackendConfigDeps{
 				BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,

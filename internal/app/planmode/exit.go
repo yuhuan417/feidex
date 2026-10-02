@@ -2,6 +2,7 @@ package planmode
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -158,7 +159,7 @@ func ExitOtherOpenPendingExists(a App, sessionKey, excludeID string) bool {
 	return false
 }
 
-func SessionHasPlanExitBlockers(a App, sess *state.Session) bool {
+func SessionHasPlanExitBlockers(a App, sess *conversation.Session) bool {
 	if sess == nil {
 		return true
 	}
@@ -573,7 +574,7 @@ func ClearCodexPlanModeForSession(a App, sessionKey string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_, err = a.State().UpdateSession(sessionKey, func(sess *state.Session) {
+	_, err = a.State().UpdateSession(sessionKey, func(sess *conversation.Session) {
 		if sess == nil {
 			return
 		}

@@ -5,20 +5,21 @@ import (
 	"feidex/internal/app/modelconfig"
 	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/state"
 )
 
 // Resolve from one config, binding and profile revision. Callers must not hold
 // ConfigMu; writers of profiles/bindings use the same lock.
-func modelConfigSnapshot(a *App, sess *state.Session, backend string) domainmodelconfig.Snapshot {
+func modelConfigSnapshot(a *App, sess *conversation.Session, backend string) domainmodelconfig.Snapshot {
 	store := a.State() // Construct the frontend-scoped facade before ConfigMu.
 	a.ConfigMu().RLock()
 	defer a.ConfigMu().RUnlock()
 	binding := &state.AgentBinding{}
 	profile := &state.BotProfile{}
 	if sess == nil {
-		sess = &state.Session{}
+		sess = &conversation.Session{}
 	}
 	if store != nil {
 		if value := store.AgentBinding(sess.BindingID); value != nil {
@@ -68,7 +69,7 @@ func modelConfigSnapshot(a *App, sess *state.Session, backend string) domainmode
 	return domainmodelconfig.Resolve(backend, sources)
 }
 
-func (a submissionAppAdapter) SubmissionQueueResolveModelConfig(sess *state.Session, sub *state.Submission) domainmodelconfig.Snapshot {
+func (a submissionAppAdapter) SubmissionQueueResolveModelConfig(sess *conversation.Session, sub *state.Submission) domainmodelconfig.Snapshot {
 	if sess != nil && sub != nil && sub.BindingID != "" {
 		cp := *sess
 		cp.BindingID = sub.BindingID

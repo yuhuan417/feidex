@@ -3,6 +3,7 @@ package workspacecmd
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,7 +94,7 @@ type threadServiceOptions struct {
 	markLive func(sessionKey, threadID string)
 }
 
-func newTestWorkspaceApp(t *testing.T, backend string) (*testWorkspaceApp, *state.Session, *config.Workspace) {
+func newTestWorkspaceApp(t *testing.T, backend string) (*testWorkspaceApp, *conversation.Session, *config.Workspace) {
 	t.Helper()
 	baseDir := t.TempDir()
 	cwd := filepath.Join(baseDir, "default")
@@ -116,7 +117,7 @@ func newTestWorkspaceApp(t *testing.T, backend string) (*testWorkspaceApp, *stat
 	if err := config.Save(app.cfgPath, cfg); err != nil {
 		t.Fatalf("config.Save() error = %v", err)
 	}
-	session := &state.Session{
+	session := &conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: "default",
 		OwnerUserID: "user-1",
@@ -127,15 +128,15 @@ func newTestWorkspaceApp(t *testing.T, backend string) (*testWorkspaceApp, *stat
 	return app, session, &cfg.Workspaces[0]
 }
 
-func newTestStateDeps(session **state.Session) StateDeps {
+func newTestStateDeps(session **conversation.Session) StateDeps {
 	return StateDeps{
-		GetSession: func(key string) *state.Session {
+		GetSession: func(key string) *conversation.Session {
 			if *session == nil || (*session).Key != key {
 				return nil
 			}
 			return *session
 		},
-		SaveSession: func(sess *state.Session) error {
+		SaveSession: func(sess *conversation.Session) error {
 			*session = sess
 			return nil
 		},
@@ -144,27 +145,27 @@ func newTestStateDeps(session **state.Session) StateDeps {
 
 func testSessionContextDeps() SessionContextDeps {
 	return SessionContextDeps{
-		SessionHasInFlight: func(*state.Session) bool { return false },
-		SwitchSessionWorkspace: func(sess *state.Session, workspaceID string) {
+		SessionHasInFlight: func(*conversation.Session) bool { return false },
+		SwitchSessionWorkspace: func(sess *conversation.Session, workspaceID string) {
 			sess.WorkspaceID = workspaceID
 		},
-		ClearSessionThreadCtx: func(sess *state.Session) {
+		ClearSessionThreadCtx: func(sess *conversation.Session) {
 			sess.ActiveThreadWorkspaceID = ""
 			sess.ActiveThreadID = ""
 			sess.ActiveThreadName = ""
 			sess.ActiveThreadPreview = ""
 		},
-		SetSessionThreadCtx: func(sess *state.Session, workspaceID, threadID, name, preview string) {
+		SetSessionThreadCtx: func(sess *conversation.Session, workspaceID, threadID, name, preview string) {
 			sess.ActiveThreadWorkspaceID = workspaceID
 			sess.ActiveThreadID = threadID
 			sess.ActiveThreadName = name
 			sess.ActiveThreadPreview = preview
 		},
-		SessionResetActiveOps: func(*state.Session) {},
+		SessionResetActiveOps: func(*conversation.Session) {},
 	}
 }
 
-func newTestThreadService(app *testWorkspaceApp, session *state.Session, opts threadServiceOptions) *ThreadService {
+func newTestThreadService(app *testWorkspaceApp, session *conversation.Session, opts threadServiceOptions) *ThreadService {
 	return NewThreadService(ThreadServiceDeps{
 		App:   app,
 		State: newTestStateDeps(&session),

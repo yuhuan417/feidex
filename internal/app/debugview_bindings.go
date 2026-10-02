@@ -5,8 +5,8 @@ import (
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -79,7 +79,7 @@ func (a debugViewAppAdapter) DebugCommandLabel(label, slash string) string {
 	return commandLabel(label, slash)
 }
 
-func (a debugViewAppAdapter) DebugCurrentThreadLabel(sess *state.Session) string {
+func (a debugViewAppAdapter) DebugCurrentThreadLabel(sess *conversation.Session) string {
 	return appthreadmenu.SessionCurrentThreadLabel(sess)
 }
 
@@ -111,7 +111,7 @@ type debugConversationBackendAdapter struct {
 	app *App
 }
 
-func (a debugConversationBackendAdapter) RenderUsageBody(sess *state.Session) string {
+func (a debugConversationBackendAdapter) RenderUsageBody(sess *conversation.Session) string {
 	return conversationBackend(a.app).RenderUsageBody(sess)
 }
 
@@ -119,7 +119,7 @@ type debugWorkspaceConfigAdapter struct {
 	app *App
 }
 
-func (a debugWorkspaceConfigAdapter) CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (string, *state.Session, *config.Workspace) {
+func (a debugWorkspaceConfigAdapter) CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (string, *conversation.Session, *config.Workspace) {
 	return currentWorkspaceForMessage(a.app, msg)
 }
 

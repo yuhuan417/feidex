@@ -3,6 +3,7 @@ package workspacecmd
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"os"
@@ -194,7 +195,7 @@ func (s *ManagementService) WorkspaceByIDAndCWD(workspaceID, targetDir string) *
 func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, id, name, cwd string) error {
 	sess := s.GetSession(sessionKey)
 	if sess == nil {
-		sess = &state.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
+		sess = &conversation.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
 	}
 	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
 		return fmt.Errorf("%s", reason)
@@ -937,7 +938,7 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 	}
 	sess := s.GetSession(sessionKey)
 	if sess == nil {
-		sess = &state.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
+		sess = &conversation.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
 	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: reason}}, nil
@@ -1563,7 +1564,7 @@ func (s *ManagementService) CompleteWorkspaceNewText(msg *feishu.InboundMessage,
 
 // --- private helpers ---
 
-func (s *ManagementService) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *state.Session, ws *config.Workspace) {
+func (s *ManagementService) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace) {
 	sessionKey = appcore.MakeSessionKey(s.App, msg)
 	sess = s.GetSession(sessionKey)
 	workspaceID := selectedWorkspaceIDForMessage(s.App, msg, sess)

@@ -2,12 +2,12 @@ package app
 
 import (
 	"errors"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 // newClaudePermissionMenuApp prepares an app on the Claude backend with an
@@ -19,7 +19,7 @@ func newClaudePermissionMenuApp(t *testing.T, claude *fakeClaudeCore) (*App, *fa
 	a.codex = nil
 	a.claude = claude
 	sessionKey := "feishu:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		ChatID:         "chat-1",
 		ChatType:       "p2p",

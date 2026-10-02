@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 
 	appcore "feidex/internal/app/appcore"
 	appreview "feidex/internal/app/review"
@@ -88,12 +89,12 @@ func (a reviewAppAdapter) ReviewCommandMessageFromAction(action *feishu.CardActi
 	return commandMessageFromAction(a.App, action, sessionKey, rawCommand)
 }
 
-func (a reviewAppAdapter) ReviewSessionHasActiveWork(sess *state.Session) bool {
+func (a reviewAppAdapter) ReviewSessionHasActiveWork(sess *conversation.Session) bool {
 	return sessionHasActiveWork(sess)
 }
 
-func (a reviewAppAdapter) ReviewSessionHasInFlightSubmission(sess *state.Session) bool {
-	return sessionHasInFlightSubmission(sess)
+func (a reviewAppAdapter) ReviewSessionHasInFlightSubmission(sess *conversation.Session) bool {
+	return conversation.HasInFlightSubmission(sess)
 }
 
 func (a reviewAppAdapter) ReviewStartNextSubmission(sessionKey string) error {

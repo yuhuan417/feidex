@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
 	"path/filepath"
 	"strings"
@@ -895,7 +896,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *state.Submission {
 	t.Helper()
 
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     threadID,

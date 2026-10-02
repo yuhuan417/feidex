@@ -41,7 +41,7 @@ internal/app/replycontinuation/ 回复接续处理
 internal/app/review/        review target 数据结构
 internal/app/reviewcmd/     review 命令处理
 internal/app/serverrequest/ 服务端请求处理
-internal/app/sessionctx/    session 上下文类型
+internal/domain/conversation/ 会话、backend lineage 与活动操作领域状态
 internal/app/skills/        技能管理
 internal/app/skillscmd/     技能命令处理
 internal/app/submission/    submission 队列与生命周期
@@ -81,7 +81,7 @@ config.example.toml         配置样例
 - `internal/domain` 和 `internal/application` 拥有 backend-neutral 产品语义；Codex/Claude 协议细节应收敛在 backend adapter，避免散落到消息、菜单和审批编排里。`internal/app` 只保留迁移期间的入口、组合和协议敏感兼容编排。
 - `internal/codexrpc` 只负责 Codex App Server 传输和协议类型；`internal/claudecli` 只负责 Claude CLI stream-json 协议。不要让它们理解飞书、session 或卡片。
 - 命令与菜单通过 `internal/app/features/` 统一注册，按 backend 自动过滤可用命令。
-- app 物理子包的职责边界见 [docs/app-package-boundaries.md](app-package-boundaries.md)；新增子包不得反向 import `internal/app`。
+- 依赖方向按长期架构提案和 architecture tests 执行；旧 app package boundary 仅作迁移定位。
 - `internal/feishu` 只负责飞书 SDK、消息/卡片发送、文件分享、链接改写和权限问题转换；不要把业务策略放进适配层。
 - 慢操作必须走"快速 callback ack → 异步执行 → patch card / follow-up"，尤其是 clone、review、upgrade、download 和外部网络请求。
 - frontend 生命周期和异步任务准入由 `internal/runtime.FrontendRuntime` 持有；兼容入口仍可使用 `RunAsync`/`a.waitAsync()`，测试通过显式等待同步。
@@ -90,6 +90,7 @@ config.example.toml         配置样例
 ### 迁移中的架构状态
 
 - 现有 `internal/app` 已拆成多个子包，但仍存在 callback、宽 `App` interface 和 root glue。新的拆分以 [长期架构重构提案](architecture-refactor-proposal.md) 为准，优先把状态和用例迁移到 `internal/domain`、`internal/application`。
+- conversation/session 类型、workspace 恢复校验、backend lineage 和活动操作转换已迁入 domain；删除 sessionctx、appcore session facade 和根活动操作转发文件。持久化字段和协议转换边界保持原有语义。
 - frontend 生命周期与 shutdown drain 已迁入 `internal/runtime`；submission startup 由纯领域转换和 runtime 串行协调器共同负责。
 - 模型快照统一使用 `internal/domain/modelconfig.Snapshot`；Codex resume 字段解释位于 `internal/adapter/backend/codex`，已应用/待生效状态由 `internal/application/modelconfig` 计算。
 - interaction reply/resolved 转换由 `internal/application/interaction` 协调，JSON store 适配器只映射 DTO；Codex 的 serverRequest/resolved 仍是权威终点。

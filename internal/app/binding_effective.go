@@ -2,6 +2,7 @@ package app
 
 import (
 	appmodelconfig "feidex/internal/app/modelconfig"
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/apputil"
@@ -9,11 +10,11 @@ import (
 	"feidex/internal/state"
 )
 
-func effectiveBindingForSession(a *App, sess *state.Session) *state.AgentBinding {
+func effectiveBindingForSession(a *App, sess *conversation.Session) *state.AgentBinding {
 	return agentBindingForSession(a, sess)
 }
 
-func effectiveCodexModel(a *App, sess *state.Session, ws *config.Workspace) string {
+func effectiveCodexModel(a *App, sess *conversation.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
 	return apputil.FirstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
@@ -23,31 +24,31 @@ func effectiveCodexModel(a *App, sess *state.Session, ws *config.Workspace) stri
 	)
 }
 
-func effectiveCodexPlanModel(a *App, sess *state.Session) string {
+func effectiveCodexPlanModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
 	return apputil.FirstNonEmpty(
 		sessionPlanModelOverride(sess), bindingPlanModelOverride(binding), botProfilePlanModelForApp(a), strings.TrimSpace(a.cfg.Codex.PlanModel), effectiveCodexModel(a, sess, nil),
 	)
 }
 
-func effectiveCodexPlanReasoningEffort(a *App, sess *state.Session) string {
+func effectiveCodexPlanReasoningEffort(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
 	return apputil.FirstNonEmpty(
 		sessionPlanReasoningEffortOverride(sess), bindingPlanReasoningEffortOverride(binding), botProfilePlanReasoningEffortForApp(a), strings.TrimSpace(a.cfg.Codex.PlanReasoningEffort),
 	)
 }
 
-func effectiveCodexReviewModel(a *App, sess *state.Session) string {
+func effectiveCodexReviewModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
 	return apputil.FirstNonEmpty(sessionReviewModelOverride(sess), bindingReviewModelOverride(binding), botProfileReviewModelForApp(a), strings.TrimSpace(a.cfg.Codex.ReviewModel), effectiveCodexModel(a, sess, nil))
 }
 
-func effectiveCodexSubagentModel(a *App, sess *state.Session) string {
+func effectiveCodexSubagentModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
 	return apputil.FirstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileSubagentModelForApp(a), strings.TrimSpace(a.cfg.Codex.SubagentModel), effectiveCodexModel(a, sess, nil))
 }
 
-func effectiveClaudeModel(a *App, sess *state.Session, ws *config.Workspace) string {
+func effectiveClaudeModel(a *App, sess *conversation.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
 	return apputil.FirstNonEmpty(
 		strings.TrimSpace(sessionModelOverride(sess)),
@@ -57,7 +58,7 @@ func effectiveClaudeModel(a *App, sess *state.Session, ws *config.Workspace) str
 	)
 }
 
-func effectiveClaudeSmallModel(a *App, sess *state.Session) string {
+func effectiveClaudeSmallModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
 	if profile := effectiveBotProfile(a); profile != nil {
 		return apputil.FirstNonEmpty(sessionSmallModelOverride(sess), bindingSmallModelOverride(binding), strings.TrimSpace(profile.ClaudeSmallModel), strings.TrimSpace(a.cfg.Claude.SmallModel))
@@ -65,12 +66,12 @@ func effectiveClaudeSmallModel(a *App, sess *state.Session) string {
 	return apputil.FirstNonEmpty(sessionSmallModelOverride(sess), bindingSmallModelOverride(binding), strings.TrimSpace(a.cfg.Claude.SmallModel))
 }
 
-func effectiveClaudeSubagentModel(a *App, sess *state.Session) string {
+func effectiveClaudeSubagentModel(a *App, sess *conversation.Session) string {
 	binding := effectiveBindingForSession(a, sess)
 	return apputil.FirstNonEmpty(sessionSubagentModelOverride(sess), bindingSubagentModelOverride(binding), botProfileClaudeSubagentModelForApp(a), strings.TrimSpace(a.cfg.Claude.SubagentModel), effectiveClaudeModel(a, sess, nil))
 }
 
-func effectiveBindingApprovalPolicy(a *App, sess *state.Session, ws *config.Workspace) string {
+func effectiveBindingApprovalPolicy(a *App, sess *conversation.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
 		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
@@ -84,7 +85,7 @@ func effectiveBindingApprovalPolicy(a *App, sess *state.Session, ws *config.Work
 	return effectiveThreadApprovalPolicy(sess, ws)
 }
 
-func effectiveBindingSandboxMode(a *App, sess *state.Session, ws *config.Workspace) string {
+func effectiveBindingSandboxMode(a *App, sess *conversation.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
 		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
@@ -98,8 +99,8 @@ func effectiveBindingSandboxMode(a *App, sess *state.Session, ws *config.Workspa
 	return effectiveThreadSandboxMode(sess, ws)
 }
 
-func effectiveBindingServiceTier(a *App, sess *state.Session) string {
-	if serviceTier := effectiveThreadServiceTier(sess); strings.TrimSpace(serviceTier) != "" {
+func effectiveBindingServiceTier(a *App, sess *conversation.Session) string {
+	if serviceTier := conversation.EffectiveServiceTier(sess); strings.TrimSpace(serviceTier) != "" {
 		return strings.TrimSpace(serviceTier)
 	}
 	if binding := effectiveBindingForSession(a, sess); binding != nil {
@@ -113,7 +114,7 @@ func effectiveBindingServiceTier(a *App, sess *state.Session) string {
 	return ""
 }
 
-func effectiveBindingMultiAgentMode(a *App, sess *state.Session, ws *config.Workspace) string {
+func effectiveBindingMultiAgentMode(a *App, sess *conversation.Session, ws *config.Workspace) string {
 	binding := effectiveBindingForSession(a, sess)
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadMultiAgentMode) != "" {
 		return strings.TrimSpace(sess.ActiveThreadMultiAgentMode)
@@ -127,7 +128,7 @@ func effectiveBindingMultiAgentMode(a *App, sess *state.Session, ws *config.Work
 	return effectiveThreadMultiAgentMode(sess, ws)
 }
 
-func effectiveBindingClaudePermissionMode(a *App, sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+func effectiveBindingClaudePermissionMode(a *App, sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
 		return normalizeClaudePermissionModeValue(sess.ActiveClaudePermissionMode)
 	}
@@ -185,7 +186,7 @@ func botProfileClaudeSubagentModelForApp(a *App) string {
 	return ""
 }
 
-func sessionModelOverride(sess *state.Session) string {
+func sessionModelOverride(sess *conversation.Session) string {
 	if sess == nil {
 		return ""
 	}
@@ -236,38 +237,38 @@ func bindingSmallModelOverride(b *state.AgentBinding) string {
 	}
 	return ""
 }
-func sessionPlanModelOverride(s *state.Session) string {
+func sessionPlanModelOverride(s *conversation.Session) string {
 	if s != nil {
 		return s.PlanModelOverride
 	}
 	return ""
 }
-func sessionPlanReasoningEffortOverride(s *state.Session) string {
+func sessionPlanReasoningEffortOverride(s *conversation.Session) string {
 	if s != nil {
 		return s.PlanReasoningEffortOverride
 	}
 	return ""
 }
-func sessionReviewModelOverride(s *state.Session) string {
+func sessionReviewModelOverride(s *conversation.Session) string {
 	if s != nil {
 		return s.ReviewModelOverride
 	}
 	return ""
 }
-func sessionSubagentModelOverride(s *state.Session) string {
+func sessionSubagentModelOverride(s *conversation.Session) string {
 	if s != nil {
 		return s.SubagentModelOverride
 	}
 	return ""
 }
-func sessionSmallModelOverride(s *state.Session) string {
+func sessionSmallModelOverride(s *conversation.Session) string {
 	if s != nil {
 		return s.SmallModelOverride
 	}
 	return ""
 }
 
-func codexAuxiliaryConfig(a *App, sess *state.Session) map[string]any {
+func codexAuxiliaryConfig(a *App, sess *conversation.Session) map[string]any {
 	if a == nil {
 		return nil
 	}

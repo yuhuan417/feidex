@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/appcore"
@@ -13,7 +14,7 @@ func makeWorkspaceSelectionKey(a *App, chatType, chatID, userID string) string {
 	return appcore.MakeWorkspaceSelectionKey(a, chatType, chatID, userID)
 }
 
-func resolveWorkspaceSelectionForMessage(a *App, msg *feishu.InboundMessage, fallback *state.Session) string {
+func resolveWorkspaceSelectionForMessage(a *App, msg *feishu.InboundMessage, fallback *conversation.Session) string {
 	return appcore.ResolveWorkspaceSelectionForMessage(a, msg, fallback)
 }
 
@@ -21,14 +22,14 @@ func setWorkspaceSelectionForMessage(a *App, msg *feishu.InboundMessage, workspa
 	return appcore.SetWorkspaceSelectionForMessage(a, msg, workspaceID)
 }
 
-func resolveThreadWorkspaceID(sess *state.Session, fallback string) string {
+func resolveThreadWorkspaceID(sess *conversation.Session, fallback string) string {
 	if sess == nil {
 		return strings.TrimSpace(fallback)
 	}
 	return apputil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(fallback))
 }
 
-func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *state.Session, bindOnlyCurrentRoot bool) string {
+func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string {
 	if binding := agentBindingForSession(a, sess); binding != nil {
 		if bindOnlyCurrentRoot {
 			if workspaceID := strings.TrimSpace(sess.ActiveThreadWorkspaceID); workspaceID != "" {
@@ -56,7 +57,7 @@ func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *stat
 	)
 }
 
-func agentBindingForSession(a *App, sess *state.Session) *state.AgentBinding {
+func agentBindingForSession(a *App, sess *conversation.Session) *state.AgentBinding {
 	if a == nil || sess == nil {
 		return nil
 	}

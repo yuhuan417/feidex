@@ -3,6 +3,7 @@
 package replycontinuation
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"sort"
 	"strings"
@@ -25,10 +26,10 @@ type App interface {
 
 // TrySteerFunc is called to attempt steering a reply into an existing
 // conversation thread via the active backend.
-type TrySteerFunc func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error)
+type TrySteerFunc func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error)
 
 // StartSubmissionFunc starts a Claude submission for a given session.
-type StartSubmissionFunc func(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+type StartSubmissionFunc func(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
 
 // ResolveInboundAttachmentsFunc downloads and resolves attachments from an
 // inbound message.
@@ -53,10 +54,10 @@ type Service struct {
 	ResolveInboundAttachments ResolveInboundAttachmentsFunc
 
 	// GetSession retrieves a session by key from the store.
-	GetSession func(key string) *state.Session
+	GetSession func(key string) *conversation.Session
 
 	// SaveSession persists a session to the store.
-	SaveSession func(sess *state.Session) error
+	SaveSession func(sess *conversation.Session) error
 
 	// GetMessageLink retrieves a message link by ID with frontend scoping.
 	GetMessageLink func(messageID string) *state.MessageLink
@@ -68,7 +69,7 @@ type Service struct {
 	CreateSubmission func(sub *state.Submission) (string, error)
 
 	// HasInFlightSubmission returns true if the session has an in-flight submission.
-	HasInFlightSubmission func(sess *state.Session) bool
+	HasInFlightSubmission func(sess *conversation.Session) bool
 }
 
 // NewService creates a new reply continuation Service.
@@ -146,8 +147,8 @@ func (s *Service) PendingInputSessionKey(msg *feishu.InboundMessage) string {
 
 // CollectPendingStagedImages collects staged images from the given session
 // keys, deduplicating and sorting by creation time.
-func (s *Service) CollectPendingStagedImages(targetSessionKey, bucketSessionKey string) []state.SessionStagedImage {
-	images := []state.SessionStagedImage{}
+func (s *Service) CollectPendingStagedImages(targetSessionKey, bucketSessionKey string) []conversation.SessionStagedImage {
+	images := []conversation.SessionStagedImage{}
 	seen := map[string]struct{}{}
 	for _, key := range []string{strings.TrimSpace(bucketSessionKey), strings.TrimSpace(targetSessionKey)} {
 		if key == "" {
@@ -213,7 +214,7 @@ func (s *Service) TrySteerInboundReply(msg *feishu.InboundMessage, link *state.M
 	sessionKey := s.SessionKeyForInboundMessage(msg, link)
 	sess := s.GetSession(sessionKey)
 	if sess == nil {
-		sess = &state.Session{
+		sess = &conversation.Session{
 			Key:           sessionKey,
 			WorkspaceID:   s.App.DefaultWorkspaceID(),
 			OwnerUserID:   msg.UserID,
@@ -231,7 +232,7 @@ func (s *Service) TrySteerInboundReply(msg *feishu.InboundMessage, link *state.M
 
 // TryClaudeReplyContinuation attempts to continue an active Claude session
 // with a reply message. Returns true if the continuation was started.
-func (s *Service) TryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+func (s *Service) TryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 	if s == nil || s.App == nil || msg == nil || link == nil || sess == nil {
 		return false, nil
 	}
@@ -290,26 +291,26 @@ func (s *Service) ContinueClaudeSessionWithText(sessionKey, text string) error {
 
 // StagedImageAttachments converts staged images to submission attachments,
 // delegating to the submission package.
-func StagedImageAttachments(images []state.SessionStagedImage) []state.SubmissionAttachment {
+func StagedImageAttachments(images []conversation.SessionStagedImage) []state.SubmissionAttachment {
 	return submission.StagedImageAttachments(images)
 }
 
 // StagedImageSourceMessageIDs returns the unique source message IDs from
 // staged images, delegating to the submission package.
-func StagedImageSourceMessageIDs(images []state.SessionStagedImage) []string {
+func StagedImageSourceMessageIDs(images []conversation.SessionStagedImage) []string {
 	return submission.StagedImageSourceMessageIDs(images)
 }
 
 // StagedImageRootMessageIDs returns the unique root message IDs from staged
 // images, falling back to source message IDs when root is empty. Delegates
 // to the submission package.
-func StagedImageRootMessageIDs(images []state.SessionStagedImage) []string {
+func StagedImageRootMessageIDs(images []conversation.SessionStagedImage) []string {
 	return submission.StagedImageRootMessageIDs(images)
 }
 
 // BuildClaudeContinuationSubmissionFromMessage builds a submission for
 // continuing a Claude session from an inbound reply message.
-func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.InboundMessage, sessionKey string, sess *state.Session, bindOnlyCurrentRoot bool) (*state.Submission, error) {
+func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.InboundMessage, sessionKey string, sess *conversation.Session, bindOnlyCurrentRoot bool) (*state.Submission, error) {
 	if s == nil || s.App == nil || msg == nil || sess == nil {
 		return nil, nil
 	}

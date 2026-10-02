@@ -1,19 +1,18 @@
 package backend
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
 	appcore "feidex/internal/app/appcore"
 	"feidex/internal/app/cardactions"
 	appruntime "feidex/internal/app/runtime"
-	appsessionctx "feidex/internal/app/sessionctx"
 	appthreadview "feidex/internal/app/threadview"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -106,11 +105,11 @@ func (claudeConversationDriver) WorkspaceSwitchBindingNotice(binding *appworkspa
 	return "。已自动创建新会话。"
 }
 
-func (codexConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+func (codexConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
 	return ops.EnsureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
-func (claudeConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+func (claudeConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
 	return ops.EnsureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
 }
 
@@ -122,11 +121,11 @@ func (claudeConversationDriver) ListWorkspaceThreads(ops WorkspaceThreadOps, ses
 	return ops.ListClaudeWorkspaceThreads(sessionKey, ws, includeAll)
 }
 
-func (codexConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+func (codexConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
 	return ops.StartCodexWorkspaceThread(sessionKey, sess, ws)
 }
 
-func (claudeConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *state.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+func (claudeConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
 	return ops.StartClaudeWorkspaceThread(sessionKey, sess, ws)
 }
 
@@ -201,7 +200,7 @@ func (claudePermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu
 	}}
 }
 
-func (codexPermissionDriver) AppendStatusLines(_ PermissionApp, lines []string, sess *state.Session, ws *config.Workspace) []string {
+func (codexPermissionDriver) AppendStatusLines(_ PermissionApp, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
 	workspaceSandbox := "-"
 	workspacePolicy := "-"
 	workspaceMultiAgent := "-"
@@ -212,9 +211,9 @@ func (codexPermissionDriver) AppendStatusLines(_ PermissionApp, lines []string, 
 		workspaceSandbox = firstNonEmpty(ws.SandboxMode, "-")
 		workspacePolicy = firstNonEmpty(ws.ApprovalPolicy, "-")
 		workspaceMultiAgent = firstNonEmpty(ws.MultiAgentMode, "-")
-		effectiveSandbox = appsessionctx.EffectiveSandboxMode(sess, ws)
-		effectivePolicy = appsessionctx.EffectiveApprovalPolicy(sess, ws)
-		effectiveMultiAgent = appsessionctx.EffectiveMultiAgentMode(sess, ws)
+		effectiveSandbox = conversation.EffectiveSandboxMode(sess, ws.SandboxMode)
+		effectivePolicy = conversation.EffectiveApprovalPolicy(sess, ws.ApprovalPolicy)
+		effectiveMultiAgent = conversation.EffectiveMultiAgentMode(sess, ws.MultiAgentMode)
 	}
 	threadSandbox := appthreadview.RenderThreadSettingValue("", "")
 	threadPolicy := appthreadview.RenderThreadSettingValue("", "")
@@ -240,7 +239,7 @@ func (codexPermissionDriver) AppendStatusLines(_ PermissionApp, lines []string, 
 	)
 }
 
-func (claudePermissionDriver) AppendStatusLines(app PermissionApp, lines []string, sess *state.Session, ws *config.Workspace) []string {
+func (claudePermissionDriver) AppendStatusLines(app PermissionApp, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
 	if app == nil || app.Config() == nil {
 		return lines
 	}
@@ -765,7 +764,11 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 		return nil, fmt.Errorf("当前没有活动线程")
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	current := appsessionctx.EffectiveSandboxMode(sess, ws)
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.SandboxMode
+	}
+	current := conversation.EffectiveSandboxMode(sess, workspaceValue)
 	workspaceDefault := "-"
 	if ws != nil {
 		workspaceDefault = firstNonEmpty(ws.SandboxMode, "-")
@@ -821,7 +824,11 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 		return nil, fmt.Errorf("当前没有活动线程")
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	current := appsessionctx.EffectiveApprovalPolicy(sess, ws)
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.ApprovalPolicy
+	}
+	current := conversation.EffectiveApprovalPolicy(sess, workspaceValue)
 	workspaceDefault := "-"
 	if ws != nil {
 		workspaceDefault = firstNonEmpty(ws.ApprovalPolicy, "-")
@@ -877,7 +884,11 @@ func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey strin
 		return nil, fmt.Errorf("当前没有活动线程")
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	current := appsessionctx.EffectiveMultiAgentMode(sess, ws)
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.MultiAgentMode
+	}
+	current := conversation.EffectiveMultiAgentMode(sess, workspaceValue)
 	body := "配置当前 thread 默认 multi-agent mode。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
 	buttons := make([]feishu.Button, 0, len(appworkspace.MultiAgentModeOptions())+1)
 	for _, opt := range appworkspace.MultiAgentModeOptions() {
@@ -1141,11 +1152,11 @@ func (d codexPermissionDriver) CompleteConversationPermissionModeSet(string, str
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 backend 不支持 /session permissions"}}, nil
 }
 
-func currentWorkspaceForDriver(app appcore.AppConfig, sessionKey string) (*state.Session, *config.Workspace, error) {
+func currentWorkspaceForDriver(app appcore.AppConfig, sessionKey string) (*conversation.Session, *config.Workspace, error) {
 	if app == nil || app.Config() == nil {
 		return nil, nil, fmt.Errorf("app not configured")
 	}
-	var sess *state.Session
+	var sess *conversation.Session
 	if store := app.Store(); store != nil {
 		sess = store.GetSession(strings.TrimSpace(sessionKey))
 	}

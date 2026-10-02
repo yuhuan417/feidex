@@ -3,11 +3,11 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"reflect"
 	"strings"
 	"testing"
 
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -16,7 +16,7 @@ import (
 func seedGoalTestSession(t *testing.T, a *App, msg *feishu.InboundMessage, threadID string) string {
 	t.Helper()
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          threadID,
@@ -496,8 +496,8 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpdateSubmission(first goal continuation) error = %v", err)
 	}
-	if _, err := a.store.UpdateSession(sessionKey, func(current *state.Session) {
-		sessionctx.ResetActiveOperations(current)
+	if _, err := a.store.UpdateSession(sessionKey, func(current *conversation.Session) {
+		conversation.ResetActiveOperations(current)
 		current.Status = state.SessionStatusIdle.String()
 	}); err != nil {
 		t.Fatalf("UpdateSession(first goal continuation complete) error = %v", err)

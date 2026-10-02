@@ -1,6 +1,7 @@
 package claudesupport
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,16 +11,15 @@ import (
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 // ---------- callback types for history dependencies ----------
 
 // FetchClaudeSessionTurnsFunc fetches Claude session turns for a session key.
-type FetchClaudeSessionTurnsFunc func(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error)
+type FetchClaudeSessionTurnsFunc func(sessionKey string) (*conversation.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error)
 
 // ThreadLabelFunc returns the display label for the active thread.
-type ThreadLabelFunc func(sess *state.Session) string
+type ThreadLabelFunc func(sess *conversation.Session) string
 
 // MenuCardBodyFunc formats a menu card body with breadcrumb navigation.
 type MenuCardBodyFunc func(action, body string) string

@@ -2,19 +2,19 @@ package backend
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
 	"feidex/internal/app/appcore"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type CompactRunner interface {
-	StartThreadCompaction(sessionKey string) (*state.Session, error)
+	StartThreadCompaction(sessionKey string) (*conversation.Session, error)
 }
 
 type ActionCommandDeps struct {

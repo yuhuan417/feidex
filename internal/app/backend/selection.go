@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -10,7 +11,6 @@ import (
 	"feidex/internal/app/appcore"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -392,12 +392,12 @@ func (s SelectionService) SwitchBackend(ctx context.Context, target string) erro
 
 // FrontendSessionsAfterBackendSwitch returns session copies with thread lineage
 // transferred from the current backend to the target backend.
-func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target string) []*state.Session {
+func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target string) []*conversation.Session {
 	store := s.App.Store()
 	if store == nil {
 		return nil
 	}
-	out := make([]*state.Session, 0, 8)
+	out := make([]*conversation.Session, 0, 8)
 	for _, sess := range store.AllSessions() {
 		if sess == nil || !appcore.SessionBelongsToFrontend(s.App, sess.Key) {
 			continue
@@ -407,10 +407,10 @@ func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target str
 			continue
 		}
 		if current != "" {
-			appcore.SessionStoreBackendThread(cp, current)
+			conversation.StoreBackendThread(cp, current)
 		}
-		if !appcore.SessionRestoreBackendThread(cp, target) {
-			appcore.ClearSessionThreadContext(cp)
+		if !conversation.RestoreBackendThread(cp, target) {
+			conversation.ClearThreadContext(cp)
 		}
 		cp.Status = appcore.FirstNonEmpty(strings.TrimSpace(cp.Status), "idle")
 		out = append(out, cp)

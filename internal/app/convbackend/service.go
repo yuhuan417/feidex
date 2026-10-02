@@ -7,6 +7,7 @@ package convbackend
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
@@ -41,8 +42,8 @@ type App interface {
 
 // AppStateProvider narrows app state access to the methods used by the service.
 type AppStateProvider interface {
-	Session(key string) *state.Session
-	SaveSession(sess *state.Session) error
+	Session(key string) *conversation.Session
+	SaveSession(sess *conversation.Session) error
 }
 
 // ConversationProvider narrows conversation backend access to the methods
@@ -52,41 +53,41 @@ type ConversationProvider interface {
 	// ListCodexThreads lists codex workspace threads.
 	ListCodexThreads(app App, sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
 	// EnsureCodexBinding ensures a codex workspace thread binding.
-	EnsureCodexBinding(app App, sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
+	EnsureCodexBinding(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
 	// StartCodexThread starts a new codex workspace thread.
-	StartCodexThread(app App, sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
+	StartCodexThread(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
 	// ResumeCodexThread resumes a selected codex thread.
-	ResumeCodexThread(app App, sessionKey string, sess *state.Session, ws *config.Workspace, sel ThreadResumeSelection) (*ThreadBinding, error)
+	ResumeCodexThread(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace, sel ThreadResumeSelection) (*ThreadBinding, error)
 	// InterruptCodexTurn interrupts an active codex turn.
-	InterruptCodexTurn(app App, ctx context.Context, sess *state.Session) error
+	InterruptCodexTurn(app App, ctx context.Context, sess *conversation.Session) error
 	// ContinueCodexTurn continues an active codex turn with text.
 	ContinueCodexTurn(app App, sessionKey, text string) error
 	// TryCodexReplyContinuation tries to continue a codex reply.
-	TryCodexReplyContinuation(app App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error)
+	TryCodexReplyContinuation(app App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error)
 	// ForkCodexConversation forks the active codex conversation.
-	ForkCodexConversation(app App, sessionKey string, sess *state.Session, ws *config.Workspace) (string, error)
+	ForkCodexConversation(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error)
 	// RecoverCodexStartup recovers a codex startup conversation.
-	RecoverCodexStartup(app App, sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string)
+	RecoverCodexStartup(app App, sessionKey, workspaceID string, sess *conversation.Session, ws *config.Workspace, effectiveModel string)
 	// ListClaudeThreads lists claude workspace threads.
 	ListClaudeThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
 	// EnsureClaudeBinding ensures a claude workspace thread binding.
-	EnsureClaudeBinding(app App, sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
+	EnsureClaudeBinding(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
 	// StartClaudeThread starts a new claude workspace thread.
-	StartClaudeThread(app App, sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
+	StartClaudeThread(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
 	// ResumeClaudeThread resumes a selected claude thread.
-	ResumeClaudeThread(app App, sessionKey string, sess *state.Session, ws *config.Workspace, sel ThreadResumeSelection) (*ThreadBinding, error)
+	ResumeClaudeThread(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace, sel ThreadResumeSelection) (*ThreadBinding, error)
 	// InterruptClaudeTurn interrupts an active claude turn.
 	InterruptClaudeTurn(app App, ctx context.Context, sessionKey string) error
 	// ContinueClaudeTurn continues an active claude turn with text.
 	ContinueClaudeTurn(app App, sessionKey, text string) error
 	// TryClaudeReplyContinuation tries to continue a claude reply.
-	TryClaudeReplyContinuation(app App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error)
+	TryClaudeReplyContinuation(app App, msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error)
 	// ForkClaudeConversation forks the active claude conversation.
-	ForkClaudeConversation(app App, sessionKey string, sess *state.Session, ws *config.Workspace) (string, error)
+	ForkClaudeConversation(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error)
 	// RecoverClaudeStartup recovers a claude startup conversation.
-	RecoverClaudeStartup(app App, sessionKey, workspaceID string, sess *state.Session)
+	RecoverClaudeStartup(app App, sessionKey, workspaceID string, sess *conversation.Session)
 	// StartNextSubmission starts the next queued submission.
-	StartNextSubmission(app App, sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+	StartNextSubmission(app App, sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
 	// MarkThreadLive marks a thread as live for a session.
 	MarkThreadLive(app App, sessionKey, threadID string)
 }
@@ -100,7 +101,7 @@ type WorkspaceConfigProvider interface {
 	// RenderCodexHistoryDetailCard renders the codex history detail card.
 	RenderCodexHistoryDetailCard(app App, sessionKey string, index int) (map[string]any, error)
 	// RenderCodexUsageBody renders the codex usage body.
-	RenderCodexUsageBody(app App, sess *state.Session) string
+	RenderCodexUsageBody(app App, sess *conversation.Session) string
 	// HistoryTurnIndexForOrdinal returns the history turn index for a claude ordinal.
 	HistoryTurnIndexForOrdinal(app App, sessionKey string, ordinal int) (int, error)
 	// RenderClaudeHistoryCard renders the claude history card.
@@ -108,7 +109,7 @@ type WorkspaceConfigProvider interface {
 	// RenderClaudeHistoryDetailCard renders the claude history detail card.
 	RenderClaudeHistoryDetailCard(app App, sessionKey string, index int) (map[string]any, error)
 	// RenderClaudeUsageBody renders the claude usage body.
-	RenderClaudeUsageBody(app App, sess *state.Session) string
+	RenderClaudeUsageBody(app App, sess *conversation.Session) string
 }
 
 // ThreadResumeSelection describes a thread resume selection from the UI.
@@ -126,21 +127,21 @@ type ThreadBinding = appworkspace.ThreadBinding
 // operations. Implementations are provided for both Codex and Claude backends.
 type ConversationBackendFacade interface {
 	ListWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
-	EnsureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
-	StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error)
-	ResumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error)
-	ForkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error)
+	EnsureWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
+	StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
+	ResumeSelectedThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error)
+	ForkActiveConversation(sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error)
 	ForkReplyMessage(forkedID string) string
-	RecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string)
+	RecoverStartupConversation(sessionKey, workspaceID string, sess *conversation.Session, ws *config.Workspace, effectiveModel string)
 	RenderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error)
 	HistoryIndexForOrdinal(sessionKey string, ordinal int) (int, error)
 	RenderHistoryCard(sessionKey string, page int) (map[string]any, error)
 	RenderHistoryDetailCard(sessionKey string, index int) (map[string]any, error)
-	RenderUsageBody(sess *state.Session) string
-	InterruptActiveTurn(ctx context.Context, sessionKey string, sess *state.Session) error
+	RenderUsageBody(sess *conversation.Session) string
+	InterruptActiveTurn(ctx context.Context, sessionKey string, sess *conversation.Session) error
 	ContinueActiveTurn(sessionKey, text string) error
-	TryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error)
-	StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+	TryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error)
+	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
 }
 
 // UIWarningError is a sentinel error type for UI warning messages.
@@ -202,14 +203,14 @@ func renderThreadSettingValue(override, fallback string) string {
 	return appthreadview.RenderThreadSettingValue(override, fallback)
 }
 
-func currentThreadLabel(sess *state.Session) string {
+func currentThreadLabel(sess *conversation.Session) string {
 	if sess == nil {
 		return "-"
 	}
 	return appthreadview.CurrentThreadLabel(sess.ActiveThreadName, sess.ActiveThreadPreview, sess.ActiveThreadID)
 }
 
-func effectiveClaudePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+func effectiveClaudePermissionMode(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
 		return normalizeClaudePermissionModeValue(sess.ActiveClaudePermissionMode)
 	}
@@ -466,7 +467,7 @@ func RenderClaudeThreadsCardForCurrentBackend(app App, sessionKey string, includ
 }
 
 // RenderClaudeThreadsCard renders the claude threads card.
-func RenderClaudeThreadsCard(app App, sessionKey string, sess *state.Session, ws *config.Workspace, includeAll bool) (map[string]any, error) {
+func RenderClaudeThreadsCard(app App, sessionKey string, sess *conversation.Session, ws *config.Workspace, includeAll bool) (map[string]any, error) {
 	conversation := app.ConvBackendConversation()
 	items, err := conversation.ListClaudeThreads(sessionKey, ws, includeAll)
 	if err != nil {
@@ -599,19 +600,19 @@ func (b *CodexConversationBackend) ListWorkspaceThreads(sessionKey string, ws *c
 	return b.app.ConvBackendConversation().ListCodexThreads(b.app, sessionKey, ws, includeAll)
 }
 
-func (b *CodexConversationBackend) EnsureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (b *CodexConversationBackend) EnsureWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	return b.app.ConvBackendConversation().EnsureCodexBinding(b.app, sessionKey, sess, ws)
 }
 
-func (b *CodexConversationBackend) StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (b *CodexConversationBackend) StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	return b.app.ConvBackendConversation().StartCodexThread(b.app, sessionKey, sess, ws)
 }
 
-func (b *CodexConversationBackend) ResumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error) {
+func (b *CodexConversationBackend) ResumeSelectedThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error) {
 	return b.app.ConvBackendConversation().ResumeCodexThread(b.app, sessionKey, sess, ws, selection)
 }
 
-func (b *CodexConversationBackend) ForkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+func (b *CodexConversationBackend) ForkActiveConversation(sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error) {
 	return b.app.ConvBackendConversation().ForkCodexConversation(b.app, sessionKey, sess, ws)
 }
 
@@ -619,7 +620,7 @@ func (b *CodexConversationBackend) ForkReplyMessage(string) string {
 	return "forked current thread and switched to new branch thread."
 }
 
-func (b *CodexConversationBackend) RecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
+func (b *CodexConversationBackend) RecoverStartupConversation(sessionKey, workspaceID string, sess *conversation.Session, ws *config.Workspace, effectiveModel string) {
 	b.app.ConvBackendConversation().RecoverCodexStartup(b.app, sessionKey, workspaceID, sess, ws, effectiveModel)
 }
 
@@ -639,11 +640,11 @@ func (b *CodexConversationBackend) RenderHistoryDetailCard(sessionKey string, in
 	return b.app.ConvBackendWorkspaceConfig().RenderCodexHistoryDetailCard(b.app, sessionKey, index)
 }
 
-func (b *CodexConversationBackend) RenderUsageBody(sess *state.Session) string {
+func (b *CodexConversationBackend) RenderUsageBody(sess *conversation.Session) string {
 	return b.app.ConvBackendWorkspaceConfig().RenderCodexUsageBody(b.app, sess)
 }
 
-func (b *CodexConversationBackend) InterruptActiveTurn(ctx context.Context, _ string, sess *state.Session) error {
+func (b *CodexConversationBackend) InterruptActiveTurn(ctx context.Context, _ string, sess *conversation.Session) error {
 	return b.app.ConvBackendConversation().InterruptCodexTurn(b.app, ctx, sess)
 }
 
@@ -651,11 +652,11 @@ func (b *CodexConversationBackend) ContinueActiveTurn(sessionKey, text string) e
 	return b.app.ConvBackendConversation().ContinueCodexTurn(b.app, sessionKey, text)
 }
 
-func (b *CodexConversationBackend) TryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+func (b *CodexConversationBackend) TryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 	return b.app.ConvBackendConversation().TryCodexReplyContinuation(b.app, msg, link, sessionKey, sess)
 }
 
-func (b *CodexConversationBackend) StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (b *CodexConversationBackend) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return b.app.ConvBackendConversation().StartNextSubmission(b.app, sessionKey, sess, sub, ws, notifyFailure)
 }
 
@@ -675,19 +676,19 @@ func (b *ClaudeConversationBackend) ListWorkspaceThreads(sessionKey string, ws *
 	return b.app.ConvBackendConversation().ListClaudeThreads(sessionKey, ws, includeAll)
 }
 
-func (b *ClaudeConversationBackend) EnsureWorkspaceThreadBinding(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (b *ClaudeConversationBackend) EnsureWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	return b.app.ConvBackendConversation().EnsureClaudeBinding(b.app, sessionKey, sess, ws)
 }
 
-func (b *ClaudeConversationBackend) StartWorkspaceThread(sessionKey string, sess *state.Session, ws *config.Workspace) (*ThreadBinding, error) {
+func (b *ClaudeConversationBackend) StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	return b.app.ConvBackendConversation().StartClaudeThread(b.app, sessionKey, sess, ws)
 }
 
-func (b *ClaudeConversationBackend) ResumeSelectedThread(sessionKey string, sess *state.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error) {
+func (b *ClaudeConversationBackend) ResumeSelectedThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, selection ThreadResumeSelection) (*ThreadBinding, error) {
 	return b.app.ConvBackendConversation().ResumeClaudeThread(b.app, sessionKey, sess, ws, selection)
 }
 
-func (b *ClaudeConversationBackend) ForkActiveConversation(sessionKey string, sess *state.Session, ws *config.Workspace) (string, error) {
+func (b *ClaudeConversationBackend) ForkActiveConversation(sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error) {
 	return b.app.ConvBackendConversation().ForkClaudeConversation(b.app, sessionKey, sess, ws)
 }
 
@@ -698,7 +699,7 @@ func (b *ClaudeConversationBackend) ForkReplyMessage(forkedID string) string {
 	return "forked current session and switched to new branch session."
 }
 
-func (b *ClaudeConversationBackend) RecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, _ *config.Workspace, _ string) {
+func (b *ClaudeConversationBackend) RecoverStartupConversation(sessionKey, workspaceID string, sess *conversation.Session, _ *config.Workspace, _ string) {
 	b.app.ConvBackendConversation().RecoverClaudeStartup(b.app, sessionKey, workspaceID, sess)
 }
 
@@ -718,11 +719,11 @@ func (b *ClaudeConversationBackend) RenderHistoryDetailCard(sessionKey string, i
 	return b.app.ConvBackendWorkspaceConfig().RenderClaudeHistoryDetailCard(b.app, sessionKey, index)
 }
 
-func (b *ClaudeConversationBackend) RenderUsageBody(sess *state.Session) string {
+func (b *ClaudeConversationBackend) RenderUsageBody(sess *conversation.Session) string {
 	return b.app.ConvBackendWorkspaceConfig().RenderClaudeUsageBody(b.app, sess)
 }
 
-func (b *ClaudeConversationBackend) InterruptActiveTurn(ctx context.Context, sessionKey string, _ *state.Session) error {
+func (b *ClaudeConversationBackend) InterruptActiveTurn(ctx context.Context, sessionKey string, _ *conversation.Session) error {
 	return b.app.ConvBackendConversation().InterruptClaudeTurn(b.app, ctx, sessionKey)
 }
 
@@ -730,11 +731,11 @@ func (b *ClaudeConversationBackend) ContinueActiveTurn(sessionKey, text string) 
 	return b.app.ConvBackendConversation().ContinueClaudeTurn(b.app, sessionKey, text)
 }
 
-func (b *ClaudeConversationBackend) TryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+func (b *ClaudeConversationBackend) TryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 	return b.app.ConvBackendConversation().TryClaudeReplyContinuation(b.app, msg, link, sessionKey, sess)
 }
 
-func (b *ClaudeConversationBackend) StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (b *ClaudeConversationBackend) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return b.app.ConvBackendConversation().StartNextSubmission(b.app, sessionKey, sess, sub, ws, notifyFailure)
 }
 

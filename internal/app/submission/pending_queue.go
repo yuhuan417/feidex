@@ -2,11 +2,11 @@ package submission
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
 	"time"
 
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -26,16 +26,16 @@ type PendingQueueApp interface {
 	PendingQueueDefaultWorkspaceID() string
 	PendingQueueAddReaction(ctx context.Context, messageID, emoji string) error
 	PendingQueueRemoveReaction(ctx context.Context, messageID, emoji string) error
-	PendingQueueLogSessionState(event, sessionKey string, sess *state.Session)
+	PendingQueueLogSessionState(event, sessionKey string, sess *conversation.Session)
 }
 
 // PendingQueueAppStateProvider narrows app state access.
 type PendingQueueAppStateProvider interface {
-	Session(key string) *state.Session
-	Sessions() []*state.Session
+	Session(key string) *conversation.Session
+	Sessions() []*conversation.Session
 	Submission(id string) *state.Submission
-	SaveSession(sess *state.Session) error
-	UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error)
+	SaveSession(sess *conversation.Session) error
+	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
 	UpdateSubmission(id string, mutate func(*state.Submission)) error
 }
 
@@ -86,7 +86,7 @@ func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMes
 	appState := a.PendingQueueAppState()
 	sess := appState.Session(sessionKey)
 	if sess == nil {
-		sess = &state.Session{
+		sess = &conversation.Session{
 			Key:           sessionKey,
 			WorkspaceID:   a.PendingQueueDefaultWorkspaceID(),
 			OwnerUserID:   msg.UserID,
@@ -105,7 +105,7 @@ func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMes
 	}
 	now := time.Now().Unix()
 	for _, attachment := range attachments {
-		sess.StagedImages = append(sess.StagedImages, state.SessionStagedImage{
+		sess.StagedImages = append(sess.StagedImages, conversation.SessionStagedImage{
 			SourceMessageID: msg.MessageID,
 			RootMessageID:   firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID)),
 			Name:            attachment.Name,
@@ -113,7 +113,7 @@ func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMes
 			CreatedAt:       now,
 		})
 	}
-	if sessionctx.HasInFlightSubmission(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
+	if conversation.HasInFlightSubmission(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 		sess.Status = state.SessionStatusQueued.String()
 	}
 	if err := appState.SaveSession(sess); err != nil {
@@ -155,14 +155,14 @@ func (s PendingQueueService) DiscardPendingInputByMessageID(messageID string) bo
 
 // DiscardStagedImageFromSessionSnapshot discards a staged image from a session
 // snapshot by source message ID.
-func (s PendingQueueService) DiscardStagedImageFromSessionSnapshot(snapshot *state.Session, messageID string) bool {
+func (s PendingQueueService) DiscardStagedImageFromSessionSnapshot(snapshot *conversation.Session, messageID string) bool {
 	a := s.App
 	if snapshot == nil || strings.TrimSpace(snapshot.Key) == "" {
 		return false
 	}
 	appState := a.PendingQueueAppState()
 	discarded := false
-	if _, err := appState.UpdateSession(snapshot.Key, func(current *state.Session) {
+	if _, err := appState.UpdateSession(snapshot.Key, func(current *conversation.Session) {
 		if current == nil {
 			return
 		}
@@ -180,14 +180,14 @@ func (s PendingQueueService) DiscardStagedImageFromSessionSnapshot(snapshot *sta
 
 // DiscardQueuedSubmissionFromSessionSnapshot discards a queued submission
 // from a session snapshot.
-func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot *state.Session, submissionID string, sub *state.Submission) bool {
+func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot *conversation.Session, submissionID string, sub *state.Submission) bool {
 	a := s.App
 	if snapshot == nil || strings.TrimSpace(snapshot.Key) == "" || strings.TrimSpace(submissionID) == "" {
 		return false
 	}
 	appState := a.PendingQueueAppState()
 	discarded := false
-	if _, err := appState.UpdateSession(snapshot.Key, func(current *state.Session) {
+	if _, err := appState.UpdateSession(snapshot.Key, func(current *conversation.Session) {
 		if current == nil {
 			return
 		}
@@ -247,7 +247,7 @@ func (s PendingQueueService) DiscardSessionPendingInputs(sessionKey string) int 
 	}
 	sess.Queue = nil
 	sess.StagedImages = nil
-	if !sessionctx.HasInFlightSubmission(sess) {
+	if !conversation.HasInFlightSubmission(sess) {
 		sess.Status = state.SessionStatusIdle.String()
 	}
 	if err := appState.SaveSession(sess); err != nil {
@@ -346,11 +346,11 @@ func (s PendingQueueService) forEachMessageID(messageIDs []string, fn func(conte
 
 // DiscardStagedImageByMessageID removes the first staged image with the given
 // source message ID from a session.
-func DiscardStagedImageByMessageID(sess *state.Session, messageID string) bool {
+func DiscardStagedImageByMessageID(sess *conversation.Session, messageID string) bool {
 	if sess == nil || len(sess.StagedImages) == 0 {
 		return false
 	}
-	next := make([]state.SessionStagedImage, 0, len(sess.StagedImages))
+	next := make([]conversation.SessionStagedImage, 0, len(sess.StagedImages))
 	discarded := false
 	for _, image := range sess.StagedImages {
 		if !discarded && strings.TrimSpace(image.SourceMessageID) == messageID {

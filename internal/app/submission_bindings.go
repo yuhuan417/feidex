@@ -2,6 +2,7 @@ package app
 
 import (
 	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"strings"
@@ -32,7 +33,7 @@ type sqConversationBackendAdapter struct {
 	facade appconvbackend.ConversationBackendFacade
 }
 
-func (a sqConversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (a sqConversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	if a.facade == nil {
 		return nil
 	}
@@ -110,7 +111,7 @@ func (a submissionAppAdapter) SubmissionQueueConfiguredInflightMode() appsubmiss
 func (a submissionAppAdapter) SubmissionQueueInflightAllowsAdditional(mode appsubmission.QueueInflightMode) bool {
 	return sessionInflightAllowsAdditional(intToInflightMode(mode))
 }
-func (a submissionAppAdapter) SubmissionQueueResolveWorkspaceID(msg *feishu.InboundMessage, sess *state.Session, bindOnlyCurrentRoot bool) string {
+func (a submissionAppAdapter) SubmissionQueueResolveWorkspaceID(msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string {
 	return resolveSubmissionWorkspaceID(a.app, msg, sess, bindOnlyCurrentRoot)
 }
 
@@ -154,7 +155,7 @@ func (a submissionAppAdapter) SubmissionQueueTryBeginStart(sessionKey string) bo
 func (a submissionAppAdapter) SubmissionQueueFinishStart(sessionKey string) bool {
 	return a.app.trackers.submissionStarts.Finish(sessionKey)
 }
-func (a submissionAppAdapter) SubmissionQueueLogSessionState(event, sessionKey string, sess *state.Session) {
+func (a submissionAppAdapter) SubmissionQueueLogSessionState(event, sessionKey string, sess *conversation.Session) {
 	logSessionState(event, sessionKey, sess)
 }
 func (a submissionAppAdapter) SubmissionQueueMarkSubmissionQueuedReactions(sub *state.Submission) {
@@ -175,7 +176,7 @@ func (a submissionAppAdapter) SubmissionQueueStartSubmissionTurn(ctx context.Con
 func (a submissionAppAdapter) SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error) {
 	return appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a.app), ctx, threadID, sub)
 }
-func (a submissionAppAdapter) SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) codexrpc.ThreadStartParams {
+func (a submissionAppAdapter) SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *conversation.Session, model string) codexrpc.ThreadStartParams {
 	return buildThreadStartParams(a.app, ws, sess, model)
 }
 func (a submissionAppAdapter) SubmissionQueueRequireCodexClient() (CodexClient, error) {
@@ -214,7 +215,7 @@ func (a submissionAppAdapter) SubmissionQueueDeleteMessageLinks(match func(*stat
 func (a submissionAppAdapter) SubmissionQueueUpdateSubmission(id string, mutate func(*state.Submission)) error {
 	return a.app.State().UpdateSubmission(id, mutate)
 }
-func (a submissionAppAdapter) SubmissionQueueSessions() []*state.Session {
+func (a submissionAppAdapter) SubmissionQueueSessions() []*conversation.Session {
 	return a.app.State().Sessions()
 }
 
@@ -267,7 +268,7 @@ type sqPendingQueueFullAdapter struct{ app *App }
 func (a sqPendingQueueFullAdapter) PendingInputSessionKey(msg *feishu.InboundMessage) string {
 	return newReplyContinuationService(a.app).pendingInputSessionKey(msg)
 }
-func (a sqPendingQueueFullAdapter) CollectPendingStagedImages(sessionKey, bucketSessionKey string) []state.SessionStagedImage {
+func (a sqPendingQueueFullAdapter) CollectPendingStagedImages(sessionKey, bucketSessionKey string) []conversation.SessionStagedImage {
 	return newReplyContinuationService(a.app).collectPendingStagedImages(sessionKey, bucketSessionKey)
 }
 func (a sqPendingQueueFullAdapter) ClearPendingStagedImages(sessionKey, bucketSessionKey string) error {
@@ -276,7 +277,7 @@ func (a sqPendingQueueFullAdapter) ClearPendingStagedImages(sessionKey, bucketSe
 
 type sqBackendRuntimeFullAdapter struct{ app *App }
 
-func (a sqBackendRuntimeFullAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session {
+func (a sqBackendRuntimeFullAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if runtime := backendRuntime(a.app); runtime != nil {
 		return runtime.reconcileCompletedTurnFromFinalOutput(a.app, sessionKey, sess)
 	}
@@ -322,7 +323,7 @@ func (a pendingQueueAppAdapter) PendingQueueRemoveReaction(ctx context.Context, 
 	}
 	return a.app.feishu.RemoveReaction(ctx, messageID, emoji)
 }
-func (a pendingQueueAppAdapter) PendingQueueLogSessionState(event, sessionKey string, sess *state.Session) {
+func (a pendingQueueAppAdapter) PendingQueueLogSessionState(event, sessionKey string, sess *conversation.Session) {
 	logSessionState(event, sessionKey, sess)
 }
 

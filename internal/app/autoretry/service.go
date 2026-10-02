@@ -3,6 +3,7 @@ package autoretry
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -46,7 +47,7 @@ type App interface {
 	// MenuCardBody formats a menu card body with breadcrumb navigation.
 	MenuCardBody(action, body string) string
 	// SessionHasActiveWork reports whether the session has active work.
-	SessionHasActiveWork(sess *state.Session) bool
+	SessionHasActiveWork(sess *conversation.Session) bool
 	// SessionHasLiveThread reports whether the given thread is live for the session.
 	SessionHasLiveThread(sessionKey, threadID string) bool
 	// ClearSessionLiveThread clears the live thread for the session.
@@ -61,7 +62,7 @@ type App interface {
 
 // AppStateProvider narrows app state access to the methods used by the service.
 type AppStateProvider interface {
-	Session(key string) *state.Session
+	Session(key string) *conversation.Session
 	CreateSubmission(sub *state.Submission) (string, error)
 	Submission(id string) *state.Submission
 }
@@ -76,7 +77,7 @@ type BackendRuntimeProvider interface {
 // ConversationBackendProvider narrows conversation backend access to the
 // methods used by the service.
 type ConversationBackendProvider interface {
-	StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +245,7 @@ func (s Service) CurrentAutoRetryState(sessionKey string) (RetryState, bool) {
 // ObserveAutoRetryTerminal inspects a terminal turn status. On failure it
 // schedules an auto-retry; on other terminals it cleans up retry state.
 // Returns true if a retry is pending after the observation.
-func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
+func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
 	if s.app == nil {
 		return false
 	}
@@ -304,7 +305,7 @@ func (s Service) FinishAutoRetryOnTerminal(sessionKey, threadID, status string) 
 
 // ScheduleAutoRetryAfterFailure attempts to schedule an auto-retry after a
 // failed turn. Returns true if a retry is now pending.
-func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, updatedSess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
+func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, updatedSess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
 	if s.app == nil {
 		return false
 	}
@@ -473,7 +474,7 @@ func (s Service) BumpAutoRetryBackoffAndReschedule(sessionKey, notice string) {
 
 // StartAutoRetrySubmission creates and starts a "继续" submission for the
 // auto-retry cycle.
-func (s Service) StartAutoRetrySubmission(sessionKey string, sess *state.Session, snapshot RetryState) (*state.Submission, error) {
+func (s Service) StartAutoRetrySubmission(sessionKey string, sess *conversation.Session, snapshot RetryState) (*state.Submission, error) {
 	if s.app == nil || sess == nil {
 		return nil, fmt.Errorf("session missing")
 	}

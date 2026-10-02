@@ -6,6 +6,7 @@ import (
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	apppathpick "feidex/internal/app/pathpick"
 	appupgradecmd "feidex/internal/app/upgradecmd"
+	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1264,7 +1265,7 @@ func TestPathPickerUpgradeLocalBinaryConfirmStagesArtifact(t *testing.T) {
 	currentGOOS = func() string { return "linux" }
 	currentGOARCH = func() string { return "amd64" }
 	sessionKey := "sess-upgrade"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: "default",
 		OwnerUserID: "user-1",

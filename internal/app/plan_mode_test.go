@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
 	appconvbackend "feidex/internal/app/convbackend"
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -23,7 +23,7 @@ func TestCommandPlanOnSavesThreadCollaborationMode(t *testing.T) {
 		UserID:    "user-1",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -81,7 +81,7 @@ func TestCommandPlanOnRejectsWhenExperimentalAPIDisabled(t *testing.T) {
 		UserID:    "user-1",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -110,7 +110,7 @@ func TestCommandPlanOnUsesConfiguredPlanModelAndEffort(t *testing.T) {
 		UserID:    "user-1",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -162,7 +162,7 @@ func TestCommandPlanOnLeavesReasoningEffortEmptyWithoutPresetOrOverride(t *testi
 		UserID:    "user-1",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -211,7 +211,7 @@ func TestCommandPlanWithoutArgsTogglesPlanMode(t *testing.T) {
 		UserID:    "user-1",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -271,7 +271,7 @@ func TestCommandPlanWithoutArgsTogglesPlanMode(t *testing.T) {
 	}
 	restored := *sess
 	restored.ActiveThreadCollaborationMode = nil
-	if !sessionctx.RestoreBackendThread(&restored, backendCodex) {
+	if !conversation.RestoreBackendThread(&restored, backendCodex) {
 		t.Fatal("expected backend thread snapshot to restore")
 	}
 	if restored.ActiveThreadCollaborationMode == nil || restored.ActiveThreadCollaborationMode.Mode != "default" {
@@ -293,7 +293,7 @@ func TestCommandPlanOffStoresDefaultModeWhenActiveModeMissing(t *testing.T) {
 		UserID:    "user-1",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -338,12 +338,12 @@ func TestCommandPlanOffStoresConfiguredDefaultModelAndEffort(t *testing.T) {
 		UserID:    "user-1",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.5",
 			ReasoningEffort: "xhigh",
@@ -391,12 +391,12 @@ func TestCommandPlanOffDoesNotReuseConfiguredPlanModelAsDefault(t *testing.T) {
 		UserID:    "user-1",
 	}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.5",
 			ReasoningEffort: "xhigh",
@@ -446,12 +446,12 @@ func TestStartSubmissionTurnIncludesThreadCollaborationMode(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",
@@ -498,12 +498,12 @@ func TestStartSubmissionTurnIncludesDefaultCollaborationModeAfterPlanDisabled(t 
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:  "default",
 			Model: "gpt-5.4",
 		},
@@ -550,12 +550,12 @@ func TestStartSubmissionTurnFillsConfiguredEffortForStoredDefaultCollaborationMo
 	a.cfg.Codex.ReasoningEffort = "xhigh"
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:  "default",
 			Model: "gpt-5.4",
 		},
@@ -598,7 +598,7 @@ func TestStartSubmissionTurnOmitsCollaborationModeByDefault(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
@@ -634,12 +634,12 @@ func TestStartSubmissionTurnOmitsCollaborationModeByDefault(t *testing.T) {
 func TestResumeSelectedThreadClearsThreadCollaborationMode(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-old",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",
@@ -680,12 +680,12 @@ func TestResumeSelectedThreadClearsThreadCollaborationMode(t *testing.T) {
 func TestForkActiveConversationClearsThreadCollaborationMode(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-old",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",

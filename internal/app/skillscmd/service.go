@@ -5,6 +5,7 @@ package skillscmd
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"sync"
@@ -46,7 +47,7 @@ type Service struct {
 	// RequireCodexClient returns the Codex RPC client or an error.
 	RequireCodexClient func() (CodexClient, error)
 	// AppStateSession returns the session for the given key.
-	AppStateSession func(sessionKey string) *state.Session
+	AppStateSession func(sessionKey string) *conversation.Session
 	// DefaultWorkspaceID returns the default workspace ID.
 	DefaultWorkspaceID func() string
 	// FindWorkspace looks up a workspace by ID from the config.

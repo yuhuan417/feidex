@@ -5,6 +5,7 @@ import (
 	"feidex/internal/app/pendingforms"
 	appturnlifecycle "feidex/internal/app/turnlifecycle"
 	"feidex/internal/codexrpc"
+	"feidex/internal/domain/conversation"
 	"path/filepath"
 
 	appapproval "feidex/internal/app/approval"
@@ -91,7 +92,7 @@ func TestTurnStartedNotificationRebindsPendingSubmission(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	a := &App{store: store, trackers: appTrackers{turnStreams: newTurnStreamTracker()}}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
 		ActiveThreadID:          "thread-1",
@@ -135,7 +136,7 @@ func TestFindSubmissionByTurnFallsBackToActiveSubmissionOnThread(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	a := &App{store: store}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                "sess-1",
 		WorkspaceID:        "default",
 		ActiveThreadID:     "thread-1",

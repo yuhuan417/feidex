@@ -7,13 +7,13 @@ package submission
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
@@ -49,14 +49,14 @@ type App interface {
 	SubmissionQueueReplyInThreadForSubmission(sub *state.Submission) bool
 	SubmissionQueueConfiguredInflightMode() QueueInflightMode
 	SubmissionQueueInflightAllowsAdditional(mode QueueInflightMode) bool
-	SubmissionQueueResolveWorkspaceID(msg *feishu.InboundMessage, sess *state.Session, bindOnlyCurrentRoot bool) string
+	SubmissionQueueResolveWorkspaceID(msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string
 	SubmissionQueueReplyText(ctx context.Context, messageID, text string, inThread bool) error
 	SubmissionQueueSendQueuedNotice(ctx context.Context, sub *state.Submission)
 	SubmissionQueueSendStartFailureNotice(ctx context.Context, sub *state.Submission, err error, willContinue bool)
 	SubmissionQueueRunAsync(fn func())
 	SubmissionQueueTryBeginStart(sessionKey string) bool
 	SubmissionQueueFinishStart(sessionKey string) bool
-	SubmissionQueueLogSessionState(event, sessionKey string, sess *state.Session)
+	SubmissionQueueLogSessionState(event, sessionKey string, sess *conversation.Session)
 
 	// Reactions (delegated to PendingQueueService through app).
 	SubmissionQueueMarkSubmissionQueuedReactions(sub *state.Submission)
@@ -67,7 +67,7 @@ type App interface {
 	SubmissionQueueIsReviewSubmission(sub *state.Submission) bool
 	SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error)
 	SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error)
-	SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *state.Session, model string) codexrpc.ThreadStartParams
+	SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *conversation.Session, model string) codexrpc.ThreadStartParams
 	SubmissionQueueRequireCodexClient() (appcore.CodexClient, error)
 	SubmissionQueueClaudeClient() QueueClaudeClient
 	SubmissionQueueConfiguredClaudeModel() string
@@ -87,7 +87,7 @@ type agentBindingByIDResolver interface {
 // Optional for narrow queue hosts; the production adapter captures all model
 // fields together, after dequeue and before any backend I/O.
 type modelConfigResolver interface {
-	SubmissionQueueResolveModelConfig(*state.Session, *state.Submission) domainmodelconfig.Snapshot
+	SubmissionQueueResolveModelConfig(*conversation.Session, *state.Submission) domainmodelconfig.Snapshot
 }
 
 type codexConfigResolver interface {
@@ -105,20 +105,20 @@ type botProfileResolver interface {
 
 // QueueAppStateProvider narrows app state access.
 type QueueAppStateProvider interface {
-	Session(key string) *state.Session
+	Session(key string) *conversation.Session
 	Submission(id string) *state.Submission
-	SaveSession(sess *state.Session) error
+	SaveSession(sess *conversation.Session) error
 	CreateSubmission(sub *state.Submission) (string, error)
 	QueueSubmission(sessionKey, id string) error
 	DequeueSubmission(sessionKey string) (string, error)
 	MarkSubmissionRunning(id, threadID, turnID string) error
 	FinalizeSubmission(id, status string) error
-	UpdateSession(key string, mutate func(*state.Session)) (*state.Session, error)
+	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
 	NextLocalID(prefix string) (string, error)
 	DeletePendingRequests(match func(*state.PendingRequest) bool)
 	DeleteMessageLinks(match func(*state.MessageLink) bool)
 	UpdateSubmission(id string, mutate func(*state.Submission)) error
-	Sessions() []*state.Session
+	Sessions() []*conversation.Session
 }
 
 // QueueSkillResolver narrows skill resolution.
@@ -151,7 +151,7 @@ type QueueLiveThreadProvider interface {
 // QueuePendingQueueProvider narrows pending queue operations.
 type QueuePendingQueueProvider interface {
 	PendingInputSessionKey(msg *feishu.InboundMessage) string
-	CollectPendingStagedImages(sessionKey, bucketSessionKey string) []state.SessionStagedImage
+	CollectPendingStagedImages(sessionKey, bucketSessionKey string) []conversation.SessionStagedImage
 	ClearPendingStagedImages(sessionKey, bucketSessionKey string) error
 }
 
@@ -185,18 +185,18 @@ type QueueTurnStreamProvider interface {
 
 // QueueAutoRetryProvider narrows auto retry.
 type QueueAutoRetryProvider interface {
-	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *state.Session, sub *state.Submission, reuseMessageID, lastError string) bool
+	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool
 	HasBlockingAutoRetry(sessionKey string) bool
 }
 
 // QueueConversationBackendProvider narrows conversation backend.
 type QueueConversationBackendProvider interface {
-	StartQueuedSubmission(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
 }
 
 // QueueBackendRuntimeProvider narrows backend runtime.
 type QueueBackendRuntimeProvider interface {
-	ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *state.Session) *state.Session
+	ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session
 	DropThreadLineageAfterStartFailure(err error) bool
 	DeferQueuedSubmissionsDuringRecovery() bool
 }
@@ -237,14 +237,14 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	chatBinding := resolveAgentBinding(a, msg)
-	newSession := func() *state.Session {
+	newSession := func() *conversation.Session {
 		bindingID := ""
 		workspaceID := a.SubmissionQueueDefaultWorkspaceID()
 		if chatBinding != nil {
 			bindingID = strings.TrimSpace(chatBinding.ID)
 			workspaceID = ""
 		}
-		return &state.Session{
+		return &conversation.Session{
 			Key:           sessionKey,
 			BindingID:     bindingID,
 			WorkspaceID:   workspaceID,
@@ -313,7 +313,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		sourceRootMessageIDs = UniqueStrings(append(sourceRootMessageIDs, StagedImageRootMessageIDs(stagedImages)...))
 	}
 	mode := a.SubmissionQueueConfiguredInflightMode()
-	hasInFlight := sessionctx.HasInFlightSubmission(sess)
+	hasInFlight := conversation.HasInFlightSubmission(sess)
 	queueLenBefore := len(sess.Queue)
 	autoRetryBlocked := s.hasAutoRetryWorkAhead(appState, sess)
 	serialBindingBlocked := s.hasSerialBindingWorkAhead(appState, sess)
@@ -432,7 +432,7 @@ func resolveAgentBindingByID(a App, id string) *state.AgentBinding {
 	return resolver.SubmissionQueueAgentBindingByID(id)
 }
 
-func submissionBinding(a App, sess *state.Session, sub *state.Submission) *state.AgentBinding {
+func submissionBinding(a App, sess *conversation.Session, sub *state.Submission) *state.AgentBinding {
 	if sub != nil {
 		if binding := resolveAgentBindingByID(a, sub.BindingID); binding != nil {
 			return binding
@@ -444,7 +444,7 @@ func submissionBinding(a App, sess *state.Session, sub *state.Submission) *state
 	return nil
 }
 
-func effectiveCodexModel(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveCodexModel(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
 	binding := submissionBinding(a, sess, sub)
 	return firstNonEmpty(
 		sessionModelOverride(sess),
@@ -454,7 +454,7 @@ func effectiveCodexModel(a App, sess *state.Session, sub *state.Submission, ws *
 	)
 }
 
-func effectiveCodexReasoningEffort(a App, sess *state.Session, sub *state.Submission) string {
+func effectiveCodexReasoningEffort(a App, sess *conversation.Session, sub *state.Submission) string {
 	binding := submissionBinding(a, sess, sub)
 	return firstNonEmpty(
 		bindingReasoningEffortOverride(binding),
@@ -463,7 +463,7 @@ func effectiveCodexReasoningEffort(a App, sess *state.Session, sub *state.Submis
 	)
 }
 
-func effectiveClaudeModel(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveClaudeModel(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
 	binding := submissionBinding(a, sess, sub)
 	return firstNonEmpty(
 		sessionModelOverride(sess),
@@ -473,7 +473,7 @@ func effectiveClaudeModel(a App, sess *state.Session, sub *state.Submission, ws 
 	)
 }
 
-func effectiveBindingApprovalPolicy(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveBindingApprovalPolicy(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
 		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
 	}
@@ -483,10 +483,14 @@ func effectiveBindingApprovalPolicy(a App, sess *state.Session, sub *state.Submi
 	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.ApprovalPolicy) != "" {
 		return strings.TrimSpace(profile.ApprovalPolicy)
 	}
-	return sessionctx.EffectiveApprovalPolicy(sess, ws)
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.ApprovalPolicy
+	}
+	return conversation.EffectiveApprovalPolicy(sess, workspaceValue)
 }
 
-func effectiveBindingSandboxMode(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveBindingSandboxMode(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
 		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
 	}
@@ -496,11 +500,15 @@ func effectiveBindingSandboxMode(a App, sess *state.Session, sub *state.Submissi
 	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.SandboxMode) != "" {
 		return strings.TrimSpace(profile.SandboxMode)
 	}
-	return sessionctx.EffectiveSandboxMode(sess, ws)
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.SandboxMode
+	}
+	return conversation.EffectiveSandboxMode(sess, workspaceValue)
 }
 
-func effectiveBindingServiceTier(a App, sess *state.Session, sub *state.Submission) string {
-	if value := sessionctx.EffectiveServiceTier(sess); strings.TrimSpace(value) != "" {
+func effectiveBindingServiceTier(a App, sess *conversation.Session, sub *state.Submission) string {
+	if value := conversation.EffectiveServiceTier(sess); strings.TrimSpace(value) != "" {
 		return strings.TrimSpace(value)
 	}
 	if binding := submissionBinding(a, sess, sub); binding != nil {
@@ -511,7 +519,7 @@ func effectiveBindingServiceTier(a App, sess *state.Session, sub *state.Submissi
 	return strings.TrimSpace(botProfileServiceTier(a))
 }
 
-func effectiveBindingMultiAgentMode(a App, sess *state.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveBindingMultiAgentMode(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadMultiAgentMode) != "" {
 		return strings.TrimSpace(sess.ActiveThreadMultiAgentMode)
 	}
@@ -521,7 +529,11 @@ func effectiveBindingMultiAgentMode(a App, sess *state.Session, sub *state.Submi
 	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.MultiAgentMode) != "" {
 		return strings.TrimSpace(profile.MultiAgentMode)
 	}
-	return sessionctx.EffectiveMultiAgentMode(sess, ws)
+	workspaceValue := ""
+	if ws != nil {
+		workspaceValue = ws.MultiAgentMode
+	}
+	return conversation.EffectiveMultiAgentMode(sess, workspaceValue)
 }
 
 func submissionBotProfile(a App) *state.BotProfile {
@@ -583,7 +595,7 @@ func configuredClaudeModel(a App) string {
 	return strings.TrimSpace(a.SubmissionQueueConfiguredClaudeModel())
 }
 
-func sessionModelOverride(sess *state.Session) string {
+func sessionModelOverride(sess *conversation.Session) string {
 	if sess == nil {
 		return ""
 	}
@@ -658,7 +670,7 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 				nextMode = a.SubmissionQueueConfiguredInflightMode()
 			}
 		}
-		if sessionctx.HasInFlightSubmission(sess) && !a.SubmissionQueueInflightAllowsAdditional(nextMode) {
+		if conversation.HasInFlightSubmission(sess) && !a.SubmissionQueueInflightAllowsAdditional(nextMode) {
 			slog.Debug("startNextSubmission skipped",
 				"session_key", sessionKey,
 				"has_session", true,
@@ -688,7 +700,7 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 				"error", err,
 			)
 			if err == nil {
-				updatedSess, updateErr := appState.UpdateSession(sessionKey, func(current *state.Session) {
+				updatedSess, updateErr := appState.UpdateSession(sessionKey, func(current *conversation.Session) {
 					if current == nil {
 						return
 					}
@@ -710,7 +722,7 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 				"session_key", sessionKey,
 				"submission_id", subID,
 			)
-			updatedSess, updateErr := appState.UpdateSession(sessionKey, func(current *state.Session) {
+			updatedSess, updateErr := appState.UpdateSession(sessionKey, func(current *conversation.Session) {
 				if current == nil {
 					return
 				}
@@ -720,7 +732,7 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 				return updateErr
 			}
 			a.SubmissionQueueLogSessionState("startNextSubmission after missing queued item", sessionKey, updatedSess)
-			if updatedSess != nil && !sessionctx.HasInFlightSubmission(updatedSess) && len(updatedSess.Queue) > 0 {
+			if updatedSess != nil && !conversation.HasInFlightSubmission(updatedSess) && len(updatedSess.Queue) > 0 {
 				continue
 			}
 			return nil
@@ -752,16 +764,16 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 // ShouldStartNextSubmissionAsync returns true when a session has queued
 // submissions and no in-flight work, meaning it is safe to start the next
 // submission asynchronously.
-func ShouldStartNextSubmissionAsync(sess *state.Session) bool {
+func ShouldStartNextSubmissionAsync(sess *conversation.Session) bool {
 	if sess == nil {
 		return false
 	}
-	return !sessionctx.HasInFlightSubmission(sess) && len(sess.Queue) > 0
+	return !conversation.HasInFlightSubmission(sess) && len(sess.Queue) > 0
 }
 
 // RefreshPendingStatus refreshes the session status based on queue state.
-func RefreshPendingStatus(sess *state.Session) {
-	if sess == nil || sessionctx.HasInFlightSubmission(sess) {
+func RefreshPendingStatus(sess *conversation.Session) {
+	if sess == nil || conversation.HasInFlightSubmission(sess) {
 		return
 	}
 	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
@@ -800,19 +812,19 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 	}
 	shouldStartNext := false
 	clearedThreadLineage := false
-	if sess, saveErr := appState.UpdateSession(sessionKey, func(sess *state.Session) {
+	if sess, saveErr := appState.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		if sess == nil {
 			return
 		}
 		if sub != nil {
-			sessionctx.RemoveActiveOperation(sess, sub.ID, "")
+			conversation.RemoveActiveOperation(sess, sub.ID, "")
 		}
 		if dropThreadLineage && strings.TrimSpace(threadID) != "" && strings.TrimSpace(sess.ActiveThreadID) == strings.TrimSpace(threadID) {
-			sessionctx.ClearThreadContext(sess)
-			sessionctx.ClearBackendThread(sess, "codex")
+			conversation.ClearThreadContext(sess)
+			conversation.ClearBackendThread(sess, "codex")
 			clearedThreadLineage = true
 		}
-		if !sessionctx.HasActiveOperations(sess) {
+		if !conversation.HasActiveOperations(sess) {
 			if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 				sess.Status = state.SessionStatusQueued.String()
 			} else {
@@ -917,7 +929,7 @@ func (s SubmissionQueueService) NextQueuedSessionKey(sessionKey string) string {
 	return ""
 }
 
-func (s SubmissionQueueService) hasAutoRetryWorkAhead(appState QueueAppStateProvider, sess *state.Session) bool {
+func (s SubmissionQueueService) hasAutoRetryWorkAhead(appState QueueAppStateProvider, sess *conversation.Session) bool {
 	if sess == nil {
 		return false
 	}
@@ -940,7 +952,7 @@ func (s SubmissionQueueService) hasAutoRetryWorkAhead(appState QueueAppStateProv
 	return autoRetry.HasBlockingAutoRetry(strings.TrimSpace(sess.Key))
 }
 
-func (s SubmissionQueueService) hasSerialBindingWorkAhead(appState QueueAppStateProvider, sess *state.Session) bool {
+func (s SubmissionQueueService) hasSerialBindingWorkAhead(appState QueueAppStateProvider, sess *conversation.Session) bool {
 	groupExecutionKey := serialGroupExecutionKey(sess)
 	if groupExecutionKey == "" {
 		return false
@@ -951,7 +963,7 @@ func (s SubmissionQueueService) hasSerialBindingWorkAhead(appState QueueAppState
 		if candidate == nil || strings.TrimSpace(candidate.Key) == currentKey || serialGroupExecutionKey(candidate) != groupExecutionKey {
 			continue
 		}
-		if sessionctx.HasInFlightSubmission(candidate) {
+		if conversation.HasInFlightSubmission(candidate) {
 			return true
 		}
 		candidateHead := queuedHeadSubmission(appState, candidate)
@@ -976,7 +988,7 @@ func nextQueuedSerialSessionKey(appState QueueAppStateProvider, groupExecutionKe
 		if sess == nil || serialGroupExecutionKey(sess) != groupExecutionKey {
 			continue
 		}
-		if sessionctx.HasInFlightSubmission(sess) {
+		if conversation.HasInFlightSubmission(sess) {
 			return ""
 		}
 		head := queuedHeadSubmission(appState, sess)
@@ -991,7 +1003,7 @@ func nextQueuedSerialSessionKey(appState QueueAppStateProvider, groupExecutionKe
 	return bestSessionKey
 }
 
-func serialGroupExecutionKey(sess *state.Session) string {
+func serialGroupExecutionKey(sess *conversation.Session) string {
 	if sess == nil || !strings.EqualFold(strings.TrimSpace(sess.ChatType), "group") {
 		return ""
 	}
@@ -1023,7 +1035,7 @@ func sessionGroupKeyParts(sessionKey string) (frontendID, chatID string, ok bool
 	return strings.TrimSpace(frontendID), strings.TrimSpace(chatID), true
 }
 
-func queuedHeadSubmission(appState QueueAppStateProvider, sess *state.Session) *state.Submission {
+func queuedHeadSubmission(appState QueueAppStateProvider, sess *conversation.Session) *state.Submission {
 	if sess == nil || len(sess.Queue) == 0 {
 		return nil
 	}
@@ -1054,13 +1066,13 @@ func submissionBefore(a, b *state.Submission) bool {
 
 // StartNextCodexSubmissionWithFailureNotice handles Codex-specific submission
 // startup: thread creation, turn start, and state binding.
-func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	if !sessionctx.CanResumeThreadForSubmission(sess, sub) {
+	if !(sub != nil && conversation.CanResumeThreadForWorkspace(sess, sub.WorkspaceID)) {
 		threadID = ""
-		sessionctx.ClearThreadContext(sess)
+		conversation.ClearThreadContext(sess)
 	}
 	if threadID != "" && !a.SubmissionQueueLiveThread().SessionHasLiveThread(sessionKey, threadID) {
 		slog.Warn("dropping non-live session thread before submission",
@@ -1070,7 +1082,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 			"workspace_id", sub.WorkspaceID,
 		)
 		threadID = ""
-		sessionctx.ClearThreadContext(sess)
+		conversation.ClearThreadContext(sess)
 	}
 	if resolver, ok := a.(modelConfigResolver); ok {
 		sub.ModelConfig = resolver.SubmissionQueueResolveModelConfig(sess, sub)
@@ -1140,17 +1152,17 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 			"thread_id", threadID,
 			"model", effectiveModel,
 		)
-		sessionctx.SetThreadContext(sess, sub.WorkspaceID, threadID, threadResp.Thread.Name, threadResp.Thread.Preview)
+		conversation.SetThreadContext(sess, sub.WorkspaceID, threadID, threadResp.Thread.Name, threadResp.Thread.Preview)
 		a.SubmissionQueueLiveThread().MarkSessionThreadLive(sessionKey, threadID)
 	}
 	if threadID != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
-		sessionctx.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
+		conversation.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	}
 	if threadID != "" {
 		a.SubmissionQueueLiveThread().MarkSessionThreadLive(sessionKey, threadID)
 	}
-	sessionctx.UpsertActiveOperation(sess, state.SessionActiveOperation{
-		Kind:         sessionctx.OpKindSubmission,
+	conversation.UpsertActiveOperation(sess, conversation.SessionActiveOperation{
+		Kind:         conversation.OpKindSubmission,
 		SubmissionID: sub.ID,
 		ThreadID:     threadID,
 	})
@@ -1217,8 +1229,8 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		"thread_id", threadID,
 		"turn_id", turnID,
 	)
-	sessionctx.UpsertActiveOperation(sess, state.SessionActiveOperation{
-		Kind:         sessionctx.OpKindSubmission,
+	conversation.UpsertActiveOperation(sess, conversation.SessionActiveOperation{
+		Kind:         conversation.OpKindSubmission,
 		SubmissionID: sub.ID,
 		ThreadID:     threadID,
 		TurnID:       turnID,
@@ -1259,7 +1271,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func recordLegacySessionRootTurnBinding(reply QueueReplyContinuationProvider, sess *state.Session, sub *state.Submission, sessionKey, threadID, turnID string) {
+func recordLegacySessionRootTurnBinding(reply QueueReplyContinuationProvider, sess *conversation.Session, sub *state.Submission, sessionKey, threadID, turnID string) {
 	if reply == nil || sess == nil || appcore.SubmissionHasSourceRootMessages(sub) {
 		return
 	}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
@@ -10,7 +11,6 @@ import (
 	appruntime "feidex/internal/app/runtime"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
-	"feidex/internal/state"
 )
 
 // ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ import (
 func newClaudeHistoryService(a *App) *claudesupport.HistoryService {
 	return serviceFor(a, "claudeHistoryService", func() *claudesupport.HistoryService {
 		return &claudesupport.HistoryService{
-			FetchClaudeSessionTurns: func(sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error) {
+			FetchClaudeSessionTurns: func(sessionKey string) (*conversation.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error) {
 				return fetchClaudeCurrentSessionTurns(a, sessionKey)
 			},
 			ThreadLabel:  appthreadmenu.SessionCurrentThreadLabel,
@@ -50,7 +50,7 @@ func renderClaudeHistoryDetailCard(a *App, sessionKey string, index int) (map[st
 // Fetch helper — stays in app/ since it uses app-internal aliases
 // ---------------------------------------------------------------------------
 
-func fetchClaudeCurrentSessionTurns(a *App, sessionKey string) (*state.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error) {
+func fetchClaudeCurrentSessionTurns(a *App, sessionKey string) (*conversation.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error) {
 	if a == nil || a.store == nil {
 		return nil, nil, nil, fmt.Errorf("store not initialized")
 	}
@@ -65,7 +65,7 @@ func fetchClaudeCurrentSessionTurns(a *App, sessionKey string) (*state.Session, 
 	if strings.TrimSpace(filePath) == "" {
 		return nil, nil, nil, fmt.Errorf("未找到 Claude session `%s` 的本地 transcript", strings.TrimSpace(sess.ActiveThreadID))
 	}
-	turns, err := claudesession.ReadHistoryTurns(filePath, sessionHasInFlightSubmission(sess))
+	turns, err := claudesession.ReadHistoryTurns(filePath, conversation.HasInFlightSubmission(sess))
 	if err != nil {
 		return nil, nil, nil, err
 	}

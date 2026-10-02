@@ -1,12 +1,12 @@
 package backend
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 	"time"
 
 	"feidex/internal/app/appcore"
 	applifecycle "feidex/internal/app/lifecycle"
-	appsessionctx "feidex/internal/app/sessionctx"
 	"feidex/internal/domain/interaction"
 	"feidex/internal/state"
 )
@@ -17,11 +17,11 @@ var Now = time.Now
 const sessionStatusCompacting = "compacting"
 
 // SessionHasActiveWork reports whether a session has active work.
-func SessionHasActiveWork(sess *state.Session) bool {
+func SessionHasActiveWork(sess *conversation.Session) bool {
 	if sess == nil {
 		return false
 	}
-	if appsessionctx.HasActiveOperations(sess) {
+	if conversation.HasActiveOperations(sess) {
 		return true
 	}
 	switch state.NormalizeSessionStatus(sess.Status) {

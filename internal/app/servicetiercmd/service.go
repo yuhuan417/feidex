@@ -3,6 +3,7 @@ package servicetiercmd
 import (
 	"context"
 	"errors"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
@@ -10,7 +11,6 @@ import (
 	appruntime "feidex/internal/app/runtime"
 	appthreadview "feidex/internal/app/threadview"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 const (
@@ -36,8 +36,8 @@ type App interface {
 }
 
 type AppStateProvider interface {
-	Session(key string) *state.Session
-	SaveSession(sess *state.Session) error
+	Session(key string) *conversation.Session
+	SaveSession(sess *conversation.Session) error
 }
 
 type Service struct {
@@ -112,7 +112,7 @@ func (s Service) RenderMenuCard(sessionKey string) map[string]any {
 	return s.app.Feishu().SimpleStatusCard("响应速度", "blue", s.app.MenuCardBody("menu.fast", body), buttons)
 }
 
-func (s Service) SetThreadServiceTier(sessionKey, threadID, serviceTier string) (*state.Session, error) {
+func (s Service) SetThreadServiceTier(sessionKey, threadID, serviceTier string) (*conversation.Session, error) {
 	stateProvider := s.app.ServiceTierAppState()
 	sess := stateProvider.Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {

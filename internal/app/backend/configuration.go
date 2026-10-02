@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -211,7 +211,7 @@ func normalizeClaudePermissionModeValue(value string) string {
 	}
 }
 
-func effectiveClaudePermissionMode(sess *state.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
+func effectiveClaudePermissionMode(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
 		return normalizeClaudePermissionModeValue(sess.ActiveClaudePermissionMode)
 	}
@@ -450,7 +450,7 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 
 // StatusCardBody returns the status card body text for the given session,
 // dispatching by backend.
-func (s ConfigurationService) StatusCardBody(sess *state.Session) string {
+func (s ConfigurationService) StatusCardBody(sess *conversation.Session) string {
 	switch appcore.ConfiguredBackend(s.App) {
 	case appruntime.BackendCodex:
 		return s.RenderCodexStatusBody(sess)
@@ -462,7 +462,7 @@ func (s ConfigurationService) StatusCardBody(sess *state.Session) string {
 }
 
 // RenderClaudeStatusBody renders the Claude status card body.
-func (s ConfigurationService) RenderClaudeStatusBody(sess *state.Session) string {
+func (s ConfigurationService) RenderClaudeStatusBody(sess *conversation.Session) string {
 	workspaceID := appcore.DefaultWorkspaceID(s.App)
 	conversationLabel := "-"
 	conversationID := "-"
@@ -503,7 +503,7 @@ func (s ConfigurationService) RenderClaudeStatusBody(sess *state.Session) string
 }
 
 // RenderCodexStatusBody renders the Codex status card body.
-func (s ConfigurationService) RenderCodexStatusBody(sess *state.Session) string {
+func (s ConfigurationService) RenderCodexStatusBody(sess *conversation.Session) string {
 	workspaceID := appcore.DefaultWorkspaceID(s.App)
 	conversationLabel := "-"
 	conversationID := "-"

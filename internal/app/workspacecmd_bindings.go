@@ -3,6 +3,7 @@ package app
 import (
 	"feidex/internal/app/appstate"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -29,9 +30,9 @@ func init() {
 
 func workspaceStateDeps(store *appstate.Store) appworkspacecmd.StateDeps {
 	return appworkspacecmd.StateDeps{
-		GetSession:    func(key string) *state.Session { return store.Session(key) },
-		Sessions:      func() []*state.Session { return store.Sessions() },
-		SaveSession:   func(sess *state.Session) error { return store.SaveSession(sess) },
+		GetSession:    func(key string) *conversation.Session { return store.Session(key) },
+		Sessions:      func() []*conversation.Session { return store.Sessions() },
+		SaveSession:   func(sess *conversation.Session) error { return store.SaveSession(sess) },
 		NextLocalID:   func(prefix string) (string, error) { return store.NextLocalID(prefix) },
 		Pending:       func(id string) *state.PendingRequest { return store.Pending(id) },
 		SavePending:   func(req *state.PendingRequest) error { return store.SavePending(req) },

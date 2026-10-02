@@ -4,6 +4,7 @@ import (
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"io"
@@ -32,7 +33,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 	}
 
 	a := &App{store: store}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
@@ -61,7 +62,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 	}
 
 	a := &App{store: store, codex: codexrpc.New(config.CodexConfig{}), cfg: testCodexConfig()}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
@@ -122,7 +123,7 @@ func TestHandleCommandWorkspaceUseRejectsRunningTurn(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             "default",
 		ChatID:                  "chat",
@@ -159,7 +160,7 @@ func TestHandleCommandWorkspaceUseClearsIdleThreadLineage(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             "default",
 		ChatID:                  "chat",
@@ -167,7 +168,7 @@ func TestHandleCommandWorkspaceUseClearsIdleThreadLineage(t *testing.T) {
 		OwnerUserID:             "user",
 		ActiveThreadID:          "thread-old",
 		ActiveThreadWorkspaceID: "default",
-		ActiveThreadCollaborationMode: &state.SessionCollaborationMode{
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
 			Mode:            "plan",
 			Model:           "gpt-5.4",
 			ReasoningEffort: "high",
@@ -521,7 +522,7 @@ func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
 }
 
 func TestStartupReadyChatIDsDeduplicatesP2PChats(t *testing.T) {
-	ids := startupReadyChatIDs([]*state.Session{
+	ids := startupReadyChatIDs([]*conversation.Session{
 		{ChatID: "chat-b", ChatType: "p2p"},
 		{ChatID: "chat-a", ChatType: "p2p"},
 		{ChatID: "chat-b", ChatType: "p2p"},
@@ -547,7 +548,7 @@ func TestCommandFastTogglesAndSupportsConfigCard(t *testing.T) {
 	}
 	ff := &fakeFeishuClient{}
 	a := &App{store: store, feishu: ff}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "feishu:chat:chat",
 		WorkspaceID:             "default",
 		ActiveThreadID:          "thread-1",
@@ -586,7 +587,7 @@ func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
 	a := &App{store: store, codex: fc, feishu: ff, cfg: testCodexConfig()}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
@@ -626,7 +627,7 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 	}
 	fc := &fakeCodexClient{callErr: context.DeadlineExceeded}
 	a := &App{store: store, codex: fc, feishu: &fakeFeishuClient{}, cfg: testCodexConfig()}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
 		ActiveThreadID: "thread-1",
@@ -687,7 +688,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	ff := &fakeFeishuClient{}
 	cfg := testCodexConfig()
 	a := &App{store: store, codex: fc, feishu: ff, cfg: cfg}
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        "feishu:chat:chat",
 		WorkspaceID:                "default",
 		ActiveThreadID:             "thread-1",
@@ -789,7 +790,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			a.claude = claude
 
 			sessionKey := "feishu:chat:chat"
-			if err := a.store.UpsertSession(&state.Session{
+			if err := a.store.UpsertSession(&conversation.Session{
 				Key:                     sessionKey,
 				WorkspaceID:             a.cfg.Workspaces[0].ID,
 				ActiveThreadID:          "claude-parent",
@@ -837,7 +838,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	a.claude = claude
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "claude-parent",

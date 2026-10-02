@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
 
 	"context"
@@ -53,7 +54,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "dup"})
 
 	sessionKey := "feishu:chat:chat"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
 		ChatID:         "chat",
@@ -164,7 +165,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 		t.Fatalf("nonZero(all zero) = %d, want 0", got)
 	}
 	sessionKey := "sess-err"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: "missing",
 		ChatID:      "chat-1",
@@ -182,7 +183,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	}
 
 	sessionKey = "sess-resume"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             "default",
 		ChatID:                  "chat-1",
@@ -224,7 +225,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	}
 
 	sessionKey = "sess-timeout"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: "default",
 		ChatID:      "chat-1",
@@ -260,7 +261,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 func TestStartNextSubmissionFailureClearsBrokenActiveStateAndAdvancesQueue(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sessionKey := "sess-failed-start"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: "default",
 		ChatID:      "chat-1",
@@ -378,7 +379,7 @@ func TestStartNextSubmissionFailureClearsBrokenActiveStateAndAdvancesQueue(t *te
 func TestStartNextSubmissionNormalizesIdleAfterMissingQueuedSubmission(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sessionKey := "sess-ghost-only"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",
@@ -402,14 +403,14 @@ func TestStartNextSubmissionNormalizesIdleAfterMissingQueuedSubmission(t *testin
 func TestStartNextSubmissionClearsCodexThreadLineageAfterRuntimeFailure(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-start-failure-runtime"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",
 		ChatType:    "group",
 		Status:      "queued",
 		Queue:       []string{"sub-1"},
-		BackendThreads: map[string]state.SessionBackendThread{
+		BackendThreads: map[string]conversation.SessionBackendThread{
 			backendCodex: {
 				ThreadID:    "thread-stale",
 				WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -464,7 +465,7 @@ func TestStartNextSubmissionClearsCodexThreadLineageAfterRuntimeFailure(t *testi
 func TestStartNextSubmissionSkipsMissingQueuedSubmissionAndStartsNext(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-ghost-then-real"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",

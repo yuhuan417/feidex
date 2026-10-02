@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"testing"
 
 	"feidex/internal/state"
@@ -12,7 +13,7 @@ func TestCanonicalizeStoredSessionKeysMigratesLegacyTypedKeys(t *testing.T) {
 
 	legacyKey := "feishu:frontend:bot-a:group:chat-1:root:root-1"
 	canonicalKey := "feishu:frontend:bot-a:chat:chat-1"
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     legacyKey,
 		WorkspaceID:             "default",
 		ChatID:                  "chat-1",

@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"io"
 	"net"
 	"net/http"
@@ -17,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/state"
 )
@@ -46,8 +46,8 @@ type FeishuClient interface {
 }
 
 type StateProvider interface {
-	GetSession(string) *state.Session
-	AllSessions() []*state.Session
+	GetSession(string) *conversation.Session
+	AllSessions() []*conversation.Session
 	GetSubmission(string) *state.Submission
 }
 
@@ -423,11 +423,11 @@ func (s *Service) resolveOnlyActiveToolContext() *toolContext {
 	return match
 }
 
-func (s *Service) resolveToolContextFromSessionSnapshot(sess *state.Session) *toolContext {
+func (s *Service) resolveToolContextFromSessionSnapshot(sess *conversation.Session) *toolContext {
 	if s == nil || s.app == nil || s.app.State() == nil || sess == nil {
 		return nil
 	}
-	sessionctx.EnsureActiveOperations(sess)
+	conversation.EnsureActiveOperations(sess)
 	var match *toolContext
 	for _, op := range sess.ActiveOperations {
 		submissionID := strings.TrimSpace(op.SubmissionID)

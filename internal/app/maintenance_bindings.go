@@ -3,6 +3,7 @@ package app
 import (
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 )
@@ -62,29 +63,29 @@ func (a *App) MaintenanceSessionBelongsToFrontend(sessionKey string) bool {
 	return sessionBelongsToFrontend(a, sessionKey)
 }
 
-func (a *App) MaintenanceClearSessionThreadContext(sess *state.Session) {
-	clearSessionThreadContext(sess)
+func (a *App) MaintenanceClearSessionThreadContext(sess *conversation.Session) {
+	conversation.ClearThreadContext(sess)
 }
 
-func (a *App) MaintenanceResetSessionActiveOperations(sess *state.Session) {
-	sessionResetActiveOperations(sess)
+func (a *App) MaintenanceResetSessionActiveOperations(sess *conversation.Session) {
+	conversation.ResetActiveOperations(sess)
 }
 
-func (a *App) MaintenanceSessionHasInFlightSubmission(sess *state.Session) bool {
-	return sessionHasInFlightSubmission(sess)
+func (a *App) MaintenanceSessionHasInFlightSubmission(sess *conversation.Session) bool {
+	return conversation.HasInFlightSubmission(sess)
 }
 
 func (a *App) MaintenanceClearSessionLiveThread(sessionKey string) {
 	clearSessionLiveThread(a, sessionKey)
 }
 
-func (a *App) MaintenanceEffectiveModel(sess *state.Session) string {
+func (a *App) MaintenanceEffectiveModel(sess *conversation.Session) string {
 	if a == nil {
 		return ""
 	}
 	return modelConfigSnapshot(a, sess, configuredBackend(a)).Model
 }
 
-func (a *App) MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *state.Session, ws *config.Workspace, effectiveModel string) {
+func (a *App) MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *conversation.Session, ws *config.Workspace, effectiveModel string) {
 	conversationBackend(a).RecoverStartupConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
 }

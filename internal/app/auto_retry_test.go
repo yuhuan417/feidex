@@ -3,6 +3,7 @@ package app
 import (
 	appautoretry "feidex/internal/app/autoretry"
 	appthreadmenu "feidex/internal/app/threadmenu"
+	"feidex/internal/domain/conversation"
 
 	"context"
 	"errors"
@@ -39,9 +40,9 @@ type scheduledRetry struct {
 	task  *fakeDelayedTask
 }
 
-func seedAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string) *state.Session {
+func seedAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string) *conversation.Session {
 	t.Helper()
-	sess := &state.Session{
+	sess := &conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             defaultWorkspaceID(a),
 		ActiveThreadID:          threadID,
@@ -165,7 +166,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 
 	sessionKey := "feishu:frontend:default:chat:chat-1"
 	threadID := "thread-retry-queue-1"
-	sess := &state.Session{
+	sess := &conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             defaultWorkspaceID(a),
 		ActiveThreadID:          threadID,
@@ -193,7 +194,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	if err := a.State().QueueSubmission(sessionKey, queuedID); err != nil {
 		t.Fatalf("QueueSubmission(later) error = %v", err)
 	}
-	updatedSess, err := a.State().UpdateSession(sessionKey, func(sess *state.Session) {
+	updatedSess, err := a.State().UpdateSession(sessionKey, func(sess *conversation.Session) {
 		sess.Status = state.SessionStatusQueued.String()
 	})
 	if err != nil {

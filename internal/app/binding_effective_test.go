@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"testing"
 
 	"feidex/internal/config"
@@ -13,7 +14,7 @@ func TestEffectiveModelUsesSessionBindingThenBotDefault(t *testing.T) {
 	a.cfg.Codex.Model = "gpt-5-bot"
 	a.cfg.Claude.Model = "sonnet-bot"
 	ws := &config.Workspace{ID: "default", Cwd: t.TempDir()}
-	sess := &state.Session{
+	sess := &conversation.Session{
 		Key:         "feishu:frontend:bot-a:chat:chat-model-priority",
 		BindingID:   "binding-model-priority",
 		WorkspaceID: "default",

@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 
@@ -156,7 +157,7 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 func seedStartingSubmission(t *testing.T, a *App, sessionKey, submissionID, threadID, kind string) *state.Submission {
 	t.Helper()
 
-	if err := a.store.UpsertSession(&state.Session{
+	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
 		ActiveThreadID:     threadID,

@@ -1,11 +1,11 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"sync"
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/replycontinuation"
-	"feidex/internal/app/sessionctx"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -36,14 +36,14 @@ func newReplyContinuationService(a *App) replyContinuationService {
 		svc := replycontinuation.NewService(replyContinuationAppAdapter{app: a})
 
 		// Wire callback function fields that need *App internals.
-		svc.GetSession = func(key string) *state.Session {
+		svc.GetSession = func(key string) *conversation.Session {
 			st := a.State()
 			if st == nil {
 				return nil
 			}
 			return st.Session(key)
 		}
-		svc.SaveSession = func(sess *state.Session) error {
+		svc.SaveSession = func(sess *conversation.Session) error {
 			st := a.State()
 			if st == nil {
 				return nil
@@ -71,16 +71,16 @@ func newReplyContinuationService(a *App) replyContinuationService {
 			}
 			return st.CreateSubmission(sub)
 		}
-		svc.HasInFlightSubmission = func(sess *state.Session) bool {
-			return sessionctx.HasInFlightSubmission(sess)
+		svc.HasInFlightSubmission = func(sess *conversation.Session) bool {
+			return conversation.HasInFlightSubmission(sess)
 		}
-		svc.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+		svc.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 			return conversationBackend(a).TryReplyContinuation(msg, link, sessionKey, sess)
 		}
-		svc.StartSubmission = func(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+		svc.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 			return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 		}
-		svc.StartSteerSubmission = func(sessionKey string, sess *state.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+		svc.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
 			return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
 		}
 		svc.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
@@ -103,7 +103,7 @@ func (s replyContinuationService) pendingInputSessionKey(msg *feishu.InboundMess
 	return s.inner.PendingInputSessionKey(msg)
 }
 
-func (s replyContinuationService) collectPendingStagedImages(targetSessionKey, bucketSessionKey string) []state.SessionStagedImage {
+func (s replyContinuationService) collectPendingStagedImages(targetSessionKey, bucketSessionKey string) []conversation.SessionStagedImage {
 	return s.inner.CollectPendingStagedImages(targetSessionKey, bucketSessionKey)
 }
 
@@ -115,7 +115,7 @@ func (s replyContinuationService) trySteerInboundReply(msg *feishu.InboundMessag
 	return s.inner.TrySteerInboundReply(msg, link)
 }
 
-func (s replyContinuationService) tryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *state.Session) (bool, error) {
+func (s replyContinuationService) tryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 	return s.inner.TryClaudeReplyContinuation(msg, link, sessionKey, sess)
 }
 

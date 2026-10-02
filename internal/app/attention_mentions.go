@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	"feidex/internal/app/apputil"
@@ -25,9 +26,9 @@ func shouldMentionOnTurnStop(a *App, sub *state.Submission, turnID string) bool 
 	}
 	cp := *sess
 	cp.Queue = append([]string(nil), sess.Queue...)
-	cp.StagedImages = append([]state.SessionStagedImage(nil), sess.StagedImages...)
-	cp.ActiveOperations = append([]state.SessionActiveOperation(nil), sess.ActiveOperations...)
-	sessionRemoveActiveOperation(&cp, sub.ID, turnID)
+	cp.StagedImages = append([]conversation.SessionStagedImage(nil), sess.StagedImages...)
+	cp.ActiveOperations = append([]conversation.SessionActiveOperation(nil), sess.ActiveOperations...)
+	conversation.RemoveActiveOperation(&cp, sub.ID, turnID)
 	if sessionHasActiveWork(&cp) {
 		return false
 	}
