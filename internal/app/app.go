@@ -71,6 +71,8 @@ type App struct {
 
 	serverRequestSvc *serverrequest.Service
 	trackers         appTrackers
+	dispatcher       *application.Dispatcher
+	effectRunner     *frontendruntime.EffectRunner
 }
 
 func (a *App) configMutex() *sync.RWMutex {
@@ -144,6 +146,10 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 			groupAnnouncements: newGroupAnnouncementTracker(),
 		},
 	}
+	dispatcher := newInputDispatcher(app)
+	app.dispatcher = &dispatcher
+	effectRunner := newEffectRunner(app)
+	app.effectRunner = &effectRunner
 	if err := canonicalizeStoredSessionKeys(app); err != nil {
 		return nil, err
 	}

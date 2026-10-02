@@ -46,7 +46,11 @@ func newInputDispatcher(a *App) application.Dispatcher {
 	}
 }
 func dispatchInput(a *App, input application.Input) (application.Result, error) {
-	result, err := newInputDispatcher(a).Dispatch(a.Context(), input)
+	dispatcher := newInputDispatcher(a)
+	if a != nil && a.dispatcher != nil {
+		dispatcher = *a.dispatcher
+	}
+	result, err := dispatcher.Dispatch(a.Context(), input)
 	if err != nil {
 		return result, err
 	}
@@ -72,6 +76,9 @@ func dispatchCodexRequest(a *App, req codexrpc.RequestEnvelope) {
 }
 
 func newEffectRunner(a *App) frontendruntime.EffectRunner {
+	if a != nil && a.effectRunner != nil {
+		return *a.effectRunner
+	}
 	return frontendruntime.EffectRunner{
 		Send: func(ctx context.Context, e application.SendMessage) error {
 			if e.ReplyMessageID != "" {
