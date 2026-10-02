@@ -34,3 +34,15 @@ func (s *Submission) Finalize(status string) {
 	s.SetStatus(status)
 	s.Finalized = true
 }
+
+func (s *Submission) HasSourceRootMessages() bool {
+	if s == nil {
+		return false
+	}
+	for _, id := range s.SourceRootMessageIDs {
+		if strings.TrimSpace(id) != "" {
+			return true
+		}
+	}
+	return false
+}

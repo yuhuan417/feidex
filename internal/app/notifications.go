@@ -17,7 +17,7 @@ func onThreadTokenUsageUpdated(a *App, threadID, turnID string, usage codexrpc.T
 }
 
 func onTurnStartedNotification(a *App, threadID, turnID string) {
-	newTurnLifecycleService(a).onTurnStartedNotification(threadID, turnID)
+	newTurnLifecycleService(a).OnTurnStartedNotification(threadID, turnID)
 }
 
 func handleServerRequest(a *App, req codexrpc.RequestEnvelope) {
@@ -50,7 +50,7 @@ func finishTurn(a *App, threadID, turnID, status string) {
 	// before the async StartNextSubmissionAsync is launched.  This
 	// prevents a race where the newly started submission (same thread)
 	// was incorrectly finalized by a post-hoc steer scan.
-	newTurnLifecycleService(a).finishTurn(threadID, turnID, status)
+	newTurnLifecycleService(a).FinishTurn(threadID, turnID, status)
 }
 
 // finishSteerSubmission finalizes a steer submission that was processed as

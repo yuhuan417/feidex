@@ -5,6 +5,7 @@ package turnstream
 
 import (
 	"context"
+	applicationturn "feidex/internal/application/turn"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"sync"
@@ -175,18 +176,7 @@ type Stream struct {
 }
 
 // FlushResult captures the result of flushing a turn stream.
-type FlushResult struct {
-	SawFinal                bool
-	SawPlanItem             bool
-	PlanCompleted           bool
-	PlanMarkdown            string
-	PlanMessageID           string
-	ShouldUsePlanExitPrompt bool
-	LastError               string
-	WorkingMessageID        string
-	FinalText               string
-	FinalReuseMessageID     string
-}
+type FlushResult = applicationturn.StreamSummary
 
 // ---------------------------------------------------------------------------
 // Service — manages turn streams

@@ -15,12 +15,12 @@ import (
 	"time"
 
 	appfeishuwrap "feidex/internal/app/feishuwrap"
-	"feidex/internal/app/turnbinding"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/release"
+	"feidex/internal/runtime/turnbinding"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"

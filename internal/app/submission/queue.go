@@ -1251,7 +1251,7 @@ func firstNonEmpty(values ...string) string {
 }
 
 func recordLegacySessionRootTurnBinding(reply QueueReplyContinuationProvider, sess *conversation.Session, sub *domainsubmission.Submission, sessionKey, threadID, turnID string) {
-	if reply == nil || sess == nil || appcore.SubmissionHasSourceRootMessages(sub) {
+	if reply == nil || sess == nil || sub.HasSourceRootMessages() {
 		return
 	}
 	reply.RecordRootTurnBinding(sess.RootMessageID, sessionKey, threadID, turnID)

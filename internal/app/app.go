@@ -22,8 +22,8 @@ import (
 	"feidex/internal/app/serverrequest"
 
 	appskillscmd "feidex/internal/app/skillscmd"
-	"feidex/internal/app/turnbinding"
 	"feidex/internal/app/turnitem"
+	"feidex/internal/runtime/turnbinding"
 
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"

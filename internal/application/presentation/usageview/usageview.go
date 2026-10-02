@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/app/apputil"
-	"feidex/internal/codexrpc"
+	domainturn "feidex/internal/domain/turn"
+	"feidex/internal/textutil"
 )
 
 // FormatUsageInt formats an int64 value as a decimal string.
@@ -33,7 +33,7 @@ func FormatUsageCost(value float64) string {
 }
 
 // FormatTurnUsageLine formats a single line of token usage for a turn.
-func FormatTurnUsageLine(usage codexrpc.TokenUsageBreakdown) string {
+func FormatTurnUsageLine(usage domainturn.TokenUsageBreakdown) string {
 	return fmt.Sprintf(
 		"token: input %s | cache %s (%s) | output %s | reasoning %s",
 		FormatUsageInt(usage.InputTokens),
@@ -117,10 +117,10 @@ func FormatContextUsedLine(percentage float64) string {
 
 // RenderThreadUsageCardBody renders the markdown body for a Codex thread
 // usage card. contextLine is optional and appended if non-empty.
-func RenderThreadUsageCardBody(threadLabel, threadID string, usage codexrpc.ThreadTokenUsage, contextLine string) string {
+func RenderThreadUsageCardBody(threadLabel, threadID string, usage domainturn.ThreadTokenUsage, contextLine string) string {
 	lines := []string{
-		"当前线程: " + apputil.FirstNonEmpty(strings.TrimSpace(threadLabel), "-"),
-		"thread: `" + apputil.FirstNonEmpty(strings.TrimSpace(threadID), "-") + "`",
+		"当前线程: " + textutil.FirstNonEmpty(strings.TrimSpace(threadLabel), "-"),
+		"thread: `" + textutil.FirstNonEmpty(strings.TrimSpace(threadID), "-") + "`",
 		"",
 		"累计 token usage (`total`):",
 		"- total: `" + FormatUsageInt(usage.Total.TotalTokens) + "`",

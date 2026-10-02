@@ -688,3 +688,4 @@
 - 领域测试覆盖 backend lineage 隔离、活动操作合并/移除、workspace 恢复匹配和运行中 workspace 切换保留 lineage；原有 app 状态机契约测试继续运行。
 - submission 的状态枚举和 `MarkRunning`/`Finalize` 转换迁入 `internal/domain/submission`；未改变 SM-03、SM-04、SM-09～SM-11、SM-14、SM-22～SM-26 的协议终点，尤其没有把用户回复成功当作 resolved。
 - conversation queue 的 `Enqueue`/`Dequeue`/`RefreshPendingStatus` 迁入 domain；active turn 存在时仍禁止启动下一条 submission，未改变 turn started/completed 和 server-request resolve 的顺序。
+- turn lifecycle 编排迁入 `internal/application/turn` 后核对 SM-03、SM-04、SM-07～SM-11、SM-14、SM-22～SM-26：`turn/started`、`turn/completed`、review response turn、goal continuation、standalone compact 和 `serverRequest/resolved` 的 owner 与终态未改变。usage 仅做协议到 domain 的字段转换。

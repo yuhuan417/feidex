@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	appturnlifecycle "feidex/internal/app/turnlifecycle"
+	appturnlifecycle "feidex/internal/application/turn"
 
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/state"

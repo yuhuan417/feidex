@@ -24,7 +24,7 @@ func (s runtimeStateService) noteTurnItemStartedPayload(threadID, turnID string,
 	if s.app == nil || (item.Raw == nil && item.ID == "" && item.Type == "") {
 		return
 	}
-	newTurnLifecycleService(s.app).bindPendingSubmissionTurn(threadID, turnID, true)
+	newTurnLifecycleService(s.app).BindPendingSubmissionTurn(threadID, turnID, true)
 	itemID := strings.TrimSpace(item.EffectiveID(""))
 	key := turnitem.StateKey(turnID, itemID)
 	if key == "" {

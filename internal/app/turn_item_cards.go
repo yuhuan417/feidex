@@ -4,6 +4,7 @@ import (
 	"context"
 	domainsubmission "feidex/internal/domain/submission"
 
+	"feidex/internal/app/apputil"
 	appdelivery "feidex/internal/app/delivery"
 	"feidex/internal/app/quietmode"
 	"feidex/internal/app/turnitem"
@@ -175,4 +176,9 @@ func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *domain
 	}
 	meta, body := turnitem.CompactTurnItemCardContent(payload)
 	return cardRendererForApp(s.app).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app, sub, payload.Title), payload.Color, meta, body, nil)
+}
+
+// SendTerminalCard executes the turn use case's semantic terminal effect.
+func (s outboundCardService) SendTerminalCard(ctx context.Context, sub *domainsubmission.Submission, text, attentionUserID, reuseMessageID string) {
+	s.ReplaceTurnEventCardWithReuse(ctx, sub, "任务状态", "grey", apputil.PrependAttentionMentionMarkdown(text, attentionUserID), "turn_terminal", "", reuseMessageID)
 }

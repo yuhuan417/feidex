@@ -2,6 +2,26 @@ package conversation
 
 import "slices"
 
+// RefreshActiveStatus derives status after removing an active operation.
+// A remaining operation keeps the session active; queued and staged input
+// are considered only after all active operations have drained.
+func RefreshActiveStatus(sess *Session) {
+	if sess == nil {
+		return
+	}
+	if HasActiveOperations(sess) {
+		sess.Status = SessionStatusTurnStarting.String()
+		for _, op := range sess.ActiveOperations {
+			if op.TurnID != "" {
+				sess.Status = SessionStatusTurnInProgress.String()
+				break
+			}
+		}
+		return
+	}
+	RefreshPendingStatus(sess)
+}
+
 // Enqueue adds an input once while preserving arrival order.
 func Enqueue(sess *Session, submissionID string) {
 	if sess == nil || slices.Contains(sess.Queue, submissionID) {

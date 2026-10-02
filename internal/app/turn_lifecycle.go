@@ -1,29 +1,18 @@
 package app
 
 import (
-	appturnlifecycle "feidex/internal/app/turnlifecycle"
+	"feidex/internal/app/autoretry"
+	"feidex/internal/app/maintenance"
+	applicationturn "feidex/internal/application/turn"
 )
 
-// turnLifecycleService wraps the exported turnlifecycle.Service to preserve
-// the lowercase method names used throughout app/.
-type turnLifecycleService struct {
-	inner appturnlifecycle.Service
-}
-
-func newTurnLifecycleService(app *App) *turnLifecycleService {
-	return serviceFor(app, "turnLifecycleService", func() *turnLifecycleService {
-		return &turnLifecycleService{inner: appturnlifecycle.NewService(app)}
+func newTurnLifecycleService(app *App) applicationturn.Service {
+	return applicationturn.NewService(applicationturn.Dependencies{
+		State: app.State(), Bindings: newRuntimeStateService(app),
+		Replies: newReplyContinuationService(app), Streams: newTurnStreamService(app),
+		Reactions: newPendingQueueService(app), Cards: newOutboundCardService(app),
+		Queue: newSubmissionQueueServiceFromApp(app), Retry: autoretry.NewService(app),
+		Cleanup: maintenance.NewRuntimeMaintenanceService(app),
+		Runtime: app, Continuations: app, Delivery: app, Diagnostics: app,
 	})
-}
-
-func (w *turnLifecycleService) bindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
-	return w.inner.BindPendingSubmissionTurn(threadID, turnID, allowReview)
-}
-
-func (w *turnLifecycleService) onTurnStartedNotification(threadID, turnID string) {
-	w.inner.OnTurnStartedNotification(threadID, turnID)
-}
-
-func (w *turnLifecycleService) finishTurn(threadID, turnID, status string) {
-	w.inner.FinishTurn(threadID, turnID, status)
 }

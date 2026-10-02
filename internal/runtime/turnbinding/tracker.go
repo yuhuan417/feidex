@@ -2,8 +2,7 @@
 // submissions. It tracks pending bindings, records token usage, and produces
 // turn-final metadata lines for display.
 //
-// Extracted from internal/app/turn_binding.go so that the app god package
-// delegates to a focused sub-package.
+// Runtime owns synchronization; turn domain owns binding identity and time.
 package turnbinding
 
 import (
@@ -12,18 +11,13 @@ import (
 	"sync"
 	"time"
 
-	appusageview "feidex/internal/app/usageview"
-	"feidex/internal/codexrpc"
-	"feidex/internal/state"
+	domainturn "feidex/internal/domain/turn"
 )
 
 // Binding records the association between a turn, thread, and submission.
 type Binding struct {
-	SessionKey             string
-	SubmissionID           string
-	ThreadID               string
-	StartedAt              time.Time
-	LastUsage              codexrpc.TokenUsageBreakdown
+	domainturn.Binding
+	LastUsage              domainturn.TokenUsageBreakdown
 	HasLastUsage           bool
 	ContextUsagePercent    float64
 	HasContextUsagePercent bool
@@ -46,28 +40,29 @@ type Tracker struct {
 	mu          sync.Mutex
 	Bindings    map[string]Binding
 	Pending     map[string][]Binding
-	ThreadUsage map[string]codexrpc.ThreadTokenUsage
+	ThreadUsage map[string]domainturn.ThreadTokenUsage
 	ClaudeUsage map[string]ClaudeThreadUsageSnapshot
 
 	// store is used to look up submissions by ID. It is set at construction
 	// time and must not be nil.
-	store *state.Store
+	store SubmissionRepository
 }
 
 // NewTracker creates a new Tracker. The store is used for submission lookups.
-func NewTracker(store *state.Store) *Tracker {
+func NewTracker(store SubmissionRepository) *Tracker {
 	return &Tracker{
 		Bindings:    map[string]Binding{},
 		Pending:     map[string][]Binding{},
-		ThreadUsage: map[string]codexrpc.ThreadTokenUsage{},
+		ThreadUsage: map[string]domainturn.ThreadTokenUsage{},
 		ClaudeUsage: map[string]ClaudeThreadUsageSnapshot{},
 		store:       store,
 	}
 }
 
-// Store returns the underlying state store.
-func (t *Tracker) Store() *state.Store {
-	return t.store
+// SubmissionRepository is owned by the runtime consumer; no concrete storage
+// implementation enters the tracker.
+type SubmissionRepository interface {
+	GetSubmission(id string) *domainsubmission.Submission
 }
 
 // submission looks up a submission by ID from the store.
@@ -98,11 +93,7 @@ func (t *Tracker) NotePendingTurnBinding(threadID, sessionKey, submissionID stri
 			return
 		}
 	}
-	t.Pending[threadID] = append(t.Pending[threadID], Binding{
-		ThreadID:     threadID,
-		SessionKey:   strings.TrimSpace(sessionKey),
-		SubmissionID: submissionID,
-	})
+	t.Pending[threadID] = append(t.Pending[threadID], Binding{Binding: domainturn.NewBinding(threadID, sessionKey, submissionID)})
 }
 
 // PendingSubmissionForThread returns the session key and submission for the
@@ -192,11 +183,7 @@ func (t *Tracker) BindTurnSubmission(threadID, turnID, sessionKey, submissionID 
 	if t.Bindings == nil {
 		t.Bindings = map[string]Binding{}
 	}
-	t.Bindings[turnID] = Binding{
-		ThreadID:     strings.TrimSpace(threadID),
-		SessionKey:   strings.TrimSpace(sessionKey),
-		SubmissionID: strings.TrimSpace(submissionID),
-	}
+	t.Bindings[turnID] = Binding{Binding: domainturn.NewBinding(threadID, sessionKey, submissionID)}
 }
 
 // RebindTurnThreadID updates the thread ID for an existing turn binding.
@@ -270,15 +257,13 @@ func (t *Tracker) MarkTurnStartedAt(turnID string, startedAt time.Time) {
 	if !ok {
 		return
 	}
-	if binding.StartedAt.IsZero() {
-		binding.StartedAt = startedAt
-		t.Bindings[turnID] = binding
-	}
+	binding.MarkStarted(startedAt)
+	t.Bindings[turnID] = binding
 }
 
 // RecordTurnTokenUsage records token usage for a thread and optionally
 // associates it with a turn binding.
-func (t *Tracker) RecordTurnTokenUsage(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
+func (t *Tracker) RecordTurnTokenUsage(threadID, turnID string, usage domainturn.ThreadTokenUsage) {
 	if t == nil {
 		return
 	}
@@ -287,7 +272,7 @@ func (t *Tracker) RecordTurnTokenUsage(threadID, turnID string, usage codexrpc.T
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.ThreadUsage == nil {
-		t.ThreadUsage = map[string]codexrpc.ThreadTokenUsage{}
+		t.ThreadUsage = map[string]domainturn.ThreadTokenUsage{}
 	}
 	if threadID != "" {
 		t.ThreadUsage[threadID] = usage
@@ -324,65 +309,25 @@ func (t *Tracker) RecordTurnContextUsagePercent(turnID string, percentage float6
 	t.Bindings[turnID] = binding
 }
 
-// ThreadUsageFunc is a callback that returns the thread-level token usage for
-// a given thread ID. It is used by TurnFinalMetadata to look up context window
-// information when the binding does not carry its own context usage percentage.
-type ThreadUsageFunc func(threadID string) (codexrpc.ThreadTokenUsage, bool)
-
-// TurnFinalMetadata computes the usage, context, and elapsed time lines for a
-// completed turn. The threadUsageFn callback is called with the binding's
-// thread ID to look up thread-level token usage when needed.
-func (t *Tracker) TurnFinalMetadata(turnID string, completedAt time.Time, threadUsageFn ThreadUsageFunc) (usageLine, contextLine, elapsedLine string) {
+// TurnMetadata returns an immutable snapshot for presentation to format.
+func (t *Tracker) TurnMetadata(turnID string) (Binding, bool) {
 	if t == nil {
-		return "", "", ""
-	}
-	turnID = strings.TrimSpace(turnID)
-	if turnID == "" {
-		return "", "", ""
+		return Binding{}, false
 	}
 	t.mu.Lock()
-	binding, ok := t.Bindings[turnID]
-	t.mu.Unlock()
-	if ok && binding.HasLastUsage {
-		usageLine = appusageview.FormatTurnUsageLine(binding.LastUsage)
-	}
-	if ok {
-		if binding.HasContextUsagePercent {
-			contextLine = appusageview.FormatContextUsedLine(binding.ContextUsagePercent)
-		} else if threadUsageFn != nil {
-			if usage, found := threadUsageFn(binding.ThreadID); found && usage.ModelContextWindow != nil {
-				contextLine = appusageview.FormatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
-			}
-		}
-	}
-	if ok && !binding.StartedAt.IsZero() && !completedAt.IsZero() {
-		elapsedLine = appusageview.FormatTurnElapsedLine(completedAt.Sub(binding.StartedAt))
-	}
-	return usageLine, contextLine, elapsedLine
-}
-
-// TurnFinalFooterLines returns the non-empty context and elapsed lines for a
-// completed turn, suitable for rendering in a card footer.
-func (t *Tracker) TurnFinalFooterLines(turnID string, completedAt time.Time, threadUsageFn ThreadUsageFunc) []string {
-	_, contextLine, elapsedLine := t.TurnFinalMetadata(turnID, completedAt, threadUsageFn)
-	lines := make([]string, 0, 2)
-	for _, line := range []string{contextLine, elapsedLine} {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			lines = append(lines, line)
-		}
-	}
-	return lines
+	defer t.mu.Unlock()
+	binding, ok := t.Bindings[strings.TrimSpace(turnID)]
+	return binding, ok
 }
 
 // CurrentThreadUsage returns the recorded token usage for a thread.
-func (t *Tracker) CurrentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {
+func (t *Tracker) CurrentThreadUsage(threadID string) (domainturn.ThreadTokenUsage, bool) {
 	if t == nil {
-		return codexrpc.ThreadTokenUsage{}, false
+		return domainturn.ThreadTokenUsage{}, false
 	}
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
-		return codexrpc.ThreadTokenUsage{}, false
+		return domainturn.ThreadTokenUsage{}, false
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()

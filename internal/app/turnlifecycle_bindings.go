@@ -4,57 +4,18 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
-	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/domain/conversation"
 
-	appmaintenance "feidex/internal/app/maintenance"
-
-	appturnlifecycle "feidex/internal/app/turnlifecycle"
+	appturnlifecycle "feidex/internal/application/turn"
 )
 
 // ---------------------------------------------------------------------------
-// Provider adapters — satisfy turnlifecycle narrow interfaces
+// Provider adapters — satisfy application turn use case ports
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// *App methods satisfying turnlifecycle.App
+// *App methods satisfying runtime and delivery ports
 // ---------------------------------------------------------------------------
-
-func (a *App) TurnLifecycleAppState() appturnlifecycle.AppStateProvider {
-	return a.State()
-}
-
-func (a *App) TurnLifecycleRuntimeState() appturnlifecycle.RuntimeStateProvider {
-	return newRuntimeStateService(a)
-}
-
-func (a *App) TurnLifecycleReplyContinuation() appturnlifecycle.ReplyContinuationProvider {
-	return newReplyContinuationService(a)
-}
-
-func (a *App) TurnLifecycleTurnStream() appturnlifecycle.TurnStreamProvider {
-	return newTurnStreamService(a)
-}
-
-func (a *App) TurnLifecyclePendingQueue() appturnlifecycle.PendingQueueProvider {
-	return newPendingQueueService(a)
-}
-
-func (a *App) TurnLifecycleOutboundCard() appturnlifecycle.OutboundCardProvider {
-	return newOutboundCardService(a)
-}
-
-func (a *App) TurnLifecycleSubmissionDispatch() appturnlifecycle.SubmissionDispatchProvider {
-	return submissionDispatchAdapter{app: a}
-}
-
-func (a *App) TurnLifecycleAutoRetry() appturnlifecycle.AutoRetryProvider {
-	return appautoretry.NewService(a)
-}
-
-func (a *App) TurnLifecycleRuntimeMaintenance() appturnlifecycle.RuntimeMaintenanceProvider {
-	return appmaintenance.NewRuntimeMaintenanceService(a)
-}
 
 func (a *App) MarkSessionThreadLive(sessionKey, threadID string) {
 	markSessionThreadLive(a, sessionKey, threadID)

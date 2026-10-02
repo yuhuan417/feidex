@@ -22,7 +22,7 @@ func (a turnStreamSubmissionFinderAdapter) FindSubmissionByTurn(threadID, turnID
 type turnStreamTurnLifecycleAdapter struct{ app *App }
 
 func (a turnStreamTurnLifecycleAdapter) BindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool {
-	return newTurnLifecycleService(a.app).bindPendingSubmissionTurn(threadID, turnID, allowReview)
+	return newTurnLifecycleService(a.app).BindPendingSubmissionTurn(threadID, turnID, allowReview)
 }
 
 type turnStreamOutboundCardAdapter struct{ app *App }

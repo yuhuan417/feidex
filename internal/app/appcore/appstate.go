@@ -2,7 +2,6 @@ package appcore
 
 import (
 	"feidex/internal/domain/conversation"
-	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/state"
 	"strings"
 )
@@ -67,18 +66,4 @@ func StateCloneSession(sess *conversation.Session) *conversation.Session {
 		}
 	}
 	return &cp
-}
-
-// SubmissionHasSourceRootMessages reports whether a submission already carries
-// explicit source root anchors for reply continuation binding.
-func SubmissionHasSourceRootMessages(sub *domainsubmission.Submission) bool {
-	if sub == nil {
-		return false
-	}
-	for _, rootID := range sub.SourceRootMessageIDs {
-		if strings.TrimSpace(rootID) != "" {
-			return true
-		}
-	}
-	return false
 }

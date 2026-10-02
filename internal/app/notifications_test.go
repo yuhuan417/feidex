@@ -5,7 +5,7 @@ import (
 	"feidex/internal/app/pendingforms"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appturnlifecycle "feidex/internal/app/turnlifecycle"
+	appturnlifecycle "feidex/internal/application/turn"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
 	"path/filepath"

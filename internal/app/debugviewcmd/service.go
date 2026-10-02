@@ -5,6 +5,7 @@ package debugviewcmd
 import (
 	"context"
 	"encoding/json"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
@@ -20,15 +21,15 @@ import (
 	appdelivery "feidex/internal/app/delivery"
 	apppathpick "feidex/internal/app/pathpick"
 	appthreadmenu "feidex/internal/app/threadmenu"
-	turnbinding "feidex/internal/app/turnbinding"
 	turnitem "feidex/internal/app/turnitem"
-	appusageview "feidex/internal/app/usageview"
 	appworkspace "feidex/internal/app/workspace"
+	appusageview "feidex/internal/application/presentation/usageview"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/logcontrol"
+	turnbinding "feidex/internal/runtime/turnbinding"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -540,7 +541,7 @@ func (s UsageService) RenderCodexUsageBody(sess *conversation.Session) string {
 		if usage.ModelContextWindow != nil {
 			contextLine = FormatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
 		}
-		body = RenderThreadUsageCardBody(s.app.DebugCurrentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
+		body = RenderThreadUsageCardBody(s.app.DebugCurrentThreadLabel(sess), sess.ActiveThreadID, codexadapter.ThreadUsage(usage), contextLine)
 	}
 	return body
 }

@@ -2,6 +2,7 @@ package submission
 
 import (
 	"encoding/json"
+	"feidex/internal/application/presentation"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/state"
@@ -194,7 +195,7 @@ func TestCompletionTerminalText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CompletionTerminalText(tt.status, tt.lastError)
+			got := presentation.CompletionTerminalText(tt.status, tt.lastError)
 			if got != tt.expect {
 				t.Fatalf("CompletionTerminalText(%q, %q) = %q, want %q", tt.status, tt.lastError, got, tt.expect)
 			}

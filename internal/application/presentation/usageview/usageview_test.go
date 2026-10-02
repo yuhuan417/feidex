@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"feidex/internal/codexrpc"
+	domainturn "feidex/internal/domain/turn"
 )
 
 func TestUsageFormattingHelpers(t *testing.T) {
@@ -21,7 +21,7 @@ func TestUsageFormattingHelpers(t *testing.T) {
 	if got := FormatContextLeftLine(750, 1000); got != "context left: 25.0%" {
 		t.Fatalf("FormatContextLeftLine(750/1000) = %q", got)
 	}
-	if got := FormatTurnUsageLine(codexrpc.TokenUsageBreakdown{
+	if got := FormatTurnUsageLine(domainturn.TokenUsageBreakdown{
 		InputTokens:           150,
 		CachedInputTokens:     90,
 		OutputTokens:          50,
@@ -44,8 +44,8 @@ func TestUsageFormattingHelpers(t *testing.T) {
 }
 
 func TestRenderThreadUsageCardBody(t *testing.T) {
-	body := RenderThreadUsageCardBody("main", "thread-1", codexrpc.ThreadTokenUsage{
-		Total: codexrpc.TokenUsageBreakdown{
+	body := RenderThreadUsageCardBody("main", "thread-1", domainturn.ThreadTokenUsage{
+		Total: domainturn.TokenUsageBreakdown{
 			TotalTokens:           500,
 			InputTokens:           400,
 			CachedInputTokens:     200,

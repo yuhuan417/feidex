@@ -1,9 +1,12 @@
 package app
 
 import (
-	"feidex/internal/app/turnbinding"
+	codexadapter "feidex/internal/adapter/backend/codex"
+	"feidex/internal/application/presentation/usageview"
 	"feidex/internal/codexrpc"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/runtime/turnbinding"
+	"strings"
 	"time"
 )
 
@@ -82,7 +85,7 @@ func (s runtimeStateService) markTurnStartedAt(turnID string, startedAt time.Tim
 func (s runtimeStateService) recordTurnTokenUsage(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
 	tracker := s.turnBindingTracker()
 	if tracker != nil {
-		tracker.RecordTurnTokenUsage(threadID, turnID, usage)
+		tracker.RecordTurnTokenUsage(threadID, turnID, codexadapter.ThreadUsage(usage))
 	}
 }
 
@@ -98,7 +101,22 @@ func (s runtimeStateService) turnFinalMetadata(turnID string, completedAt time.T
 	if tracker == nil {
 		return "", "", ""
 	}
-	return tracker.TurnFinalMetadata(turnID, completedAt, s.currentThreadUsage)
+	binding, ok := tracker.TurnMetadata(turnID)
+	usageLine, contextLine, elapsedLine = "", "", ""
+	if ok && binding.HasLastUsage {
+		usageLine = usageview.FormatTurnUsageLine(binding.LastUsage)
+	}
+	if ok {
+		if binding.HasContextUsagePercent {
+			contextLine = usageview.FormatContextUsedLine(binding.ContextUsagePercent)
+		} else if usage, found := tracker.CurrentThreadUsage(binding.ThreadID); found && usage.ModelContextWindow != nil {
+			contextLine = usageview.FormatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
+		}
+	}
+	if ok && !binding.StartedAt.IsZero() && !completedAt.IsZero() {
+		elapsedLine = usageview.FormatTurnElapsedLine(completedAt.Sub(binding.StartedAt))
+	}
+	return usageLine, contextLine, elapsedLine
 }
 
 func (s runtimeStateService) turnFinalFooterLines(turnID string, completedAt time.Time) []string {
@@ -106,7 +124,14 @@ func (s runtimeStateService) turnFinalFooterLines(turnID string, completedAt tim
 	if tracker == nil {
 		return nil
 	}
-	return tracker.TurnFinalFooterLines(turnID, completedAt, s.currentThreadUsage)
+	_, contextLine, elapsedLine := s.turnFinalMetadata(turnID, completedAt)
+	lines := make([]string, 0, 2)
+	for _, line := range []string{contextLine, elapsedLine} {
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 func (s runtimeStateService) currentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {
@@ -114,7 +139,8 @@ func (s runtimeStateService) currentThreadUsage(threadID string) (codexrpc.Threa
 	if tracker == nil {
 		return codexrpc.ThreadTokenUsage{}, false
 	}
-	return tracker.CurrentThreadUsage(threadID)
+	usage, found := tracker.CurrentThreadUsage(threadID)
+	return codexadapter.ProtocolThreadUsage(usage), found
 }
 
 // Exported wrappers so runtimeStateService directly satisfies sub-package
