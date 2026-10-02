@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"feidex/internal/application"
 	"log/slog"
 	"strings"
 
 	applifecycle "feidex/internal/app/lifecycle"
+	"feidex/internal/domain/identity"
 	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/state"
 )
@@ -64,7 +66,11 @@ func ExpireClaudeInteractionCards(a *App, sessionKey string, requestIDs []string
 		}
 		title := contentCardTitleForSession(a, pending.SessionKey, "", "请求已失效")
 		card := a.feishu.SimpleStatusCard(title, "grey", body, nil)
-		if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
+		if err := newEffectRunner(a).Run(context.Background(), []application.Effect{application.PatchCard{
+			Frontend:  identity.FrontendID(a.FrontendID()),
+			MessageID: messageID,
+			View:      card,
+		}}); err != nil {
 			slog.Warn("expire claude interaction card failed",
 				"request_id", pending.ID,
 				"message_id", messageID,

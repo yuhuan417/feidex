@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -95,8 +94,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			return nil
 		}
 		card := renderQuietModeMenuCard(a, makeSessionKey(a, msg))
-		_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
-		return err
+		return replyCardEffect(a, msg, card)
 	}
 	arg := strings.TrimSpace(args[0])
 	if len(args) == 1 {
@@ -106,8 +104,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 				return nil
 			}
 			card := renderQuietModeMenuCard(a, makeSessionKey(a, msg))
-			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
-			return err
+			return replyCardEffect(a, msg, card)
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))
 			if err != nil {
@@ -119,7 +116,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			if err := updateQuietMode(a, mode); err != nil {
 				return err
 			}
-			return a.feishu.ReplyText(context.Background(), msg.MessageID, "Quiet Mode 已切换为 `"+quietmode.StatusText(mode)+"`。", replyInThreadEnabled(a, msg.ChatType))
+			return replyTextEffect(a, msg, "Quiet Mode 已切换为 `"+quietmode.StatusText(mode)+"`。")
 		}
 	}
 	return nil

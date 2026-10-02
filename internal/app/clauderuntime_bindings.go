@@ -17,7 +17,6 @@ import (
 	"feidex/internal/adapter/feishu/quietmode"
 
 	appturn "feidex/internal/adapter/feishu/turn"
-	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -54,28 +53,6 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		TurnStream: appclauderuntime.TurnStreamDeps{
 			Port: claudeTurnStreamPort{app: app},
-			NoteTurnItemStarted: func(threadID, turnID string, item turnitem.ProtocolItem) {
-				newRuntimeStateService(app).noteTurnItemStartedPayload(threadID, turnID, item)
-			},
-			UpdateInFlightTurnItem: func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
-				newTurnStreamService(app).updateInFlightTurnItemPayload(ctx, threadID, turnID, itemID, item)
-			},
-			RecordTurnError: func(threadID, turnID, message string) {
-				newTurnStreamService(app).recordTurnError(threadID, turnID, message)
-			},
-			CompleteTurnItem: func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
-				newTurnStreamService(app).completeTurnItemPayload(ctx, threadID, turnID, itemID, item)
-			},
-			PrepareTurnStreamQuietBoundary: func(turnID string) string {
-				boundary := newTurnStreamService(app).prepareTurnStreamQuietBoundary(turnID)
-				return boundary.ReuseMessageID
-			},
-			PrepareTurnStreamQuietUpdate: func(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp {
-				return newTurnStreamService(app).prepareTurnStreamQuietUpdatePayload(sessionKey, sub, threadID, itemID, item, workspaceCwd)
-			},
-			MarkTurnStreamFinal: func(turnID string) {
-				newTurnStreamService(app).markTurnStreamFinal(turnID)
-			},
 		},
 		Usage: appclauderuntime.UsageDeps{
 			RecordClaudeThreadUsage: func(threadID string, usage claudecli.TurnUsage) {

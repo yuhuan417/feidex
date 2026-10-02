@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"feidex/internal/textutil"
 	"strings"
 
@@ -35,15 +34,13 @@ func replyCommandActionResponse(a *App, msg *feishu.InboundMessage, resp *callba
 	if msg == nil || resp == nil {
 		return nil
 	}
-	replyInThread := replyInThreadEnabled(a, msg.ChatType)
 	if resp.Card != nil {
 		if card, ok := resp.Card.Data.(map[string]any); ok && len(card) > 0 {
-			_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThread)
-			return err
+			return replyCardEffect(a, msg, card)
 		}
 	}
 	if resp.Toast != nil && strings.TrimSpace(resp.Toast.Content) != "" {
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, strings.TrimSpace(resp.Toast.Content), replyInThread)
+		return replyTextEffect(a, msg, strings.TrimSpace(resp.Toast.Content))
 	}
 	return nil
 }

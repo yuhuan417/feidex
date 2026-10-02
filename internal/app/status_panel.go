@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"feidex/internal/domain/conversation"
 	"strings"
 
@@ -22,6 +21,5 @@ func renderStatusCard(a *App, sessionKey string) map[string]any {
 
 func commandStatus(a *App, msg *feishu.InboundMessage) error {
 	card := renderStatusCard(a, makeSessionKey(a, msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
-	return err
+	return replyCardEffect(a, msg, card)
 }

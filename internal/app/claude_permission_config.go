@@ -1,6 +1,7 @@
 package app
 
 import (
+	"feidex/internal/application"
 	appruntime "feidex/internal/runtime"
 
 	"context"
@@ -12,6 +13,7 @@ import (
 	"feidex/internal/adapter/feishu/cards"
 	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 )
 
@@ -107,7 +109,11 @@ func patchClaudePermissionMenuRuntimeFailure(a *App, messageID, sessionKey strin
 	}
 	warning := "⚠️ 运行时未生效：" + applyErr.Error() + "（设置已保存，将在会话重启后生效）"
 	card = cards.PrependMarkdownWarning(card, warning)
-	if err := a.feishu.PatchCard(context.Background(), messageID, card); err != nil {
+	if err := newEffectRunner(a).Run(context.Background(), []application.Effect{application.PatchCard{
+		Frontend:  identity.FrontendID(a.FrontendID()),
+		MessageID: messageID,
+		View:      card,
+	}}); err != nil {
 		slog.Warn("patch claude permission menu failed",
 			"session_key", sessionKey,
 			"message_id", messageID,
@@ -129,8 +135,13 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
-	return err
+	return newEffectRunner(a).Run(context.Background(), []application.Effect{application.SendCard{
+		Frontend:       identity.FrontendID(a.FrontendID()),
+		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
+		ReplyMessageID: msg.MessageID,
+		View:           card,
+		InThread:       replyInThreadEnabled(a, msg.ChatType),
+	}})
 }
 
 func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
@@ -145,6 +156,11 @@ func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error
 	if err != nil {
 		return err
 	}
-	_, err = a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
-	return err
+	return newEffectRunner(a).Run(context.Background(), []application.Effect{application.SendCard{
+		Frontend:       identity.FrontendID(a.FrontendID()),
+		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
+		ReplyMessageID: msg.MessageID,
+		View:           card,
+		InThread:       replyInThreadEnabled(a, msg.ChatType),
+	}})
 }

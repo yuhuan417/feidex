@@ -23,22 +23,27 @@ func upgradeTargetMatchesCurrent(currentVersion, targetVersion string) bool {
 // upgradeRenderService renders upgrade cards for either backend; the spec
 // selects which one.
 type upgradeRenderService struct {
-	app *App
+	app      *App
+	renderer upgraderender.StatusCardRenderer
 }
 
 func newUpgradeRenderService(app *App) upgradeRenderService {
-	return upgradeRenderService{app: app}
+	var renderer upgraderender.StatusCardRenderer
+	if app != nil {
+		renderer = app.feishu
+	}
+	return upgradeRenderService{app: app, renderer: renderer}
 }
 
 func (s upgradeRenderService) renderUpgradeStatusCard(spec upgraderender.Spec, sessionKey string, view backendUpgradeView, latestChecked bool) map[string]any {
-	return upgraderender.RenderUpgradeStatusCard(spec, s.app.feishu, sessionKey, view, latestChecked)
+	return upgraderender.RenderUpgradeStatusCard(spec, s.renderer, sessionKey, view, latestChecked)
 }
 
 // prepareUpgradeCard renders the confirmation card and persists the pending
 // request, or returns the status card when the upgrade cannot start.
 func (s upgradeRenderService) prepareUpgradeCard(spec upgraderender.Spec, pendingKind, idPrefix string, sessionKey, ownerUserID string, view backendUpgradeView) (map[string]any, string, error) {
 	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || upgradeTargetMatchesCurrent(view.Probe.CurrentVersion, view.LatestVersion) {
-		return upgraderender.RenderUpgradeStatusCard(spec, s.app.feishu, sessionKey, view, true), "", nil
+		return upgraderender.RenderUpgradeStatusCard(spec, s.renderer, sessionKey, view, true), "", nil
 	}
 	requestID, err := s.app.State().NextLocalID(idPrefix)
 	if err != nil {
@@ -63,21 +68,21 @@ func (s upgradeRenderService) prepareUpgradeCard(spec upgraderender.Spec, pendin
 	}); err != nil {
 		return nil, "", err
 	}
-	return upgraderender.RenderUpgradeConfirmCard(spec, s.app.feishu, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand), requestID, nil
+	return upgraderender.RenderUpgradeConfirmCard(spec, s.renderer, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand), requestID, nil
 }
 
 func (s upgradeRenderService) renderUpgradePreparingCard(spec upgraderender.Spec, sessionKey, body string) map[string]any {
-	return upgraderender.RenderUpgradePreparingCard(spec, s.app.feishu, body)
+	return upgraderender.RenderUpgradePreparingCard(spec, s.renderer, body)
 }
 
 func (s upgradeRenderService) renderUpgradeFailedCard(spec upgraderender.Spec, sessionKey, errText string) map[string]any {
-	return upgraderender.RenderUpgradeFailedCard(spec, s.app.feishu, sessionKey, errText)
+	return upgraderender.RenderUpgradeFailedCard(spec, s.renderer, sessionKey, errText)
 }
 
 func (s upgradeRenderService) renderUpgradeOperationCard(spec upgraderender.Spec, sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
-	return upgraderender.RenderUpgradeOperationCard(spec, s.app.feishu, sessionKey, snapshot)
+	return upgraderender.RenderUpgradeOperationCard(spec, s.renderer, sessionKey, snapshot)
 }
 
 func (s upgradeRenderService) renderRestartOperationCard(spec upgraderender.Spec, sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
-	return upgraderender.RenderRestartOperationCard(spec, s.app.feishu, sessionKey, snapshot)
+	return upgraderender.RenderRestartOperationCard(spec, s.renderer, sessionKey, snapshot)
 }

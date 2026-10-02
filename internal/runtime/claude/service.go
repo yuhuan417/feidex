@@ -166,19 +166,10 @@ type LifecycleDeps struct {
 }
 
 type TurnStreamDeps struct {
-	Port                           TurnStreamPort
-	NoteTurnItemStarted            func(threadID, turnID string, item turnitem.ProtocolItem)
-	UpdateInFlightTurnItem         func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
-	RecordTurnError                func(threadID, turnID, message string)
-	CompleteTurnItem               func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
-	PrepareTurnStreamQuietBoundary func(turnID string) (reuseMessageID string)
-	PrepareTurnStreamQuietUpdate   func(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp
-	MarkTurnStreamFinal            func(turnID string)
+	Port TurnStreamPort
 }
 
 // TurnStreamPort is the presentation boundary used by the Claude runtime.
-// The callback fields in TurnStreamDeps remain as a compatibility bridge for
-// older callers; new composition roots should provide this port instead.
 type TurnStreamPort interface {
 	NoteTurnItemStarted(threadID, turnID string, item turnitem.ProtocolItem)
 	UpdateInFlightTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
@@ -307,10 +298,6 @@ func (s *Service) FailBackendActiveWork(backend, sessionKey, threadID, message s
 func (s *Service) RecordTurnError(threadID, turnID, message string) {
 	if s != nil && s.deps.TurnStream.Port != nil {
 		s.deps.TurnStream.Port.RecordTurnError(threadID, turnID, message)
-		return
-	}
-	if s != nil && s.deps.TurnStream.RecordTurnError != nil {
-		s.deps.TurnStream.RecordTurnError(threadID, turnID, message)
 	}
 }
 
@@ -321,10 +308,6 @@ func (s *Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID
 func (s *Service) CompleteTurnItemPayload(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
 	if s != nil && s.deps.TurnStream.Port != nil {
 		s.deps.TurnStream.Port.CompleteTurnItem(ctx, threadID, turnID, itemID, item)
-		return
-	}
-	if s != nil && s.deps.TurnStream.CompleteTurnItem != nil {
-		s.deps.TurnStream.CompleteTurnItem(ctx, threadID, turnID, itemID, item)
 	}
 }
 
@@ -332,10 +315,7 @@ func (s *Service) PrepareTurnStreamQuietBoundary(turnID string) string {
 	if s != nil && s.deps.TurnStream.Port != nil {
 		return s.deps.TurnStream.Port.PrepareTurnStreamQuietBoundary(turnID)
 	}
-	if s == nil || s.deps.TurnStream.PrepareTurnStreamQuietBoundary == nil {
-		return ""
-	}
-	return s.deps.TurnStream.PrepareTurnStreamQuietBoundary(turnID)
+	return ""
 }
 
 func (s *Service) PrepareTurnStreamQuietUpdate(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp {
@@ -346,19 +326,12 @@ func (s *Service) PrepareTurnStreamQuietUpdatePayload(sessionKey string, sub *do
 	if s != nil && s.deps.TurnStream.Port != nil {
 		return s.deps.TurnStream.Port.PrepareTurnStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
 	}
-	if s == nil || s.deps.TurnStream.PrepareTurnStreamQuietUpdate == nil {
-		return appturn.QuietWorkingCardOp{}
-	}
-	return s.deps.TurnStream.PrepareTurnStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
+	return appturn.QuietWorkingCardOp{}
 }
 
 func (s *Service) MarkTurnStreamFinal(turnID string) {
 	if s != nil && s.deps.TurnStream.Port != nil {
 		s.deps.TurnStream.Port.MarkTurnStreamFinal(turnID)
-		return
-	}
-	if s != nil && s.deps.TurnStream.MarkTurnStreamFinal != nil {
-		s.deps.TurnStream.MarkTurnStreamFinal(turnID)
 	}
 }
 
@@ -1666,20 +1639,12 @@ func (s *Service) HandleToolComplete(state *SessionState, event claudecli.ToolCo
 func (s *Service) NoteTurnItemStarted(threadID, turnID string, item turnitem.ProtocolItem) {
 	if s != nil && s.deps.TurnStream.Port != nil {
 		s.deps.TurnStream.Port.NoteTurnItemStarted(threadID, turnID, item)
-		return
-	}
-	if s != nil && s.deps.TurnStream.NoteTurnItemStarted != nil {
-		s.deps.TurnStream.NoteTurnItemStarted(threadID, turnID, item)
 	}
 }
 
 func (s *Service) UpdateInFlightTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
 	if s != nil && s.deps.TurnStream.Port != nil {
 		s.deps.TurnStream.Port.UpdateInFlightTurnItem(ctx, threadID, turnID, itemID, item)
-		return
-	}
-	if s != nil && s.deps.TurnStream.UpdateInFlightTurnItem != nil {
-		s.deps.TurnStream.UpdateInFlightTurnItem(ctx, threadID, turnID, itemID, item)
 	}
 }
 

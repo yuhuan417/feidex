@@ -486,6 +486,7 @@ Codex server request
 - backend configuration service 也已按 frontend runtime 缓存，并在 backend 切换时失效；模型、workspace 和 status command 不再重复构造同一组绑定。
 - application effect pipeline 已增加 `SendCard`，根菜单发送已通过 effect runner 进入 Feishu adapter。
 - backend selection 已改为由 composition root 注入卡片渲染和发送/patch ports，selection service 不再直接持有 Feishu outbound client。
-- Claude runtime 的 turn stream 已增加 `TurnStreamPort` presentation boundary；生产绑定通过该 port 连接 turn presentation service，旧 callback 字段仅保留迁移兼容。
+- Claude runtime 的 turn stream 已增加 `TurnStreamPort` presentation boundary；生产绑定通过该 port 连接 turn presentation service，`TurnStreamDeps` 不再保留旧 callback 字段或 fallback 分支。
+- backend upgrade 的卡片 renderer 与发送路径改为显式注入 `StatusCardRenderer` 和 outbound port；Claude permission 菜单、交互失效卡以及 help/quiet/status/menu bridge 的用户可见发送统一经过 application effect runner。
 
-当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，Claude stream presentation 回调，effect pipeline 的同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
+当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，effect pipeline 尚未覆盖全部同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"feidex/internal/textutil"
 	"fmt"
 	"strings"
@@ -99,8 +98,7 @@ func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {
 		return fmt.Errorf("usage: /help")
 	}
 	card := renderHelpCard(a, makeSessionKey(a, msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
-	return err
+	return replyCardEffect(a, msg, card)
 }
 
 func renderToolsMenuCard(a *App, sessionKey string) map[string]any {
