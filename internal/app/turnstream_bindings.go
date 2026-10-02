@@ -44,6 +44,30 @@ func (a turnStreamQuietCardExecutorAdapter) ExecuteQuietWorkingCardOp(ctx contex
 	executeQuietWorkingCardOp(a.app, ctx, sub, op)
 }
 
+type claudeTurnStreamPort struct{ app *App }
+
+func (p claudeTurnStreamPort) NoteTurnItemStarted(threadID, turnID string, item turnitem.ProtocolItem) {
+	newRuntimeStateService(p.app).noteTurnItemStartedPayload(threadID, turnID, item)
+}
+func (p claudeTurnStreamPort) UpdateInFlightTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+	newTurnStreamService(p.app).updateInFlightTurnItemPayload(ctx, threadID, turnID, itemID, item)
+}
+func (p claudeTurnStreamPort) RecordTurnError(threadID, turnID, message string) {
+	newTurnStreamService(p.app).recordTurnError(threadID, turnID, message)
+}
+func (p claudeTurnStreamPort) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+	newTurnStreamService(p.app).completeTurnItemPayload(ctx, threadID, turnID, itemID, item)
+}
+func (p claudeTurnStreamPort) PrepareTurnStreamQuietBoundary(turnID string) string {
+	return newTurnStreamService(p.app).prepareTurnStreamQuietBoundary(turnID).ReuseMessageID
+}
+func (p claudeTurnStreamPort) PrepareTurnStreamQuietUpdate(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
+	return newTurnStreamService(p.app).prepareTurnStreamQuietUpdatePayload(sessionKey, sub, threadID, itemID, item, workspaceCwd)
+}
+func (p claudeTurnStreamPort) MarkTurnStreamFinal(turnID string) {
+	newTurnStreamService(p.app).markTurnStreamFinal(turnID)
+}
+
 func newTurnPresentation(a *App) appturnstream.Service {
 	if a.trackers.turnStreams == nil {
 		a.trackers.turnStreams = appturnstream.NewTracker()

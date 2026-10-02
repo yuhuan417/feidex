@@ -53,6 +53,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			},
 		},
 		TurnStream: appclauderuntime.TurnStreamDeps{
+			Port: claudeTurnStreamPort{app: app},
 			NoteTurnItemStarted: func(threadID, turnID string, item turnitem.ProtocolItem) {
 				newRuntimeStateService(app).noteTurnItemStartedPayload(threadID, turnID, item)
 			},
