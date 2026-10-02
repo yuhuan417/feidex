@@ -13,6 +13,29 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type goalOutbound struct{ app *App }
+
+func (o goalOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+}
+
+func (o goalOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
+	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
+}
+
+func (o goalOutbound) SendCard(ctx context.Context, chatID string, card map[string]any) (string, error) {
+	return sendCardWithIDEffect(ctx, o.app, chatID, card)
+}
+
+type goalCardRenderer struct{ app *App }
+
+func (r goalCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
+	if r.app == nil || r.app.feishu == nil {
+		return nil
+	}
+	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
+}
+
 const (
 	goalCommandUsage          = goalcmd.CommandUsage
 	goalMaxObjectiveRunes     = goalcmd.MaxObjectiveRunes
@@ -44,7 +67,7 @@ func goalDependenciesForApp(a *App) goalcmd.Dependencies {
 		return goalcmd.Dependencies{}
 	}
 	return goalcmd.Dependencies{
-		StateProvider: a.State(), FeishuClient: a.feishu,
+		StateProvider: a.State(), Outbound: goalOutbound{app: a}, CardRenderer: goalCardRenderer{app: a},
 		CodexClientProvider: func() (goalcmd.CodexClient, error) { return requireCodexGateway(a) }, GoalTracker: goalTrackerForApp(a),
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
 		MenuCardBodyForSessionFn: func(s, x, b string) string { return menuCardBodyForSession(a, s, x, b) }, ActionStringValueFn: actionStringValue, ActionSessionKeyFn: actionSessionKey,

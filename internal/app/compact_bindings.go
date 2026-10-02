@@ -29,7 +29,7 @@ func newCompactionService(a *App) compaction.Service {
 	st := a.State()
 	return compaction.Service{
 		Context: a.Context, Repository: compactSessionStoreAdapter{Session: st.Session, Sessions: st.Sessions, Save: st.SaveSession},
-		Gateway: codexadapter.CompactionGateway{Client: currentCodexClient(a)},
+		Gateway: codexadapter.Gateway{Client: currentCodexClient(a)},
 		Notices: func(ctx context.Context, sess *conversation.Session, text string) {
 			if a.feishu != nil && sess.ChatID != "" {
 				_ = sendTextEffect(ctx, a, sess.ChatID, text)
