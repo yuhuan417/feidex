@@ -49,6 +49,21 @@ func (r GroupPrimaryRepository) SaveGroupPrimaryState(primary *domainrouting.Gro
 	return r.store.UpsertGroupPrimary(toSnapshot(primary))
 }
 
+func (r GroupPrimaryRepository) EnsureGroupPrimary(frontendID, chatType, chatID string, enabled bool) (*domainrouting.GroupPrimaryState, error) {
+	if r.store == nil {
+		return nil, fmt.Errorf("state store is nil")
+	}
+	if strings.TrimSpace(frontendID) != strings.TrimSpace(r.frontendID) {
+		return nil, fmt.Errorf("frontend scope mismatch")
+	}
+	record := &state.GroupPrimary{ID: GroupPrimaryID(r.frontendID, chatType, chatID), FrontendID: r.frontendID, ChatType: chatType, ChatID: chatID, Enabled: enabled}
+	result, err := r.store.EnsureGroupPrimary(record)
+	if err != nil || result == nil {
+		return nil, err
+	}
+	return &domainrouting.GroupPrimaryState{FrontendID: result.FrontendID, ChatType: result.ChatType, ChatID: result.ChatID, Enabled: result.Enabled, LastAssignmentMessageID: result.LastAssignmentMessageID, LastAssignmentCreatedAt: result.LastAssignmentCreatedAt}, nil
+}
+
 // GroupPrimaryID is the stable storage key for one frontend and group.
 func GroupPrimaryID(frontendID, chatType, chatID string) string {
 	return "primary_" + sanitizeIDPart(frontendID) + "_" + sanitizeIDPart(chatType) + "_" + sanitizeIDPart(chatID)

@@ -17,10 +17,24 @@ type PrimaryRepository interface {
 	SaveGroupPrimaryState(*domainrouting.GroupPrimaryState) error
 }
 
+type PrimaryInitializer interface {
+	EnsureGroupPrimary(frontendID, chatType, chatID string, enabled bool) (*domainrouting.GroupPrimaryState, error)
+}
+
 // Service owns the group primary transition while delivery and transport stay
 // outside the application layer.
 type Service struct {
 	Repository PrimaryRepository
+}
+
+// EnsurePrimary creates the initial record only when storage has no explicit
+// assignment. Existing operator choices always win over automatic discovery.
+func (s Service) EnsurePrimary(frontendID, chatType, chatID string, enabled bool) (*domainrouting.GroupPrimaryState, error) {
+	initializer, ok := s.Repository.(PrimaryInitializer)
+	if !ok {
+		return s.SetPrimary(ChangePrimary{Frontend: identity.FrontendID(frontendID), Chat: identity.ChatRef{Type: identity.ChatType(chatType), ID: chatID}, Enabled: enabled})
+	}
+	return initializer.EnsureGroupPrimary(frontendID, chatType, chatID, enabled)
 }
 
 // ChangePrimary is a transport-independent input to the primary use case.

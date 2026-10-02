@@ -89,12 +89,11 @@ func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID
 	}
 	// The group lookup can finish after this frontend has initialized its local
 	// state or processed /primary on. EnsureGroupPrimary preserves that state.
-	return a.State().EnsureGroupPrimary(&state.GroupPrimary{
-		FrontendID: a.FrontendID(),
-		ChatID:     chatID,
-		ChatType:   chatType,
-		Enabled:    enabled,
-	})
+	result, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).EnsurePrimary(a.FrontendID(), chatType, chatID, enabled)
+	if err != nil || result == nil {
+		return nil, err
+	}
+	return &state.GroupPrimary{FrontendID: result.FrontendID, ChatID: result.ChatID, ChatType: result.ChatType, Enabled: result.Enabled, LastAssignmentMessageID: result.LastAssignmentMessageID, LastAssignmentCreatedAt: result.LastAssignmentCreatedAt}, nil
 }
 
 func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
