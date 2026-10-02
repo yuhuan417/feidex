@@ -193,11 +193,11 @@ func (a *App) invalidateBackendConfigurationService() {
 	if a == nil {
 		return
 	}
-	a.backendConfigMu.Lock()
 	if a.composition != nil {
+		a.composition.mu.Lock()
 		a.composition.backendConfig = nil
+		a.composition.mu.Unlock()
 	}
-	a.backendConfigMu.Unlock()
 }
 
 // ConfigMu returns the config read-write mutex.

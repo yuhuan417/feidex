@@ -57,7 +57,6 @@ type App struct {
 	frontendRuntime        frontendruntime.FrontendRuntime
 	stateMu                sync.Mutex
 	stateView              *appstate.Store
-	backendConfigMu        sync.Mutex
 	composition            *appComposition
 	deduper                *frontendruntime.InboundDeduper
 	backendSwitchMu        sync.Mutex

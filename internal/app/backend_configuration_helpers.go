@@ -21,11 +21,11 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 	if app == nil {
 		return buildBackendConfigurationService(nil)
 	}
-	app.backendConfigMu.Lock()
-	defer app.backendConfigMu.Unlock()
 	if app.composition == nil {
 		app.composition = &appComposition{}
 	}
+	app.composition.mu.Lock()
+	defer app.composition.mu.Unlock()
 	if app.composition.backendConfig == nil {
 		service := buildBackendConfigurationService(app)
 		app.composition.backendConfig = &service

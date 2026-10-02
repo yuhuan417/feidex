@@ -501,5 +501,6 @@ Codex server request
 - dispatcher、effect runner 和 server request service 也已归入 `appComposition`；`App` 的字段只保留 frontend state、runtime 和生命周期 owner。
 - thread menu composition cache 也已归入 `appComposition`，backend 切换时通过 composition invalidation 重建。
 - group message root anchor normalization 已迁入 application，Feishu router 只负责把 inbound 字段转换为 routing input。
+- composition cache 的锁和生命周期也已从 `App` 移入 `appComposition`，避免宿主继续承担 service registry synchronization。
 
 当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，effect pipeline 尚未覆盖全部同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
