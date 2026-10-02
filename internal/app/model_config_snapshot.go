@@ -1,10 +1,9 @@
 package app
 
 import (
-	"strings"
-
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/modelconfig"
+	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/state"
@@ -95,26 +94,20 @@ func modelConfigStatus(a *App, sessionKey string) string {
 		return notice
 	}
 	desired := modelConfigSnapshot(a, sess, backend)
-	nextModel, nextEffort := modelConfigTurnSettings(desired)
-	notice += "\n下一轮本地启动模型：`" + apputil.FirstNonEmpty(nextModel, "默认") + "`；推理强度：`" + apputil.FirstNonEmpty(nextEffort, "默认") + "`。"
-	if sess.ModelConfigError != "" {
-		notice += "\n配置应用失败/待生效：" + sess.ModelConfigError
+	status := applicationmodelconfig.SessionStatus(backend, sess.ActiveThreadID, desired, sess.AppliedModelConfig, sess.ModelConfigError)
+	notice += "\n下一轮本地启动模型：`" + apputil.FirstNonEmpty(status.NextModel, "默认") + "`；推理强度：`" + apputil.FirstNonEmpty(status.NextEffort, "默认") + "`。"
+	if status.Error != "" {
+		notice += "\n配置应用失败/待生效：" + status.Error
 	}
-	applied := sess.AppliedModelConfig
-	if applied.Valid && applied.Backend == backend && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		appliedModel, appliedEffort := modelConfigTurnSettings(applied)
-		notice += "\n最近已应用模型：`" + apputil.FirstNonEmpty(appliedModel, "默认") + "`；推理强度：`" + apputil.FirstNonEmpty(appliedEffort, "默认") + "`。"
-		if desired != applied {
+	if status.HasApplied {
+		notice += "\n最近已应用模型：`" + apputil.FirstNonEmpty(status.AppliedModel, "默认") + "`；推理强度：`" + apputil.FirstNonEmpty(status.AppliedEffort, "默认") + "`。"
+		if status.Pending {
 			notice += "\n已保存配置与当前应用值不同，待对应边界生效。"
 		}
 	} else {
 		notice += "\n当前会话尚无已确认的配置应用记录。"
 	}
 	return notice
-}
-
-func modelConfigTurnSettings(snapshot domainmodelconfig.Snapshot) (string, string) {
-	return domainmodelconfig.TurnSettings(snapshot)
 }
 
 func modelConfigReadCopy(a *App) *config.Config {
