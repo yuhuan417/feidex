@@ -15,6 +15,7 @@ import (
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/state"
 )
 
@@ -160,11 +161,11 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		PrepareClaudeMCPConfig: func(sessionKey string) (string, []string, func(), error) {
 			return prepareClaudeMCPConfig(app, sessionKey)
 		},
-		ModelSettings: func(sessionKey string) state.ModelConfigSnapshot {
+		ModelSettings: func(sessionKey string) domainmodelconfig.Snapshot {
 			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
 			return modelConfigSnapshot(app, sess, backendClaude)
 		},
-		ModelSettingsApplied: func(sessionKey string, settings state.ModelConfigSnapshot) {
+		ModelSettingsApplied: func(sessionKey string, settings domainmodelconfig.Snapshot) {
 			_, err := app.State().UpdateSession(sessionKey, func(sess *state.Session) {
 				sess.AppliedModelConfig = settings
 				sess.ModelConfigError = ""
