@@ -48,11 +48,25 @@ func newBackendSelectionService(app *App) backendSelectionService {
 			},
 		},
 		Render: backend.SelectionRenderDeps{
+			BuildStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+				return app.Feishu().SimpleStatusCard(title, color, body, buttons)
+			},
 			BuildMenuCard: func(sessionKey string) map[string]any {
 				return renderBackendMenuCard(app, sessionKey)
 			},
 			BuildCardBody: func(action, body string) string {
 				return menuCardBody(action, body)
+			},
+		},
+		Transport: backend.SelectionTransportDeps{
+			ReplyCard: func(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+				return app.Feishu().ReplyCard(ctx, messageID, card, inThread)
+			},
+			SendCard: func(ctx context.Context, chatID string, card map[string]any) (string, error) {
+				return app.Feishu().SendCard(ctx, chatID, card)
+			},
+			PatchCard: func(ctx context.Context, messageID string, card map[string]any) error {
+				return app.Feishu().PatchCard(ctx, messageID, card)
 			},
 		},
 		Commands: backend.SelectionCommandDeps{

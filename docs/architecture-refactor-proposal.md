@@ -485,5 +485,6 @@ Codex server request
 - thread menu 依赖组装已按 frontend runtime 缓存；backend 切换时显式失效并重新绑定 driver，命令和 card action 不再重复构造 capability carrier。
 - backend configuration service 也已按 frontend runtime 缓存，并在 backend 切换时失效；模型、workspace 和 status command 不再重复构造同一组绑定。
 - application effect pipeline 已增加 `SendCard`，根菜单发送已通过 effect runner 进入 Feishu adapter。
+- backend selection 已改为由 composition root 注入卡片渲染和发送/patch ports，selection service 不再直接持有 Feishu outbound client。
 
 当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，Claude stream presentation 回调，effect pipeline 的同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

@@ -39,8 +39,15 @@ type SelectionRuntimeDeps struct {
 }
 
 type SelectionRenderDeps struct {
-	BuildMenuCard func(sessionKey string) map[string]any
-	BuildCardBody func(action, body string) string
+	BuildMenuCard   func(sessionKey string) map[string]any
+	BuildCardBody   func(action, body string) string
+	BuildStatusCard func(title, color, body string, buttons []feishu.Button) map[string]any
+}
+
+type SelectionTransportDeps struct {
+	ReplyCard func(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error)
+	SendCard  func(ctx context.Context, chatID string, card map[string]any) (string, error)
+	PatchCard func(ctx context.Context, messageID string, card map[string]any) error
 }
 
 type SelectionCommandDeps struct {
@@ -48,10 +55,11 @@ type SelectionCommandDeps struct {
 }
 
 type SelectionDeps struct {
-	App      App
-	Runtime  SelectionRuntimeDeps
-	Render   SelectionRenderDeps
-	Commands SelectionCommandDeps
+	App       App
+	Runtime   SelectionRuntimeDeps
+	Render    SelectionRenderDeps
+	Transport SelectionTransportDeps
+	Commands  SelectionCommandDeps
 }
 
 // SelectionService manages backend selection, switching, and configuration
@@ -173,7 +181,10 @@ func (s SelectionService) RenderBackendSelectionCard(sessionKey, notice string) 
 	if s.deps.Render.BuildCardBody != nil {
 		body = s.deps.Render.BuildCardBody("menu.backend.switch", body)
 	}
-	return s.App.Feishu().SimpleStatusCard("后端选择", color, body, buttons)
+	if s.deps.Render.BuildStatusCard == nil {
+		return nil
+	}
+	return s.deps.Render.BuildStatusCard("后端选择", color, body, buttons)
 }
 
 // RenderBackendSwitchingCard builds the in-progress switching card.
@@ -187,14 +198,17 @@ func (s SelectionService) RenderBackendSwitchingCard(sessionKey, target string) 
 	if s.deps.Render.BuildCardBody != nil {
 		cardBody = s.deps.Render.BuildCardBody("menu.backend.switch", body)
 	}
-	return s.App.Feishu().SimpleStatusCard("切换后端", "orange", cardBody, []feishu.Button{
+	if s.deps.Render.BuildStatusCard == nil {
+		return nil
+	}
+	return s.deps.Render.BuildStatusCard("切换后端", "orange", cardBody, []feishu.Button{
 		{Text: "处理中", Type: "default", Value: map[string]any{"action": "menu.backend.switch", "session_key": sessionKey}},
 	})
 }
 
 // ReplyBackendSelectionCard sends the backend selection card as a reply.
 func (s SelectionService) ReplyBackendSelectionCard(msg *feishu.InboundMessage, reason string) error {
-	if s.App == nil || s.App.Feishu() == nil {
+	if s.App == nil {
 		return fmt.Errorf("backend not configured")
 	}
 	sessionKey := ""
@@ -203,11 +217,17 @@ func (s SelectionService) ReplyBackendSelectionCard(msg *feishu.InboundMessage, 
 	}
 	card := s.RenderBackendSelectionCard(sessionKey, appcore.FirstNonEmpty(strings.TrimSpace(reason), "当前 frontend 还没有设置 backend，请先选择。"))
 	if msg != nil && strings.TrimSpace(msg.MessageID) != "" {
-		_, err := s.App.Feishu().ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		if s.deps.Transport.ReplyCard == nil {
+			return fmt.Errorf("backend card reply not configured")
+		}
+		_, err := s.deps.Transport.ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 		return err
 	}
 	if msg != nil && strings.TrimSpace(msg.ChatID) != "" {
-		_, err := s.App.Feishu().SendCard(appcore.Context(s.App), msg.ChatID, card)
+		if s.deps.Transport.SendCard == nil {
+			return fmt.Errorf("backend card send not configured")
+		}
+		_, err := s.deps.Transport.SendCard(appcore.Context(s.App), msg.ChatID, card)
 		return err
 	}
 	return fmt.Errorf("backend not configured")
@@ -291,7 +311,11 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 				"error", err,
 			)
 		}
-		if patchErr := s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
+		if s.deps.Transport.PatchCard == nil {
+			slog.Warn("backend switch patch unavailable", "message_id", messageID)
+			return
+		}
+		if patchErr := s.deps.Transport.PatchCard(appcore.Context(s.App), messageID, s.RenderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
 			slog.Warn("backend switch patch failed",
 				"frontend_id", s.App.FrontendID(),
 				"target_backend", target,
