@@ -1,7 +1,7 @@
 package app
 
 import (
-	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 
 	"context"
 	"encoding/json"

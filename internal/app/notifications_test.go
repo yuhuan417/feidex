@@ -93,7 +93,7 @@ func TestTurnStartedNotificationRebindsPendingSubmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	a := &App{store: store, trackers: appTrackers{turnStreams: newTurnStreamTracker()}}
+	a := &App{store: store, composition: &appComposition{trackers: &appTrackers{turnStreams: newTurnStreamTracker()}}}
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
@@ -334,7 +334,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 		t.Fatalf("user-input pending = %+v, want stored request", pending)
 	}
 
-	empty := &App{store: a.store, codex: fc, feishu: ff}
+	empty := &App{store: a.store, feishu: ff, composition: &appComposition{codex: fc}}
 	empty.ServerRequestService().SendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
 	empty.ServerRequestService().SendUserInputCard(json.RawMessage(`"missing-input"`), pendingforms.ToolUserInputPayload{})
 	handleServerRequest(empty, codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})

@@ -1,8 +1,8 @@
 package app
 
 import (
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
-	appfeishuwrap "feidex/internal/app/feishuwrap"
 
 	"context"
 	"strings"

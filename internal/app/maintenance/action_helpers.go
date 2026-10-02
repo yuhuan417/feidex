@@ -2,17 +2,17 @@ package maintenance
 
 import (
 	"context"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"log/slog"
 	"strings"
 	"time"
 
-	appcore "feidex/internal/app/appcore"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func PatchCard(feishuClient appcore.FeishuClient, messageID string, card map[string]any, warnMsg string, attrs ...any) {
+func PatchCard(feishuClient feishutransport.Client, messageID string, card map[string]any, warnMsg string, attrs ...any) {
 	if feishuClient == nil || strings.TrimSpace(messageID) == "" || card == nil {
 		return
 	}

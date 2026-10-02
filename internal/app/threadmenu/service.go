@@ -6,6 +6,7 @@ package threadmenu
 import (
 	"context"
 	"errors"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"sort"
@@ -34,7 +35,7 @@ const (
 // composition root. The menu service never receives the application root.
 type Dependencies struct {
 	ConfigProvider                            appcore.AppConfig
-	FeishuClient                              appcore.FeishuClient
+	FeishuClient                              feishutransport.Client
 	AppStateFn                                func() StateProvider
 	EffectiveSessionKeyFn                     func(string) string
 	ConversationBackendFn                     func() ConversationBackendProvider
@@ -96,7 +97,7 @@ func (d Dependencies) Store() *state.Store {
 	}
 	return d.ConfigProvider.Store()
 }
-func (d Dependencies) Feishu() appcore.FeishuClient { return d.FeishuClient }
+func (d Dependencies) Feishu() feishutransport.Client { return d.FeishuClient }
 func (d Dependencies) ThreadMenuAppState() StateProvider {
 	if d.AppStateFn == nil {
 		return nil

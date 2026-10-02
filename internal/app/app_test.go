@@ -12,7 +12,7 @@ import (
 
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 
-	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 
 	"feidex/internal/adapter/feishu/pendingforms"
 	appmaintenance "feidex/internal/app/maintenance"
@@ -62,8 +62,8 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	notifier, ok := app.feishu.(*appfeishuwrap.NotifyingFeishuClient)
-	if app.codex != fc || !ok || notifier.Base != ff {
+	notifier, ok := app.composition.feishuTransport.(*appfeishuwrap.NotifyingFeishuClient)
+	if app.composition.codex != fc || !ok || notifier.Base != ff {
 		t.Fatalf("New() did not use injected clients: %+v", app)
 	}
 	if fc.onNotification == nil || fc.onRequest == nil {

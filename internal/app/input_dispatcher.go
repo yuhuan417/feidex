@@ -116,6 +116,12 @@ func newEffectRunner(a *App) frontendruntime.EffectRunner {
 	if a != nil && a.composition != nil && a.composition.effectRunner != nil {
 		return *a.composition.effectRunner
 	}
+	if a != nil && a.composition != nil && a.composition.feishuTransport != nil {
+		return feishuoutbound.NewEffectRunner(a.composition.feishuTransport)
+	}
+	if a == nil {
+		return frontendruntime.EffectRunner{}
+	}
 	return feishuoutbound.NewEffectRunner(a.feishu)
 }
 func dispatchCardAction(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

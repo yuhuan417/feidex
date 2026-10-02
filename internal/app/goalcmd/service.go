@@ -2,6 +2,7 @@ package goalcmd
 
 import (
 	"context"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
@@ -41,7 +42,7 @@ type StateProvider interface {
 // Dependencies is the explicit capability set consumed by goal commands.
 type Dependencies struct {
 	StateProvider                 StateProvider
-	FeishuClient                  appcore.FeishuClient
+	FeishuClient                  feishutransport.Client
 	CodexClientProvider           func() (CodexClient, error)
 	GoalTracker                   *Tracker
 	MakeSessionKeyFn              func(*feishu.InboundMessage) string
@@ -61,8 +62,8 @@ type Dependencies struct {
 	ContextProvider               interface{ Context() context.Context }
 }
 
-func (d Dependencies) State() StateProvider         { return d.StateProvider }
-func (d Dependencies) Feishu() appcore.FeishuClient { return d.FeishuClient }
+func (d Dependencies) State() StateProvider           { return d.StateProvider }
+func (d Dependencies) Feishu() feishutransport.Client { return d.FeishuClient }
 func (d Dependencies) CodexClient() (CodexClient, error) {
 	if d.CodexClientProvider == nil {
 		return nil, fmt.Errorf("codex client unavailable")

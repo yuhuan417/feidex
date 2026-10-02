@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -872,7 +872,6 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 		cfg:     loadedCfg,
 		cfgPath: cfgPath,
 		store:   store,
-		codex:   fc,
 		feishu:  appfeishuwrap.WrapFeishuClient(ff),
 		started: time.Now(),
 		asyncRunner: func(fn func()) {
@@ -882,11 +881,14 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 				fn()
 			}()
 		},
-		waitAsync:   asyncWG.Wait,
-		liveThreads: frontendruntime.NewLiveThreads(),
-		trackers: appTrackers{
-			turnStreams:  newTurnStreamTracker(),
-			turnBindings: turnbinding.NewTracker(store),
+		waitAsync: asyncWG.Wait,
+		composition: &appComposition{
+			codex:       fc,
+			liveThreads: frontendruntime.NewLiveThreads(),
+			trackers: &appTrackers{
+				turnStreams:  newTurnStreamTracker(),
+				turnBindings: turnbinding.NewTracker(store),
+			},
 		},
 	}
 	replaceCodexClient(a, fc)

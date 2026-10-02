@@ -35,14 +35,16 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	ff := &downloadFeishuStub{fakeFeishuClient: &fakeFeishuClient{}, downloadPath: downloadPath}
 	fc := &fakeCodexClient{}
 	a := &App{
-		cfg:         cfg,
-		store:       store,
-		feishu:      ff,
-		codex:       fc,
-		started:     time.Now(),
-		deduper:     frontendruntime.NewInboundDeduper(),
-		liveThreads: frontendruntime.NewLiveThreads(),
-		trackers:    appTrackers{turnStreams: newTurnStreamTracker()},
+		cfg:     cfg,
+		store:   store,
+		feishu:  ff,
+		started: time.Now(),
+		deduper: frontendruntime.NewInboundDeduper(),
+		composition: &appComposition{
+			codex:       fc,
+			liveThreads: frontendruntime.NewLiveThreads(),
+			trackers:    &appTrackers{turnStreams: newTurnStreamTracker()},
+		},
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "stale", CreatedAt: a.started.Add(-time.Minute).Unix()})
@@ -115,13 +117,15 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
 
 	bad := &App{
-		cfg:         &config.Config{Feishu: config.FeishuConfig{Backend: backendCodex}},
-		store:       store,
-		feishu:      ff,
-		codex:       fc,
-		started:     time.Now(),
-		liveThreads: frontendruntime.NewLiveThreads(),
-		trackers:    appTrackers{turnStreams: newTurnStreamTracker()},
+		cfg:     &config.Config{Feishu: config.FeishuConfig{Backend: backendCodex}},
+		store:   store,
+		feishu:  ff,
+		started: time.Now(),
+		composition: &appComposition{
+			codex:       fc,
+			liveThreads: frontendruntime.NewLiveThreads(),
+			trackers:    &appTrackers{turnStreams: newTurnStreamTracker()},
+		},
 	}
 	bad.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID:   "bad-attach",

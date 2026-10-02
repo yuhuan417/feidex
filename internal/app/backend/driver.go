@@ -1,6 +1,7 @@
 package backend
 
 import (
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
@@ -53,7 +54,7 @@ type ConversationDriver interface {
 
 type PermissionDependencies interface {
 	appcore.AppConfig
-	Feishu() appcore.FeishuClient
+	Feishu() feishutransport.Client
 }
 
 type WorkspacePermissionCommandRequest struct {

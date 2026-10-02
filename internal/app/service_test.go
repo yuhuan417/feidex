@@ -84,10 +84,10 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 	if codexApp.ConfigMu() != claudeApp.ConfigMu() {
 		t.Fatal("frontend apps should share one config mutex")
 	}
-	if codexApp.frontendID != "codex-main" || codexApp.backend != backendCodex || codexApp.codex != codexClients[0] || codexApp.claude != nil {
+	if codexApp.frontendID != "codex-main" || codexApp.backend != backendCodex || codexApp.composition.codex != codexClients[0] || codexApp.composition.claude != nil {
 		t.Fatalf("codex app = %+v", codexApp)
 	}
-	if claudeApp.frontendID != "claude-main" || claudeApp.backend != backendClaude || claudeApp.codex != nil || claudeApp.claude != claudeClients[0] {
+	if claudeApp.frontendID != "claude-main" || claudeApp.backend != backendClaude || claudeApp.composition.codex != nil || claudeApp.composition.claude != claudeClients[0] {
 		t.Fatalf("claude app = %+v", claudeApp)
 	}
 }
@@ -138,7 +138,7 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 	if codexCalls != 0 || claudeCalls != 0 {
 		t.Fatalf("runtime constructors should not run for unset backend, codex=%d claude=%d", codexCalls, claudeCalls)
 	}
-	if svc.apps[0].backend != "" || svc.apps[0].codex != nil || svc.apps[0].claude != nil {
+	if svc.apps[0].backend != "" || svc.apps[0].composition.codex != nil || svc.apps[0].composition.claude != nil {
 		t.Fatalf("unset backend app = %+v", svc.apps[0])
 	}
 }

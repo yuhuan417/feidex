@@ -201,13 +201,15 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 	}
 
 	a := &App{
-		cfg:         cfg,
-		cfgPath:     cfgPath,
-		store:       store,
-		backend:     backendCodex,
-		codex:       &fakeCodexClient{},
-		feishu:      &fakeFeishuClient{},
-		liveThreads: frontendruntime.NewLiveThreads(),
+		cfg:     cfg,
+		cfgPath: cfgPath,
+		store:   store,
+		backend: backendCodex,
+		feishu:  &fakeFeishuClient{},
+		composition: &appComposition{
+			codex:       &fakeCodexClient{},
+			liveThreads: frontendruntime.NewLiveThreads(),
+		},
 	}
 
 	sessionKey := "feishu:chat:chat-1"
@@ -329,13 +331,15 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 	}
 
 	app = &App{
-		cfg:         cfg,
-		cfgPath:     cfgPath,
-		store:       store,
-		backend:     backendClaude,
-		claude:      &fakeClaudeCore{},
-		feishu:      &fakeFeishuClient{},
-		liveThreads: frontendruntime.NewLiveThreads(),
+		cfg:     cfg,
+		cfgPath: cfgPath,
+		store:   store,
+		backend: backendClaude,
+		feishu:  &fakeFeishuClient{},
+		composition: &appComposition{
+			claude:      &fakeClaudeCore{},
+			liveThreads: frontendruntime.NewLiveThreads(),
+		},
 	}
 
 	sessionKey := "feishu:chat:chat-1"

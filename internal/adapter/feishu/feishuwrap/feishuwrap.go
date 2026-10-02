@@ -1,18 +1,18 @@
 // Package feishuwrap provides Feishu client wrappers for command capture
-// and permission-issue notification. Extracted from the app god package.
+// and permission-issue notification, plus the semantic outbound effect proxy.
 package feishuwrap
 
 import (
 	"context"
-	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
-	"feidex/internal/app/appcore"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/feishu"
+	"feidex/internal/textutil"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -29,7 +29,7 @@ type NotifyTarget struct {
 
 // CommandCaptureClient captures Feishu replies instead of sending them.
 type CommandCaptureClient struct {
-	Base           appcore.FeishuClient
+	Base           feishutransport.Client
 	ReplyMessageID string
 	Text           string
 	Card           map[string]any
@@ -198,7 +198,7 @@ func (c *CommandCaptureClient) BotName() string {
 // NotifyingFeishuClient wraps a FeishuClient to intercept replies for
 // command capture and to send permission-issue notifications.
 type NotifyingFeishuClient struct {
-	Base appcore.FeishuClient
+	Base feishutransport.Client
 
 	mu        sync.Mutex
 	recent    map[string]time.Time
@@ -207,7 +207,7 @@ type NotifyingFeishuClient struct {
 }
 
 // WrapFeishuClient creates a NotifyingFeishuClient wrapping the given base client.
-func WrapFeishuClient(base appcore.FeishuClient) appcore.FeishuClient {
+func WrapFeishuClient(base feishutransport.Client) feishutransport.Client {
 	if base == nil {
 		return nil
 	}

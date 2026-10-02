@@ -3,7 +3,7 @@ package app
 import (
 	domainsubmission "feidex/internal/domain/submission"
 
-	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 
 	"context"
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"

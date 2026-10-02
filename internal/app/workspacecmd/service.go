@@ -4,6 +4,7 @@ package workspacecmd
 
 import (
 	"context"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/domain/conversation"
 	"strings"
 	"sync"
@@ -94,7 +95,7 @@ var (
 // ReplyInThreadEnabled, FirstNonEmpty) which all accept this interface.
 type App struct {
 	ConfigProvider  appcore.AppExtended
-	FeishuClient    appcore.FeishuClient
+	FeishuClient    feishutransport.Client
 	ContextProvider interface{ Context() context.Context }
 	BackendDriver   appbackend.Driver
 }
@@ -146,7 +147,7 @@ func (a App) SetBackend(v string) {
 		a.ConfigProvider.SetBackend(v)
 	}
 }
-func (a App) Feishu() appcore.FeishuClient { return a.FeishuClient }
+func (a App) Feishu() feishutransport.Client { return a.FeishuClient }
 func (a App) Context() context.Context {
 	if a.ContextProvider != nil {
 		if c := a.ContextProvider.Context(); c != nil {

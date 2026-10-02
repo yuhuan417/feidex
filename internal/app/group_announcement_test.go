@@ -1,7 +1,7 @@
 package app
 
 import (
-	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
 
@@ -23,14 +23,16 @@ func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeish
 	cfg.Feishu.Backend = backendCodex
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	return &App{
-		cfg:         cfg,
-		store:       store,
-		frontendID:  strings.TrimSpace(frontendID),
-		feishu:      appfeishuwrap.WrapFeishuClient(ff),
-		started:     time.Now(),
-		liveThreads: frontendruntime.NewLiveThreads(),
-		trackers: appTrackers{
-			groupAnnouncements: newGroupAnnouncementTracker(),
+		cfg:        cfg,
+		store:      store,
+		frontendID: strings.TrimSpace(frontendID),
+		feishu:     appfeishuwrap.WrapFeishuClient(ff),
+		started:    time.Now(),
+		composition: &appComposition{
+			liveThreads: frontendruntime.NewLiveThreads(),
+			trackers: &appTrackers{
+				groupAnnouncements: newGroupAnnouncementTracker(),
+			},
 		},
 	}
 }

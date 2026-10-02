@@ -2,6 +2,7 @@ package planmode
 
 import (
 	"context"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/modelconfig"
 	domainbackend "feidex/internal/domain/backend"
@@ -36,7 +37,7 @@ type Dependencies struct {
 	ConfigProvider               appcore.AppConfig
 	ContextProvider              interface{ Context() context.Context }
 	StateProvider                StateProvider
-	FeishuClient                 appcore.FeishuClient
+	FeishuClient                 feishutransport.Client
 	CodexClientProvider          func() (CodexClient, error)
 	MakeSessionKeyFn             func(*feishu.InboundMessage) string
 	ReplyInThreadEnabledFn       func(string) bool
@@ -94,8 +95,8 @@ func (d Dependencies) Context() context.Context {
 	}
 	return context.Background()
 }
-func (d Dependencies) State() StateProvider         { return d.StateProvider }
-func (d Dependencies) Feishu() appcore.FeishuClient { return d.FeishuClient }
+func (d Dependencies) State() StateProvider           { return d.StateProvider }
+func (d Dependencies) Feishu() feishutransport.Client { return d.FeishuClient }
 func (d Dependencies) CodexClient() (CodexClient, error) {
 	if d.CodexClientProvider == nil {
 		return nil, fmt.Errorf("codex client unavailable")

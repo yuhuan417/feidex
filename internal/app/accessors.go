@@ -160,8 +160,9 @@ func currentClaudeCore(a *App) ClaudeCore {
 		return nil
 	}
 	ensureCompositionState(a)
+	a.composition.clientsMu.RLock()
+	defer a.composition.clientsMu.RUnlock()
 	return a.composition.claude
-
 }
 
 func ensureCompositionState(a *App) {
@@ -171,25 +172,6 @@ func ensureCompositionState(a *App) {
 	if a.composition == nil {
 		a.composition = &appComposition{}
 	}
-	if a.composition.codex == nil && a.codex != nil {
-		a.composition.codex = a.codex
-	}
-	if a.composition.claude == nil && a.claude != nil {
-		a.composition.claude = a.claude
-	}
-	if a.composition.liveThreads == nil && a.liveThreads != nil {
-		a.composition.liveThreads = a.liveThreads
-	}
-	if a.composition.trackers == nil && legacyTrackersPresent(&a.trackers) {
-		a.composition.trackers = &a.trackers
-	}
-	if a.composition.autoRetries == nil && a.autoRetries != nil {
-		a.composition.autoRetries = a.autoRetries
-	}
-}
-
-func legacyTrackersPresent(t *appTrackers) bool {
-	return t != nil && (t.turnStreams != nil || t.turnItems != nil || t.turnBindings != nil || t.workspaceCloneOps != nil || t.finalCardPatches != nil || t.pendingSkills != nil || t.groupAnnouncements != nil || t.maintenanceTrackers != nil || t.goals != nil)
 }
 
 func setCompositionClaude(a *App, core ClaudeCore) {
@@ -197,8 +179,9 @@ func setCompositionClaude(a *App, core ClaudeCore) {
 		return
 	}
 	ensureCompositionState(a)
+	a.composition.clientsMu.Lock()
+	defer a.composition.clientsMu.Unlock()
 	a.composition.claude = core
-	a.claude = core
 }
 
 // Trackers returns the per-service runtime tracker bundle.

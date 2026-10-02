@@ -507,4 +507,14 @@ Codex server request
 - tracker、live-thread、auto-retry、Codex recovery 和 backend client 的生产 owner 已迁入 `appComposition`；`App` 上保留的字段只作为旧测试/过渡构造的兼容镜像，生产读写经过 composition accessor。
 - application/runtime/adapter 中残留的 `*App` 状态接口已统一改为 capability 语义命名（`StateProvider`、`QueueStateProvider`、`PendingQueueStateProvider`），避免接口名称继续暗示宿主聚合依赖。
 
-四个目标均已完成：message/card command 编排、effect outbound pipeline、backend dependency carrier 收窄和 composition root 瘦身。剩余的 `App` 字段仅为兼容镜像，不作为生产 capability owner；后续新增代码继续禁止直接依赖这些字段。
+上述记录描述各阶段迁移结果；最终清理以以下记录为准。
+
+
+### 2026-10-02 outbound 与兼容状态最终清理
+
+- 删除 App 的 codex、claude、autoRetries、liveThreads、trackers 五个兼容镜像；删除复制回 composition 的 fallback 和双写逻辑。测试直接构造 composition，生产与测试只有一个 runtime owner。
+- 新增 Feishu EffectClient，六种消息/卡片 outbound 方法统一转换为 application effect，composition 在创建 dispatcher 和下游服务前安装 proxy。带 ID 的方法使用 RunSendMessage/RunSendCard，保留 final reuse、fallback、pending/message link 和 goal continuation 的 ID 语义。
+- effect runner 绑定独立 NotifyingFeishuClient transport，proxy 与 runner 不形成递归。显式 effect 和旧调用都保留 command capture、权限诊断、去重、thread 路由和错误返回。事件注册、文件上传下载、reaction 和身份查询继续由 transport 执行。
+- Feishu wrapper 与 transport 接口整体迁入 internal/adapter/feishu；删除旧 internal/app/feishuwrap 路径和 appcore.FeishuClient，不留兼容别名。
+- composition 持有 transport 和 client 读写锁；恢复后替换 Codex client 与队列恢复读取使用同一锁，消除 race 检测发现的竞争。
+- 新增真实 New 构造路径回归，覆盖六种 outbound、返回 ID、capture、取消、transport error 和权限通知去重。全量 go test、go test -race、go vet、staticcheck、diff check 通过；不运行 live token-consuming integration tests。

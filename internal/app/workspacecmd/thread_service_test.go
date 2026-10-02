@@ -5,6 +5,7 @@ import (
 	"errors"
 	claudeadapter "feidex/internal/adapter/backend/claude"
 	codexadapter "feidex/internal/adapter/backend/codex"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	conversationapp "feidex/internal/application/conversation"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
@@ -82,15 +83,15 @@ type testWorkspaceApp struct {
 	mu      sync.RWMutex
 }
 
-func (a *testWorkspaceApp) Config() *config.Config       { return a.cfg }
-func (a *testWorkspaceApp) ConfigMu() *sync.RWMutex      { return &a.mu }
-func (a *testWorkspaceApp) Backend() string              { return a.backend }
-func (a *testWorkspaceApp) FrontendID() string           { return "" }
-func (a *testWorkspaceApp) FrontendConfigIndex() int     { return -1 }
-func (a *testWorkspaceApp) Store() *state.Store          { return nil }
-func (a *testWorkspaceApp) SetBackend(backend string)    { a.backend = backend }
-func (a *testWorkspaceApp) ConfigPath() string           { return a.cfgPath }
-func (a *testWorkspaceApp) Feishu() appcore.FeishuClient { return nil }
+func (a *testWorkspaceApp) Config() *config.Config         { return a.cfg }
+func (a *testWorkspaceApp) ConfigMu() *sync.RWMutex        { return &a.mu }
+func (a *testWorkspaceApp) Backend() string                { return a.backend }
+func (a *testWorkspaceApp) FrontendID() string             { return "" }
+func (a *testWorkspaceApp) FrontendConfigIndex() int       { return -1 }
+func (a *testWorkspaceApp) Store() *state.Store            { return nil }
+func (a *testWorkspaceApp) SetBackend(backend string)      { a.backend = backend }
+func (a *testWorkspaceApp) ConfigPath() string             { return a.cfgPath }
+func (a *testWorkspaceApp) Feishu() feishutransport.Client { return nil }
 
 type threadServiceOptions struct {
 	claude   appcore.ClaudeCore

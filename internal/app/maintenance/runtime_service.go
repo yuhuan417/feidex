@@ -16,7 +16,7 @@ import (
 
 	appattachments "feidex/internal/app/attachments"
 
-	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"

@@ -6,9 +6,9 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/app/appstate"
 	"feidex/internal/app/attachments"
-	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/domain/conversation"
 	appcodexruntime "feidex/internal/runtime/codex"
 	"fmt"
@@ -69,20 +69,16 @@ type App struct {
 	backendSwitching       bool
 	backendSwitchTarget    string
 	mcp                    *feidexMCPService
-	// Deprecated test construction mirrors; production runtime state is owned
-	// by appComposition and accessed through capability accessors.
-	codex       CodexClient
-	claude      ClaudeCore
-	autoRetries *appautoretry.Tracker
-	liveThreads *frontendruntime.LiveThreads
-	trackers    appTrackers
 }
 
 // appComposition owns lazily constructed application/backend services. Keeping
 // these bindings together prevents the frontend aggregate from becoming a
 // second service registry while preserving one cache per frontend runtime.
 type appComposition struct {
-	mu sync.Mutex
+	mu        sync.Mutex
+	clientsMu sync.RWMutex
+	// feishuTransport is used only by the effect runner; services get the proxy.
+	feishuTransport FeishuClient
 	// Runtime-owned state lives here so App remains the frontend entrypoint
 	// rather than a registry of mutable service state.
 	codex            CodexClient
@@ -148,7 +144,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		return nil, fmt.Errorf("nil store")
 	}
 	backend := normalizeRuntimeBackend(frontend.Backend)
-	FeishuClient := appfeishuwrap.WrapFeishuClient(newFeishuClient(frontend.Feishu))
+	feishuTransport := appfeishuwrap.WrapFeishuClient(newFeishuClient(frontend.Feishu))
 	app := &App{
 		cfg:                 cfg,
 		cfgPath:             cfgPath,
@@ -157,8 +153,8 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		frontendConfigIndex: frontend.ConfigIndex,
 		backend:             backend,
 		backendDriver:       backendDriverForKind(backend),
-		composition:         &appComposition{},
-		feishu:              FeishuClient,
+		composition:         &appComposition{feishuTransport: feishuTransport},
+		feishu:              feishuTransport,
 		started:             time.Now(),
 		deduper:             frontendruntime.NewInboundDeduper(),
 		sessionActors:       frontendruntime.NewSessionActors(),
@@ -174,11 +170,14 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		pendingSkills:      appskillscmd.NewPendingSkillTracker(),
 		groupAnnouncements: newGroupAnnouncementTracker(),
 	}
+	effectRunner := newEffectRunner(app)
+	app.composition.effectRunner = &effectRunner
+	if notifying, ok := app.feishu.(*appfeishuwrap.NotifyingFeishuClient); ok {
+		app.feishu = &appfeishuwrap.EffectClient{NotifyingFeishuClient: notifying, Frontend: identity.FrontendID(app.frontendID), Runner: effectRunner}
+	}
 	app.stateView = appstate.New(app)
 	dispatcher := newInputDispatcher(app)
 	app.composition.dispatcher = &dispatcher
-	effectRunner := newEffectRunner(app)
-	app.composition.effectRunner = &effectRunner
 	if err := canonicalizeStoredSessionKeys(app); err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"runtime"
 
 	"feidex/internal/app/appcore"
@@ -14,10 +15,10 @@ import (
 	"feidex/internal/release"
 )
 
-// CodexClient, ClaudeCore, and FeishuClient are defined in appcore/.
+// Backend clients come from appcore; Feishu transport is adapter-owned.
 type CodexClient = appcore.CodexClient
 type ClaudeCore = appcore.ClaudeCore
-type FeishuClient = appcore.FeishuClient
+type FeishuClient = feishutransport.Client
 
 type releaseClient interface {
 	LatestLinuxBinary(context.Context, string) (*release.ReleaseInfo, error)

@@ -3,6 +3,7 @@
 package backend
 
 import (
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"sync"
 
 	"feidex/internal/app/appcore"
@@ -24,5 +25,5 @@ type Dependencies interface {
 	MaintenanceTrackers() TrackerMap
 
 	// Feishu client access
-	Feishu() appcore.FeishuClient
+	Feishu() feishutransport.Client
 }

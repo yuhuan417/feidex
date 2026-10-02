@@ -83,6 +83,8 @@ func getCodex(a *App) CodexClient {
 		return nil
 	}
 	ensureCompositionState(a)
+	a.composition.clientsMu.RLock()
+	defer a.composition.clientsMu.RUnlock()
 	return a.composition.codex
 }
 
@@ -91,8 +93,9 @@ func setCodex(a *App, c CodexClient) {
 		return
 	}
 	ensureCompositionState(a)
+	a.composition.clientsMu.Lock()
+	defer a.composition.clientsMu.Unlock()
 	a.composition.codex = c
-	a.codex = c
 }
 
 func currentCodexClient(a *App) CodexClient {

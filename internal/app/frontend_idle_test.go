@@ -54,7 +54,7 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(foreign) error = %v", err)
 				}
-				a.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
+				a.composition.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					foreignSessionKey: {
 						SessionKey: foreignSessionKey,
 						ThreadID:   "thread-foreign",
@@ -180,7 +180,7 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(current) error = %v", err)
 				}
-				a.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
+				a.composition.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					currentSessionKey: {
 						SessionKey: currentSessionKey,
 						ThreadID:   "thread-1",
@@ -200,7 +200,7 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(current) error = %v", err)
 				}
-				a.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
+				a.composition.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					currentSessionKey: {
 						SessionKey: currentSessionKey,
 						ThreadID:   "thread-1",
@@ -216,6 +216,7 @@ func TestFrontendIdleState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			a, store := newTestApp(t)
 			if tt.seed != nil {
+				ensureCompositionState(a)
 				tt.seed(t, a, store)
 			}
 			got := frontendIdleBlockedReason(a)

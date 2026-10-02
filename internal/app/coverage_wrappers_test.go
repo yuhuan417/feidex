@@ -4,8 +4,8 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/app/appstate"
-	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

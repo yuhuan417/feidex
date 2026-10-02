@@ -4,7 +4,7 @@ import (
 	"feidex/internal/textutil"
 	"strings"
 
-	appfeishuwrap "feidex/internal/app/feishuwrap"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"

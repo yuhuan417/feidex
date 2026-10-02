@@ -13,31 +13,33 @@ internal/domain/             纯领域模型与状态转换
 internal/adapter/            Feishu、backend 和 storage 适配器
 internal/architecture/       依赖方向与分层架构测试
 internal/app/appcore/       核心组合（client 接口、session key、workspace 选择）
-internal/app/apphistory/    进程历史
+internal/adapter/backend/claude/catalog/ Claude session catalog
+internal/adapter/backend/claude/history.go Claude 历史转换
 internal/app/appstate/      应用状态 store
 internal/adapter/feishu/approval/      审批卡片文案、按钮、文件摘要
 internal/adapter/feishu/approvalview/  审批视图渲染
-internal/app/autoretry/     自动重试状态
+internal/runtime/autoretry/ 自动重试状态与定时协调
+internal/adapter/feishu/autoretry/ 自动重试卡片与入口
 internal/app/backend/       后端驱动抽象（选择、action、failure、transition）
 internal/adapter/feishu/cards/         飞书卡片构造 helper
-internal/app/clauderuntime/ Claude 运行时集成
-internal/app/claudesession/ Claude session 生命周期
-internal/app/claudesupport/ Claude 诊断/历史 helper
-internal/runtime/codex/  Codex 运行时集成
-internal/app/compact/       上下文压缩
-internal/app/convbackend/   会话后端 facade
+internal/runtime/codex/     Codex 恢复与升级
+internal/runtime/claude/    Claude 运行时集成
+internal/application/compaction/ 上下文压缩用例
+internal/application/conversation/ 会话创建、恢复、选择与 fork
+internal/adapter/feishu/history/ 历史命令与展示
+internal/adapter/feishu/turnstream/ turn 流展示
 internal/adapter/feishu/delivery/      回复卡片分片、markdown 拆分
 internal/application/features/         统一命令/菜单/action 注册
-internal/app/feishuwrap/    飞书适配包装器
-internal/app/finalcardpatch/最终卡片 patch 逻辑
-internal/app/historycmd/    历史命令处理
+internal/adapter/feishu/feishuwrap/    effect proxy、命令捕获与权限通知
+internal/adapter/feishu/transport/    Feishu transport 接口
+internal/adapter/feishu/outbound/     effect 到 transport 的执行绑定
+internal/adapter/feishu/finalcardpatch/ 最终卡片 patch 逻辑
 internal/app/lifecycle/     pending request / lifecycle 共享谓词
 internal/app/maintenance/   backend-agnostic 升级/维护 workflow
 internal/app/modelconfig/   模型配置卡片与命令入口（迁移中的 adapter）
 internal/domain/modelconfig/ 模型 scope resolution 与 turn snapshot 规则
 internal/app/pathpick/      路径选择器
 internal/adapter/feishu/pendingforms/  待处理表单
-internal/app/replycontinuation/ 回复接续处理
 internal/adapter/feishu/review/        review target 数据结构
 internal/app/reviewcmd/     review 命令处理
 internal/app/serverrequest/ 服务端请求处理
@@ -51,7 +53,6 @@ internal/adapter/feishu/turn/          turn 管理
 internal/runtime/turnbinding/          turn 绑定逻辑
 internal/adapter/feishu/turnitem/      turn item 类型
 internal/application/turn/ turn 生命周期协调
-internal/app/turnstream/    turn 流处理
 internal/app/upgradecmd/    升级命令处理
 internal/app/upgraderender/ 升级卡片渲染
 internal/application/presentation/usageview/ usage 视图渲染
@@ -65,15 +66,14 @@ internal/state/             本地状态存储（session/submission/message link
 internal/textutil/          不依赖 app 的通用文本 helper
 internal/daemon/            daemon 安装、运行与升级
 internal/release/           GitHub Release 查询与版本比较
-internal/codexinstall/      Codex CLI 安装与探测
-internal/claudeinstall/     Claude CLI 安装与探测
+internal/install/           Codex/Claude CLI 安装与探测
 scripts/create_github_release.sh  发布 tag 脚本
 config.example.toml         配置样例
 ```
 
 ## 架构视图
 
-当前兼容主路径是：飞书事件进入 `internal/feishu`，由 `internal/app` 转发到逐步迁移中的 application use case，再通过 backend adapter 调用 `internal/codexrpc` 或 `internal/claudecli`，运行时和可恢复状态写入 `internal/state`。长期目标路径见 [长期架构重构提案](architecture-refactor-proposal.md)。
+当前主路径是：飞书事件进入 `internal/feishu`，由 `internal/app` 转发到逐步迁移中的 application use case，再通过 backend adapter 调用 `internal/codexrpc` 或 `internal/claudecli`，运行时和可恢复状态写入 `internal/state`。长期目标路径见 [长期架构重构提案](architecture-refactor-proposal.md)。
 
 关键边界：
 
@@ -89,7 +89,7 @@ config.example.toml         配置样例
 
 ### 迁移中的架构状态
 
-- 现有 `internal/app` 已拆成多个子包，但仍存在 callback、宽 `App` interface 和 root glue。新的拆分以 [长期架构重构提案](architecture-refactor-proposal.md) 为准，优先把状态和用例迁移到 `internal/domain`、`internal/application`。
+- `internal/app` 仍保留 Feishu 命令、菜单和 composition 编排；核心业务状态与用例分别由 `internal/domain`、`internal/application` 持有。新增功能不得扩大 root glue 或引入宽宿主接口。
 - conversation/session 类型、workspace 恢复校验、backend lineage 和活动操作转换已迁入 domain；删除 sessionctx、appcore session facade 和根活动操作转发文件。持久化字段和协议转换边界保持原有语义。
 - submission 类型、状态枚举和 running/finalize 转换已迁入 `internal/domain/submission`；`internal/state` 保留 repository 实现，状态语义由 domain transition 持有。
 - session queue 的 FIFO、去重和 active-operation 边界由 `internal/domain/conversation` 维护；repository 只保存队列快照。

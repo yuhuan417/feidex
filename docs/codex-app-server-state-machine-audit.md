@@ -709,3 +709,11 @@ frontend 的有效 client，审批 reply/resolved、turn/start timeout 和 revie
 - 自动重试 timer 携带 generation token，通过统一输入 dispatch；/stop 的串行启动锁、cancel marker、backoff 和“继续”语义保持原行为。
 - startup recovery 与 turn cleanup 的 owner 移至 runtime；async question 和 Claude open control request 仍保留到其独立终点。后台维护与 final card patch 使用 frontend context 和任务准入，shutdown 继续先取消再 drain。
 - standalone compact 状态 owner 移至 application；仅 backend adapter 调用 thread/compact/start，失败时仍只在 thread/status 未被后续事件推进的条件下恢复旧状态。
+
+
+## 2026-10-02 outbound effect proxy 与单一 client owner 核对
+
+- 核对 SM-03～SM-11、SM-14、SM-22～SM-26：Feishu proxy 只改变 outbound 执行入口，thread/turn、review、compaction、goal continuation 和 server-request reply/resolved 顺序不变。
+- 新消息 ID 由 RunSendMessage/RunSendCard 原样返回；goal continuation 的新根卡、pending 请求的消息关联和 final card reuse 保持原有绑定。command capture 和权限诊断仍在独立 transport wrapper 内执行。
+- 删除 App 的五个 runtime 兼容镜像，client 唯一 owner 为 composition。Codex 恢复安装与队列读取使用同一 client 锁，不持锁执行网络操作，也不跨 frontend 共享 client。
+- 原有状态机契约测试、真实 composition outbound 回归和全量 race 检查通过；未运行消耗 token 的 live integration 测试。

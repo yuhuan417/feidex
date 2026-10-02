@@ -6,6 +6,7 @@ package reviewcmd
 import (
 	"context"
 	"encoding/json"
+	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/textutil"
@@ -83,7 +84,7 @@ type CodexClient interface {
 // composition root.
 type Dependencies struct {
 	ConfigProvider                    appcore.AppConfig
-	FeishuClient                      appcore.FeishuClient
+	FeishuClient                      feishutransport.Client
 	StateProvider                     StateProvider
 	WorkspaceProviderValue            WorkspaceProvider
 	GitProvider                       ReviewGitProvider
@@ -138,7 +139,7 @@ func (d Dependencies) Store() *state.Store {
 	}
 	return d.ConfigProvider.Store()
 }
-func (d Dependencies) ReviewFeishu() appcore.FeishuClient         { return d.FeishuClient }
+func (d Dependencies) ReviewFeishu() feishutransport.Client       { return d.FeishuClient }
 func (d Dependencies) ReviewAppState() StateProvider              { return d.StateProvider }
 func (d Dependencies) ReviewWorkspaceProvider() WorkspaceProvider { return d.WorkspaceProviderValue }
 func (d Dependencies) ReviewGitProvider() ReviewGitProvider       { return d.GitProvider }
