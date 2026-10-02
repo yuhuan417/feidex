@@ -1,13 +1,13 @@
-package apphistory
+package history
 
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"feidex/internal/app/appcore"
 	"feidex/internal/codexrpc"
 	appruntime "feidex/internal/runtime"
+	"feidex/internal/textutil"
 )
 
 // TurnSummary is an alias for the runtime type.
@@ -24,7 +24,7 @@ func SummarizeThreadHistory(turns []codexrpc.ThreadReadTurn, currentTurnID strin
 			IsCurrent: strings.TrimSpace(turn.ID) != "" && strings.TrimSpace(turn.ID) == strings.TrimSpace(currentTurnID),
 		}
 		if turn.Error != nil {
-			summary.ErrorText = strings.TrimSpace(appcore.FirstNonEmpty(turn.Error.Message, StringPtrValue(turn.Error.AdditionalDetails)))
+			summary.ErrorText = strings.TrimSpace(textutil.FirstNonEmpty(turn.Error.Message, StringPtrValue(turn.Error.AdditionalDetails)))
 		}
 		for _, item := range turn.Items {
 			switch strings.TrimSpace(item.Type) {
@@ -62,13 +62,13 @@ func UserMessageInputs(item codexrpc.ThreadReadItem) []string {
 				rendered = append(rendered, text)
 			}
 		case "image":
-			rendered = append(rendered, "[image] "+appcore.FirstNonEmpty(strings.TrimSpace(input.URL), "(no url)"))
+			rendered = append(rendered, "[image] "+textutil.FirstNonEmpty(strings.TrimSpace(input.URL), "(no url)"))
 		case "localImage":
-			rendered = append(rendered, "[localImage] "+appcore.FirstNonEmpty(strings.TrimSpace(input.Path), "(no path)"))
+			rendered = append(rendered, "[localImage] "+textutil.FirstNonEmpty(strings.TrimSpace(input.Path), "(no path)"))
 		case "skill":
-			rendered = append(rendered, "[skill] "+appcore.FirstNonEmpty(strings.TrimSpace(input.Name), strings.TrimSpace(input.Path), "(unknown skill)"))
+			rendered = append(rendered, "[skill] "+textutil.FirstNonEmpty(strings.TrimSpace(input.Name), strings.TrimSpace(input.Path), "(unknown skill)"))
 		case "mention":
-			rendered = append(rendered, "[mention] "+appcore.FirstNonEmpty(strings.TrimSpace(input.Name), strings.TrimSpace(input.Path), "(unknown mention)"))
+			rendered = append(rendered, "[mention] "+textutil.FirstNonEmpty(strings.TrimSpace(input.Name), strings.TrimSpace(input.Path), "(unknown mention)"))
 		}
 	}
 	return rendered
@@ -80,9 +80,9 @@ func InputPreview(inputs []string) string {
 		return ""
 	}
 	if len(inputs) == 1 {
-		return appcore.Truncate(inputs[0], 72)
+		return textutil.Truncate(inputs[0], 72)
 	}
-	return appcore.Truncate(inputs[0], 56) + fmt.Sprintf(" 等 %d 条", len(inputs))
+	return textutil.Truncate(inputs[0], 56) + fmt.Sprintf(" 等 %d 条", len(inputs))
 }
 
 // StringPtrValue dereferences a string pointer, returning "" if nil.

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	claudesession "feidex/internal/adapter/backend/claude/catalog"
+	history "feidex/internal/adapter/feishu/history"
 	"feidex/internal/app/claudesupport"
-	apphistorycmd "feidex/internal/app/historycmd"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	appruntime "feidex/internal/runtime"
@@ -24,7 +24,7 @@ func newClaudeHistoryService(a *App) *claudesupport.HistoryService {
 		},
 		ThreadLabel:  appthreadmenu.SessionCurrentThreadLabel,
 		MenuCardBody: menuCardBody,
-		PageSize:     apphistorycmd.HistoryPageSize,
+		PageSize:     history.HistoryPageSize,
 	}
 }
 

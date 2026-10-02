@@ -1,4 +1,4 @@
-package apphistory
+package history
 
 import (
 	"encoding/json"

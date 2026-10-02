@@ -39,7 +39,7 @@ type TurnStreamFlushResult struct {
 	PlanMessageID           string
 }
 
-func ExitContentCardTitle(a App, sessionKey, workspaceID, title string) string {
+func ExitContentCardTitle(a Dependencies, sessionKey, workspaceID, title string) string {
 	return ContentCardTitleForSession(a, sessionKey, workspaceID, title)
 }
 
@@ -81,40 +81,40 @@ func ExitPromptButtons(requestID string) []feishu.Button {
 	}
 }
 
-func ExitPromptCard(a App, sessionKey, workspaceID, planMarkdown, requestID string) map[string]any {
+func ExitPromptCard(a Dependencies, sessionKey, workspaceID, planMarkdown, requestID string) map[string]any {
 	body := strings.TrimSpace(planMarkdown)
 	if body == "" {
 		body = "Plan mode has finished."
 	}
-	if a == nil || a.Feishu() == nil {
+	if a.ConfigProvider == nil || a.Feishu() == nil {
 		return nil
 	}
 	return a.Feishu().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitPendingTitle), "orange", body, ExitPromptButtons(requestID))
 }
 
-func ExitSuccessCard(a App, sessionKey, workspaceID, title, body string) map[string]any {
-	if a == nil || a.Feishu() == nil {
+func ExitSuccessCard(a Dependencies, sessionKey, workspaceID, title, body string) map[string]any {
+	if a.ConfigProvider == nil || a.Feishu() == nil {
 		return nil
 	}
 	return a.Feishu().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, strings.TrimSpace(appcore.FirstNonEmpty(title, ExitPendingTitle))), "green", strings.TrimSpace(body), nil)
 }
 
-func ExitFailureCard(a App, sessionKey, workspaceID, body string) map[string]any {
-	if a == nil || a.Feishu() == nil {
+func ExitFailureCard(a Dependencies, sessionKey, workspaceID, body string) map[string]any {
+	if a.ConfigProvider == nil || a.Feishu() == nil {
 		return nil
 	}
 	return a.Feishu().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitPendingTitle), "red", strings.TrimSpace(appcore.FirstNonEmpty(body, "Unable to process the plan confirmation.")), nil)
 }
 
-func ExitExpiredCard(a App, sessionKey, workspaceID, body string) map[string]any {
-	if a == nil || a.Feishu() == nil {
+func ExitExpiredCard(a Dependencies, sessionKey, workspaceID, body string) map[string]any {
+	if a.ConfigProvider == nil || a.Feishu() == nil {
 		return nil
 	}
 	return a.Feishu().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitExpiredTitle), "grey", strings.TrimSpace(appcore.FirstNonEmpty(body, "This confirmation is no longer valid.")), nil)
 }
 
-func ExitPendingRequest(a App, sessionKey string) *state.PendingRequest {
-	if a == nil {
+func ExitPendingRequest(a Dependencies, sessionKey string) *state.PendingRequest {
+	if a.ConfigProvider == nil {
 		return nil
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
@@ -136,8 +136,8 @@ func ExitPendingRequest(a App, sessionKey string) *state.PendingRequest {
 	return latest
 }
 
-func ExitOtherOpenPendingExists(a App, sessionKey, excludeID string) bool {
-	if a == nil {
+func ExitOtherOpenPendingExists(a Dependencies, sessionKey, excludeID string) bool {
+	if a.ConfigProvider == nil {
 		return false
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
@@ -160,11 +160,11 @@ func ExitOtherOpenPendingExists(a App, sessionKey, excludeID string) bool {
 	return false
 }
 
-func SessionHasPlanExitBlockers(a App, sess *conversation.Session) bool {
+func SessionHasPlanExitBlockers(a Dependencies, sess *conversation.Session) bool {
 	if sess == nil {
 		return true
 	}
-	if a != nil && a.SessionHasActiveWork(sess) {
+	if a.ConfigProvider != nil && a.SessionHasActiveWork(sess) {
 		return true
 	}
 	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
@@ -176,9 +176,9 @@ func SessionHasPlanExitBlockers(a App, sess *conversation.Session) bool {
 	return false
 }
 
-func InvalidateCodexPlanModeExitArtifactsForSession(a App, sessionKey, reason string) {
+func InvalidateCodexPlanModeExitArtifactsForSession(a Dependencies, sessionKey, reason string) {
 	sessionKey = strings.TrimSpace(sessionKey)
-	if sessionKey == "" || a == nil {
+	if sessionKey == "" || a.ConfigProvider == nil {
 		return
 	}
 	reason = strings.TrimSpace(reason)
@@ -195,8 +195,8 @@ func InvalidateCodexPlanModeExitArtifactsForSession(a App, sessionKey, reason st
 	}
 }
 
-func ProcessCodexPlanModeExitOnTurnCompleted(a App, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool {
-	if a == nil || sub == nil {
+func ProcessCodexPlanModeExitOnTurnCompleted(a Dependencies, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool {
+	if a.ConfigProvider == nil || sub == nil {
 		return false
 	}
 	if appcore.ConfiguredBackend(a) != BackendCodex {
@@ -247,8 +247,8 @@ func ProcessCodexPlanModeExitOnTurnCompleted(a App, sessionKey string, sub *doma
 	return true
 }
 
-func sendCodexPlanModeExitPrompt(a App, sub *domainsubmission.Submission, planMarkdown, reuseMessageID string) error {
-	if a == nil || a.Feishu() == nil || sub == nil {
+func sendCodexPlanModeExitPrompt(a Dependencies, sub *domainsubmission.Submission, planMarkdown, reuseMessageID string) error {
+	if a.ConfigProvider == nil || a.Feishu() == nil || sub == nil {
 		return fmt.Errorf("plan mode exit prompt unavailable")
 	}
 	requestID, err := a.State().NextLocalID("codex-plan-exit")
@@ -291,8 +291,8 @@ func sendCodexPlanModeExitPrompt(a App, sub *domainsubmission.Submission, planMa
 	})
 }
 
-func CompleteCodexPlanModeExit(a App, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	if a == nil || action == nil {
+func CompleteCodexPlanModeExit(a Dependencies, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+	if a.ConfigProvider == nil || action == nil {
 		return &callback.CardActionTriggerResponse{}, nil
 	}
 	requestID := strings.TrimSpace(a.ActionStringValue(action, "request_id"))
@@ -343,8 +343,8 @@ func CompleteCodexPlanModeExit(a App, action *feishu.CardAction, actionName stri
 	}, nil
 }
 
-func sendCodexPlanModeExitFollowupCard(a App, pending *state.PendingRequest, action *feishu.CardAction, card map[string]any, sub *domainsubmission.Submission) error {
-	if a == nil || a.Feishu() == nil || pending == nil || card == nil {
+func sendCodexPlanModeExitFollowupCard(a Dependencies, pending *state.PendingRequest, action *feishu.CardAction, card map[string]any, sub *domainsubmission.Submission) error {
+	if a.ConfigProvider == nil || a.Feishu() == nil || pending == nil || card == nil {
 		return fmt.Errorf("plan mode exit follow-up unavailable")
 	}
 	messageID := strings.TrimSpace(pending.FeishuMsgID)
@@ -364,8 +364,8 @@ func sendCodexPlanModeExitFollowupCard(a App, pending *state.PendingRequest, act
 	return err
 }
 
-func runCodexPlanModeExitAction(a App, actionName string, pending *state.PendingRequest, action *feishu.CardAction) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
-	if a == nil || pending == nil || action == nil {
+func runCodexPlanModeExitAction(a Dependencies, actionName string, pending *state.PendingRequest, action *feishu.CardAction) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
+	if a.ConfigProvider == nil || pending == nil || action == nil {
 		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	current := a.State().Pending(pending.ID)
@@ -391,8 +391,8 @@ func runCodexPlanModeExitAction(a App, actionName string, pending *state.Pending
 	}
 }
 
-func codexPlanModeExitImplementCurrent(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
-	if a == nil || pending == nil {
+func codexPlanModeExitImplementCurrent(a Dependencies, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
+	if a.ConfigProvider == nil || pending == nil {
 		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	sess := a.State().Session(pending.SessionKey)
@@ -444,8 +444,8 @@ func codexPlanModeExitImplementCurrent(a App, pending *state.PendingRequest) (*c
 	}, startedSub, nil
 }
 
-func codexPlanModeExitImplementFresh(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
-	if a == nil || pending == nil {
+func codexPlanModeExitImplementFresh(a Dependencies, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
+	if a.ConfigProvider == nil || pending == nil {
 		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	sess := a.State().Session(pending.SessionKey)
@@ -510,8 +510,8 @@ func codexPlanModeExitImplementFresh(a App, pending *state.PendingRequest) (*cal
 	}, startedSub, nil
 }
 
-func codexPlanModeExitStay(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
-	if a == nil || pending == nil {
+func codexPlanModeExitStay(a Dependencies, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
+	if a.ConfigProvider == nil || pending == nil {
 		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	if current := a.State().Pending(pending.ID); current == nil || state.NormalizePendingRequestStatus(current.Status) != state.PendingRequestStatusPending {
@@ -528,8 +528,8 @@ func codexPlanModeExitStay(a App, pending *state.PendingRequest) (*callback.Card
 	}, nil, nil
 }
 
-func createCodexPlanModeExitSubmission(a App, pending *state.PendingRequest, inputText string) (*domainsubmission.Submission, error) {
-	if a == nil || pending == nil {
+func createCodexPlanModeExitSubmission(a Dependencies, pending *state.PendingRequest, inputText string) (*domainsubmission.Submission, error) {
+	if a.ConfigProvider == nil || pending == nil {
 		return nil, fmt.Errorf("plan confirmation unavailable")
 	}
 	sess := a.State().Session(pending.SessionKey)
@@ -559,8 +559,8 @@ func createCodexPlanModeExitSubmission(a App, pending *state.PendingRequest, inp
 	return sub, nil
 }
 
-func ClearCodexPlanModeForSession(a App, sessionKey string) (bool, error) {
-	if a == nil {
+func ClearCodexPlanModeForSession(a Dependencies, sessionKey string) (bool, error) {
+	if a.ConfigProvider == nil {
 		return false, fmt.Errorf("app not initialized")
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
@@ -587,8 +587,8 @@ func ClearCodexPlanModeForSession(a App, sessionKey string) (bool, error) {
 	return true, nil
 }
 
-func firstNonEmptyWorkspace(a App, workspaceID string) *config.Workspace {
-	if a == nil {
+func firstNonEmptyWorkspace(a Dependencies, workspaceID string) *config.Workspace {
+	if a.ConfigProvider == nil {
 		return nil
 	}
 	return config.FindWorkspace(a.Config(), workspaceID)

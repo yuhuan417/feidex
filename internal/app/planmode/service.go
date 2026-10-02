@@ -29,6 +29,132 @@ type CodexClient interface {
 	Call(ctx context.Context, method string, params any, out any) error
 }
 
+// Dependencies is the plan-mode capability set. It keeps plan-mode logic
+// independent from the application orchestrator while making every runtime
+// capability explicit at the composition boundary.
+type Dependencies struct {
+	ConfigProvider               appcore.AppConfig
+	ContextProvider              interface{ Context() context.Context }
+	StateProvider                StateProvider
+	FeishuClient                 appcore.FeishuClient
+	CodexClientProvider          func() (CodexClient, error)
+	MakeSessionKeyFn             func(*feishu.InboundMessage) string
+	ReplyInThreadEnabledFn       func(string) bool
+	SessionHasActiveWorkFn       func(*conversation.Session) bool
+	EffectivePlanSettingsFn      func(*conversation.Session) (string, string)
+	ActionStringValueFn          func(*feishu.CardAction, string) string
+	RunAsyncFn                   func(func())
+	ReplyInThreadForSubmissionFn func(*domainsubmission.Submission) bool
+	SendLocalTurnFollowupCardFn  func(context.Context, string, map[string]any, bool, *domainsubmission.Submission, string) (string, error)
+	StartNextSubmissionFn        func(string) error
+	StartWorkspaceThreadFn       func(string, *conversation.Session, *config.Workspace) (*appworkspace.ThreadBinding, error)
+}
+
+func (d Dependencies) Config() *config.Config {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.Config()
+}
+func (d Dependencies) ConfigMu() *sync.RWMutex {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.ConfigMu()
+}
+func (d Dependencies) Backend() string {
+	if d.ConfigProvider == nil {
+		return ""
+	}
+	return d.ConfigProvider.Backend()
+}
+func (d Dependencies) FrontendID() string {
+	if d.ConfigProvider == nil {
+		return ""
+	}
+	return d.ConfigProvider.FrontendID()
+}
+func (d Dependencies) FrontendConfigIndex() int {
+	if d.ConfigProvider == nil {
+		return -1
+	}
+	return d.ConfigProvider.FrontendConfigIndex()
+}
+func (d Dependencies) Store() *state.Store {
+	if d.ConfigProvider == nil {
+		return nil
+	}
+	return d.ConfigProvider.Store()
+}
+func (d Dependencies) Context() context.Context {
+	if d.ContextProvider != nil {
+		if ctx := d.ContextProvider.Context(); ctx != nil {
+			return ctx
+		}
+	}
+	return context.Background()
+}
+func (d Dependencies) State() StateProvider         { return d.StateProvider }
+func (d Dependencies) Feishu() appcore.FeishuClient { return d.FeishuClient }
+func (d Dependencies) CodexClient() (CodexClient, error) {
+	if d.CodexClientProvider == nil {
+		return nil, fmt.Errorf("codex client unavailable")
+	}
+	return d.CodexClientProvider()
+}
+func (d Dependencies) MakeSessionKey(m *feishu.InboundMessage) string {
+	if d.MakeSessionKeyFn == nil {
+		return ""
+	}
+	return d.MakeSessionKeyFn(m)
+}
+func (d Dependencies) ReplyInThreadEnabled(v string) bool {
+	return d.ReplyInThreadEnabledFn != nil && d.ReplyInThreadEnabledFn(v)
+}
+func (d Dependencies) SessionHasActiveWork(s *conversation.Session) bool {
+	return d.SessionHasActiveWorkFn != nil && d.SessionHasActiveWorkFn(s)
+}
+func (d Dependencies) EffectivePlanSettings(s *conversation.Session) (string, string) {
+	if d.EffectivePlanSettingsFn == nil {
+		return "", ""
+	}
+	return d.EffectivePlanSettingsFn(s)
+}
+func (d Dependencies) ActionStringValue(a *feishu.CardAction, k string) string {
+	if d.ActionStringValueFn == nil {
+		return ""
+	}
+	return d.ActionStringValueFn(a, k)
+}
+func (d Dependencies) RunAsync(fn func()) {
+	if d.RunAsyncFn != nil {
+		d.RunAsyncFn(fn)
+	} else if fn != nil {
+		go fn()
+	}
+}
+func (d Dependencies) ReplyInThreadForSubmission(s *domainsubmission.Submission) bool {
+	return d.ReplyInThreadForSubmissionFn != nil && d.ReplyInThreadForSubmissionFn(s)
+}
+func (d Dependencies) SendLocalTurnFollowupCard(c context.Context, p string, card map[string]any, r bool, s *domainsubmission.Submission, k string) (string, error) {
+	if d.SendLocalTurnFollowupCardFn == nil {
+		return "", fmt.Errorf("follow-up card unavailable")
+	}
+	return d.SendLocalTurnFollowupCardFn(c, p, card, r, s, k)
+}
+func (d Dependencies) StartNextSubmission(k string) error {
+	if d.StartNextSubmissionFn == nil {
+		return fmt.Errorf("submission starter unavailable")
+	}
+	return d.StartNextSubmissionFn(k)
+}
+func (d Dependencies) StartWorkspaceThread(k string, s *conversation.Session, w *config.Workspace) (*appworkspace.ThreadBinding, error) {
+	if d.StartWorkspaceThreadFn == nil {
+		return nil, fmt.Errorf("workspace thread starter unavailable")
+	}
+	return d.StartWorkspaceThreadFn(k, s, w)
+}
+
 type StateProvider interface {
 	Session(key string) *conversation.Session
 	SaveSession(sess *conversation.Session) error
@@ -43,32 +169,11 @@ type StateProvider interface {
 	Submission(id string) *domainsubmission.Submission
 }
 
-type App interface {
-	Config() *config.Config
-	ConfigMu() *sync.RWMutex
-	Backend() string
-	FrontendID() string
-	FrontendConfigIndex() int
-	Store() *state.Store
-	State() StateProvider
-	Feishu() appcore.FeishuClient
-	CodexClient() (CodexClient, error)
-	MakeSessionKey(msg *feishu.InboundMessage) string
-	ReplyInThreadEnabled(chatType string) bool
-	SessionHasActiveWork(sess *conversation.Session) bool
-	ActionStringValue(action *feishu.CardAction, key string) string
-	RunAsync(fn func())
-	ReplyInThreadForSubmission(sub *domainsubmission.Submission) bool
-	SendLocalTurnFollowupCard(ctx context.Context, parentMessageID string, card map[string]any, replyInThread bool, sub *domainsubmission.Submission, kind string) (string, error)
-	StartNextSubmission(sessionKey string) error
-	StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
-}
-
 type PlanSettingsProvider interface {
 	EffectivePlanSettings(sess *conversation.Session) (model, effort string)
 }
 
-func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
+func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 1 {
 		return fmt.Errorf("usage: %s", CommandUsage)
 	}
@@ -79,7 +184,7 @@ func CommandPlan(a App, msg *feishu.InboundMessage, args []string) error {
 			return fmt.Errorf("usage: %s", CommandUsage)
 		}
 	}
-	if a == nil || msg == nil {
+	if a.ConfigProvider == nil || msg == nil {
 		return nil
 	}
 	sessionKey := a.MakeSessionKey(msg)
@@ -153,12 +258,12 @@ func RenderPlanModeStatusText(mode *conversation.SessionCollaborationMode) strin
 	return strings.Join(lines, "\n")
 }
 
-func ResolvePlanModeForActiveThread(a App) (*conversation.SessionCollaborationMode, error) {
+func ResolvePlanModeForActiveThread(a Dependencies) (*conversation.SessionCollaborationMode, error) {
 	return ResolvePlanModeForSession(a, nil)
 }
 
-func ResolvePlanModeForSession(a App, sess *conversation.Session) (*conversation.SessionCollaborationMode, error) {
-	if a == nil {
+func ResolvePlanModeForSession(a Dependencies, sess *conversation.Session) (*conversation.SessionCollaborationMode, error) {
+	if a.ConfigProvider == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
 	if a.Config() == nil || !a.Config().Codex.ExperimentalAPI {
@@ -196,8 +301,8 @@ func ResolvePlanModeForSession(a App, sess *conversation.Session) (*conversation
 	return NormalizeThreadCollaborationMode(mode), nil
 }
 
-func PlanModeForSession(a App, sessionKey string) *conversation.SessionCollaborationMode {
-	if a == nil || strings.TrimSpace(sessionKey) == "" {
+func PlanModeForSession(a Dependencies, sessionKey string) *conversation.SessionCollaborationMode {
+	if a.ConfigProvider == nil || strings.TrimSpace(sessionKey) == "" {
 		return nil
 	}
 	sess := a.State().Session(sessionKey)
@@ -232,11 +337,11 @@ func sessionBackendCollaborationModeForLog(sess *conversation.Session, backend s
 	return snapshot.CollaborationMode
 }
 
-func ResolveDefaultCodexCollaborationModeForSession(a App, sess *conversation.Session) (*conversation.SessionCollaborationMode, error) {
+func ResolveDefaultCodexCollaborationModeForSession(a Dependencies, sess *conversation.Session) (*conversation.SessionCollaborationMode, error) {
 	if mode := defaultCodexCollaborationModeForSession(a, sess); mode != nil {
 		return mode, nil
 	}
-	if a == nil {
+	if a.ConfigProvider == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
 	client, err := a.CodexClient()
@@ -259,10 +364,10 @@ func ResolveDefaultCodexCollaborationModeForSession(a App, sess *conversation.Se
 	return NormalizeThreadCollaborationMode(mode), nil
 }
 
-func defaultCodexCollaborationModeForSession(a App, sess *conversation.Session) *conversation.SessionCollaborationMode {
+func defaultCodexCollaborationModeForSession(a Dependencies, sess *conversation.Session) *conversation.SessionCollaborationMode {
 	model := ""
 	effort := ""
-	if a != nil && a.Config() != nil {
+	if a.ConfigProvider != nil && a.Config() != nil {
 		model = strings.TrimSpace(modelconfig.ConfiguredGlobalModel(a.Config()))
 		effort = strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.Config()))
 	}
@@ -309,7 +414,7 @@ func defaultCodexCollaborationModeForSession(a App, sess *conversation.Session) 
 	return NormalizeThreadCollaborationMode(mode)
 }
 
-func canReuseCollaborationModeModelForDefault(a App, mode *conversation.SessionCollaborationMode) bool {
+func canReuseCollaborationModeModelForDefault(a Dependencies, mode *conversation.SessionCollaborationMode) bool {
 	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil {
 		return false
@@ -317,13 +422,13 @@ func canReuseCollaborationModeModelForDefault(a App, mode *conversation.SessionC
 	if !strings.EqualFold(mode.Mode, "plan") {
 		return true
 	}
-	if a == nil || a.Config() == nil {
+	if a.ConfigProvider == nil || a.Config() == nil {
 		return true
 	}
 	return strings.TrimSpace(modelconfig.ConfiguredPlanModel(a.Config())) == ""
 }
 
-func PlanModeTitleForSession(a App, sessionKey, title string) string {
+func PlanModeTitleForSession(a Dependencies, sessionKey, title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return ""
@@ -336,20 +441,20 @@ func PlanModeTitleForSession(a App, sessionKey, title string) string {
 	return prependTitlePrefix(title, "[plan]")
 }
 
-func ContentCardTitleForSubmission(a App, sub *domainsubmission.Submission, title string) string {
+func ContentCardTitleForSubmission(a Dependencies, sub *domainsubmission.Submission, title string) string {
 	if sub == nil {
 		return strings.TrimSpace(title)
 	}
 	return ContentCardTitleForSession(a, sub.SessionKey, sub.WorkspaceID, title)
 }
 
-func ContentCardTitleForSession(a App, sessionKey, workspaceID, title string) string {
+func ContentCardTitleForSession(a Dependencies, sessionKey, workspaceID, title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return ""
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
-	if strings.TrimSpace(workspaceID) == "" && a != nil && sessionKey != "" {
+	if strings.TrimSpace(workspaceID) == "" && a.ConfigProvider != nil && sessionKey != "" {
 		if sess := a.State().Session(sessionKey); sess != nil {
 			workspaceID = strings.TrimSpace(sess.WorkspaceID)
 		}
@@ -398,9 +503,9 @@ func titlePrefixAlreadyPresent(prefixes []string, candidate string) bool {
 	return false
 }
 
-func sessionWorkspaceTitleForSession(a App, sessionKey, title string) string {
+func sessionWorkspaceTitleForSession(a Dependencies, sessionKey, title string) string {
 	title = strings.TrimSpace(title)
-	if title == "" || a == nil || strings.TrimSpace(sessionKey) == "" {
+	if title == "" || a.ConfigProvider == nil || strings.TrimSpace(sessionKey) == "" {
 		return title
 	}
 	sess := a.State().Session(sessionKey)
@@ -459,10 +564,8 @@ func splitLeadingTitlePrefixes(title string) (prefixes []string, rest string) {
 	return prefixes, rest
 }
 
-func resolvePlanModeSettings(ctx context.Context, a App, client CodexClient, preset *codexrpc.CollaborationModeMask, sess *conversation.Session) (model string, effort string, err error) {
-	if provider, ok := a.(PlanSettingsProvider); ok {
-		model, effort = provider.EffectivePlanSettings(sess)
-	}
+func resolvePlanModeSettings(ctx context.Context, a Dependencies, client CodexClient, preset *codexrpc.CollaborationModeMask, sess *conversation.Session) (model string, effort string, err error) {
+	model, effort = a.EffectivePlanSettings(sess)
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(modelconfig.ConfiguredGlobalModel(a.Config()))
@@ -494,7 +597,7 @@ func resolvePlanModeSettings(ctx context.Context, a App, client CodexClient, pre
 	return model, resolvedEffort, nil
 }
 
-func resolveDefaultCollaborationModeSettings(ctx context.Context, a App, client CodexClient) (model string, effort string, err error) {
+func resolveDefaultCollaborationModeSettings(ctx context.Context, a Dependencies, client CodexClient) (model string, effort string, err error) {
 	model = strings.TrimSpace(modelconfig.ConfiguredGlobalModel(a.Config()))
 	effort = strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.Config()))
 	if model != "" {
@@ -521,8 +624,8 @@ func resolveDefaultCollaborationModeSettings(ctx context.Context, a App, client 
 	return model, effort, nil
 }
 
-func CodexCollaborationModeForTurnStart(a App, sessionKey, threadID string) *codexrpc.CollaborationMode {
-	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
+func CodexCollaborationModeForTurnStart(a Dependencies, sessionKey, threadID string) *codexrpc.CollaborationMode {
+	if a.ConfigProvider == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
 		return nil
 	}
 	sess := a.State().Session(sessionKey)
@@ -552,12 +655,12 @@ func CodexCollaborationModeFromState(mode *conversation.SessionCollaborationMode
 	}
 }
 
-func DefaultCollaborationModeWithConfiguredEffort(a App, mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
+func DefaultCollaborationModeWithConfiguredEffort(a Dependencies, mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
 	mode = NormalizeThreadCollaborationMode(mode)
 	if mode == nil || !strings.EqualFold(mode.Mode, "default") || strings.TrimSpace(mode.ReasoningEffort) != "" {
 		return mode
 	}
-	if a == nil || a.Config() == nil {
+	if a.ConfigProvider == nil || a.Config() == nil {
 		return mode
 	}
 	effort := strings.TrimSpace(modelconfig.ConfiguredGlobalReasoningEffort(a.Config()))

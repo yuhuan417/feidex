@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"feidex/internal/app/appcore"
 	"fmt"
 	"log/slog"
 	"os"
@@ -44,40 +43,9 @@ type UpgradeState interface {
 	UpdatePending(id string, mutate func(*state.PendingRequest)) error
 }
 
-// App defines the interface the upgrade service requires from the host
-// application.
-type App interface {
-	// UpgradeFeishu returns the Feishu bot client.
-	UpgradeFeishu() FeishuClient
-	// UpgradeState returns the narrowed app state provider for upgrade ops.
-	UpgradeState() UpgradeState
-	// UpgradeCurrentWorkspace resolves the active session key and workspace
-	// for an inbound message.
-	UpgradeCurrentWorkspace(msg *feishu.InboundMessage) (string, *config.Workspace)
-	// UpgradeWorkspaceForSession resolves the current workspace for a session.
-	UpgradeWorkspaceForSession(sessionKey string) *config.Workspace
-	// UpgradeRenderPathPickerCard renders the path picker card used by the
-	// local-upgrade flow.
-	UpgradeRenderPathPickerCard(requestID string, payload PathPickerPayload) (map[string]any, error)
-	// UpgradeDataDir returns the application data directory for staged local
-	// upgrade artifacts.
-	UpgradeDataDir() string
-	// DaemonServiceName returns the daemon service name from config (thread-safe).
-	DaemonServiceName() string
-	// MakeSessionKey builds a session key from an inbound message.
-	MakeSessionKey(msg *feishu.InboundMessage) string
-	// ReplyInThreadEnabled reports whether reply-in-thread is enabled for the
-	// given chat type.
-	ReplyInThreadEnabled(chatType string) bool
-	// MenuCardBody formats a menu card body with breadcrumb navigation.
-	MenuCardBody(action, body string) string
-}
-
-// FeishuClient is the narrow interface for the Feishu bot client methods
-// used by the upgrade service.
 type FeishuClient interface {
-	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
-	ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error)
+	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
+	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
 }
 
 // DefaultApp provides an App implementation backed by function callbacks.
@@ -175,12 +143,12 @@ type UpgradeServiceDeps struct {
 
 // UpgradeService manages daemon upgrade commands for a single app instance.
 type UpgradeService struct {
-	app  App
+	app  *DefaultApp
 	deps UpgradeServiceDeps
 }
 
 // NewUpgradeService creates a new upgrade service bound to the given app.
-func NewUpgradeService(app App, deps UpgradeServiceDeps) UpgradeService {
+func NewUpgradeService(app *DefaultApp, deps UpgradeServiceDeps) UpgradeService {
 	return UpgradeService{app: app, deps: deps}
 }
 
@@ -229,7 +197,7 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
+	ctx, cancel := context.WithTimeout(s.context(), 20*time.Second)
 	defer cancel()
 
 	current := s.deps.CurrentVersion()
@@ -387,7 +355,7 @@ func (s UpgradeService) ReplyUpgradeCard(msg *feishu.InboundMessage, targetVersi
 	if err != nil {
 		return err
 	}
-	_, err = s.app.UpgradeFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err = s.app.UpgradeFeishu().ReplyCard(s.context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -400,7 +368,7 @@ func (s UpgradeService) ReplyUpgradeDevCard(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.UpgradeFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err = s.app.UpgradeFeishu().ReplyCard(s.context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -697,6 +665,13 @@ func firstNonEmpty(values ...string) string {
 func (a *DefaultApp) Context() context.Context {
 	if a.ContextFunc != nil {
 		return a.ContextFunc()
+	}
+	return context.Background()
+}
+
+func (s UpgradeService) context() context.Context {
+	if s.app != nil && s.app.ContextFunc != nil {
+		return s.app.ContextFunc()
 	}
 	return context.Background()
 }

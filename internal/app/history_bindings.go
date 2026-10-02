@@ -1,76 +1,36 @@
 package app
 
 import (
-	appcore "feidex/internal/app/appcore"
-	apphistorycmd "feidex/internal/app/historycmd"
+	history "feidex/internal/adapter/feishu/history"
 	appthreadmenu "feidex/internal/app/threadmenu"
-	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 )
 
-type historyAppAdapter struct{ *App }
-
-func newHistoryAppAdapter(app *App) historyAppAdapter {
-	return historyAppAdapter{App: app}
-}
-
-func newHistoryService(app *App) apphistorycmd.Service {
-	return apphistorycmd.NewService(newHistoryAppAdapter(app))
-}
-
-func (a historyAppAdapter) HistoryFeishu() appcore.FeishuClient {
-	return a.feishu
-}
-
-func (a historyAppAdapter) HistoryAppState() apphistorycmd.AppStateProvider {
-	return a.State()
-}
-
-func (a historyAppAdapter) HistoryConversationBackend() apphistorycmd.ConversationBackendProvider {
-	return historyConversationBackendAdapter{app: a.App}
-}
-
-func (a historyAppAdapter) HistoryCodexClient() (apphistorycmd.CodexClient, error) {
-	return requireCodexClient(a.App)
-}
-
-func (a historyAppAdapter) HistoryMakeSessionKey(msg *feishu.InboundMessage) string {
-	return makeSessionKey(a.App, msg)
-}
-
-func (a historyAppAdapter) HistoryReplyInThreadEnabled(chatType string) bool {
-	return replyInThreadEnabled(a.App, chatType)
-}
-
-func (a historyAppAdapter) HistoryMenuCardBody(action, body string) string {
-	return menuCardBody(action, body)
-}
-
-func (a historyAppAdapter) HistoryCurrentThreadLabel(sess *conversation.Session) string {
-	return appthreadmenu.SessionCurrentThreadLabel(sess)
-}
-
-type historyConversationBackendAdapter struct {
-	app *App
-}
-
-func (a historyConversationBackendAdapter) HistoryIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	if configuredBackend(a.app) == backendClaude {
-		return historyTurnIndexForOrdinal(a.app, sessionKey, ordinal)
-	}
-	return newHistoryService(a.app).CodexHistoryIndexForOrdinal(sessionKey, ordinal)
-}
-
-func (a historyConversationBackendAdapter) RenderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	if configuredBackend(a.app) == backendClaude {
-		return renderClaudeHistoryCard(a.app, sessionKey, page)
-	}
-	return newHistoryService(a.app).RenderCodexHistoryCard(sessionKey, page)
-}
-
-func (a historyConversationBackendAdapter) RenderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	if configuredBackend(a.app) == backendClaude {
-		return renderClaudeHistoryDetailCard(a.app, sessionKey, index)
-	}
-	return newHistoryService(a.app).RenderCodexHistoryDetailCard(sessionKey, index)
+func newHistoryService(app *App) history.Service {
+	return history.NewService(history.Dependencies{
+		Context: app.Context, Feishu: app.feishu, State: app.State(),
+		Codex:         func() (history.CodexClient, error) { return requireCodexClient(app) },
+		SessionKey:    func(msg *feishu.InboundMessage) string { return makeSessionKey(app, msg) },
+		ReplyInThread: func(chatType string) bool { return replyInThreadEnabled(app, chatType) },
+		MenuBody:      menuCardBody,
+		ThreadLabel:   appthreadmenu.SessionCurrentThreadLabel,
+		HistoryIndex: func(key string, ordinal int) (int, error) {
+			if configuredBackend(app) == backendClaude {
+				return historyTurnIndexForOrdinal(app, key, ordinal)
+			}
+			return newHistoryService(app).CodexHistoryIndexForOrdinal(key, ordinal)
+		},
+		RenderHistory: func(key string, page int) (map[string]any, error) {
+			if configuredBackend(app) == backendClaude {
+				return renderClaudeHistoryCard(app, key, page)
+			}
+			return newHistoryService(app).RenderCodexHistoryCard(key, page)
+		},
+		RenderDetail: func(key string, index int) (map[string]any, error) {
+			if configuredBackend(app) == backendClaude {
+				return renderClaudeHistoryDetailCard(app, key, index)
+			}
+			return newHistoryService(app).RenderCodexHistoryDetailCard(key, index)
+		},
+	})
 }

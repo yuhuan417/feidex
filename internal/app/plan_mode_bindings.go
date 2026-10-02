@@ -132,71 +132,31 @@ func clearCodexPlanModeForSession(a *App, sessionKey string) (bool, error) {
 	return planmode.ClearCodexPlanModeForSession(newPlanModeAppAdapter(a), sessionKey)
 }
 
-type planModeAppAdapter struct {
-	*App
-}
-
-func newPlanModeAppAdapter(a *App) planModeAppAdapter {
-	return planModeAppAdapter{App: a}
-}
-
-func (a planModeAppAdapter) State() planmode.StateProvider {
-	if a.App == nil {
-		return nil
+func newPlanModeAppAdapter(a *App) planmode.Dependencies {
+	if a == nil {
+		return planmode.Dependencies{}
 	}
-	return a.App.State()
-}
-
-func (a planModeAppAdapter) Feishu() FeishuClient {
-	if a.App == nil {
-		return nil
+	return planmode.Dependencies{
+		ConfigProvider:         a,
+		ContextProvider:        a,
+		StateProvider:          a.State(),
+		FeishuClient:           a.feishu,
+		CodexClientProvider:    func() (planmode.CodexClient, error) { return requireCodexClient(a) },
+		MakeSessionKeyFn:       func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
+		ReplyInThreadEnabledFn: func(chatType string) bool { return replyInThreadEnabled(a, chatType) },
+		SessionHasActiveWorkFn: sessionHasActiveWork,
+		EffectivePlanSettingsFn: func(sess *conversation.Session) (string, string) {
+			return effectiveCodexPlanModel(a, sess), effectiveCodexPlanReasoningEffort(a, sess)
+		},
+		ActionStringValueFn:          actionStringValue,
+		RunAsyncFn:                   func(fn func()) { runAsync(a, fn) },
+		ReplyInThreadForSubmissionFn: func(sub *domainsubmission.Submission) bool { return replyInThreadForSubmission(a, sub) },
+		SendLocalTurnFollowupCardFn: func(ctx context.Context, parent string, card map[string]any, reply bool, sub *domainsubmission.Submission, kind string) (string, error) {
+			return sendLocalTurnFollowupCard(ctx, a, parent, card, reply, sub, kind)
+		},
+		StartNextSubmissionFn: func(key string) error { return startNextSubmission(a, key) },
+		StartWorkspaceThreadFn: func(key string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+			return newConversationService(a).StartWorkspaceThread(key, sess, ws)
+		},
 	}
-	return a.App.feishu
-}
-
-func (a planModeAppAdapter) CodexClient() (planmode.CodexClient, error) {
-	return requireCodexClient(a.App)
-}
-
-func (a planModeAppAdapter) MakeSessionKey(msg *feishu.InboundMessage) string {
-	return makeSessionKey(a.App, msg)
-}
-
-func (a planModeAppAdapter) ReplyInThreadEnabled(chatType string) bool {
-	return replyInThreadEnabled(a.App, chatType)
-}
-
-func (a planModeAppAdapter) SessionHasActiveWork(sess *conversation.Session) bool {
-	return sessionHasActiveWork(sess)
-}
-
-func (a planModeAppAdapter) EffectivePlanSettings(sess *conversation.Session) (string, string) {
-	if a.App == nil {
-		return "", ""
-	}
-	return effectiveCodexPlanModel(a.App, sess), effectiveCodexPlanReasoningEffort(a.App, sess)
-}
-
-func (a planModeAppAdapter) ActionStringValue(action *feishu.CardAction, key string) string {
-	return actionStringValue(action, key)
-}
-
-func (a planModeAppAdapter) RunAsync(fn func()) {
-	runAsync(a.App, fn)
-}
-
-func (a planModeAppAdapter) ReplyInThreadForSubmission(sub *domainsubmission.Submission) bool {
-	return replyInThreadForSubmission(a.App, sub)
-}
-
-func (a planModeAppAdapter) SendLocalTurnFollowupCard(ctx context.Context, parentMessageID string, card map[string]any, replyInThread bool, sub *domainsubmission.Submission, kind string) (string, error) {
-	return sendLocalTurnFollowupCard(ctx, a.App, parentMessageID, card, replyInThread, sub, kind)
-}
-
-func (a planModeAppAdapter) StartNextSubmission(sessionKey string) error {
-	return startNextSubmission(a.App, sessionKey)
-}
-
-func (a planModeAppAdapter) StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
-	return newConversationService(a.App).StartWorkspaceThread(sessionKey, sess, ws)
 }

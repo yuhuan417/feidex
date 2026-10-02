@@ -35,15 +35,33 @@ func commandGoalRaw(a *App, msg *feishu.InboundMessage, raw string, args []strin
 }
 
 func newGoalService(a *App) goalcmd.Service {
-	return goalcmd.NewService(goalAppAdapter{app: a})
+	return goalcmd.NewService(goalDependenciesForApp(a))
+}
+
+func goalDependenciesForApp(a *App) goalcmd.Dependencies {
+	if a == nil {
+		return goalcmd.Dependencies{}
+	}
+	return goalcmd.Dependencies{
+		StateProvider: a.State(), FeishuClient: a.feishu,
+		CodexClientProvider: func() (goalcmd.CodexClient, error) { return requireCodexClient(a) }, GoalTracker: goalTrackerForApp(a),
+		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
+		MenuCardBodyForSessionFn: func(s, x, b string) string { return menuCardBodyForSession(a, s, x, b) }, ActionStringValueFn: actionStringValue, ActionSessionKeyFn: actionSessionKey,
+		CompleteMenuCommandFn: func(x *feishu.CardAction, s, r, f string) (*callback.CardActionTriggerResponse, error) {
+			return completeMenuCommand(a, x, s, r, f)
+		}, DefaultWorkspaceIDFn: func() string { return defaultWorkspaceID(a) }, SessionBelongsToFrontendFn: func(s string) bool { return sessionBelongsToFrontend(a, s) },
+		BindTurnSubmissionFn: func(t, u, s, i string) { newRuntimeStateService(a).BindTurnSubmission(t, u, s, i) }, MarkTurnStartedAtFn: func(t string, v time.Time) { newRuntimeStateService(a).MarkTurnStartedAt(t, v) },
+		RecordSubmissionSourceLinksFn: func(s *domainsubmission.Submission) { newReplyContinuationService(a).RecordSubmissionSourceLinks(s) }, RecordRootTurnBindingFn: func(r, s, t, u string) { newReplyContinuationService(a).RecordRootTurnBinding(r, s, t, u) },
+		NoteTurnStartedFn: func(s string, sub *domainsubmission.Submission) { newTurnStreamService(a).NoteTurnStarted(s, sub) }, MarkSessionThreadLiveFn: func(s, t string) { markSessionThreadLive(a, s, t) }, ContextProvider: a,
+	}
 }
 
 func onThreadGoalUpdated(a *App, note codexrpc.ThreadGoalUpdatedNotification) {
-	goalcmd.OnThreadGoalUpdated(goalAppAdapter{app: a}, note)
+	goalcmd.OnThreadGoalUpdated(goalDependenciesForApp(a), note)
 }
 
 func onThreadGoalCleared(a *App, note codexrpc.ThreadGoalClearedNotification) {
-	goalcmd.OnThreadGoalCleared(goalAppAdapter{app: a}, note)
+	goalcmd.OnThreadGoalCleared(goalDependenciesForApp(a), note)
 }
 
 func completeMenuGoalAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -115,86 +133,4 @@ func goalActionReplyInThread(a *App, sessionKey string) bool {
 		return replyInThreadEnabled(a, sess.ChatType)
 	}
 	return false
-}
-
-type goalAppAdapter struct {
-	app *App
-}
-
-func (a goalAppAdapter) State() goalcmd.StateProvider {
-	if a.app == nil {
-		return nil
-	}
-	return a.app.State()
-}
-
-func (a goalAppAdapter) Feishu() FeishuClient {
-	if a.app == nil {
-		return nil
-	}
-	return a.app.feishu
-}
-
-func (a goalAppAdapter) CodexClient() (goalcmd.CodexClient, error) {
-	return requireCodexClient(a.app)
-}
-
-func (a goalAppAdapter) Tracker() *goalcmd.Tracker {
-	return goalTrackerForApp(a.app)
-}
-
-func (a goalAppAdapter) MakeSessionKey(msg *feishu.InboundMessage) string {
-	return makeSessionKey(a.app, msg)
-}
-
-func (a goalAppAdapter) ReplyInThreadEnabled(chatType string) bool {
-	return replyInThreadEnabled(a.app, chatType)
-}
-
-func (a goalAppAdapter) MenuCardBodyForSession(sessionKey, action, body string) string {
-	return menuCardBodyForSession(a.app, sessionKey, action, body)
-}
-
-func (a goalAppAdapter) ActionStringValue(action *feishu.CardAction, key string) string {
-	return actionStringValue(action, key)
-}
-
-func (a goalAppAdapter) ActionSessionKey(action *feishu.CardAction) string {
-	return actionSessionKey(action)
-}
-
-func (a goalAppAdapter) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, fallbackAction string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(a.app, action, sessionKey, rawCommand, fallbackAction)
-}
-
-func (a goalAppAdapter) DefaultWorkspaceID() string {
-	return defaultWorkspaceID(a.app)
-}
-
-func (a goalAppAdapter) SessionBelongsToFrontend(sessionKey string) bool {
-	return sessionBelongsToFrontend(a.app, sessionKey)
-}
-
-func (a goalAppAdapter) BindTurnSubmission(threadID, turnID, sessionKey, submissionID string) {
-	newRuntimeStateService(a.app).BindTurnSubmission(threadID, turnID, sessionKey, submissionID)
-}
-
-func (a goalAppAdapter) MarkTurnStartedAt(turnID string, startedAt time.Time) {
-	newRuntimeStateService(a.app).MarkTurnStartedAt(turnID, startedAt)
-}
-
-func (a goalAppAdapter) RecordSubmissionSourceLinks(sub *domainsubmission.Submission) {
-	newReplyContinuationService(a.app).RecordSubmissionSourceLinks(sub)
-}
-
-func (a goalAppAdapter) RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string) {
-	newReplyContinuationService(a.app).RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID)
-}
-
-func (a goalAppAdapter) NoteTurnStarted(sessionKey string, sub *domainsubmission.Submission) {
-	newTurnStreamService(a.app).NoteTurnStarted(sessionKey, sub)
-}
-
-func (a goalAppAdapter) MarkSessionThreadLive(sessionKey, threadID string) {
-	markSessionThreadLive(a.app, sessionKey, threadID)
 }

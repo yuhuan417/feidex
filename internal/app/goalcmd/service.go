@@ -38,25 +38,117 @@ type StateProvider interface {
 	DeleteSubmission(id string)
 }
 
-type App interface {
-	State() StateProvider
-	Feishu() appcore.FeishuClient
-	CodexClient() (CodexClient, error)
-	Tracker() *Tracker
-	MakeSessionKey(msg *feishu.InboundMessage) string
-	ReplyInThreadEnabled(chatType string) bool
-	MenuCardBodyForSession(sessionKey, action, body string) string
-	ActionStringValue(action *feishu.CardAction, key string) string
-	ActionSessionKey(action *feishu.CardAction) string
-	CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, fallbackAction string) (*callback.CardActionTriggerResponse, error)
-	DefaultWorkspaceID() string
-	SessionBelongsToFrontend(sessionKey string) bool
-	BindTurnSubmission(threadID, turnID, sessionKey, submissionID string)
-	MarkTurnStartedAt(turnID string, startedAt time.Time)
-	RecordSubmissionSourceLinks(sub *domainsubmission.Submission)
-	RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string)
-	NoteTurnStarted(sessionKey string, sub *domainsubmission.Submission)
-	MarkSessionThreadLive(sessionKey, threadID string)
+// Dependencies is the explicit capability set consumed by goal commands.
+type Dependencies struct {
+	StateProvider                 StateProvider
+	FeishuClient                  appcore.FeishuClient
+	CodexClientProvider           func() (CodexClient, error)
+	GoalTracker                   *Tracker
+	MakeSessionKeyFn              func(*feishu.InboundMessage) string
+	ReplyInThreadEnabledFn        func(string) bool
+	MenuCardBodyForSessionFn      func(string, string, string) string
+	ActionStringValueFn           func(*feishu.CardAction, string) string
+	ActionSessionKeyFn            func(*feishu.CardAction) string
+	CompleteMenuCommandFn         func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
+	DefaultWorkspaceIDFn          func() string
+	SessionBelongsToFrontendFn    func(string) bool
+	BindTurnSubmissionFn          func(string, string, string, string)
+	MarkTurnStartedAtFn           func(string, time.Time)
+	RecordSubmissionSourceLinksFn func(*domainsubmission.Submission)
+	RecordRootTurnBindingFn       func(string, string, string, string)
+	NoteTurnStartedFn             func(string, *domainsubmission.Submission)
+	MarkSessionThreadLiveFn       func(string, string)
+	ContextProvider               interface{ Context() context.Context }
+}
+
+func (d Dependencies) State() StateProvider         { return d.StateProvider }
+func (d Dependencies) Feishu() appcore.FeishuClient { return d.FeishuClient }
+func (d Dependencies) CodexClient() (CodexClient, error) {
+	if d.CodexClientProvider == nil {
+		return nil, fmt.Errorf("codex client unavailable")
+	}
+	return d.CodexClientProvider()
+}
+func (d Dependencies) Tracker() *Tracker { return d.GoalTracker }
+func (d Dependencies) MakeSessionKey(m *feishu.InboundMessage) string {
+	if d.MakeSessionKeyFn == nil {
+		return ""
+	}
+	return d.MakeSessionKeyFn(m)
+}
+func (d Dependencies) ReplyInThreadEnabled(v string) bool {
+	return d.ReplyInThreadEnabledFn != nil && d.ReplyInThreadEnabledFn(v)
+}
+func (d Dependencies) MenuCardBodyForSession(s, a, b string) string {
+	if d.MenuCardBodyForSessionFn == nil {
+		return b
+	}
+	return d.MenuCardBodyForSessionFn(s, a, b)
+}
+func (d Dependencies) ActionStringValue(a *feishu.CardAction, k string) string {
+	if d.ActionStringValueFn == nil {
+		return ""
+	}
+	return d.ActionStringValueFn(a, k)
+}
+func (d Dependencies) ActionSessionKey(a *feishu.CardAction) string {
+	if d.ActionSessionKeyFn == nil {
+		return ""
+	}
+	return d.ActionSessionKeyFn(a)
+}
+func (d Dependencies) CompleteMenuCommand(a *feishu.CardAction, s, r, f string) (*callback.CardActionTriggerResponse, error) {
+	if d.CompleteMenuCommandFn == nil {
+		return nil, fmt.Errorf("menu command unavailable")
+	}
+	return d.CompleteMenuCommandFn(a, s, r, f)
+}
+func (d Dependencies) DefaultWorkspaceID() string {
+	if d.DefaultWorkspaceIDFn == nil {
+		return "default"
+	}
+	return d.DefaultWorkspaceIDFn()
+}
+func (d Dependencies) SessionBelongsToFrontend(s string) bool {
+	return d.SessionBelongsToFrontendFn == nil || d.SessionBelongsToFrontendFn(s)
+}
+func (d Dependencies) BindTurnSubmission(a, b, c, e string) {
+	if d.BindTurnSubmissionFn != nil {
+		d.BindTurnSubmissionFn(a, b, c, e)
+	}
+}
+func (d Dependencies) MarkTurnStartedAt(a string, t time.Time) {
+	if d.MarkTurnStartedAtFn != nil {
+		d.MarkTurnStartedAtFn(a, t)
+	}
+}
+func (d Dependencies) RecordSubmissionSourceLinks(s *domainsubmission.Submission) {
+	if d.RecordSubmissionSourceLinksFn != nil {
+		d.RecordSubmissionSourceLinksFn(s)
+	}
+}
+func (d Dependencies) RecordRootTurnBinding(a, b, c, e string) {
+	if d.RecordRootTurnBindingFn != nil {
+		d.RecordRootTurnBindingFn(a, b, c, e)
+	}
+}
+func (d Dependencies) NoteTurnStarted(a string, s *domainsubmission.Submission) {
+	if d.NoteTurnStartedFn != nil {
+		d.NoteTurnStartedFn(a, s)
+	}
+}
+func (d Dependencies) MarkSessionThreadLive(a, b string) {
+	if d.MarkSessionThreadLiveFn != nil {
+		d.MarkSessionThreadLiveFn(a, b)
+	}
+}
+func (d Dependencies) Context() context.Context {
+	if d.ContextProvider != nil {
+		if c := d.ContextProvider.Context(); c != nil {
+			return c
+		}
+	}
+	return context.Background()
 }
 
 type Tracker struct {
@@ -200,16 +292,16 @@ func (t *Tracker) NextContinuationOrdinal(threadID string) int {
 }
 
 type Service struct {
-	app App
+	app Dependencies
 }
 
-func NewService(a App) Service {
+func NewService(a Dependencies) Service {
 	return Service{app: a}
 }
 
 func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []string) error {
 	a := s.app
-	if a == nil || msg == nil {
+	if a.StateProvider == nil || msg == nil {
 		return nil
 	}
 	sessionKey := a.MakeSessionKey(msg)
@@ -285,7 +377,7 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 }
 
 func (s Service) replyGoalSetText(msg *feishu.InboundMessage, sessionKey, threadID string) error {
-	if s.app == nil || s.app.Feishu() == nil || msg == nil {
+	if s.app.StateProvider == nil || s.app.Feishu() == nil || msg == nil {
 		return nil
 	}
 	s.recordContext(sessionKey, threadID, msg)
@@ -944,11 +1036,11 @@ func (s Service) recordContextFromAction(action *feishu.CardAction, sessionKey, 
 	})
 }
 
-func OnThreadGoalUpdated(a App, note codexrpc.ThreadGoalUpdatedNotification) {
+func OnThreadGoalUpdated(a Dependencies, note codexrpc.ThreadGoalUpdatedNotification) {
 	a.Tracker().NoteGoal(note.Goal)
 }
 
-func OnThreadGoalCleared(a App, note codexrpc.ThreadGoalClearedNotification) {
+func OnThreadGoalCleared(a Dependencies, note codexrpc.ThreadGoalClearedNotification) {
 	a.Tracker().ClearGoal(note.ThreadID)
 }
 
@@ -1021,7 +1113,7 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 }
 
 func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string, sess *conversation.Session, goal codexrpc.ThreadGoal) (Anchor, bool) {
-	if s.app == nil || s.app.Feishu() == nil || sess == nil {
+	if s.app.StateProvider == nil || s.app.Feishu() == nil || sess == nil {
 		return Anchor{}, false
 	}
 	anchor := Anchor{

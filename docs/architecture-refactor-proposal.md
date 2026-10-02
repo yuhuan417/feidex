@@ -467,4 +467,11 @@ Codex server request
 - session snapshot 复制与 active-work 判定归属 conversation domain。显式 resume 保存失败时保留调用方旧 lineage，不发布 live thread。
 - 回归覆盖 frontend 隔离、cancelled effect、save-before-start、request ID 保真、workspace 拒绝和 conversation persistence failure。原审批、模型、菜单、review、goal 和 compaction 契约继续运行。
 
+### 2026-10-02 前端服务边界继续收敛
+
+- history command/history backend 已分别迁入 Feishu adapter 与 Codex history adapter，删除 history 宿主 facade 和 backend callback。
+- upgrade service 改为显式依赖集合，取消宽宿主接口和 appcore 生命周期耦合。
+- planmode 与 goalcmd 改为 consumer-owned Dependencies，composition root 只在绑定处组装 capability ports；删除对应宽 App interface 和 adapter。
+- 保持模型生效、thread 生命周期、pending 状态、菜单顺序与 frontend 隔离契约不变；全量 Go 测试 1215 项通过。
+
 当前剩余：遗留 message/card command 编排，thread/history/debug/goal/workspace/review/planmode/upgrade/MCP 的宽宿主接口，Claude stream presentation 回调，完整 session event 串行 owner，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

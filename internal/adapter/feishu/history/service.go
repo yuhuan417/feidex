@@ -1,7 +1,7 @@
 // Package historycmd provides the /history command service extracted from the
 // app god package. It handles history listing, detail views, and Codex thread
 // history card rendering.
-package historycmd
+package history
 
 import (
 	"context"
@@ -12,10 +12,9 @@ import (
 	"strings"
 	"time"
 
+	history "feidex/internal/adapter/backend/codex/history"
 	"feidex/internal/adapter/feishu/cardactions"
 	appcards "feidex/internal/adapter/feishu/cards"
-	appcore "feidex/internal/app/appcore"
-	apphistory "feidex/internal/app/apphistory"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 )
@@ -55,30 +54,22 @@ type CodexClient interface {
 	Call(ctx context.Context, method string, params any, out any) error
 }
 
-// App defines the interface the history service requires from the host
-// application. It embeds appcore.AppConfig so that appcore helpers like
-// MakeSessionKey, ReplyInThreadEnabled, etc. can be called directly.
-type App interface {
-	appcore.AppConfig
-
-	// HistoryFeishu returns the Feishu bot client.
-	HistoryFeishu() appcore.FeishuClient
-	// HistoryAppState returns the narrowed app state provider.
-	HistoryAppState() AppStateProvider
-	// HistoryConversationBackend returns the narrowed conversation backend
-	// provider for delegation.
-	HistoryConversationBackend() ConversationBackendProvider
-	// HistoryCodexClient returns the current Codex RPC client.
-	HistoryCodexClient() (CodexClient, error)
-	// HistoryMakeSessionKey builds a session key from an inbound message.
-	HistoryMakeSessionKey(msg *feishu.InboundMessage) string
-	// HistoryReplyInThreadEnabled reports whether reply-in-thread is enabled
-	// for the given chat type.
-	HistoryReplyInThreadEnabled(chatType string) bool
-	// HistoryMenuCardBody formats a menu card body with breadcrumb navigation.
-	HistoryMenuCardBody(action, body string) string
-	// HistoryCurrentThreadLabel returns the display label for the active thread.
-	HistoryCurrentThreadLabel(sess *conversation.Session) string
+type FeishuClient interface {
+	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
+	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
+}
+type Dependencies struct {
+	Context       func() context.Context
+	Feishu        FeishuClient
+	State         AppStateProvider
+	Codex         func() (CodexClient, error)
+	SessionKey    func(*feishu.InboundMessage) string
+	ReplyInThread func(string) bool
+	MenuBody      func(string, string) string
+	ThreadLabel   func(*conversation.Session) string
+	HistoryIndex  func(string, int) (int, error)
+	RenderHistory func(string, int) (map[string]any, error)
+	RenderDetail  func(string, int) (map[string]any, error)
 }
 
 // ---------------------------------------------------------------------------
@@ -86,14 +77,10 @@ type App interface {
 // ---------------------------------------------------------------------------
 
 // Service manages history command actions for a single app instance.
-type Service struct {
-	app App
-}
+type Service struct{ deps Dependencies }
 
 // NewService creates a new history service bound to the given app.
-func NewService(app App) Service {
-	return Service{app: app}
-}
+func NewService(deps Dependencies) Service { return Service{deps: deps} }
 
 // ---------------------------------------------------------------------------
 // Command handling
@@ -109,24 +96,24 @@ func (s Service) CommandHistory(msg *feishu.InboundMessage, args []string) error
 		if err != nil || ordinal <= 0 {
 			return fmt.Errorf("usage: %s", HistoryCommandUsage)
 		}
-		sessionKey := s.app.HistoryMakeSessionKey(msg)
-		index, err := s.HistoryIndexForOrdinal(sessionKey, ordinal)
+		sessionKey := s.deps.SessionKey(msg)
+		index, err := s.deps.HistoryIndex(sessionKey, ordinal)
 		if err != nil {
 			return err
 		}
-		card, err := s.RenderHistoryDetailCard(sessionKey, index)
+		card, err := s.deps.RenderDetail(sessionKey, index)
 		if err != nil {
 			return err
 		}
-		_, err = s.app.HistoryFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.HistoryReplyInThreadEnabled(msg.ChatType))
+		_, err = s.deps.Feishu.ReplyCard(s.context(), msg.MessageID, card, s.deps.ReplyInThread(msg.ChatType))
 		return err
 	}
-	sessionKey := s.app.HistoryMakeSessionKey(msg)
-	card, err := s.RenderHistoryCard(sessionKey, 0)
+	sessionKey := s.deps.SessionKey(msg)
+	card, err := s.deps.RenderHistory(sessionKey, 0)
 	if err != nil {
 		return err
 	}
-	_, err = s.app.HistoryFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.HistoryReplyInThreadEnabled(msg.ChatType))
+	_, err = s.deps.Feishu.ReplyCard(s.context(), msg.MessageID, card, s.deps.ReplyInThread(msg.ChatType))
 	return err
 }
 
@@ -136,18 +123,18 @@ func (s Service) CommandHistory(msg *feishu.InboundMessage, args []string) error
 
 // HistoryIndexForOrdinal returns the turn index for the given ordinal.
 func (s Service) HistoryIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return s.app.HistoryConversationBackend().HistoryIndexForOrdinal(sessionKey, ordinal)
+	return s.deps.HistoryIndex(sessionKey, ordinal)
 }
 
 // RenderHistoryCard renders the history list card for the given session and page.
 func (s Service) RenderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return s.app.HistoryConversationBackend().RenderHistoryCard(sessionKey, page)
+	return s.deps.RenderHistory(sessionKey, page)
 }
 
 // RenderHistoryDetailCard renders the history detail card for the given session
 // and turn index.
 func (s Service) RenderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return s.app.HistoryConversationBackend().RenderHistoryDetailCard(sessionKey, index)
+	return s.deps.RenderDetail(sessionKey, index)
 }
 
 // ---------------------------------------------------------------------------
@@ -188,9 +175,9 @@ func (s Service) RenderCodexHistoryCard(sessionKey string, page int) (map[string
 	if end > total {
 		end = total
 	}
-	label := s.app.HistoryCurrentThreadLabel(sess)
+	label := s.deps.ThreadLabel(sess)
 	if label == "-" {
-		label = textutil.FirstNonEmpty(apphistory.StringPtrValue(thread.Name), thread.Preview, thread.ID)
+		label = textutil.FirstNonEmpty(history.StringPtrValue(thread.Name), thread.Preview, thread.ID)
 	}
 	bodyLines := []string{
 		"当前线程: " + label,
@@ -247,7 +234,7 @@ func (s Service) RenderCodexHistoryCard(sessionKey string, page int) (map[string
 		Value: cardactions.MenuActionValue{Action: "menu.tools", SessionKey: sessionKey}.Map(),
 	})
 	card := appcards.NewMarkdownBodyCard("历史记录", "blue")
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.app.HistoryMenuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.deps.MenuBody("menu.history", strings.Join(bodyLines, "\n"))})
 	if len(selectOptions) > 0 {
 		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 			"history_detail_select",
@@ -272,9 +259,9 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 		return nil, fmt.Errorf("history turn index out of range")
 	}
 	turn := turns[index]
-	label := s.app.HistoryCurrentThreadLabel(sess)
+	label := s.deps.ThreadLabel(sess)
 	if label == "-" {
-		label = textutil.FirstNonEmpty(apphistory.StringPtrValue(thread.Name), thread.Preview, thread.ID)
+		label = textutil.FirstNonEmpty(history.StringPtrValue(thread.Name), thread.Preview, thread.ID)
 	}
 	bodyLines := []string{
 		"当前线程: " + label,
@@ -323,7 +310,7 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 		Type:  "default",
 		Value: cardactions.HistoryPageActionValue{SessionKey: sessionKey, Page: index / HistoryPageSize}.Map(),
 	})
-	return s.app.HistoryFeishu().SimpleStatusCard("Turn 详情", "blue", s.app.HistoryMenuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
+	return s.deps.Feishu.SimpleStatusCard("Turn 详情", "blue", s.deps.MenuBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -332,19 +319,19 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 
 // FetchCurrentThreadHistory fetches the current thread history from the Codex
 // backend. Returns the session, thread, turn summaries, and any error.
-func (s Service) FetchCurrentThreadHistory(sessionKey string) (*conversation.Session, *codexrpc.ThreadReadThread, []apphistory.TurnSummary, error) {
-	store := s.app.Store()
+func (s Service) FetchCurrentThreadHistory(sessionKey string) (*conversation.Session, *codexrpc.ThreadReadThread, []history.TurnSummary, error) {
+	store := s.deps.State
 	if store == nil {
 		return nil, nil, nil, fmt.Errorf("store not initialized")
 	}
-	sess := s.app.HistoryAppState().Session(sessionKey)
+	sess := s.deps.State.Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, nil, nil, fmt.Errorf("当前没有活动线程")
 	}
-	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
+	ctx, cancel := context.WithTimeout(s.context(), 20*time.Second)
 	defer cancel()
 	var result codexrpc.ThreadReadResult
-	client, err := s.app.HistoryCodexClient()
+	client, err := s.deps.Codex()
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -354,6 +341,13 @@ func (s Service) FetchCurrentThreadHistory(sessionKey string) (*conversation.Ses
 	}, &result); err != nil {
 		return nil, nil, nil, err
 	}
-	turns := apphistory.SummarizeThreadHistory(result.Thread.Turns, sess.ActiveTurnID)
+	turns := history.SummarizeThreadHistory(result.Thread.Turns, sess.ActiveTurnID)
 	return sess, &result.Thread, turns, nil
+}
+
+func (s Service) context() context.Context {
+	if s.deps.Context != nil {
+		return s.deps.Context()
+	}
+	return context.Background()
 }
