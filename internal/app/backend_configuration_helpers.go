@@ -18,9 +18,11 @@ type backendConfigurationService struct {
 }
 
 func newBackendConfigurationService(app *App) backendConfigurationService {
+	driver := appbackend.DriverForConfig(app)
 
 	inner := appbackend.NewConfigurationService(appbackend.ConfigurationDeps{
-		App: app,
+		App:    app,
+		Driver: driver,
 		Formatting: appbackend.ConfigurationFormattingDeps{
 			FormatMenuBody: menuCardBody,
 		},
@@ -32,7 +34,7 @@ func newBackendConfigurationService(app *App) backendConfigurationService {
 				return newModelConfigService(app).commandClaudeModel(msg, args)
 			},
 			HandleWorkspacePermissionCommand: func(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-				return appbackend.DriverForConfig(app).Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
+				return driver.Permission().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
 					Message:    msg,
 					Args:       args[1:],
 					SessionKey: sessionKey,

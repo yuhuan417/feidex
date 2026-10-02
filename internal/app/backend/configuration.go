@@ -63,6 +63,7 @@ type ConfigurationCodexDeps struct {
 
 type ConfigurationDeps struct {
 	App        App
+	Driver     Driver
 	Formatting ConfigurationFormattingDeps
 	Commands   ConfigurationCommandDeps
 	Claude     ConfigurationClaudeDeps
@@ -71,6 +72,9 @@ type ConfigurationDeps struct {
 
 // NewConfigurationService creates a new ConfigurationService.
 func NewConfigurationService(deps ConfigurationDeps) ConfigurationService {
+	if deps.Driver == nil && deps.App != nil {
+		deps.Driver = DriverForConfig(deps.App)
+	}
 	return ConfigurationService{App: deps.App, deps: deps}
 }
 
@@ -258,7 +262,7 @@ func (s ConfigurationService) backendRequiredStatusBody() string {
 // BackendWorkspaceCommandUsage returns the /workspace usage string for the
 // active backend.
 func (s ConfigurationService) BackendWorkspaceCommandUsage() string {
-	return DriverForConfig(s.App).Permission().WorkspaceCommandUsage()
+	return s.deps.Driver.Permission().WorkspaceCommandUsage()
 }
 
 // HandleBackendModelCommand dispatches model commands for the active backend.
@@ -275,31 +279,31 @@ func (s ConfigurationService) HandleBackendWorkspacePermissionCommand(msg *feish
 // AppendBackendWorkspaceSummaryLines appends backend-specific workspace
 // summary lines to the given slice.
 func (s ConfigurationService) AppendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	return DriverForConfig(s.App).Permission().AppendWorkspaceSummaryLines(s.App, lines, currentWS)
+	return s.deps.Driver.Permission().AppendWorkspaceSummaryLines(s.App, lines, currentWS)
 }
 
 // BackendWorkspaceConfigButtons returns the workspace configuration buttons
 // for the active backend.
 func (s ConfigurationService) BackendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return DriverForConfig(s.App).Permission().WorkspaceConfigButtons(sessionKey)
+	return s.deps.Driver.Permission().WorkspaceConfigButtons(sessionKey)
 }
 
 // BackendWorkspaceSwitchInFlightNotice returns the notice text for a
 // workspace switch that is in flight.
 func (s ConfigurationService) BackendWorkspaceSwitchInFlightNotice() string {
-	return DriverForConfig(s.App).Conversation().WorkspaceSwitchInFlightNotice()
+	return s.deps.Driver.Conversation().WorkspaceSwitchInFlightNotice()
 }
 
 // BackendWorkspaceSwitchBindingFailureNotice returns the notice text for a
 // workspace switch binding failure.
 func (s ConfigurationService) BackendWorkspaceSwitchBindingFailureNotice() string {
-	return DriverForConfig(s.App).Conversation().WorkspaceSwitchBindingFailureNotice()
+	return s.deps.Driver.Conversation().WorkspaceSwitchBindingFailureNotice()
 }
 
 // BackendWorkspaceSwitchBindingNotice returns the notice text for a
 // workspace switch binding result.
 func (s ConfigurationService) BackendWorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string {
-	return DriverForConfig(s.App).Conversation().WorkspaceSwitchBindingNotice(binding)
+	return s.deps.Driver.Conversation().WorkspaceSwitchBindingNotice(binding)
 }
 
 // RenderModelMenuCard renders the model menu card for the active backend.
@@ -498,7 +502,7 @@ func (s ConfigurationService) RenderClaudeStatusBody(sess *conversation.Session)
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
 	}
-	lines = DriverForConfig(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
+	lines = s.deps.Driver.Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
 	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
 	return strings.Join(lines, "\n")
 }
@@ -545,7 +549,7 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *conversation.Session) 
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
 	}
-	lines = DriverForConfig(s.App).Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
+	lines = s.deps.Driver.Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
 	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
 	return strings.Join(lines, "\n")
 }
