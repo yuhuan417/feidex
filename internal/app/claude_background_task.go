@@ -4,7 +4,9 @@ import (
 	"context"
 	"strings"
 
+	"feidex/internal/application"
 	"feidex/internal/claudecli"
+	"feidex/internal/domain/identity"
 	appclauderuntime "feidex/internal/runtime/claude"
 )
 
@@ -45,16 +47,21 @@ func sendClaudeBackgroundTaskNotification(a *App, ctx context.Context, target ap
 	}
 	card := a.feishu.SimpleStatusCard(title, color, strings.Join(lines, "\n"), nil)
 	if triggerID := strings.TrimSpace(target.TriggerMessageID); triggerID != "" {
-		if _, err := a.feishu.ReplyCard(ctx, triggerID, card, false); err != nil {
+		if err := newEffectRunner(a).Run(ctx, []application.Effect{application.SendCard{
+			Frontend:       identity.FrontendID(a.FrontendID()),
+			Chat:           identity.ChatRef{ID: target.ChatID},
+			ReplyMessageID: triggerID,
+			View:           card,
+		}}); err != nil {
 			// The original message can be unavailable after retention or recall;
 			// fall back to a standalone card when a chat ID is known.
 			if chatID := strings.TrimSpace(target.ChatID); chatID != "" {
-				_, _ = a.feishu.SendCard(ctx, chatID, card)
+				_ = sendCardEffect(ctx, a, chatID, card)
 			}
 		}
 		return
 	}
 	if chatID := strings.TrimSpace(target.ChatID); chatID != "" {
-		_, _ = a.feishu.SendCard(ctx, chatID, card)
+		_ = sendCardEffect(ctx, a, chatID, card)
 	}
 }

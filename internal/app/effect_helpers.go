@@ -36,3 +36,25 @@ func replyTextEffect(a *App, msg *feishu.InboundMessage, text string) error {
 		InThread:       replyInThreadEnabled(a, msg.ChatType),
 	}})
 }
+
+func sendCardEffect(ctx context.Context, a *App, chatID string, card map[string]any) error {
+	if a == nil {
+		return nil
+	}
+	return newEffectRunner(a).Run(ctx, []application.Effect{application.SendCard{
+		Frontend: identity.FrontendID(a.FrontendID()),
+		Chat:     identity.ChatRef{ID: chatID},
+		View:     card,
+	}})
+}
+
+func patchCardEffect(ctx context.Context, a *App, messageID string, card map[string]any) error {
+	if a == nil {
+		return nil
+	}
+	return newEffectRunner(a).Run(ctx, []application.Effect{application.PatchCard{
+		Frontend:  identity.FrontendID(a.FrontendID()),
+		MessageID: messageID,
+		View:      card,
+	}})
+}

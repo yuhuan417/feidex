@@ -488,5 +488,6 @@ Codex server request
 - backend selection 已改为由 composition root 注入卡片渲染和发送/patch ports，selection service 不再直接持有 Feishu outbound client。
 - Claude runtime 的 turn stream 已增加 `TurnStreamPort` presentation boundary；生产绑定通过该 port 连接 turn presentation service，`TurnStreamDeps` 不再保留旧 callback 字段或 fallback 分支。
 - backend upgrade 的卡片 renderer 与发送路径改为显式注入 `StatusCardRenderer` 和 outbound port；Claude permission 菜单、交互失效卡以及 help/quiet/status/menu bridge 的用户可见发送统一经过 application effect runner。
+- Claude 后台 Agent 通知与 Claude support 的 pending card patch 也统一经过 effect runner，避免 runtime support carrier 直接调用 Feishu outbound client。
 
 当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，effect pipeline 尚未覆盖全部同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

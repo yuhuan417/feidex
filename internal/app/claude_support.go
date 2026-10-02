@@ -60,7 +60,7 @@ func newClaudeSupportService(a *App) *claudesupport.Service {
 			return a.feishu.SimpleStatusCard(title, color, body, buttons)
 		},
 		PatchCard: func(messageID string, card map[string]any) error {
-			return a.feishu.PatchCard(context.Background(), messageID, card)
+			return patchCardEffect(context.Background(), a, messageID, card)
 		},
 		PrepareMentionText: apputil.PrependAttentionMentionMarkdown,
 		RenderFormCard:     pendingforms.RenderToolUserInputFormCard,
