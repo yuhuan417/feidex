@@ -738,3 +738,6 @@ frontend 的有效 client，审批 reply/resolved、turn/start timeout 和 revie
 - Frontend and session scope remains explicit for state repositories, binding
   replay, workspace selection, effects, and runtime supervision. No live
   token-consuming integration tests were run during this migration.
+- Backend permission configuration now receives a narrow capability port rather
+  than the former aggregate workspace host interface; this is a structural
+  change only and does not alter SM-09/10/11/22/23 payload or resolution order.

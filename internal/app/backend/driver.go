@@ -1,14 +1,16 @@
 package backend
 
 import (
+	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
+	"sync"
 
-	"feidex/internal/app/appcore"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -52,7 +54,12 @@ type ConversationDriver interface {
 }
 
 type PermissionDependencies interface {
-	appcore.WorkspaceSource
+	Config() *config.Config
+	ConfigMu() *sync.RWMutex
+	Backend() string
+	FrontendConfigIndex() int
+	Store() *state.Store
+	WorkspaceSelection() workspace.SelectionService
 }
 
 type WorkspacePermissionCommandRequest struct {

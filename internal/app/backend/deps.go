@@ -1,9 +1,14 @@
 package backend
 
-import "feidex/internal/app/appcore"
+import (
+	"feidex/internal/app/appcore"
+	"feidex/internal/state"
+)
 
 type SelectionSource interface {
-	appcore.WorkspaceSource
+	appcore.ConfigurationSource
+	appcore.FrontendIdentity
+	Store() *state.Store
 	SetBackend(string)
 	ConfigPath() string
 }

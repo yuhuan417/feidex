@@ -731,7 +731,7 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(deps.App)
+	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.App.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -791,7 +791,7 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(deps.App)
+	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.App.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -851,7 +851,7 @@ func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey strin
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(deps.App)
+	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.App.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -901,7 +901,7 @@ func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey 
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceID(deps.App)
+	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.App.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -1128,7 +1128,7 @@ func (d codexPermissionDriver) CompleteConversationPermissionModeSet(string, str
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 backend 不支持 /session permissions"}}, nil
 }
 
-func currentWorkspaceForDriver(app appcore.WorkspaceSource, sessionKey string) (*conversation.Session, *config.Workspace, error) {
+func currentWorkspaceForDriver(app PermissionDependencies, sessionKey string) (*conversation.Session, *config.Workspace, error) {
 	if app == nil || app.Config() == nil {
 		return nil, nil, fmt.Errorf("app not configured")
 	}

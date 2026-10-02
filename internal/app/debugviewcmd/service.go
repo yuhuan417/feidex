@@ -103,7 +103,12 @@ type WorkspaceRenderProvider interface {
 // Dependencies is the explicit debug/usage capability set assembled by the
 // composition root. The service does not depend on the application root.
 type Dependencies struct {
-	ConfigProvider                    appcore.WorkspaceSource
+	ConfigProvider interface {
+		appcore.ConfigurationSource
+		appcore.FrontendIdentity
+		Store() *state.Store
+		WorkspaceSelection() workspace.SelectionService
+	}
 	FeishuClient                      FeishuClient
 	StateProvider                     StateProvider
 	RuntimeStateProvider              RuntimeStateProvider

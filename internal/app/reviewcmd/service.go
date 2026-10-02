@@ -84,7 +84,12 @@ type CodexClient interface {
 // Dependencies is the explicit review capability set assembled by the
 // composition root.
 type Dependencies struct {
-	ConfigProvider                    appcore.WorkspaceSource
+	ConfigProvider interface {
+		appcore.ConfigurationSource
+		appcore.FrontendIdentity
+		Store() *state.Store
+		WorkspaceSelection() workspace.SelectionService
+	}
 	FeishuClient                      feishutransport.Client
 	StateProvider                     StateProvider
 	WorkspaceProviderValue            WorkspaceProvider

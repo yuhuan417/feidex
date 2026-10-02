@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 // NormalizeRuntimeBackend normalizes a backend name to its canonical form.
@@ -24,12 +23,6 @@ type ConfigurationSource interface {
 	FrontendConfigIndex() int
 }
 type FrontendIdentity interface{ FrontendID() string }
-type WorkspaceSource interface {
-	WorkspaceSelectionSource
-	ConfigurationSource
-	FrontendIdentity
-	Store() *state.Store
-}
 
 // FeishuConfigUnlocked returns the active Feishu config without acquiring
 // ConfigMu. Caller must hold at least a read lock.
@@ -122,6 +115,15 @@ func DefaultWorkspaceID(a ConfigurationSource) string {
 	defer a.ConfigMu().RUnlock()
 	cfg := a.Config()
 	if len(cfg.Workspaces) == 0 {
+		return "default"
+	}
+	return cfg.Workspaces[0].ID
+}
+
+// DefaultWorkspaceIDFromConfig resolves the default from a narrow config
+// snapshot without requiring a synchronization primitive in the port.
+func DefaultWorkspaceIDFromConfig(cfg *config.Config) string {
+	if cfg == nil || len(cfg.Workspaces) == 0 {
 		return "default"
 	}
 	return cfg.Workspaces[0].ID

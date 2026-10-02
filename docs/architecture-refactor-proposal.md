@@ -533,5 +533,6 @@ Codex server request
 - 模型 desired/applied/turn snapshot 优先级保持不变；“最近已应用模型”只来自 session 的 applied snapshot，不再混读单聊/global desired 配置。
 - 工作区选择策略迁入 `internal/application/workspace`，由 scoped repository 提供持久化；appcore 只保留兼容的薄转发，业务服务通过 `WorkspaceSelection` capability 获取用例。
 - Codex thread/read 的恢复路径只接收语义化 turn 状态，业务层不再依赖协议响应 DTO；协作模式发送前统一裁剪空白值。
+- 删除 `appcore.WorkspaceSource` 宽宿主接口；workspace/thread/review/plan/debug consumer 改为声明各自的配置、身份、存储和 selection ports，permission driver 仅接收其所需的配置快照、scoped store 与 workspace selection。
 
 当前完成标准：新增能力需声明 domain owner、application use case、consumer-owned ports、effects、adapter、协议状态机影响及 frontend/chat/session scope；新增业务代码不得以 `*App` 作为跨模块能力容器。现有 `internal/app` 仍包含 Feishu 入口和少量历史编排，后续新增代码不得扩大该层；其余迁移应按同一边界继续收敛。

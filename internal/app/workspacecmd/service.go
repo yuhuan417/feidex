@@ -97,7 +97,10 @@ var (
 // ReplyInThreadEnabled, FirstNonEmpty) which all accept this interface.
 type App struct {
 	ConfigProvider interface {
-		appcore.WorkspaceSource
+		appcore.ConfigurationSource
+		appcore.FrontendIdentity
+		Store() *state.Store
+		WorkspaceSelection() workspace.SelectionService
 		ConfigPath() string
 	}
 	FeishuClient    feishutransport.Client

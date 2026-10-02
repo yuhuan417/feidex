@@ -35,7 +35,12 @@ const (
 // Dependencies is the explicit thread-menu capability set assembled by the
 // composition root. The menu service never receives the application root.
 type Dependencies struct {
-	ConfigProvider                            appcore.WorkspaceSource
+	ConfigProvider interface {
+		appcore.ConfigurationSource
+		appcore.FrontendIdentity
+		Store() *state.Store
+		WorkspaceSelection() workspace.SelectionService
+	}
 	FeishuClient                              feishutransport.Client
 	AppStateFn                                func() StateProvider
 	EffectiveSessionKeyFn                     func(string) string

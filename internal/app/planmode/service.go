@@ -36,7 +36,12 @@ type CodexClient interface {
 // independent from the application orchestrator while making every runtime
 // capability explicit at the composition boundary.
 type Dependencies struct {
-	ConfigProvider               appcore.WorkspaceSource
+	ConfigProvider interface {
+		appcore.ConfigurationSource
+		appcore.FrontendIdentity
+		Store() *state.Store
+		WorkspaceSelection() workspace.SelectionService
+	}
 	ContextProvider              interface{ Context() context.Context }
 	StateProvider                StateProvider
 	FeishuClient                 feishutransport.Client
