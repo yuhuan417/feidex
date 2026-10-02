@@ -1,11 +1,11 @@
 # 长期架构重构提案
 
-状态：Proposal  
+状态：实施中
 更新时间：2026-10-02
 
 本文描述 Feidex 的目标架构。设计时暂时忽略现有目录、兼容层和迁移成本，先确定清晰的职责边界，再按阶段迁移现有实现。
 
-本文不替代当前开发契约。迁移期间仍以 [DEVELOPER.md](../DEVELOPER.md)、[app package boundaries](app-package-boundaries.md)、[backend layering](backend-layering.md) 和 [Codex App Server 状态机审计](codex-app-server-state-machine-audit.md) 为准。尤其是 Codex thread、turn、approval、server request 和 goal continuation 的协议行为不能因为重构而改变。
+本文的结构目标已经获得确认，旧 package boundary 仅供迁移定位，不再限制目标依赖方向。迁移保留 [DEVELOPER.md](../DEVELOPER.md) 的行为契约和 [Codex App Server 状态机审计](codex-app-server-state-machine-audit.md) 的协议约束；thread、turn、approval、server request 和 goal continuation 的行为不能因为重构而改变。
 
 ## 1. 要解决的问题
 
@@ -427,3 +427,16 @@ Codex server request
 7. 它的 frontend、chat 和 session scope 是什么？
 
 如果一个新功能仍需要把 `*App` 传入多个子服务，或需要在多个 service 之间注册 callback，说明边界还没有收敛完成。
+
+## 13. 实施记录
+
+已落地：
+
+- domain/application 的导入方向守卫与输入/effect 契约。
+- primary assignment、primary transition、群消息路由规则，以及 frontend-scoped JSON repository。
+- model scope resolution 和统一领域快照；模型应用状态用例；Codex resume config 转换。
+- frontend 生命周期、取消、异步任务准入和 shutdown drain。
+- submission startup 的纯领域状态和 runtime 并发协调，删除根 App 启动 guard。
+- interaction pending/replied/resolved 转换和阻塞恢复规则；JSON DTO adapter 保留 frontend scope。
+
+仍待迁移：完整 conversation/submission/turn aggregate、统一 dispatcher、session actor、backend event adapter、Feishu presentation/effect runner，以及旧 serviceFor、宽 App interface 和跨 owner callback 的删除。以上条目完成前不能将整份提案标记为完成。

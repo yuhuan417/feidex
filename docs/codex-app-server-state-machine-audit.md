@@ -672,3 +672,10 @@
   - 当前交互以卡片表单提交为准；普通文字消息继续走既有对话输入路径。
 - 修改建议:
   - 后续协议增加专门的 async answer 方法时，应在 backend adapter 更新答案回传方式，不能伪造 JSON-RPC server-request response。
+
+## 2026-10-02 架构迁移核对
+
+- 模型快照使用 `internal/domain/modelconfig.Snapshot`，Codex resume 配置转换迁到 `internal/adapter/backend/codex`；SM-04/05 的启动快照和 steer 边界不变。
+- interaction 的纯状态规则迁到 `internal/domain/interaction`，reply/resolved 用例迁到 `internal/application/interaction`，frontend-scoped DTO 读写位于 `internal/adapter/storage/json`。SM-09/10/11/22/23 仍按 pending → replied → serverRequest/resolved 推进；用户回复成功不提前恢复 submission。
+- authoritative resolve 使用 repository 原子转换，并发重复通知只有第一次返回状态，避免重复恢复；async question 和 Claude control response 的独立终点仍保留。
+- frontend cancellation/drain 和 submission start 串行协调迁到 `internal/runtime`；未修改 turn/interrupt、turn/completed、review、compaction 和 goal continuation 的协议绑定规则。

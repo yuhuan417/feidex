@@ -84,12 +84,15 @@ config.example.toml         配置样例
 - app 物理子包的职责边界见 [docs/app-package-boundaries.md](app-package-boundaries.md)；新增子包不得反向 import `internal/app`。
 - `internal/feishu` 只负责飞书 SDK、消息/卡片发送、文件分享、链接改写和权限问题转换；不要把业务策略放进适配层。
 - 慢操作必须走"快速 callback ack → 异步执行 → patch card / follow-up"，尤其是 clone、review、upgrade、download 和外部网络请求。
-- 异步操作使用 `RunAsync` + `sync.WaitGroup` 追踪，测试通过 `a.waitAsync()` 同步而非 `time.Sleep`。
+- frontend 生命周期和异步任务准入由 `internal/runtime.FrontendRuntime` 持有；兼容入口仍可使用 `RunAsync`/`a.waitAsync()`，测试通过显式等待同步。
 - 触碰 `internal/app`、`internal/codexrpc`、`internal/claudecli`、审批、turn/thread lifecycle、review、compaction、tool input 或 server request 时，要同步检查状态机审计文档。
 
 ### 迁移中的架构状态
 
 - 现有 `internal/app` 已拆成多个子包，但仍存在 callback、宽 `App` interface 和 root glue。新的拆分以 [长期架构重构提案](architecture-refactor-proposal.md) 为准，优先把状态和用例迁移到 `internal/domain`、`internal/application`。
+- frontend 生命周期与 shutdown drain 已迁入 `internal/runtime`；submission startup 由纯领域转换和 runtime 串行协调器共同负责。
+- 模型快照统一使用 `internal/domain/modelconfig.Snapshot`；Codex resume 字段解释位于 `internal/adapter/backend/codex`，已应用/待生效状态由 `internal/application/modelconfig` 计算。
+- interaction reply/resolved 转换由 `internal/application/interaction` 协调，JSON store 适配器只映射 DTO；Codex 的 serverRequest/resolved 仍是权威终点。
 - backend adapter 不再以 `internal/app/backend` 作为最终归属；Codex/Claude 协议转换应逐步移动到 `internal/adapter/backend`，application 只消费 backend-neutral event 和 gateway。
 - 状态同时存在内存 map 与 `internal/state` 持久化快照。新增 pending/form/message-link/session 数据时，必须明确 frontend scope。
 - README、`DEVELOPER.md` 和状态机审计共同构成开发契约。协议行为变化不能只改代码。
