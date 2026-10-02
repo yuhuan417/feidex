@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
@@ -35,8 +36,8 @@ func TestCommandPlanOnSavesThreadCollaborationMode(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "collaborationMode/list":
-			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
-				Data: []codexrpc.CollaborationModeMask{
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
 					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
 				},
 			}
@@ -122,8 +123,8 @@ func TestCommandPlanOnUsesConfiguredPlanModelAndEffort(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "collaborationMode/list":
-			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
-				Data: []codexrpc.CollaborationModeMask{
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
 					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
 				},
 			}
@@ -174,8 +175,8 @@ func TestCommandPlanOnLeavesReasoningEffortEmptyWithoutPresetOrOverride(t *testi
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "collaborationMode/list":
-			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
-				Data: []codexrpc.CollaborationModeMask{
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
 					{Name: "Plan", Mode: stringPtr("plan")},
 				},
 			}
@@ -223,8 +224,8 @@ func TestCommandPlanWithoutArgsTogglesPlanMode(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "collaborationMode/list":
-			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
-				Data: []codexrpc.CollaborationModeMask{
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
 					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
 				},
 			}
@@ -408,12 +409,12 @@ func TestCommandPlanOffDoesNotReuseConfiguredPlanModelAsDefault(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "model/list":
-			*out.(*codexrpc.ModelListResult) = codexrpc.ModelListResult{
-				Data: []codexrpc.ModelListEntry{{
+			*out.(*catalog.ModelListResult) = catalog.ModelListResult{
+				Data: []catalog.ModelListEntry{{
 					ID:                     "gpt-5.4",
 					IsDefault:              true,
 					DefaultReasoningEffort: "medium",
-					SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+					SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 						{ReasoningEffort: "medium"},
 						{ReasoningEffort: "xhigh"},
 					},

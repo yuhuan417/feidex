@@ -7,6 +7,7 @@ import (
 	codexadapter "feidex/internal/adapter/backend/codex"
 	feishutransport "feidex/internal/adapter/feishu/transport"
 	conversationapp "feidex/internal/application/conversation"
+	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"sync"
 	"testing"
 
-	appcore "feidex/internal/app/appcore"
 	"feidex/internal/config"
 	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
@@ -94,7 +94,7 @@ func (a *testWorkspaceApp) ConfigPath() string             { return a.cfgPath }
 func (a *testWorkspaceApp) Feishu() feishutransport.Client { return nil }
 
 type threadServiceOptions struct {
-	claude   appcore.ClaudeCore
+	claude   appruntime.ClaudeCore
 	codexErr error
 	markLive func(sessionKey, threadID string)
 }
@@ -258,3 +258,7 @@ func (c *testClaudeCore) CancelPending(string, string) error { return nil }
 func (c *testClaudeCore) SessionStopped(string) bool { return false }
 
 func (c *testClaudeCore) Close() error { return nil }
+
+func (a *testWorkspaceApp) WorkspaceSelection() workspace.SelectionService {
+	return workspace.SelectionService{}
+}

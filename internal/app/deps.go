@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 	feishutransport "feidex/internal/adapter/feishu/transport"
+	frontendclients "feidex/internal/runtime"
 	"runtime"
 
-	"feidex/internal/app/appcore"
 	"feidex/internal/buildinfo"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -16,8 +16,8 @@ import (
 )
 
 // Backend clients come from appcore; Feishu transport is adapter-owned.
-type CodexClient = appcore.CodexClient
-type ClaudeCore = appcore.ClaudeCore
+type CodexClient = frontendclients.CodexClient
+type ClaudeCore = frontendclients.ClaudeCore
 type FeishuClient = feishutransport.Client
 
 type releaseClient interface {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/interaction"
 	"feidex/internal/domain/routing"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
@@ -134,23 +135,7 @@ type GroupAnnouncementBlock struct {
 // AgentBindingPendingMessage stores one inbound group message while a binding
 // is waiting for a local workspace. It is replayed after binding activation.
 
-type PendingRequest struct {
-	FrontendID   string `json:"frontend_id,omitempty"`
-	ID           string `json:"id"`
-	RequestIDRaw string `json:"request_id_raw,omitempty"`
-	Backend      string `json:"backend,omitempty"`
-	Kind         string `json:"kind"`
-	SessionKey   string `json:"session_key"`
-	ThreadID     string `json:"thread_id"`
-	TurnID       string `json:"turn_id"`
-	ItemID       string `json:"item_id"`
-	OwnerUserID  string `json:"owner_user_id"`
-	FeishuMsgID  string `json:"feishu_msg_id"`
-	PayloadJSON  string `json:"payload_json"`
-	Status       string `json:"status"`
-	CreatedAt    int64  `json:"created_at"`
-	ExpiresAt    int64  `json:"expires_at"`
-}
+type PendingRequest = interaction.PendingRequest
 
 type MessageLink = conversation.MessageLink
 

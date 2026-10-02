@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
 	"log/slog"
 	"strings"
@@ -69,7 +70,7 @@ func ExpireClaudeInteractionCards(a *App, sessionKey string, requestIDs []string
 		if err := newEffectRunner(a).Run(context.Background(), []application.Effect{application.PatchCard{
 			Frontend:  identity.FrontendID(a.FrontendID()),
 			MessageID: messageID,
-			View:      card,
+			View:      feishuoutbound.Card(card),
 		}}); err != nil {
 			slog.Warn("expire claude interaction card failed",
 				"request_id", pending.ID,

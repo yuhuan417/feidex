@@ -1,6 +1,6 @@
 // Package submission provides services for submission queueing, pending
 // queue management, and related pure helpers. These services have no
-// dependency on *App; they communicate with the host through narrow
+// dependency on host; they communicate with the host through narrow
 // provider interfaces injected at construction time.
 package submission
 

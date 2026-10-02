@@ -5,7 +5,9 @@ package workspacecmd
 import (
 	"context"
 	feishutransport "feidex/internal/adapter/feishu/transport"
+	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
+	frontendclients "feidex/internal/runtime"
 	"strings"
 	"sync"
 
@@ -94,7 +96,10 @@ var (
 // appcore helpers (DefaultWorkspaceID, ConfiguredBackend, MakeSessionKey,
 // ReplyInThreadEnabled, FirstNonEmpty) which all accept this interface.
 type App struct {
-	ConfigProvider  appcore.AppExtended
+	ConfigProvider interface {
+		appcore.WorkspaceSource
+		ConfigPath() string
+	}
 	FeishuClient    feishutransport.Client
 	ContextProvider interface{ Context() context.Context }
 	BackendDriver   appbackend.Driver
@@ -141,11 +146,6 @@ func (a App) ConfigPath() string {
 		return ""
 	}
 	return a.ConfigProvider.ConfigPath()
-}
-func (a App) SetBackend(v string) {
-	if a.ConfigProvider != nil {
-		a.ConfigProvider.SetBackend(v)
-	}
 }
 func (a App) Feishu() feishutransport.Client { return a.FeishuClient }
 func (a App) Context() context.Context {
@@ -372,7 +372,7 @@ type RenderManagementDeps struct {
 }
 
 type ClaudeDeps struct {
-	RequireClaudeCore func() (appcore.ClaudeCore, error)
+	RequireClaudeCore func() (frontendclients.ClaudeCore, error)
 }
 
 type ConfigDeps struct {
@@ -992,4 +992,11 @@ func (s RenderService) DefaultWorkspaceCloneParent(ws *config.Workspace) string 
 		return ""
 	}
 	return s.deps.Management.DefaultWorkspaceCloneParent(ws)
+}
+
+func (a App) WorkspaceSelection() workspace.SelectionService {
+	if a.ConfigProvider == nil {
+		return workspace.SelectionService{}
+	}
+	return a.ConfigProvider.WorkspaceSelection()
 }

@@ -2,55 +2,42 @@ package backend
 
 import (
 	"strings"
+	"sync"
 
 	"feidex/internal/app/appcore"
 )
 
-// RuntimeStateService manages backend switch transition state.
+// RuntimeStateService is one frontend's synchronized switch state.
 type RuntimeStateService struct {
-	app Dependencies
+	mu        sync.Mutex
+	operation sync.Mutex
+	switching bool
+	target    string
 }
 
-// NewRuntimeStateService creates a new RuntimeStateService.
-func NewRuntimeStateService(app Dependencies) RuntimeStateService {
-	return RuntimeStateService{app: app}
+func (s *RuntimeStateService) LockSwitch()   { s.operation.Lock() }
+func (s *RuntimeStateService) UnlockSwitch() { s.operation.Unlock() }
+func (s *RuntimeStateService) BeginBackendSwitchState(target string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.switching = true
+	s.target = appcore.NormalizeRuntimeBackend(target)
 }
-
-// BeginBackendSwitchState marks the start of a backend switch.
-func (s RuntimeStateService) BeginBackendSwitchState(target string) {
-	if s.app == nil {
-		return
-	}
-	s.app.BackendStateMu().Lock()
-	defer s.app.BackendStateMu().Unlock()
-	s.app.SetBackendSwitching(true)
-	s.app.SetBackendSwitchTarget(appcore.NormalizeRuntimeBackend(target))
+func (s *RuntimeStateService) FinishBackendSwitchState() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.switching = false
+	s.target = ""
 }
-
-// FinishBackendSwitchState marks the end of a backend switch.
-func (s RuntimeStateService) FinishBackendSwitchState() {
-	if s.app == nil {
-		return
-	}
-	s.app.BackendStateMu().Lock()
-	defer s.app.BackendStateMu().Unlock()
-	s.app.SetBackendSwitching(false)
-	s.app.SetBackendSwitchTarget("")
-}
-
-// BackendSwitchState returns the current switch state.
-func (s RuntimeStateService) BackendSwitchState() (bool, string) {
-	if s.app == nil {
-		return false, ""
-	}
-	s.app.BackendStateMu().Lock()
-	defer s.app.BackendStateMu().Unlock()
-	return s.app.BackendSwitching(), s.app.BackendSwitchTarget()
+func (s *RuntimeStateService) BackendSwitchState() (bool, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.switching, s.target
 }
 
 // BackendSwitchBlockedReasonForTraffic returns a reason string if a backend
 // switch is in progress, blocking traffic.
-func (s RuntimeStateService) BackendSwitchBlockedReasonForTraffic() string {
+func (s *RuntimeStateService) BackendSwitchBlockedReasonForTraffic() string {
 	switching, target := s.BackendSwitchState()
 	if !switching {
 		return ""
@@ -63,7 +50,7 @@ func (s RuntimeStateService) BackendSwitchBlockedReasonForTraffic() string {
 
 // BackendSwitchBlocksCardAction returns a reason string if a backend switch
 // blocks the given card action.
-func (s RuntimeStateService) BackendSwitchBlocksCardAction(actionName string) string {
+func (s *RuntimeStateService) BackendSwitchBlocksCardAction(actionName string) string {
 	if strings.TrimSpace(actionName) == "menu.backend.switch" {
 		return ""
 	}

@@ -10,7 +10,7 @@ import (
 
 // NormalizeSessionKey ensures the session key includes the frontend ID prefix
 // and uses the canonical frontend/chat identity.
-func NormalizeSessionKey(a AppConfig, sessionKey string) string {
+func NormalizeSessionKey(a FrontendIdentity, sessionKey string) string {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {
 		return ""
@@ -23,7 +23,7 @@ func NormalizeSessionKey(a AppConfig, sessionKey string) string {
 }
 
 // MakeSessionKey builds a session key from an inbound message.
-func MakeSessionKey(a AppConfig, msg *feishu.InboundMessage) string {
+func MakeSessionKey(a FrontendIdentity, msg *feishu.InboundMessage) string {
 	if msg == nil {
 		return ""
 	}
@@ -46,7 +46,10 @@ func MakeSessionKey(a AppConfig, msg *feishu.InboundMessage) string {
 
 // SessionBelongsToFrontend returns true if the session key belongs to the
 // current frontend (or if legacy fallback allows it).
-func SessionBelongsToFrontend(a AppConfig, sessionKey string) bool {
+func SessionBelongsToFrontend(a interface {
+	FrontendIdentity
+	ConfigurationSource
+}, sessionKey string) bool {
 	frontendID, _, _, _, _ := identity.ParseSessionKey(sessionKey)
 	if strings.TrimSpace(frontendID) == strings.TrimSpace(a.FrontendID()) {
 		return true

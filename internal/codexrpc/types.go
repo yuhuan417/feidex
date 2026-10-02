@@ -1,6 +1,6 @@
 package codexrpc
 
-import "feidex/internal/domain/conversation"
+import ("feidex/internal/domain/conversation"; "feidex/internal/domain/modelconfig")
 
 type ThreadStartResult struct {
 	Thread struct {
@@ -31,21 +31,6 @@ type ThreadListResult struct {
 
 type ThreadListEntry = conversation.ThreadEntry
 
-type ModelListResult struct {
-	Data []ModelListEntry `json:"data"`
-}
-
-type ModelListEntry struct {
-	ID                        string                      `json:"id"`
-	Model                     string                      `json:"model"`
-	DisplayName               string                      `json:"displayName"`
-	Description               string                      `json:"description"`
-	DefaultReasoningEffort    string                      `json:"defaultReasoningEffort"`
-	SupportedReasoningEfforts []ModelReasoningEffortEntry `json:"supportedReasoningEfforts"`
-	IsDefault                 bool                        `json:"isDefault"`
-}
-
-type ModelReasoningEffortEntry struct {
-	ReasoningEffort string `json:"reasoningEffort"`
-	Description     string `json:"description"`
-}
+type ModelListResult = modelconfig.ModelListResult
+type ModelListEntry = modelconfig.ModelListEntry
+type ModelReasoningEffortEntry = modelconfig.ModelReasoningEffortEntry

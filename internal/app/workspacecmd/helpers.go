@@ -68,19 +68,19 @@ func submenuCommandLabel(label, slash string) string {
 	return submenuLabel(commandLabel(label, slash))
 }
 
-func selectedWorkspaceIDForMessage(app appcore.AppConfig, msg *feishu.InboundMessage, sess *conversation.Session) string {
+func selectedWorkspaceIDForMessage(app appcore.WorkspaceSelectionSource, msg *feishu.InboundMessage, sess *conversation.Session) string {
 	return appcore.ResolveWorkspaceSelectionForMessage(app, msg, sess)
 }
 
-func selectedWorkspaceIDForSession(app appcore.AppConfig, sess *conversation.Session) string {
+func selectedWorkspaceIDForSession(app appcore.WorkspaceSelectionSource, sess *conversation.Session) string {
 	return appcore.ResolveWorkspaceSelectionForSession(app, sess)
 }
 
-func setSelectedWorkspaceForMessage(app appcore.AppConfig, msg *feishu.InboundMessage, workspaceID string) error {
+func setSelectedWorkspaceForMessage(app appcore.WorkspaceSelectionSource, msg *feishu.InboundMessage, workspaceID string) error {
 	return appcore.SetWorkspaceSelectionForMessage(app, msg, workspaceID)
 }
 
-func setSelectedWorkspaceForSession(app appcore.AppConfig, sess *conversation.Session, workspaceID string) error {
+func setSelectedWorkspaceForSession(app appcore.WorkspaceSelectionSource, sess *conversation.Session, workspaceID string) error {
 	return appcore.SetWorkspaceSelectionForSession(app, sess, workspaceID)
 }
 

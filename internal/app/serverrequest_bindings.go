@@ -3,7 +3,10 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/application"
+	"feidex/internal/application/backendops"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
 	apputil "feidex/internal/formatutil"
 	"log/slog"
@@ -11,6 +14,7 @@ import (
 
 	appreview "feidex/internal/adapter/feishu/review"
 
+	"feidex/internal/adapter/backend/interactionreply"
 	"feidex/internal/app/serverrequest"
 	"feidex/internal/feishu"
 	appruntime "feidex/internal/runtime"
@@ -64,16 +68,16 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 			case backendCodex:
 				client := currentCodexClient(a)
 				if client == nil {
-					return serverrequest.NewUnsupportedAdapter(backend)
+					return interactionreply.NewUnsupportedAdapter(backend)
 				}
-				return serverrequest.NewCodexAdapter(client, backend)
+				return interactionreply.NewCodexAdapter(codexEffectReplyClient{app: a}, backend)
 			case backendClaude:
 				if currentClaudeCore(a) == nil {
-					return serverrequest.NewUnsupportedAdapter(backend)
+					return interactionreply.NewUnsupportedAdapter(backend)
 				}
-				return serverrequest.NewClaudeAdapter(claudeReplyClientShim{claude: currentClaudeCore(a)}, backend)
+				return interactionreply.NewClaudeAdapter(claudeReplyClientShim{claude: currentClaudeCore(a)}, backend)
 			default:
-				return serverrequest.NewUnsupportedAdapter(backend)
+				return interactionreply.NewUnsupportedAdapter(backend)
 			}
 		},
 
@@ -268,4 +272,13 @@ func reviewCancelledBody(pending *state.PendingRequest) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+type codexEffectReplyClient struct{ app *App }
+
+func (c codexEffectReplyClient) Reply(token json.RawMessage, payload any) error {
+	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: backendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Payload: payload}}})
+}
+func (c codexEffectReplyClient) ReplyError(token json.RawMessage, code int, message string) error {
+	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: backendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Error: &backendops.ResponseError{Code: code, Message: message}}}})
 }

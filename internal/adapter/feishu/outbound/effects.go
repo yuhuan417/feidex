@@ -41,24 +41,24 @@ func NewEffectRunner(client Client) runtime.EffectRunner {
 			return "", client.SendText(ctx, e.Chat.ID, e.Text)
 		},
 		SendCard: func(ctx context.Context, e application.SendCard) error {
-			card, ok := e.View.(map[string]any)
-			if !ok {
-				return fmt.Errorf("invalid card view %T", e.View)
+			card, err := Render(e.View)
+			if err != nil {
+				return err
 			}
 			if client == nil {
 				return fmt.Errorf("feishu outbound unavailable")
 			}
 			if e.ReplyMessageID != "" {
-				_, err := client.ReplyCard(ctx, e.ReplyMessageID, card, e.InThread)
+				_, err = client.ReplyCard(ctx, e.ReplyMessageID, card, e.InThread)
 				return err
 			}
-			_, err := client.SendCard(ctx, e.Chat.ID, card)
+			_, err = client.SendCard(ctx, e.Chat.ID, card)
 			return err
 		},
 		SendCardWithID: func(ctx context.Context, e application.SendCard) (string, error) {
-			card, ok := e.View.(map[string]any)
-			if !ok {
-				return "", fmt.Errorf("invalid card view %T", e.View)
+			card, err := Render(e.View)
+			if err != nil {
+				return "", err
 			}
 			if client == nil {
 				return "", fmt.Errorf("feishu outbound unavailable")
@@ -69,9 +69,9 @@ func NewEffectRunner(client Client) runtime.EffectRunner {
 			return client.SendCard(ctx, e.Chat.ID, card)
 		},
 		Patch: func(ctx context.Context, e application.PatchCard) error {
-			card, ok := e.View.(map[string]any)
-			if !ok {
-				return fmt.Errorf("invalid card view %T", e.View)
+			card, err := Render(e.View)
+			if err != nil {
+				return err
 			}
 			if client == nil {
 				return fmt.Errorf("feishu outbound unavailable")

@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/attachments"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/application/continuation"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
@@ -68,7 +68,7 @@ func newReplyContinuationService(a *App) *continuation.Service {
 				if err != nil {
 					return err
 				}
-				return client.Call(ctx, "turn/steer", map[string]any{"threadId": threadID, "expectedTurnId": turnID, "input": attachments.BuildTurnInputs(sub)}, nil)
+				return (codexadapter.Gateway{Client: client}).SteerTurn(ctx, threadID, turnID, sub)
 			},
 			ResolveInboundAttachments: svc.ResolveInboundAttachments,
 			PendingInputSessionKey:    svc.PendingInputSessionKey, CollectPendingStagedImages: svc.CollectPendingStagedImages,

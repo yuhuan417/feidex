@@ -1,6 +1,9 @@
 package appcore
 
 import (
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application/workspace"
+	"feidex/internal/domain/identity"
 	"sync"
 	"testing"
 
@@ -92,4 +95,8 @@ func TestGroupWorkspaceSelectionIsConversationScoped(t *testing.T) {
 	if got := ResolveWorkspaceSelectionForMessage(a, msg, nil); got != "ws-a" {
 		t.Fatalf("ResolveWorkspaceSelectionForMessage() = %q, want ws-a", got)
 	}
+}
+
+func (a workspaceSelectionTestApp) WorkspaceSelection() workspace.SelectionService {
+	return workspace.SelectionService{Frontend: identity.FrontendID(a.frontend), Repository: appstate.WorkspaceSelections{Store: appstate.NewScoped(a.store, a.frontend, "codex", false)}}
 }

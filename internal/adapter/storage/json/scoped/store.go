@@ -4,31 +4,23 @@ package appstate
 
 import (
 	"strings"
+	"sync"
 
-	"feidex/internal/app/appcore"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	"feidex/internal/state"
 )
 
 // Store provides frontend-scoped access to state.Store.
 type Store struct {
+	RevisionMutex  sync.Locker
+	revisionMu     sync.Mutex
+	scopeMu        sync.RWMutex
 	store          *state.Store
 	frontendID     string
 	backend        string
 	legacyFallback bool
-}
-
-// New creates a frontend-scoped Store from an app config host.
-func New(a appcore.AppConfig) *Store {
-	if a == nil {
-		return nil
-	}
-	return NewScoped(
-		a.Store(),
-		a.FrontendID(),
-		appcore.ConfiguredBackend(a),
-		appcore.AllowLegacyFrontendFallback(a),
-	)
 }
 
 // NewScoped creates a frontend-scoped state gateway from explicit runtime
@@ -38,7 +30,7 @@ func NewScoped(store *state.Store, frontendID, backend string, legacyFallback bo
 	return &Store{
 		store:          store,
 		frontendID:     strings.TrimSpace(frontendID),
-		backend:        appcore.NormalizeRuntimeBackend(backend),
+		backend:        domainbackend.NormalizeBackend(backend),
 		legacyFallback: legacyFallback,
 	}
 }
@@ -72,7 +64,9 @@ func (s *Store) SetBackend(backend string) {
 	if s == nil {
 		return
 	}
-	s.backend = appcore.NormalizeRuntimeBackend(backend)
+	s.scopeMu.Lock()
+	defer s.scopeMu.Unlock()
+	s.backend = domainbackend.NormalizeBackend(backend)
 }
 
 func (s *Store) scopeFrontendID() string {
@@ -89,9 +83,8 @@ func (s *Store) scopeBackend() string {
 	if s == nil {
 		return ""
 	}
-	if s.backend != "" {
-		return s.backend
-	}
+	s.scopeMu.RLock()
+	defer s.scopeMu.RUnlock()
 	return s.backend
 }
 
@@ -171,11 +164,11 @@ func (s *Store) canonicalSessionKey(key string) string {
 	if key == "" || strings.Contains(key, ":workspace:") || strings.Contains(key, ":pending:") {
 		return key
 	}
-	frontendID, _, _, _, _ := appcore.ParseSessionKey(key)
+	frontendID, _, _, _, _ := identity.ParseSessionKey(key)
 	if frontendID == "" && s.scopeLegacyFallback() {
 		frontendID = strings.TrimSpace(s.scopeFrontendID())
 	}
-	return appcore.CanonicalSessionKey(frontendID, key)
+	return identity.CanonicalSessionKey(frontendID, key)
 }
 
 func (s *Store) resolveSessionKey(key string) string {
@@ -231,4 +224,11 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func (s *Store) revisionMutex() sync.Locker {
+	if s.RevisionMutex != nil {
+		return s.RevisionMutex
+	}
+	return &s.revisionMu
 }

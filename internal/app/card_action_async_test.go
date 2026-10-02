@@ -4,6 +4,7 @@ import (
 	"context"
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	"os"
 	"strings"
 	"sync"
@@ -72,7 +73,7 @@ func TestCompleteMenuPlanReturnsToastOnlyAndPatchesAsync(t *testing.T) {
 		}
 		closeStarted.Do(func() { close(started) })
 		<-release
-		out.(*codexrpc.CollaborationModeListResponse).Data = []codexrpc.CollaborationModeMask{{
+		out.(*catalog.CollaborationModeListResponse).Data = []catalog.CollaborationModeMask{{
 			Name: "Plan",
 			Mode: &modePlan,
 		}}

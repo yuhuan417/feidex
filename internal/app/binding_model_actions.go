@@ -2,6 +2,7 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
+	catalog "feidex/internal/domain/modelconfig"
 	"feidex/internal/textutil"
 
 	"context"
@@ -11,7 +12,6 @@ import (
 
 	"feidex/internal/adapter/feishu/cards"
 	appmodelconfig "feidex/internal/app/modelconfig"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -70,7 +70,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 	}
 }
 
-func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, binding *state.AgentBinding, result codexrpc.ModelListResult) map[string]any {
+func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, binding *state.AgentBinding, result catalog.ModelListResult) map[string]any {
 	cfg := modelConfigReadCopy(s.app)
 	if binding == nil {
 		binding = &state.AgentBinding{}
@@ -407,11 +407,11 @@ func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardActi
 	}
 	value = clearableArg(value)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
 		switch role {
 		case "plan":
 			current.PlanModelOverride = value
@@ -460,7 +460,8 @@ func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, ses
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	binding, err := s.ensureBindingForMessage(commandMessageFromAction(s.app, action, sessionKey, "/model"))
+	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -493,7 +494,7 @@ func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, arg
 	}); err != nil {
 		return err
 	}
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return err
 	}

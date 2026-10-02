@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	feishutransport "feidex/internal/adapter/feishu/transport"
+	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/textutil"
@@ -20,7 +21,7 @@ import (
 	apputil "feidex/internal/formatutil"
 
 	appreview "feidex/internal/adapter/feishu/review"
-	"feidex/internal/codexrpc"
+	"feidex/internal/application/backendops"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -77,13 +78,13 @@ type ReviewGitProvider interface {
 // CodexClient is the narrow interface for the Codex RPC client used by the
 // review service.
 type CodexClient interface {
-	Call(ctx context.Context, method string, params any, out any) error
+	StartReview(context.Context, backendops.ReviewRequest) (backendops.ReviewResult, error)
 }
 
 // Dependencies is the explicit review capability set assembled by the
 // composition root.
 type Dependencies struct {
-	ConfigProvider                    appcore.AppConfig
+	ConfigProvider                    appcore.WorkspaceSource
 	FeishuClient                      feishutransport.Client
 	StateProvider                     StateProvider
 	WorkspaceProviderValue            WorkspaceProvider
@@ -270,26 +271,6 @@ func ReviewTargetFromSubmission(sub *domainsubmission.Submission) appreview.Targ
 		CommitSHA:    strings.TrimSpace(sub.ReviewCommitSHA),
 		CommitTitle:  strings.TrimSpace(sub.ReviewCommitTitle),
 		Instructions: strings.TrimSpace(sub.ReviewInstructions),
-	}
-}
-
-// ReviewTargetParams converts a TargetSpec to a map for RPC parameters.
-func ReviewTargetParams(target appreview.TargetSpec) map[string]any {
-	switch strings.TrimSpace(target.Type) {
-	case appreview.TargetUncommitted:
-		return map[string]any{"type": appreview.TargetUncommitted}
-	case appreview.TargetBaseBranch:
-		return map[string]any{"type": appreview.TargetBaseBranch, "branch": strings.TrimSpace(target.Branch)}
-	case appreview.TargetCommit:
-		params := map[string]any{"type": appreview.TargetCommit, "sha": strings.TrimSpace(target.CommitSHA)}
-		if title := strings.TrimSpace(target.CommitTitle); title != "" {
-			params["title"] = title
-		}
-		return params
-	case appreview.TargetCustom:
-		return map[string]any{"type": appreview.TargetCustom, "instructions": strings.TrimSpace(target.Instructions)}
-	default:
-		return map[string]any{"type": appreview.TargetUncommitted}
 	}
 }
 
@@ -488,17 +469,13 @@ func StartSubmissionReview(a Dependencies, ctx context.Context, threadID string,
 	if strings.TrimSpace(threadID) == "" {
 		return "", fmt.Errorf("review requires an active thread")
 	}
-	params := map[string]any{
-		"threadId": threadID,
-		"delivery": "inline",
-		"target":   ReviewTargetParams(target),
-	}
+	request := backendops.ReviewRequest{ThreadID: threadID, Target: target}
 	client, err := a.ReviewCodexClient()
 	if err != nil {
 		return "", err
 	}
-	var reviewResp codexrpc.ReviewStartResult
-	if err := client.Call(ctx, "review/start", params, &reviewResp); err != nil {
+	reviewResp, err := client.StartReview(ctx, request)
+	if err != nil {
 		return "", err
 	}
 	turnID := strings.TrimSpace(reviewResp.Turn.ID)
@@ -944,4 +921,11 @@ func rawCard(card map[string]any) *callback.Card {
 func mustJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
+}
+
+func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
+	if d.ConfigProvider == nil {
+		return workspace.SelectionService{}
+	}
+	return d.ConfigProvider.WorkspaceSelection()
 }

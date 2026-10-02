@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"feidex/internal/app/appcore"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -44,26 +43,26 @@ type ActionExecutionDeps struct {
 }
 
 type ActionDeps struct {
-	App       Dependencies
-	Commands  ActionCommandDeps
-	Render    ActionRenderDeps
-	Execution ActionExecutionDeps
+	Backend    func() string
+	SessionKey func(*feishu.InboundMessage) string
+	Commands   ActionCommandDeps
+	Render     ActionRenderDeps
+	Execution  ActionExecutionDeps
 }
 
 type ActionService struct {
-	App  Dependencies
 	deps ActionDeps
 }
 
 func NewActionService(deps ActionDeps) ActionService {
-	return ActionService{App: deps.App, deps: deps}
+	return ActionService{deps: deps}
 }
 
 func (s ActionService) RunMenuCompactAction(action *feishu.CardAction, sessionKey string, runner CompactRunner) error {
-	if s.App == nil {
+	if s.deps.Backend == nil {
 		return nil
 	}
-	switch appcore.ConfiguredBackend(s.App) {
+	switch s.deps.Backend() {
 	case domainbackend.BackendClaude:
 		if s.deps.Commands.CommandMessageFromAction == nil || s.deps.Execution.EnqueueSubmission == nil {
 			return fmt.Errorf("backend compact action not configured")
@@ -77,15 +76,15 @@ func (s ActionService) RunMenuCompactAction(action *feishu.CardAction, sessionKe
 		_, err := runner.StartThreadCompaction(sessionKey)
 		return err
 	default:
-		return unsupportedBackendError(appcore.ConfiguredBackend(s.App))
+		return unsupportedBackendError(s.deps.Backend())
 	}
 }
 
 func (s ActionService) HandleCompactCommand(msg *feishu.InboundMessage, runner CompactRunner) error {
-	if s.App == nil || msg == nil {
+	if s.deps.Backend == nil || msg == nil {
 		return nil
 	}
-	switch appcore.ConfiguredBackend(s.App) {
+	switch s.deps.Backend() {
 	case domainbackend.BackendClaude:
 		if s.deps.Execution.EnqueuePassthroughCommand == nil {
 			return fmt.Errorf("passthrough command handler not configured")
@@ -95,7 +94,7 @@ func (s ActionService) HandleCompactCommand(msg *feishu.InboundMessage, runner C
 		if runner == nil {
 			return fmt.Errorf("compact runner not configured")
 		}
-		sessionKey := strings.TrimSpace(appcore.MakeSessionKey(s.App, msg))
+		sessionKey := strings.TrimSpace(s.deps.SessionKey(msg))
 		if _, err := runner.StartThreadCompaction(sessionKey); err != nil {
 			return err
 		}
@@ -104,13 +103,13 @@ func (s ActionService) HandleCompactCommand(msg *feishu.InboundMessage, runner C
 		}
 		return s.deps.Execution.ReplyText(context.Background(), msg.MessageID, "已请求压缩当前线程上下文。", s.deps.Execution.ReplyInThreadEnabled(msg.ChatType))
 	default:
-		return unsupportedBackendError(appcore.ConfiguredBackend(s.App))
+		return unsupportedBackendError(s.deps.Backend())
 	}
 }
 
 func (s ActionService) CompleteMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	parentAction := actionStringValue(action, "parent_action")
-	switch appcore.ConfiguredBackend(s.App) {
+	switch s.deps.Backend() {
 	case domainbackend.BackendClaude:
 		if s.deps.Commands.CompleteAsyncCommandAction == nil || s.deps.Render.RenderInterruptPreparingCard == nil || s.deps.Render.RenderInterruptResultCard == nil || s.deps.Render.RenderInterruptFailedCard == nil {
 			return nil, fmt.Errorf("interrupt action not configured")
@@ -136,7 +135,7 @@ func (s ActionService) CompleteMenuInterrupt(action *feishu.CardAction, sessionK
 		}
 		return s.deps.Commands.CompleteMenuCommand(action, sessionKey, "/stop", parentAction)
 	default:
-		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
+		return unsupportedBackendActionResponse(s.deps.Backend()), nil
 	}
 }
 

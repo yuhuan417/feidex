@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode"
 
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/config"
@@ -35,7 +34,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 	if strings.TrimSpace(msg.ChatType) != "group" {
 		return fmt.Errorf("该工作区配置只能在群聊中使用；私聊仍用于配置当前 Bot 的默认能力")
 	}
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return err
 	}
@@ -100,7 +99,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model set MODEL_ID|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
 			current.ModelOverride = value
 		})
 		if err != nil {
@@ -112,7 +111,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
 			current.ReasoningEffortOverride = value
 		})
 		if err != nil {
@@ -125,7 +124,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		}
 		value := clearableArg(args[1])
 		role := strings.ToLower(strings.TrimSpace(args[0]))
-		_, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+		_, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
 			switch role {
 			case "plan":
 				current.PlanModelOverride = value
@@ -146,7 +145,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model subagent effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.SubagentReasoningEffortOverride = value })
+		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.SubagentReasoningEffortOverride = value })
 		if err != nil {
 			return err
 		}
@@ -156,7 +155,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model plan effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.PlanReasoningEffortOverride = value })
+		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.PlanReasoningEffortOverride = value })
 		if err != nil {
 			return err
 		}
@@ -175,7 +174,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 				return fmt.Errorf("unsupported service tier %q", args[1])
 			}
 		}
-		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
 			current.ServiceTierOverride = value
 		})
 		if err != nil {
@@ -250,7 +249,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 		return nil, nil
 	}
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace use")
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -277,7 +276,7 @@ func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
 	if reason := appworkspacecmd.WorkspaceSwitchBlockedReason(sess, conversation.HasInFlightSubmission(sess)); reason != "" {
 		return fmt.Errorf("%s", reason)
 	}
-	if _, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+	if _, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
 		current.WorkspaceID = ""
 		current.Status = state.AgentBindingStatusPending.String()
 	}); err != nil {
@@ -303,37 +302,12 @@ func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction
 	}, nil
 }
 
-func (s bindingService) ensureBindingForMessage(msg *feishu.InboundMessage) (*state.AgentBinding, error) {
-	if s.app == nil || msg == nil {
-		return nil, fmt.Errorf("app not initialized")
-	}
-	chatType := strings.TrimSpace(msg.ChatType)
-	chatID := strings.TrimSpace(msg.ChatID)
-	if chatType != "group" || chatID == "" {
-		return nil, fmt.Errorf("该命令只能在群聊中使用")
-	}
-	if binding := agentBindingForChat(s.app, chatType, chatID); binding != nil {
-		return binding, nil
-	}
-	binding := &state.AgentBinding{
-		ID:         defaultBindingID(s.app.FrontendID(), chatType, chatID),
-		FrontendID: s.app.FrontendID(),
-		ChatID:     chatID,
-		ChatType:   chatType,
-		Status:     state.AgentBindingStatusPending.String(),
-	}
-	if err := s.app.State().SaveAgentBinding(binding); err != nil {
-		return nil, err
-	}
-	return s.app.State().AgentBinding(binding.ID), nil
-}
-
 func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding *state.AgentBinding, args []string, name string, set func(*state.AgentBinding, string), get func(*state.AgentBinding) string) error {
 	if len(args) != 2 {
 		return fmt.Errorf("usage: /workspace %s VALUE|default", name)
 	}
 	value := clearableArg(args[1])
-	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { set(current, value) })
+	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { set(current, value) })
 	if err != nil {
 		return err
 	}
@@ -348,40 +322,10 @@ func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, wo
 	if config.FindWorkspace(s.app.cfg, workspaceID) == nil {
 		return nil, fmt.Errorf("workspace %q not found", workspaceID)
 	}
-	return s.updateBinding(binding, func(current *state.AgentBinding) {
+	return newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
 		current.WorkspaceID = workspaceID
 		current.Status = state.AgentBindingStatusActive.String()
 	})
-}
-
-func (s bindingService) updateBinding(binding *state.AgentBinding, mutate func(*state.AgentBinding)) (*state.AgentBinding, error) {
-	if binding == nil {
-		return nil, fmt.Errorf("当前 Bot 工作区配置未初始化")
-	}
-	store := s.app.State()
-	s.app.ConfigMu().Lock()
-	defer s.app.ConfigMu().Unlock()
-	if latest := store.AgentBinding(binding.ID); latest != nil {
-		binding = latest
-	}
-	current := *binding
-	if mutate != nil {
-		mutate(&current)
-	}
-	if strings.TrimSpace(current.WorkspaceID) != "" {
-		current.Status = state.AgentBindingStatusActive.String()
-	}
-	if err := store.SaveAgentBinding(&current); err != nil {
-		return nil, err
-	}
-	updated := store.AgentBinding(current.ID)
-	if updated == nil {
-		return nil, fmt.Errorf("当前 Bot 工作区配置 %q 更新后未找到", current.ID)
-	}
-	if strings.ToLower(strings.TrimSpace(updated.ChatType)) == "group" {
-		scheduleGroupAnnouncementStatusRefresh(s.app, updated.ChatID, "binding_updated")
-	}
-	return updated, nil
 }
 
 func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Workspace, error) {
@@ -539,29 +483,6 @@ func currentBotMenuContext(a *App, sessionKey string) (chatType, chatID, rootMes
 		chatID = textutil.FirstNonEmpty(chatID, inferredChatID)
 	}
 	return chatType, chatID, rootMessageID, userID
-}
-
-func defaultBindingID(frontendID, chatType, chatID string) string {
-	return "binding_" + sanitizeBindingIDPart(frontendID) + "_" + sanitizeBindingIDPart(chatType) + "_" + sanitizeBindingIDPart(chatID)
-}
-
-func sanitizeBindingIDPart(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "default"
-	}
-	var b strings.Builder
-	for _, r := range value {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' {
-			b.WriteRune(r)
-		} else {
-			b.WriteByte('_')
-		}
-	}
-	if b.Len() == 0 {
-		return "default"
-	}
-	return b.String()
 }
 
 func resolveConfigRelativePath(a *App, value string) string {

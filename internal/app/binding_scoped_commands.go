@@ -134,7 +134,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 	if !isGroupMessage(msg) {
 		return commandWorkspace(s.app, msg, args)
 	}
-	if _, err := s.ensureBindingForMessage(msg); err != nil {
+	if _, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID); err != nil {
 		return err
 	}
 	sessionKey := makeSessionKey(s.app, msg)
@@ -245,7 +245,7 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		return newBackendConfigurationService(s.app).handleBackendModelCommand(msg, args)
 	}
 	if len(args) == 0 {
-		binding, err := s.ensureBindingForMessage(msg)
+		binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 		if err != nil {
 			return err
 		}
@@ -301,7 +301,7 @@ func (s bindingService) commandEffort(msg *feishu.InboundMessage, args []string)
 	}
 	switch len(args) {
 	case 0:
-		binding, err := s.ensureBindingForMessage(msg)
+		binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 		if err != nil {
 			return err
 		}
@@ -330,7 +330,7 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "config":
-		binding, err := s.ensureBindingForMessage(msg)
+		binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 		if err != nil {
 			return err
 		}
@@ -339,12 +339,12 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 	case "fast", "default", "off":
 		return s.commandCurrentBotGroupConfig(msg, []string{"fast", args[0]})
 	case "toggle":
-		binding, err := s.ensureBindingForMessage(msg)
+		binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 		if err != nil {
 			return err
 		}
 		next := appservicetiercmd.ToggleServiceTier(binding.ServiceTierOverride)
-		updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.ServiceTierOverride = next })
+		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.ServiceTierOverride = next })
 		if err != nil {
 			return err
 		}
@@ -360,11 +360,11 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 	}
 	modelID = clearableArg(modelID)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.ModelOverride = modelID })
+	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.ModelOverride = modelID })
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -380,11 +380,11 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 	}
 	effort = clearableArg(effort)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model effort")
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.ReasoningEffortOverride = effort })
+	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.ReasoningEffortOverride = effort })
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -403,11 +403,11 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 		}
 	}
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/fast")
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) { current.ServiceTierOverride = serviceTier })
+	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.ServiceTierOverride = serviceTier })
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -419,12 +419,12 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 
 func (s bindingService) completeBindingSimpleOverride(action *feishu.CardAction, sessionKey, fieldName, value string) (*callback.CardActionTriggerResponse, error) {
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace "+fieldName)
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)
-	updated, err := s.updateBinding(binding, func(current *state.AgentBinding) {
+	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
 		switch fieldName {
 		case "sandbox":
 			current.SandboxModeOverride = value

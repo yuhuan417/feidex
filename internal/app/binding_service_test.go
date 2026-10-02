@@ -1,6 +1,7 @@
 package app
 
 import (
+	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
@@ -845,11 +846,11 @@ func TestGroupModelMenuActionsRenderModelCardsNotWorkspace(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "model/list":
-			*out.(*codexrpc.ModelListResult) = codexrpc.ModelListResult{Data: []codexrpc.ModelListEntry{{
+			*out.(*catalog.ModelListResult) = catalog.ModelListResult{Data: []catalog.ModelListEntry{{
 				ID:                     "gpt-5",
 				DisplayName:            "GPT-5",
 				DefaultReasoningEffort: "medium",
-				SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+				SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 					{ReasoningEffort: "low"},
 					{ReasoningEffort: "medium"},
 					{ReasoningEffort: "high"},

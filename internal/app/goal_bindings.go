@@ -45,7 +45,7 @@ func goalDependenciesForApp(a *App) goalcmd.Dependencies {
 	}
 	return goalcmd.Dependencies{
 		StateProvider: a.State(), FeishuClient: a.feishu,
-		CodexClientProvider: func() (goalcmd.CodexClient, error) { return requireCodexClient(a) }, GoalTracker: goalTrackerForApp(a),
+		CodexClientProvider: func() (goalcmd.CodexClient, error) { return requireCodexGateway(a) }, GoalTracker: goalTrackerForApp(a),
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
 		MenuCardBodyForSessionFn: func(s, x, b string) string { return menuCardBodyForSession(a, s, x, b) }, ActionStringValueFn: actionStringValue, ActionSessionKeyFn: actionSessionKey,
 		CompleteMenuCommandFn: func(x *feishu.CardAction, s, r, f string) (*callback.CardActionTriggerResponse, error) {
@@ -58,11 +58,11 @@ func goalDependenciesForApp(a *App) goalcmd.Dependencies {
 }
 
 func onThreadGoalUpdated(a *App, note codexrpc.ThreadGoalUpdatedNotification) {
-	goalcmd.OnThreadGoalUpdated(goalDependenciesForApp(a), note)
+	goalcmd.OnThreadGoalUpdated(goalDependenciesForApp(a), note.Goal)
 }
 
 func onThreadGoalCleared(a *App, note codexrpc.ThreadGoalClearedNotification) {
-	goalcmd.OnThreadGoalCleared(goalDependenciesForApp(a), note)
+	goalcmd.OnThreadGoalCleared(goalDependenciesForApp(a), note.ThreadID)
 }
 
 func completeMenuGoalAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

@@ -3,6 +3,7 @@ package review
 import (
 	"context"
 	"errors"
+	domainreview "feidex/internal/domain/review"
 	"fmt"
 	"os/exec"
 	"sort"
@@ -21,13 +22,7 @@ const (
 	gitFieldSep  = "\x1f"
 )
 
-type TargetSpec struct {
-	Type         string
-	Branch       string
-	CommitSHA    string
-	CommitTitle  string
-	Instructions string
-}
+type TargetSpec = domainreview.TargetSpec
 
 type BranchOption struct {
 	Name      string

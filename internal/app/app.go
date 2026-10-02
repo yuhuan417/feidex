@@ -1,19 +1,20 @@
 package app
 
 import (
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
-	"feidex/internal/app/appstate"
-	"feidex/internal/app/attachments"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application/backendops"
+	"feidex/internal/composition"
 	"feidex/internal/domain/conversation"
 	appcodexruntime "feidex/internal/runtime/codex"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -57,8 +58,7 @@ type App struct {
 	stateView              *appstate.Store
 	composition            *appComposition
 	deduper                *frontendruntime.InboundDeduper
-	backendSwitchMu        sync.Mutex
-	backendStateMu         sync.Mutex
+	switchState            backend.RuntimeStateService
 	asyncRunner            func(func())
 	waitAsync              func()
 	frontendRecoveryMu     sync.Mutex
@@ -66,8 +66,6 @@ type App struct {
 	frontendMessageTraffic int
 	sessionActorsMu        sync.Mutex
 	sessionActors          *frontendruntime.SessionActors
-	backendSwitching       bool
-	backendSwitchTarget    string
 	mcp                    *feidexMCPService
 }
 
@@ -121,22 +119,8 @@ type appTrackers struct {
 	goals               *goalcmd.Tracker
 }
 
-func New(cfg *config.Config, cfgPath string) (*App, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("nil config")
-	}
-	store, err := state.Open(filepath.Join(cfg.DataDir, "state.json"))
-	if err != nil {
-		return nil, err
-	}
-	frontends := cfg.ResolvedFrontends()
-	if len(frontends) == 0 {
-		return nil, fmt.Errorf("no frontend configured")
-	}
-	return newFrontendApp(cfg, cfgPath, store, frontends[0])
-}
-
-func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, frontend config.ResolvedFrontend) (*App, error) {
+func NewFrontend(scope composition.FrontendScope) (*App, error) {
+	cfg, cfgPath, store, frontend := scope.Config, scope.ConfigPath, scope.Store, scope.Frontend
 	if cfg == nil {
 		return nil, fmt.Errorf("nil config")
 	}
@@ -147,6 +131,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 	feishuTransport := appfeishuwrap.WrapFeishuClient(newFeishuClient(frontend.Feishu))
 	app := &App{
 		cfg:                 cfg,
+		sharedConfigMu:      scope.ConfigMutex,
 		cfgPath:             cfgPath,
 		store:               store,
 		frontendID:          strings.TrimSpace(frontend.ID),
@@ -175,7 +160,8 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 	if notifying, ok := app.feishu.(*appfeishuwrap.NotifyingFeishuClient); ok {
 		app.feishu = &appfeishuwrap.EffectClient{NotifyingFeishuClient: notifying, Frontend: identity.FrontendID(app.frontendID), Runner: effectRunner}
 	}
-	app.stateView = appstate.New(app)
+	app.stateView = appstate.NewScoped(app.store, app.FrontendID(), configuredBackend(app), allowLegacyFrontendFallback(app))
+	app.stateView.RevisionMutex = app.ConfigMu()
 	dispatcher := newInputDispatcher(app)
 	app.composition.dispatcher = &dispatcher
 	if err := canonicalizeStoredSessionKeys(app); err != nil {
@@ -199,32 +185,7 @@ func (a *App) Start(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	a.beginLifecycle(ctx)
-	ctx = a.Context()
-	if err := startMCPService(a, ctx); err != nil {
-		a.frontendRuntime.Cancel()
-		return err
-	}
-	if err := startBackend(a, ctx); err != nil {
-		a.frontendRuntime.Cancel()
-		_ = stopMCPService(a, context.Background())
-		return err
-	}
-	runAsync(a, func() { a.deduper.RunGC(ctx) })
-	recoverSharedRuntimeState(a)
-	recoverFrontendRuntimeState(a)
-	if err := startFrontend(a, ctx); err != nil {
-		a.frontendRuntime.Cancel()
-		_ = currentBackendRuntimeHandle(a).close()
-		_ = stopMCPService(a, context.Background())
-		return err
-	}
-	newRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(ctx)
-	newRuntimeMaintenanceService(a).StartUpgradeCheckLoop(ctx)
-	scheduleStartupGroupAnnouncementRefreshes(a)
-	go sendStartupReadyNotifications(a)
-	runAsync(a, func() { runFeishuAppConfigHeal(a) })
-	return nil
+	return (frontendruntime.FrontendGroup{Frontends: []frontendruntime.ManagedFrontend{a}}).Start(ctx)
 }
 
 func (a *App) beginLifecycle(ctx context.Context) {
@@ -341,47 +302,11 @@ func startNextSubmission(a *App, sessionKey string) error {
 	return newSubmissionQueueServiceFromApp(a).StartNextSubmission(sessionKey)
 }
 
-func buildTurnSandboxPolicy(mode string) map[string]any {
-	switch strings.TrimSpace(mode) {
-	case "read-only":
-		return map[string]any{"type": "readOnly"}
-	case "workspace-write":
-		return map[string]any{"type": "workspaceWrite"}
-	case "danger-full-access":
-		return map[string]any{"type": "dangerFullAccess"}
-	default:
-		return nil
-	}
-}
-
 func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID string, sub *domainsubmission.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}
-	turnParams := map[string]any{
-		"threadId":       threadID,
-		"input":          attachments.BuildTurnInputs(sub),
-		"cwd":            cwd,
-		"approvalPolicy": approvalPolicy,
-	}
-	if len(turnParams["input"].([]map[string]any)) == 0 {
-		return "", fmt.Errorf("submission %q has no input", sub.ID)
-	}
-	if strings.TrimSpace(model) != "" {
-		turnParams["model"] = model
-	}
-	if strings.TrimSpace(reasoningEffort) != "" {
-		turnParams["effort"] = reasoningEffort
-	}
-	if sandboxPolicy := buildTurnSandboxPolicy(sandboxMode); sandboxPolicy != nil {
-		turnParams["sandboxPolicy"] = sandboxPolicy
-	}
-	if strings.TrimSpace(serviceTier) != "" {
-		turnParams["serviceTier"] = strings.TrimSpace(serviceTier)
-	}
-	if strings.TrimSpace(multiAgentMode) != "" {
-		turnParams["multiAgentMode"] = strings.TrimSpace(multiAgentMode)
-	}
+	request := backendops.StartTurnRequest{ThreadID: threadID, Submission: sub, Cwd: cwd, ApprovalPolicy: approvalPolicy, SandboxMode: sandboxMode, ServiceTier: serviceTier, Model: model, Effort: reasoningEffort, MultiAgentMode: multiAgentMode}
 	if snapshot := sub.ModelConfig; snapshot.Valid {
 		if snapshot.CollaborationMode != "" {
 			selectedModel, selectedEffort := snapshot.Model, snapshot.Effort
@@ -389,13 +314,11 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 				selectedModel, selectedEffort = snapshot.PlanModel, snapshot.PlanEffort
 			}
 			if selectedModel != "" {
-				turnParams["collaborationMode"] = codexCollaborationModeFromState(&conversation.SessionCollaborationMode{
-					Mode: snapshot.CollaborationMode, Model: selectedModel, ReasoningEffort: selectedEffort,
-				})
+				request.Collaboration = &conversation.SessionCollaborationMode{Mode: snapshot.CollaborationMode, Model: selectedModel, ReasoningEffort: selectedEffort}
 			}
 		}
-	} else if collaborationMode := codexCollaborationModeForTurnStart(a, sessionKey, threadID); collaborationMode != nil {
-		turnParams["collaborationMode"] = collaborationMode
+	} else {
+		request.Collaboration = planModeStateForTurnStart(a, sessionKey, threadID)
 	}
 	slog.Debug("turn start request",
 		"session_key", sessionKey,
@@ -406,14 +329,10 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 		"reasoning_effort", reasoningEffort,
 		"model", model,
 		"multi_agent_mode", multiAgentMode,
-		"collaboration_mode", turnParams["collaborationMode"],
+		"collaboration_mode", request.Collaboration,
 	)
-	client, err := requireCodexClient(a)
+	turnResp, err := newEffectRunner(a).RunStartTurn(ctx, application.StartTurn{Frontend: identity.FrontendID(a.FrontendID()), SessionKey: identity.SessionKey(sessionKey), Request: request})
 	if err != nil {
-		return "", err
-	}
-	var turnResp codexrpc.TurnStartResult
-	if err := client.Call(ctx, "turn/start", turnParams, &turnResp); err != nil {
 		slog.Error("turn/start failed",
 			"session_key", sessionKey,
 			"submission_id", sub.ID,
@@ -422,7 +341,7 @@ func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID strin
 		)
 		return "", err
 	}
-	return turnResp.Turn.ID, nil
+	return turnResp.ID, nil
 }
 
 func replyError(a *App, msg *feishu.InboundMessage, err error) error {
@@ -438,7 +357,7 @@ func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
-		View:           card,
+		View:           feishuoutbound.Card(card),
 		InThread:       replyInThreadEnabled(a, msg.ChatType),
 	}})
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 	"sync"
 	"testing"
@@ -68,7 +69,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 			promotedCallsMu.Unlock()
 			switch method {
 			case "model/list":
-				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+				out.(*catalog.ModelListResult).Data = []catalog.ModelListEntry{{ID: "gpt-5.4"}}
 				return nil
 			case "thread/start":
 				out.(*codexrpc.ThreadStartResult).Thread.ID = "thread-recovered"
@@ -226,7 +227,7 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 			promotedCallsMu.Unlock()
 			switch method {
 			case "model/list":
-				out.(*codexrpc.ModelListResult).Data = []codexrpc.ModelListEntry{{ID: "gpt-5.4"}}
+				out.(*catalog.ModelListResult).Data = []catalog.ModelListEntry{{ID: "gpt-5.4"}}
 			case "thread/resume":
 				result := out.(*codexrpc.ThreadStartResult)
 				result.Thread.ID = "thread-1"

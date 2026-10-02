@@ -51,10 +51,10 @@ func upgradeHooksFor(a *App, kind backendUpgradeKind) backendUpgradeHooks {
 			patchLog:    "claude upgrade panel patch failed",
 			loadView:    svc.loadClaudeUpgradeView,
 			beginUpgrade: func(snapshot appbackend.BackendUpgradeSnapshot) bool {
-				return appbackend.NewMaintenanceStateService(a).BeginClaudeUpgrade(snapshot)
+				return newMaintenanceStateService(a).BeginClaudeUpgrade(snapshot)
 			},
 			upgradeState: func() appbackend.BackendUpgradeSnapshot {
-				return appbackend.NewMaintenanceStateService(a).ClaudeUpgradeState()
+				return newMaintenanceStateService(a).ClaudeUpgradeState()
 			},
 			beginRestart: svc.beginClaudeRestartOperation,
 			runRestart:   svc.runClaudeRestartOperation,
@@ -68,10 +68,10 @@ func upgradeHooksFor(a *App, kind backendUpgradeKind) backendUpgradeHooks {
 		patchLog:    "codex upgrade panel patch failed",
 		loadView:    svc.loadCodexUpgradeView,
 		beginUpgrade: func(snapshot appbackend.BackendUpgradeSnapshot) bool {
-			return appbackend.NewMaintenanceStateService(a).BeginCodexUpgrade(snapshot)
+			return newMaintenanceStateService(a).BeginCodexUpgrade(snapshot)
 		},
 		upgradeState: func() appbackend.BackendUpgradeSnapshot {
-			return appbackend.NewMaintenanceStateService(a).CodexUpgradeState()
+			return newMaintenanceStateService(a).CodexUpgradeState()
 		},
 		beginRestart: svc.beginCodexRestartOperation,
 		runRestart:   svc.runCodexRestartOperation,

@@ -1,45 +1,20 @@
 package skills
 
 import (
-	"feidex/internal/app/appcore"
+	skillcatalog "feidex/internal/domain/skill"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"fmt"
 	"sort"
 	"strings"
-	"unicode"
 
 	appcards "feidex/internal/adapter/feishu/cards"
-	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 )
 
-// PrefixMode represents the result of parsing a skill prefix.
-type PrefixMode int
-
-const (
-	PrefixNone PrefixMode = iota
-	PrefixInvalid
-	PrefixCandidate
-)
-
-// ParsedPrefix is the result of parsing a leading $skill prefix.
-type ParsedPrefix struct {
-	Mode PrefixMode
-	Name string
-	Body string
-}
-
-// SubmissionSkillResolution describes how a submission's skill was resolved.
-type SubmissionSkillResolution struct {
-	InputText          string
-	Skills             []domainsubmission.SubmissionSkill
-	ConsumePending     bool
-	PendingReplacement *domainsubmission.SubmissionSkill
-}
-
 // SortForDisplay sorts skills for display: enabled first, then by scope, then by name.
-func SortForDisplay(skills []codexrpc.SkillMetadata) []codexrpc.SkillMetadata {
-	sorted := append([]codexrpc.SkillMetadata(nil), skills...)
+func SortForDisplay(skills []skillcatalog.SkillMetadata) []skillcatalog.SkillMetadata {
+	sorted := append([]skillcatalog.SkillMetadata(nil), skills...)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		if sorted[i].Enabled != sorted[j].Enabled {
 			return sorted[i].Enabled
@@ -53,7 +28,7 @@ func SortForDisplay(skills []codexrpc.SkillMetadata) []codexrpc.SkillMetadata {
 }
 
 // DisplayName returns the display name for a skill.
-func DisplayName(skill codexrpc.SkillMetadata) string {
+func DisplayName(skill skillcatalog.SkillMetadata) string {
 	if skill.Interface != nil && strings.TrimSpace(skill.Interface.DisplayName) != "" {
 		return strings.TrimSpace(skill.Interface.DisplayName)
 	}
@@ -61,12 +36,12 @@ func DisplayName(skill codexrpc.SkillMetadata) string {
 }
 
 // OptionText returns the display text for a skill in a select dropdown.
-func OptionText(skill codexrpc.SkillMetadata) string {
+func OptionText(skill skillcatalog.SkillMetadata) string {
 	label := DisplayName(skill)
 	if skill.Name != "" && skill.Name != label {
 		label += " (" + skill.Name + ")"
 	}
-	label += " [" + appcore.FirstNonEmpty(strings.TrimSpace(skill.Scope), "unknown") + "]"
+	label += " [" + textutil.FirstNonEmpty(strings.TrimSpace(skill.Scope), "unknown") + "]"
 	if !skill.Enabled {
 		label = "[disabled] " + label
 	}
@@ -74,29 +49,14 @@ func OptionText(skill codexrpc.SkillMetadata) string {
 }
 
 // FindByPath finds a skill by path or name in the given list.
-func FindByPath(skills []codexrpc.SkillMetadata, selectedValue string) (codexrpc.SkillMetadata, bool) {
+func FindByPath(skills []skillcatalog.SkillMetadata, selectedValue string) (skillcatalog.SkillMetadata, bool) {
 	selectedValue = strings.TrimSpace(selectedValue)
 	for _, skill := range skills {
 		if strings.TrimSpace(skill.Path) == selectedValue || strings.TrimSpace(skill.Name) == selectedValue {
 			return skill, true
 		}
 	}
-	return codexrpc.SkillMetadata{}, false
-}
-
-// FindEnabledByName finds an enabled skill by name.
-func FindEnabledByName(skills []codexrpc.SkillMetadata, name string) (domainsubmission.SubmissionSkill, bool) {
-	name = strings.TrimSpace(name)
-	for _, skill := range skills {
-		if !skill.Enabled || strings.TrimSpace(skill.Name) != name {
-			continue
-		}
-		return domainsubmission.SubmissionSkill{
-			Name: strings.TrimSpace(skill.Name),
-			Path: strings.TrimSpace(skill.Path),
-		}, true
-	}
-	return domainsubmission.SubmissionSkill{}, false
+	return skillcatalog.SkillMetadata{}, false
 }
 
 // PendingConfirmationText returns the confirmation text when a skill is selected.
@@ -108,57 +68,8 @@ func PendingConfirmationText(name string) string {
 	return "已选择 `$" + name + "`，请直接继续发送需求。下一条非命令消息会自动带上它。"
 }
 
-// ParseLeadingPrefix parses a leading $skill-name prefix from input text.
-func ParseLeadingPrefix(text string) ParsedPrefix {
-	raw := strings.TrimSpace(text)
-	if raw == "" || raw[0] != '$' {
-		return ParsedPrefix{Mode: PrefixNone}
-	}
-	rest := raw[1:]
-	if rest == "" {
-		return ParsedPrefix{Mode: PrefixInvalid}
-	}
-	skillName := rest
-	body := ""
-	if idx := strings.IndexFunc(rest, unicode.IsSpace); idx >= 0 {
-		skillName = rest[:idx]
-		body = strings.TrimLeftFunc(rest[idx:], unicode.IsSpace)
-	}
-	if !ValidPrefixName(skillName) {
-		return ParsedPrefix{Mode: PrefixInvalid}
-	}
-	return ParsedPrefix{
-		Mode: PrefixCandidate,
-		Name: strings.TrimSpace(skillName),
-		Body: body,
-	}
-}
-
-// ValidPrefixName reports whether name is a valid skill prefix name.
-func ValidPrefixName(name string) bool {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return false
-	}
-	hasAlphaNum := false
-	for _, r := range name {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			hasAlphaNum = true
-			continue
-		}
-		switch r {
-		case '-', '_', '.':
-			continue
-		default:
-			return false
-		}
-	}
-	return hasAlphaNum
-}
-
-// BuildCardParams contains the parameters for BuildCard.
 type BuildCardParams struct {
-	Entry       codexrpc.SkillsListEntry
+	Entry       skillcatalog.SkillsListEntry
 	HasPending  bool
 	Pending     domainsubmission.SubmissionSkill
 	SessionKey  string
@@ -182,7 +93,7 @@ func BuildCard(p BuildCardParams) map[string]any {
 		disabledCount++
 	}
 	lines := []string{
-		"当前 cwd: `" + appcore.FirstNonEmpty(strings.TrimSpace(p.Entry.Cwd), "-") + "`",
+		"当前 cwd: `" + textutil.FirstNonEmpty(strings.TrimSpace(p.Entry.Cwd), "-") + "`",
 		fmt.Sprintf("skills: `%d` (enabled `%d`, disabled `%d`)", len(p.Entry.Skills), enabledCount, disabledCount),
 	}
 	if p.HasPending {
@@ -201,7 +112,7 @@ func BuildCard(p BuildCardParams) map[string]any {
 			if i >= 3 {
 				break
 			}
-			lines = append(lines, "- "+appcore.FirstNonEmpty(strings.TrimSpace(item.Path), "(unknown path)")+": "+appcore.FirstNonEmpty(strings.TrimSpace(item.Message), "(unknown error)"))
+			lines = append(lines, "- "+textutil.FirstNonEmpty(strings.TrimSpace(item.Path), "(unknown path)")+": "+textutil.FirstNonEmpty(strings.TrimSpace(item.Message), "(unknown error)"))
 		}
 	}
 
@@ -218,14 +129,14 @@ func BuildCard(p BuildCardParams) map[string]any {
 
 	initialOption := ""
 	if p.HasPending {
-		initialOption = appcore.FirstNonEmpty(strings.TrimSpace(p.Pending.Path), strings.TrimSpace(p.Pending.Name))
+		initialOption = textutil.FirstNonEmpty(strings.TrimSpace(p.Pending.Path), strings.TrimSpace(p.Pending.Name))
 	}
 	if len(sorted) > 0 {
 		options := make([]appcards.SelectStaticOption, 0, len(sorted))
 		for _, skill := range sorted {
 			options = append(options, appcards.SelectStaticOption{
 				Text:  OptionText(skill),
-				Value: appcore.FirstNonEmpty(strings.TrimSpace(skill.Path), strings.TrimSpace(skill.Name)),
+				Value: textutil.FirstNonEmpty(strings.TrimSpace(skill.Path), strings.TrimSpace(skill.Name)),
 			})
 		}
 		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(

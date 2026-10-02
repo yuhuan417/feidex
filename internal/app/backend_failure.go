@@ -102,7 +102,7 @@ func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *dom
 // all callbacks wired to *App dependencies.
 func newBackendFailureService(a *App) appbackend.BackendFailureService {
 	return appbackend.NewBackendFailureService(appbackend.FailureDeps{
-		App: a,
+		Context: a.Context,
 		State: appbackend.FailureStateDeps{
 			AllSessions: func() []*conversation.Session {
 				return a.State().Sessions()

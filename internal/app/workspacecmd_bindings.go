@@ -1,7 +1,7 @@
 package app
 
 import (
-	"feidex/internal/app/appstate"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"

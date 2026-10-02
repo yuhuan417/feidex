@@ -226,15 +226,16 @@ func (s *ConfigService) ShowWorkspaceDeleteMenu(msg *feishu.InboundMessage) erro
 // ValidateWorkspaceDeletion validates that a workspace can be deleted.
 func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string) error {
 	s.App.ConfigMu().RLock()
-	defer s.App.ConfigMu().RUnlock()
+	cfg := config.Clone(s.App.Config())
+	s.App.ConfigMu().RUnlock()
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
 		return fmt.Errorf("请指定 workspace_id")
 	}
-	if config.FindWorkspace(s.App.Config(), workspaceID) == nil {
+	if config.FindWorkspace(cfg, workspaceID) == nil {
 		return fmt.Errorf("workspace %q 不存在", workspaceID)
 	}
-	if len(s.App.Config().Workspaces) <= 1 {
+	if len(cfg.Workspaces) <= 1 {
 		return fmt.Errorf("至少保留一个 workspace")
 	}
 	currentID := selectedWorkspaceIDForSession(s.App, s.GetSession(sessionKey))

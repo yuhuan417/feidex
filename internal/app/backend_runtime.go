@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"fmt"
@@ -82,13 +81,13 @@ func backendRuntimeContextForApp(a *App) backendRuntimeContext {
 		}
 		return client.Start(startCtx, a.cfg.Codex.ExperimentalAPI)
 	}
-	ctx.codexMaintenanceActive = func() bool { return appbackend.NewMaintenanceStateService(a).CodexMaintenanceActive() }
-	ctx.claudeMaintenanceActive = func() bool { return appbackend.NewMaintenanceStateService(a).ClaudeMaintenanceActive() }
+	ctx.codexMaintenanceActive = func() bool { return newMaintenanceStateService(a).CodexMaintenanceActive() }
+	ctx.claudeMaintenanceActive = func() bool { return newMaintenanceStateService(a).ClaudeMaintenanceActive() }
 	ctx.maintenanceBlocksCommand = func(raw string) error {
 		if configuredBackend(a) == backendClaude {
-			return appbackend.NewMaintenanceStateService(a).ClaudeMaintenanceBlocksCommand(raw)
+			return newMaintenanceStateService(a).ClaudeMaintenanceBlocksCommand(raw)
 		}
-		return appbackend.NewMaintenanceStateService(a).CodexMaintenanceBlocksCommand(raw)
+		return newMaintenanceStateService(a).CodexMaintenanceBlocksCommand(raw)
 	}
 	ctx.deferQueuedSubmissionsRecovery = func() bool { return codexRuntimeRecovering(a) }
 	ctx.dropThreadLineageAfterFailure = func(err error) bool {

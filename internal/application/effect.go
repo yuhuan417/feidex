@@ -1,6 +1,9 @@
 package application
 
 import (
+	"feidex/internal/application/backendops"
+	"feidex/internal/application/presentation"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 )
 
@@ -8,14 +11,10 @@ import (
 // Runtime executes effects after state changes have been persisted.
 type Effect interface{ effect() }
 
-// SaveState asks the repository adapter to persist an aggregate snapshot.
-// Aggregate and Snapshot stay generic during the first migration phase; each
-// application use case will later replace them with its own typed port.
+// SaveState persists a conversation snapshot before further effects run.
 type SaveState struct {
-	Frontend  identity.FrontendID
-	Aggregate string
-	Key       string
-	Snapshot  any
+	Frontend identity.FrontendID
+	Session  *conversation.Session
 }
 
 func (SaveState) effect() {}
@@ -38,7 +37,7 @@ type SendCard struct {
 	Frontend       identity.FrontendID
 	Chat           identity.ChatRef
 	ReplyMessageID string
-	View           any
+	View           presentation.CardView
 	InThread       bool
 }
 
@@ -49,29 +48,51 @@ func (SendCard) effect() {}
 type PatchCard struct {
 	Frontend  identity.FrontendID
 	MessageID string
-	View      any
+	View      presentation.CardView
 }
 
 func (PatchCard) effect() {}
 
-// StartTurn describes the backend-neutral part of a locally initiated turn.
-// Backend adapters add their protocol-specific request details internally.
+// StartTurn starts local work using settings captured at the startup boundary.
 type StartTurn struct {
 	Frontend   identity.FrontendID
 	SessionKey identity.SessionKey
-	ThreadID   string
-	TurnID     string
-	Input      string
+	Request    backendops.StartTurnRequest
 }
 
 func (StartTurn) effect() {}
 
-// ResolveBackendRequest asks a backend adapter to resolve one pending request.
+// ResolveBackendRequest sends a response to the backend. It does not mark a
+// Codex interaction resolved; serverRequest/resolved remains authoritative.
 type ResolveBackendRequest struct {
-	Frontend  identity.FrontendID
-	RequestID string
-	Decision  string
-	Payload   any
+	Frontend identity.FrontendID
+	Backend  string
+	Response backendops.Response
 }
 
 func (ResolveBackendRequest) effect() {}
+
+// SteerTurn targets the already-active turn; it never applies new model settings.
+type SteerTurn struct {
+	Frontend                                   identity.FrontendID
+	SessionKey, ThreadID, ExpectedTurnID, Text string
+}
+
+func (SteerTurn) effect() {}
+
+type EnqueueInput struct {
+	Frontend            identity.FrontendID
+	SessionKey          string
+	BindOnlyCurrentRoot bool
+	Message             InboundMessage
+}
+
+func (EnqueueInput) effect() {}
+
+// RefreshGroupStatus schedules display refresh after a persisted binding change.
+type RefreshGroupStatus struct {
+	Frontend       identity.FrontendID
+	ChatID, Reason string
+}
+
+func (RefreshGroupStatus) effect() {}

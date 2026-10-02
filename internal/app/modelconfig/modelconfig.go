@@ -2,6 +2,7 @@ package modelconfig
 
 import (
 	"context"
+	catalog "feidex/internal/domain/modelconfig"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"feidex/internal/adapter/feishu/cards"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/runtime"
@@ -51,7 +51,8 @@ var ClaudeBuiltinModelOptions = []runtime.ClaudeModelOption{
 
 // CodexClient is the minimal interface for calling codex RPC methods.
 type CodexClient interface {
-	Call(ctx context.Context, method string, params any, result any) error
+	ListModels(context.Context, int) (catalog.ModelListResult, error)
+	ListCollaborationModes(context.Context) (catalog.CollaborationModeListResponse, error)
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +157,7 @@ func CommandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string
 // persistence for both Codex and Claude backends. Callback function fields
 // are injected by the app-layer constructor to avoid importing app/.
 type ModelConfigService struct {
+	Backend func() string
 	// Config access callbacks.
 	GetConfig   func() *config.Config
 	GetCfgPath  func() string
@@ -185,9 +187,6 @@ type ModelConfigService struct {
 	SessionConfig func(sessionKey string) *config.Config
 
 	// Backend configuration delegate callbacks.
-	CompleteGlobalModelSet           func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error)
-	CompleteGlobalReasoningEffortSet func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error)
-	HandleBackendModelCommand        func(msg *feishu.InboundMessage, args []string) error
 
 	// Menu helper callbacks.
 	FormatMenuBody           func(action, body string) string
@@ -267,7 +266,7 @@ func ConfiguredPlanReasoningEffort(cfg *config.Config) string {
 }
 
 // DefaultModelEntry returns the default model from the result, or the first entry if none is marked default.
-func DefaultModelEntry(result codexrpc.ModelListResult) *codexrpc.ModelListEntry {
+func DefaultModelEntry(result catalog.ModelListResult) *catalog.ModelListEntry {
 	for i := range result.Data {
 		if result.Data[i].IsDefault {
 			return &result.Data[i]
@@ -280,7 +279,7 @@ func DefaultModelEntry(result codexrpc.ModelListResult) *codexrpc.ModelListEntry
 }
 
 // LookupModelEntry finds a model by ID or Model field; returns nil if not found.
-func LookupModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.ModelListEntry {
+func LookupModelEntry(result catalog.ModelListResult, modelID string) *catalog.ModelListEntry {
 	modelID = strings.TrimSpace(modelID)
 	if modelID == "" {
 		return DefaultModelEntry(result)
@@ -294,7 +293,7 @@ func LookupModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc
 }
 
 // FindModelEntry finds a model by ID, falling back to the default entry.
-func FindModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.ModelListEntry {
+func FindModelEntry(result catalog.ModelListResult, modelID string) *catalog.ModelListEntry {
 	if found := LookupModelEntry(result, modelID); found != nil {
 		return found
 	}
@@ -302,7 +301,7 @@ func FindModelEntry(result codexrpc.ModelListResult, modelID string) *codexrpc.M
 }
 
 // ModelSupportsEffort reports whether the model supports the given reasoning effort.
-func ModelSupportsEffort(model *codexrpc.ModelListEntry, effort string) bool {
+func ModelSupportsEffort(model *catalog.ModelListEntry, effort string) bool {
 	effort = strings.TrimSpace(effort)
 	if model == nil || effort == "" {
 		return true
@@ -316,7 +315,7 @@ func ModelSupportsEffort(model *codexrpc.ModelListEntry, effort string) bool {
 }
 
 // EffectiveConfiguredModelAndEffort resolves the effective model and effort from config and model catalog.
-func EffectiveConfiguredModelAndEffort(cfg *config.Config, result codexrpc.ModelListResult) (model *codexrpc.ModelListEntry, effort string) {
+func EffectiveConfiguredModelAndEffort(cfg *config.Config, result catalog.ModelListResult) (model *catalog.ModelListEntry, effort string) {
 	model = FindModelEntry(result, ConfiguredGlobalModel(cfg))
 	effort = ConfiguredGlobalReasoningEffort(cfg)
 	if effort == "" && model != nil {
@@ -329,7 +328,7 @@ func EffectiveConfiguredModelAndEffort(cfg *config.Config, result codexrpc.Model
 }
 
 // EffectivePlanConfiguredModelAndEffort resolves the effective plan-mode model and effort.
-func EffectivePlanConfiguredModelAndEffort(cfg *config.Config, result codexrpc.ModelListResult, preset *codexrpc.CollaborationModeMask) (model *codexrpc.ModelListEntry, effort string) {
+func EffectivePlanConfiguredModelAndEffort(cfg *config.Config, result catalog.ModelListResult, preset *catalog.CollaborationModeMask) (model *catalog.ModelListEntry, effort string) {
 	switch planModel := ConfiguredPlanModel(cfg); {
 	case planModel != "":
 		model = FindModelEntry(result, planModel)
@@ -344,7 +343,7 @@ func EffectivePlanConfiguredModelAndEffort(cfg *config.Config, result codexrpc.M
 }
 
 // FindPlanCollaborationModePreset returns the plan collaboration-mode preset.
-func FindPlanCollaborationModePreset(resp codexrpc.CollaborationModeListResponse) (*codexrpc.CollaborationModeMask, error) {
+func FindPlanCollaborationModePreset(resp catalog.CollaborationModeListResponse) (*catalog.CollaborationModeMask, error) {
 	for i := range resp.Data {
 		mode := strings.TrimSpace(derefStringPtr(resp.Data[i].Mode))
 		if mode == "plan" {
@@ -524,33 +523,30 @@ func ClaudeModelSelectOptions(cfg *config.Config, current string) []cards.Select
 // ---------------------------------------------------------------------------
 
 // FetchModelList fetches the Codex model catalog.
-func (s ModelConfigService) FetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
-	var result codexrpc.ModelListResult
+func (s ModelConfigService) FetchModelList(ctx context.Context) (catalog.ModelListResult, error) {
+	var result catalog.ModelListResult
 	client, err := s.RequireCodexClient()
 	if err != nil {
 		return result, err
 	}
-	if err := client.Call(ctx, "model/list", map[string]any{"limit": 100, "includeHidden": false}, &result); err != nil {
-		return result, err
-	}
-	return result, nil
+	return client.ListModels(ctx, 100)
 }
 
 // FetchPlanCollaborationModePreset fetches the plan collaboration-mode preset.
-func (s ModelConfigService) FetchPlanCollaborationModePreset(ctx context.Context) (*codexrpc.CollaborationModeMask, error) {
+func (s ModelConfigService) FetchPlanCollaborationModePreset(ctx context.Context) (*catalog.CollaborationModeMask, error) {
 	client, err := s.RequireCodexClient()
 	if err != nil {
 		return nil, err
 	}
-	var result codexrpc.CollaborationModeListResponse
-	if err := client.Call(ctx, "collaborationMode/list", map[string]any{}, &result); err != nil {
+	result, err := client.ListCollaborationModes(ctx)
+	if err != nil {
 		return nil, err
 	}
 	return FindPlanCollaborationModePreset(result)
 }
 
 // RenderModelConfigCard renders the Codex model configuration card.
-func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResult, _ *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
+func (s ModelConfigService) RenderModelConfigCard(result catalog.ModelListResult, _ *catalog.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
 	menuAction = strings.TrimSpace(menuAction)
 	if menuAction == "" {
 		menuAction = "menu.model"
@@ -688,7 +684,7 @@ func (s ModelConfigService) RenderModelConfigCard(result codexrpc.ModelListResul
 }
 
 // RenderCodexAuxiliaryModelConfigCard renders the secondary Codex model page.
-func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
+func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result catalog.ModelListResult, planPreset *catalog.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
 	cfg := s.configSnapshot()
 	planModel, planEffort := EffectivePlanConfiguredModelAndEffort(cfg, result, planPreset)
 	planModelValue := ConfiguredPlanModel(cfg)
@@ -718,7 +714,7 @@ func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result codexrpc.
 	return card
 }
 
-func modelPickerOptions(entries []codexrpc.ModelListEntry, selected *codexrpc.ModelListEntry, configured string) []cards.SelectStaticOption {
+func modelPickerOptions(entries []catalog.ModelListEntry, selected *catalog.ModelListEntry, configured string) []cards.SelectStaticOption {
 	options := []cards.SelectStaticOption{{Text: "跟随主模型", Value: DefaultOptionValue}}
 	for _, item := range entries {
 		label := firstNonEmpty(item.DisplayName, item.ID, item.Model)
@@ -730,7 +726,7 @@ func modelPickerOptions(entries []codexrpc.ModelListEntry, selected *codexrpc.Mo
 	return options
 }
 
-func effortPickerOptions(model *codexrpc.ModelListEntry, selected, configured string, preset *codexrpc.CollaborationModeMask) []cards.SelectStaticOption {
+func effortPickerOptions(model *catalog.ModelListEntry, selected, configured string, preset *catalog.CollaborationModeMask) []cards.SelectStaticOption {
 	label := "跟随默认"
 	if configured == "" && preset != nil && preset.ReasoningEffort != nil && strings.TrimSpace(*preset.ReasoningEffort) != "" {
 		label = "跟随 Plan preset"
@@ -769,7 +765,7 @@ func (s ModelConfigService) CompleteCodexAuxiliaryModelSet(action *feishu.CardAc
 }
 
 // UpdateGlobalModelConfig persists a Codex config mutation.
-func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {
+func (s ModelConfigService) UpdateGlobalModelConfig(mutate func(*config.CodexConfig), result catalog.ModelListResult) error {
 	cfg := s.GetConfig()
 	if cfg == nil {
 		return fmt.Errorf("nil config")
@@ -914,7 +910,7 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 					return s.ReplyText(context.Background(), msg.MessageID, "未找到 model: "+modelID, s.ReplyInThreadEnabled(msg.ChatType))
 				}
 			}
-			resp, err := s.CompleteGlobalModelSet(action, modelID)
+			resp, err := s.CompleteCodexGlobalModelSet(action, modelID)
 			if err != nil {
 				return err
 			}
@@ -927,7 +923,7 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 			if effort == "default" || effort == DefaultOptionValue {
 				effort = ""
 			}
-			resp, err := s.CompleteGlobalReasoningEffortSet(action, effort)
+			resp, err := s.CompleteCodexGlobalReasoningEffortSet(action, effort)
 			if err != nil {
 				return err
 			}
@@ -1500,9 +1496,9 @@ func (s ModelConfigService) CommandClaudeModel(msg *feishu.InboundMessage, args 
 func (s ModelConfigService) CommandEffort(msg *feishu.InboundMessage, args []string) error {
 	switch len(args) {
 	case 0:
-		return s.HandleBackendModelCommand(msg, nil)
+		return s.CommandModel(msg, nil)
 	case 1:
-		return s.HandleBackendModelCommand(msg, []string{"effort", strings.TrimSpace(args[0])})
+		return s.CommandModel(msg, []string{"effort", strings.TrimSpace(args[0])})
 	default:
 		return fmt.Errorf("usage: %s", EffortCommandUsage)
 	}
@@ -1525,4 +1521,61 @@ func (s ModelConfigService) configSnapshot() *config.Config {
 	mu.RLock()
 	defer mu.RUnlock()
 	return config.Clone(s.GetConfig())
+}
+
+func (s ModelConfigService) CommandModel(msg *feishu.InboundMessage, args []string) error {
+	if s.Backend != nil && s.Backend() == "claude" {
+		return s.CommandClaudeModel(msg, args)
+	}
+	return s.CommandCodexModel(msg, args)
+}
+
+func (s ModelConfigService) CompleteCodexGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	menuAction := actionStringValue(action, "menu_action")
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	result, err := s.FetchModelList(ctx)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	if err := s.UpdateGlobalModelConfig(func(c *config.CodexConfig) {
+		c.Model = strings.TrimSpace(modelID)
+	}, result); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已保存 Bot 默认模型；本轮不变，下一轮启动前应用"},
+		Card:  rawCard(s.RenderModelConfigCard(result, nil, sessionKey, menuAction)),
+	}, nil
+}
+
+func (s ModelConfigService) CompleteCodexGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	menuAction := actionStringValue(action, "menu_action")
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	result, err := s.FetchModelList(ctx)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	selectedModel, _ := EffectiveConfiguredModelAndEffort(s.configSnapshot(), result)
+	if strings.TrimSpace(reasoningEffort) != "" && !ModelSupportsEffort(selectedModel, reasoningEffort) {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前模型不支持这个推理强度"}}, nil
+	}
+	if err := s.UpdateGlobalModelConfig(func(c *config.CodexConfig) {
+		c.ReasoningEffort = strings.TrimSpace(reasoningEffort)
+	}, result); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已保存 Bot 默认推理强度；本轮不变，下一轮启动前应用"},
+		Card:  rawCard(s.RenderModelConfigCard(result, nil, sessionKey, menuAction)),
+	}, nil
 }

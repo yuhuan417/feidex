@@ -31,7 +31,8 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 		return appbackend.ActionService{}
 	}
 	return appbackend.NewActionService(appbackend.ActionDeps{
-		App: app,
+		Backend:    func() string { return configuredBackend(app) },
+		SessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(app, msg) },
 		Commands: appbackend.ActionCommandDeps{
 			CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
 				return commandMessageFromAction(app, action, sessionKey, rawCommand)

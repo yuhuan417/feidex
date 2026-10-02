@@ -55,7 +55,8 @@ type SelectionCommandDeps struct {
 }
 
 type SelectionDeps struct {
-	App       Dependencies
+	App       SelectionSource
+	Switch    *RuntimeStateService
 	Runtime   SelectionRuntimeDeps
 	Render    SelectionRenderDeps
 	Transport SelectionTransportDeps
@@ -65,7 +66,7 @@ type SelectionDeps struct {
 // SelectionService manages backend selection, switching, and configuration
 // display.
 type SelectionService struct {
-	App  Dependencies
+	App  SelectionSource
 	deps SelectionDeps
 }
 
@@ -343,8 +344,8 @@ func (s SelectionService) SwitchBackend(ctx context.Context, target string) erro
 		return fmt.Errorf("%s backend 当前不可用", BackendDisplayName(target))
 	}
 
-	s.App.BackendSwitchMu().Lock()
-	defer s.App.BackendSwitchMu().Unlock()
+	s.deps.Switch.LockSwitch()
+	defer s.deps.Switch.UnlockSwitch()
 
 	if reason := s.BackendSwitchBlockedReason(); reason != "" {
 		return fmt.Errorf("%s", reason)
@@ -354,7 +355,7 @@ func (s SelectionService) SwitchBackend(ctx context.Context, target string) erro
 	if current == target && s.BackendRuntimeReady(target) {
 		return nil
 	}
-	ts := NewRuntimeStateService(s.App)
+	ts := s.deps.Switch
 	ts.BeginBackendSwitchState(target)
 	defer ts.FinishBackendSwitchState()
 	slog.Info("backend switch begin",

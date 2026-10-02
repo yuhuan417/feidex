@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"feidex/internal/codexrpc"
+	skillcatalog "feidex/internal/domain/skill"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -11,10 +12,10 @@ import (
 	"testing"
 )
 
-func testSkillsListEntry(cwd string, skills ...codexrpc.SkillMetadata) codexrpc.SkillsListEntry {
-	return codexrpc.SkillsListEntry{
+func testSkillsListEntry(cwd string, skills ...skillcatalog.SkillMetadata) skillcatalog.SkillsListEntry {
+	return skillcatalog.SkillsListEntry{
 		Cwd:    cwd,
-		Skills: append([]codexrpc.SkillMetadata(nil), skills...),
+		Skills: append([]skillcatalog.SkillMetadata(nil), skills...),
 	}
 }
 
@@ -36,11 +37,11 @@ func TestCommandSkillsRendersCardFromAppServer(t *testing.T) {
 		if len(cwds) != 1 || cwds[0] != a.cfg.Workspaces[0].Cwd {
 			t.Fatalf("skills/list cwds = %+v, want current workspace cwd", got["cwds"])
 		}
-		result := out.(*codexrpc.SkillsListResult)
-		result.Data = []codexrpc.SkillsListEntry{
+		result := out.(*skillcatalog.SkillsListResult)
+		result.Data = []skillcatalog.SkillsListEntry{
 			testSkillsListEntry(a.cfg.Workspaces[0].Cwd,
-				codexrpc.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Scope: "system", Enabled: true, Description: "Docs"},
-				codexrpc.SkillMetadata{Name: "disabled-skill", Path: "/skills/disabled", Scope: "user", Enabled: false, Description: "Disabled"},
+				skillcatalog.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Scope: "system", Enabled: true, Description: "Docs"},
+				skillcatalog.SkillMetadata{Name: "disabled-skill", Path: "/skills/disabled", Scope: "user", Enabled: false, Description: "Disabled"},
 			),
 		}
 		return nil
@@ -94,8 +95,8 @@ func TestCommandSkillsReloadForcesReload(t *testing.T) {
 		if got["forceReload"] != true {
 			t.Fatalf("skills/list forceReload = %+v, want true", got)
 		}
-		result := out.(*codexrpc.SkillsListResult)
-		result.Data = []codexrpc.SkillsListEntry{testSkillsListEntry(a.cfg.Workspaces[0].Cwd)}
+		result := out.(*skillcatalog.SkillsListResult)
+		result.Data = []skillcatalog.SkillsListEntry{testSkillsListEntry(a.cfg.Workspaces[0].Cwd)}
 		return nil
 	}
 
@@ -110,14 +111,14 @@ func TestCommandSkillsReloadForcesReload(t *testing.T) {
 func TestCompleteSkillsSelectStoresPendingSkill(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-skills-select"
-	wantSkill := codexrpc.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Scope: "system", Enabled: true}
+	wantSkill := skillcatalog.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Scope: "system", Enabled: true}
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		if method != "skills/list" {
 			t.Fatalf("unexpected codex method: %s", method)
 		}
-		result := out.(*codexrpc.SkillsListResult)
-		result.Data = []codexrpc.SkillsListEntry{testSkillsListEntry(a.cfg.Workspaces[0].Cwd, wantSkill)}
+		result := out.(*skillcatalog.SkillsListResult)
+		result.Data = []skillcatalog.SkillsListEntry{testSkillsListEntry(a.cfg.Workspaces[0].Cwd, wantSkill)}
 		return nil
 	}
 
@@ -144,14 +145,14 @@ func TestCompleteSkillsSelectStoresPendingSkill(t *testing.T) {
 func TestCompleteSkillsSelectRejectsDisabledSkill(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-skills-disabled"
-	disabled := codexrpc.SkillMetadata{Name: "disabled-skill", Path: "/skills/disabled", Scope: "user", Enabled: false}
+	disabled := skillcatalog.SkillMetadata{Name: "disabled-skill", Path: "/skills/disabled", Scope: "user", Enabled: false}
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		if method != "skills/list" {
 			t.Fatalf("unexpected codex method: %s", method)
 		}
-		result := out.(*codexrpc.SkillsListResult)
-		result.Data = []codexrpc.SkillsListEntry{testSkillsListEntry(a.cfg.Workspaces[0].Cwd, disabled)}
+		result := out.(*skillcatalog.SkillsListResult)
+		result.Data = []skillcatalog.SkillsListEntry{testSkillsListEntry(a.cfg.Workspaces[0].Cwd, disabled)}
 		return nil
 	}
 
@@ -228,10 +229,10 @@ func TestEnqueueSubmissionExplicitSkillPrefixOverridesPending(t *testing.T) {
 			if len(cwds) != 1 || cwds[0] != a.cfg.Workspaces[0].Cwd {
 				t.Fatalf("skills/list cwds = %+v, want current workspace cwd", got["cwds"])
 			}
-			result := out.(*codexrpc.SkillsListResult)
-			result.Data = []codexrpc.SkillsListEntry{
+			result := out.(*skillcatalog.SkillsListResult)
+			result.Data = []skillcatalog.SkillsListEntry{
 				testSkillsListEntry(a.cfg.Workspaces[0].Cwd,
-					codexrpc.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Enabled: true},
+					skillcatalog.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Enabled: true},
 				),
 			}
 			return nil
@@ -317,10 +318,10 @@ func TestEnqueueSubmissionSkillOnlySetsPendingSkill(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "skills/list":
-			result := out.(*codexrpc.SkillsListResult)
-			result.Data = []codexrpc.SkillsListEntry{
+			result := out.(*skillcatalog.SkillsListResult)
+			result.Data = []skillcatalog.SkillsListEntry{
 				testSkillsListEntry(a.cfg.Workspaces[0].Cwd,
-					codexrpc.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Enabled: true},
+					skillcatalog.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Enabled: true},
 				),
 			}
 			return nil
@@ -371,10 +372,10 @@ func TestEnqueueSubmissionSkillOnlyWithAttachmentStartsTurn(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
 		switch method {
 		case "skills/list":
-			result := out.(*codexrpc.SkillsListResult)
-			result.Data = []codexrpc.SkillsListEntry{
+			result := out.(*skillcatalog.SkillsListResult)
+			result.Data = []skillcatalog.SkillsListEntry{
 				testSkillsListEntry(a.cfg.Workspaces[0].Cwd,
-					codexrpc.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Enabled: true},
+					skillcatalog.SkillMetadata{Name: "openai-docs", Path: "/skills/openai-docs", Enabled: true},
 				),
 			}
 			return nil

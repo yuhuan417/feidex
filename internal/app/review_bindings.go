@@ -43,7 +43,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 	return appreviewcmd.Dependencies{
 		ConfigProvider: a, FeishuClient: a.feishu, StateProvider: a.State(),
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
-		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return requireCodexClient(a) },
+		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return requireCodexGateway(a) },
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
 		MenuCardBodyFn: menuCardBody, ActionStringValueFn: actionStringValue,
 		CommandMessageFromActionFn: func(x *feishu.CardAction, s, r string) *feishu.InboundMessage {

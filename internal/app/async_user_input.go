@@ -2,11 +2,10 @@ package app
 
 import (
 	"encoding/json"
-	"feidex/internal/domain/conversation"
+	"feidex/internal/application"
+	"feidex/internal/application/asyncinput"
 	domainsubmission "feidex/internal/domain/submission"
-	"fmt"
 	"log/slog"
-	"strings"
 
 	appcards "feidex/internal/adapter/feishu/cards"
 	"feidex/internal/adapter/feishu/pendingforms"
@@ -41,14 +40,9 @@ func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pe
 	return a.State().Pending(requestID).FeishuMsgID
 }
 
-func asyncUserInputSession(a *App, pending *state.PendingRequest) (*conversation.Session, error) {
-	sess := a.State().Session(pending.SessionKey)
-	if sess == nil || sess.ActiveThreadID != pending.ThreadID || configuredBackend(a) != pending.Backend {
-		return nil, fmt.Errorf("会话已切换，请在当前会话中回答")
-	}
-	return sess, nil
+func asyncInputService(a *App) asyncinput.Service {
+	return asyncinput.Service{Repository: a.State(), Backend: configuredBackend(a)}
 }
-
 func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {
 	warning := func(text string) (*callback.CardActionTriggerResponse, error) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: text}}, nil
@@ -58,14 +52,8 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 	}
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := a.State().Pending(requestID)
-	if pending == nil || pending.Kind != pendingforms.AsyncUserInputPendingKind || state.NormalizePendingRequestStatus(pending.Status) != state.PendingRequestStatusPending {
-		return warning("请求已处理或过期")
-	}
-	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
-		return warning("你没有权限回答这个问题")
-	}
-	if action.MessageID != "" && action.MessageID != pending.FeishuMsgID {
-		return warning("问题卡片不匹配")
+	if err := asyncInputService(a).Validate(pending, action.UserID, action.MessageID, action.ChatID, cancel); err != nil {
+		return warning(err.Error())
 	}
 	var payload pendingforms.ToolUserInputPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
@@ -74,13 +62,7 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 	drafts := pendingforms.ToolUserInputDraftsFromCardAction(payload, action)
 	answerText := ""
 	if !cancel {
-		sess, err := asyncUserInputSession(a, pending)
-		if err != nil {
-			return warning(err.Error())
-		}
-		if action.ChatID != "" && action.ChatID != sess.ChatID {
-			return warning("问题会话不匹配")
-		}
+		var err error
 		answerText, err = pendingforms.AsyncUserInputAnswerText(payload, drafts)
 		if err != nil {
 			return &callback.CardActionTriggerResponse{
@@ -89,18 +71,7 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 			}, nil
 		}
 	}
-	claimed := false
-	err := a.State().UpdatePending(requestID, func(current *state.PendingRequest) {
-		if state.NormalizePendingRequestStatus(current.Status) != state.PendingRequestStatusPending {
-			return
-		}
-		claimed = true
-		current.Status = state.PendingRequestStatusReplied.String()
-		if cancel {
-			current.Status = state.PendingRequestStatusResolved.String()
-		}
-	})
-	if err != nil || !claimed {
+	if err := asyncInputService(a).Claim(pending, cancel); err != nil {
 		return warning("请求已处理或正在提交")
 	}
 	if cancel {
@@ -115,12 +86,12 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 		err := submitAsyncUserInput(a, pending, action.UserID, answerText)
 		var card map[string]any
 		if err != nil {
-			_ = a.State().UpdatePending(requestID, func(current *state.PendingRequest) { current.Status = state.PendingRequestStatusPending.String() })
+			_ = asyncInputService(a).Complete(pending, false)
 			card = pendingforms.RenderAsyncUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)
 			appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "提交失败，请重试。\n" + err.Error()})
 			slog.Warn("async user input submission failed", "request_id", requestID, "error", err)
 		} else {
-			_ = a.State().UpdatePending(requestID, func(current *state.PendingRequest) { current.Status = state.PendingRequestStatusResolved.String() })
+			_ = asyncInputService(a).Complete(pending, true)
 			card = a.feishu.SimpleStatusCard("输入已提交", "green", answerText, nil)
 		}
 		patchMaintenanceCard(a, pending.FeishuMsgID, card, "async user input patch failed", "request_id", requestID)
@@ -129,17 +100,9 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 }
 
 func submitAsyncUserInput(a *App, pending *state.PendingRequest, userID, text string) error {
-	sess, err := asyncUserInputSession(a, pending)
+	effect, err := asyncInputService(a).AnswerEffect(pending, userID, text)
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(sess.ActiveTurnID) != "" {
-		return newConversationService(a).ContinueActiveTurn(pending.SessionKey, text)
-	}
-	msg := &feishu.InboundMessage{
-		SessionKey: pending.SessionKey, MessageID: pending.FeishuMsgID,
-		ParentMessageID: pending.FeishuMsgID, RootMessageID: pending.FeishuMsgID,
-		ChatID: sess.ChatID, ChatType: sess.ChatType, UserID: userID, Text: text,
-	}
-	return newSubmissionQueueServiceFromApp(a).EnqueueSubmission(msg, pending.SessionKey, true)
+	return newEffectRunner(a).Run(a.Context(), []application.Effect{effect})
 }

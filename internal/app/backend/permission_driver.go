@@ -426,7 +426,7 @@ func (d codexPermissionDriver) RenderWorkspaceSandboxMenu(sessionKey string, dep
 	if deps.FormatMenuBody != nil {
 		bodyText = deps.FormatMenuBody("workspace.sandbox.menu", body)
 	}
-	return deps.App.Feishu().SimpleStatusCard("配置 Sandbox", "blue", bodyText, buttons), nil
+	return feishu.SimpleStatusCard("配置 Sandbox", "blue", bodyText, buttons), nil
 }
 
 func (d codexPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
@@ -467,7 +467,7 @@ func (d codexPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps
 	if deps.FormatMenuBody != nil {
 		bodyText = deps.FormatMenuBody("workspace.policy.menu", body)
 	}
-	return deps.App.Feishu().SimpleStatusCard("配置 Policy", "blue", bodyText, buttons), nil
+	return feishu.SimpleStatusCard("配置 Policy", "blue", bodyText, buttons), nil
 }
 
 func (d codexPermissionDriver) RenderWorkspaceMultiAgentMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
@@ -507,7 +507,7 @@ func (d codexPermissionDriver) RenderWorkspaceMultiAgentMenu(sessionKey string, 
 	if deps.FormatMenuBody != nil {
 		bodyText = deps.FormatMenuBody("workspace.multiagent.menu", body)
 	}
-	return deps.App.Feishu().SimpleStatusCard("配置 Multi-Agent Mode", "blue", bodyText, buttons), nil
+	return feishu.SimpleStatusCard("配置 Multi-Agent Mode", "blue", bodyText, buttons), nil
 }
 
 func (d claudePermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
@@ -574,7 +574,7 @@ func (d claudePermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey str
 	if deps.FormatMenuBody != nil {
 		body = deps.FormatMenuBody("workspace.permission_mode.menu", body)
 	}
-	return deps.App.Feishu().SimpleStatusCard("配置默认权限", "blue", body, buttons), nil
+	return feishu.SimpleStatusCard("配置默认权限", "blue", body, buttons), nil
 }
 
 func (d codexPermissionDriver) RenderWorkspacePermissionModeMenu(string, WorkspacePermissionRenderDeps) (map[string]any, error) {
@@ -783,7 +783,7 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 	if deps.FormatMenuBody != nil {
 		body = deps.FormatMenuBody("thread.sandbox.menu", body)
 	}
-	return deps.App.Feishu().SimpleStatusCard("配置 Thread Sandbox", "blue", body, buttons), nil
+	return feishu.SimpleStatusCard("配置 Thread Sandbox", "blue", body, buttons), nil
 }
 
 func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
@@ -843,7 +843,7 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 	if deps.FormatMenuBody != nil {
 		body = deps.FormatMenuBody("thread.policy.menu", body)
 	}
-	return deps.App.Feishu().SimpleStatusCard("配置 Thread Policy", "blue", body, buttons), nil
+	return feishu.SimpleStatusCard("配置 Thread Policy", "blue", body, buttons), nil
 }
 
 func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
@@ -893,7 +893,7 @@ func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey strin
 	if deps.FormatMenuBody != nil {
 		body = deps.FormatMenuBody("thread.multiagent.menu", body)
 	}
-	return deps.App.Feishu().SimpleStatusCard("配置 Thread Multi-Agent Mode", "blue", body, buttons), nil
+	return feishu.SimpleStatusCard("配置 Thread Multi-Agent Mode", "blue", body, buttons), nil
 }
 
 func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
@@ -966,7 +966,7 @@ func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey 
 	if deps.FormatMenuBody != nil {
 		body = deps.FormatMenuBody("thread.permission_mode.menu", body)
 	}
-	return deps.App.Feishu().SimpleStatusCard("配置会话权限", "blue", body, buttons), nil
+	return feishu.SimpleStatusCard("配置会话权限", "blue", body, buttons), nil
 }
 
 func (d claudePermissionDriver) RenderConversationSandboxMenu(string, ConversationPermissionRenderDeps) (map[string]any, error) {
@@ -1128,7 +1128,7 @@ func (d codexPermissionDriver) CompleteConversationPermissionModeSet(string, str
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 backend 不支持 /session permissions"}}, nil
 }
 
-func currentWorkspaceForDriver(app appcore.AppConfig, sessionKey string) (*conversation.Session, *config.Workspace, error) {
+func currentWorkspaceForDriver(app appcore.WorkspaceSource, sessionKey string) (*conversation.Session, *config.Workspace, error) {
 	if app == nil || app.Config() == nil {
 		return nil, nil, fmt.Errorf("app not configured")
 	}

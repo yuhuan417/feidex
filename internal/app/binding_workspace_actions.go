@@ -34,7 +34,7 @@ func (s bindingService) isGroupWorkspacePending(action *feishu.CardAction, kind 
 
 func (s bindingService) completeBindingWorkspaceSettingMenu(action *feishu.CardAction, sessionKey, fieldName string) (*callback.CardActionTriggerResponse, error) {
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace "+fieldName)
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -208,7 +208,7 @@ func (s bindingService) completeBindingWorkspaceNewSubmit(action *feishu.CardAct
 		name = id
 	}
 	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace new")
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -273,7 +273,7 @@ func (s bindingService) completeBindingWorkspaceCloneSubmit(action *feishu.CardA
 	}
 	payload = mgmt.ClonePayloadWithPlan(payload, plan)
 	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace clone")
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -300,7 +300,7 @@ func (s bindingService) handleBindingWorkspaceClonePrepareError(action *feishu.C
 	var existingWorkspaceErr *appworkspacecmd.CloneExistingWorkspaceError
 	if errors.As(err, &existingWorkspaceErr) {
 		msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace clone")
-		binding, bindErr := s.ensureBindingForMessage(msg)
+		binding, bindErr := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 		if bindErr != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: bindErr.Error()}}, nil
 		}
@@ -478,7 +478,7 @@ func (s bindingService) completeBindingWorkspaceWorktreeSubmit(action *feishu.Ca
 		return s.handleBindingWorkspaceWorktreePrepareError(action, requestID, pending, payload, err)
 	}
 	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace new worktree")
-	binding, err := s.ensureBindingForMessage(msg)
+	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -510,7 +510,7 @@ func (s bindingService) handleBindingWorkspaceWorktreePrepareError(action *feish
 	var existingWorkspaceErr *appworkspacecmd.CloneExistingWorkspaceError
 	if errors.As(err, &existingWorkspaceErr) {
 		msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace new worktree")
-		binding, bindErr := s.ensureBindingForMessage(msg)
+		binding, bindErr := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 		if bindErr != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: bindErr.Error()}}, nil
 		}

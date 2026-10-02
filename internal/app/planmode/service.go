@@ -5,8 +5,10 @@ import (
 	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/modelconfig"
+	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"log/slog"
@@ -15,7 +17,6 @@ import (
 	"time"
 
 	appworkspace "feidex/internal/app/workspace"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -27,14 +28,15 @@ const (
 )
 
 type CodexClient interface {
-	Call(ctx context.Context, method string, params any, out any) error
+	ListModels(context.Context, int) (catalog.ModelListResult, error)
+	ListCollaborationModes(context.Context) (catalog.CollaborationModeListResponse, error)
 }
 
 // Dependencies is the plan-mode capability set. It keeps plan-mode logic
 // independent from the application orchestrator while making every runtime
 // capability explicit at the composition boundary.
 type Dependencies struct {
-	ConfigProvider               appcore.AppConfig
+	ConfigProvider               appcore.WorkspaceSource
 	ContextProvider              interface{ Context() context.Context }
 	StateProvider                StateProvider
 	FeishuClient                 feishutransport.Client
@@ -277,8 +279,8 @@ func ResolvePlanModeForSession(a Dependencies, sess *conversation.Session) (*con
 	ctx, cancel := context.WithTimeout(appcore.Context(a), 20*time.Second)
 	defer cancel()
 
-	var listResp codexrpc.CollaborationModeListResponse
-	if err := client.Call(ctx, "collaborationMode/list", map[string]any{}, &listResp); err != nil {
+	listResp, err := client.ListCollaborationModes(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("读取 collaboration mode 列表失败: %w", err)
 	}
 	preset, err := modelconfig.FindPlanCollaborationModePreset(listResp)
@@ -565,7 +567,7 @@ func splitLeadingTitlePrefixes(title string) (prefixes []string, rest string) {
 	return prefixes, rest
 }
 
-func resolvePlanModeSettings(ctx context.Context, a Dependencies, client CodexClient, preset *codexrpc.CollaborationModeMask, sess *conversation.Session) (model string, effort string, err error) {
+func resolvePlanModeSettings(ctx context.Context, a Dependencies, client CodexClient, preset *catalog.CollaborationModeMask, sess *conversation.Session) (model string, effort string, err error) {
 	model, effort = a.EffectivePlanSettings(sess)
 	model = strings.TrimSpace(model)
 	if model == "" {
@@ -580,11 +582,8 @@ func resolvePlanModeSettings(ctx context.Context, a Dependencies, client CodexCl
 	if model != "" {
 		return model, effort, nil
 	}
-	var result codexrpc.ModelListResult
-	if err := client.Call(ctx, "model/list", map[string]any{
-		"limit":         20,
-		"includeHidden": false,
-	}, &result); err != nil {
+	result, err := client.ListModels(ctx, 20)
+	if err != nil {
 		return "", "", fmt.Errorf("读取 model 列表失败: %w", err)
 	}
 	entry, resolvedEffort := modelconfig.EffectivePlanConfiguredModelAndEffort(a.Config(), result, preset)
@@ -604,11 +603,8 @@ func resolveDefaultCollaborationModeSettings(ctx context.Context, a Dependencies
 	if model != "" {
 		return model, effort, nil
 	}
-	var result codexrpc.ModelListResult
-	if err := client.Call(ctx, "model/list", map[string]any{
-		"limit":         20,
-		"includeHidden": false,
-	}, &result); err != nil {
+	result, err := client.ListModels(ctx, 20)
+	if err != nil {
 		return "", "", fmt.Errorf("读取 model 列表失败: %w", err)
 	}
 	entry, resolvedEffort := modelconfig.EffectiveConfiguredModelAndEffort(a.Config(), result)
@@ -625,7 +621,7 @@ func resolveDefaultCollaborationModeSettings(ctx context.Context, a Dependencies
 	return model, effort, nil
 }
 
-func CodexCollaborationModeForTurnStart(a Dependencies, sessionKey, threadID string) *codexrpc.CollaborationMode {
+func StateForTurnStart(a Dependencies, sessionKey, threadID string) *conversation.SessionCollaborationMode {
 	if a.ConfigProvider == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
 		return nil
 	}
@@ -633,27 +629,7 @@ func CodexCollaborationModeForTurnStart(a Dependencies, sessionKey, threadID str
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
 		return nil
 	}
-	mode := DefaultCollaborationModeWithConfiguredEffort(a, sess.ActiveThreadCollaborationMode)
-	return CodexCollaborationModeFromState(mode)
-}
-
-func CodexCollaborationModeFromState(mode *conversation.SessionCollaborationMode) *codexrpc.CollaborationMode {
-	mode = NormalizeThreadCollaborationMode(mode)
-	if mode == nil {
-		return nil
-	}
-	var reasoningEffort *string
-	if value := strings.TrimSpace(mode.ReasoningEffort); value != "" {
-		reasoningEffort = &value
-	}
-	return &codexrpc.CollaborationMode{
-		Mode: mode.Mode,
-		Settings: codexrpc.CollaborationModeSettings{
-			DeveloperInstructions: nil,
-			Model:                 mode.Model,
-			ReasoningEffort:       reasoningEffort,
-		},
-	}
+	return DefaultCollaborationModeWithConfiguredEffort(a, sess.ActiveThreadCollaborationMode)
 }
 
 func DefaultCollaborationModeWithConfiguredEffort(a Dependencies, mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
@@ -685,4 +661,11 @@ func NormalizeThreadCollaborationMode(mode *conversation.SessionCollaborationMod
 		return nil
 	}
 	return &cp
+}
+
+func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
+	if d.ConfigProvider == nil {
+		return workspace.SelectionService{}
+	}
+	return d.ConfigProvider.WorkspaceSelection()
 }

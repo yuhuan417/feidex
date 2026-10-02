@@ -7,14 +7,16 @@ import (
 	"feidex/internal/adapter/feishu/threadview"
 	"feidex/internal/application/conversation"
 	"feidex/internal/codexrpc"
+	"feidex/internal/composition"
 	"feidex/internal/config"
 	domain "feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	codexruntime "feidex/internal/runtime/codex"
 	"strings"
 )
 
 func newConversationService(a *App) *conversation.Service {
-	s := &conversation.Service{Context: a.Context(), Backend: configuredBackend(a), Repository: a.State(), Live: sqLiveThreadAdapter{app: a}}
+	s := &conversation.Service{Context: a.Context(), Backend: configuredBackend(a), Repository: composition.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context()}, Live: sqLiveThreadAdapter{app: a}}
 	if s.Backend == backendClaude {
 		s.Gateway = claudeadapter.ConversationGateway{Client: currentClaudeCore(a), Continue: newReplyContinuationService(a).ContinueClaudeSessionWithText}
 		s.ResolveModel = func(sess *domain.Session, ws *config.Workspace) string { return effectiveClaudeModel(a, sess, ws) }

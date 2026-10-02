@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
@@ -19,7 +20,7 @@ func replyCardEffect(a *App, msg *feishu.InboundMessage, card map[string]any) er
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
-		View:           card,
+		View:           feishuoutbound.Card(card),
 		InThread:       replyInThreadEnabled(a, msg.ChatType),
 	}})
 }
@@ -44,7 +45,7 @@ func sendCardEffect(ctx context.Context, a *App, chatID string, card map[string]
 	return newEffectRunner(a).Run(ctx, []application.Effect{application.SendCard{
 		Frontend: identity.FrontendID(a.FrontendID()),
 		Chat:     identity.ChatRef{ID: chatID},
-		View:     card,
+		View:     feishuoutbound.Card(card),
 	}})
 }
 
@@ -52,14 +53,14 @@ func replyCardWithIDEffect(ctx context.Context, a *App, parentMessageID string, 
 	if a == nil {
 		return "", nil
 	}
-	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, View: card, InThread: inThread})
+	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, View: feishuoutbound.Card(card), InThread: inThread})
 }
 
 func sendCardWithIDEffect(ctx context.Context, a *App, chatID string, card map[string]any) (string, error) {
 	if a == nil {
 		return "", nil
 	}
-	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: chatID}, View: card})
+	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: chatID}, View: feishuoutbound.Card(card)})
 }
 
 func replyTextWithIDEffect(ctx context.Context, a *App, parentMessageID, text string, inThread bool) (string, error) {
@@ -76,7 +77,7 @@ func patchCardEffect(ctx context.Context, a *App, messageID string, card map[str
 	return newEffectRunner(a).Run(ctx, []application.Effect{application.PatchCard{
 		Frontend:  identity.FrontendID(a.FrontendID()),
 		MessageID: messageID,
-		View:      card,
+		View:      feishuoutbound.Card(card),
 	}})
 }
 

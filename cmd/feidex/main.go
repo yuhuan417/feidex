@@ -13,6 +13,7 @@ import (
 
 	"feidex/internal/app"
 	"feidex/internal/buildinfo"
+	"feidex/internal/composition"
 	"feidex/internal/config"
 	"feidex/internal/logcontrol"
 )
@@ -24,8 +25,10 @@ type appService interface {
 
 var (
 	loadConfig = config.Load
-	newApp     = func(cfg *config.Config, cfgPath string) (appService, error) { return app.NewService(cfg, cfgPath) }
-	notifyCtx  = signal.NotifyContext
+	newApp     = func(cfg *config.Config, cfgPath string) (appService, error) {
+		return composition.NewService(cfg, cfgPath, app.NewFrontend)
+	}
+	notifyCtx = signal.NotifyContext
 )
 
 func main() {

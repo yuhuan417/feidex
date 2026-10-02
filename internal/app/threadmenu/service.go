@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	feishutransport "feidex/internal/adapter/feishu/transport"
+	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"sort"
@@ -34,7 +35,7 @@ const (
 // Dependencies is the explicit thread-menu capability set assembled by the
 // composition root. The menu service never receives the application root.
 type Dependencies struct {
-	ConfigProvider                            appcore.AppConfig
+	ConfigProvider                            appcore.WorkspaceSource
 	FeishuClient                              feishutransport.Client
 	AppStateFn                                func() StateProvider
 	EffectiveSessionKeyFn                     func(string) string
@@ -1116,4 +1117,11 @@ func SessionCurrentThreadLabel(sess *conversation.Session) string {
 		return "-"
 	}
 	return appthreadview.CurrentThreadLabel(sess.ActiveThreadName, sess.ActiveThreadPreview, sess.ActiveThreadID)
+}
+
+func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
+	if d.ConfigProvider == nil {
+		return workspace.SelectionService{}
+	}
+	return d.ConfigProvider.WorkspaceSelection()
 }

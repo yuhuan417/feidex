@@ -13,7 +13,7 @@ func newSkillsService(a *App) *appskillscmd.Service {
 	s := appskillscmd.NewService()
 	s.FeishuClient = func() appskillscmd.FeishuClient { return a.feishu }
 	s.RequireCodexClient = func() (appskillscmd.CodexClient, error) {
-		return requireCodexClient(a)
+		return requireCodexGateway(a)
 	}
 	s.AppStateSession = func(sessionKey string) *conversation.Session {
 		return a.State().Session(sessionKey)

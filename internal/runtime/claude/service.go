@@ -243,7 +243,7 @@ type Deps struct {
 }
 
 // Service provides Claude CLI session management. All exported methods
-// satisfy the appcore.ClaudeCore interface.
+// satisfy the appruntime.ClaudeCore interface.
 type Service struct {
 	Cfg  config.ClaudeConfig
 	deps Deps
@@ -478,7 +478,7 @@ func (s *Service) QuietWorkingCardEnabled() bool {
 }
 
 // ---------------------------------------------------------------------------
-// Exported methods — satisfy appcore.ClaudeCore
+// Exported methods — satisfy appruntime.ClaudeCore
 // ---------------------------------------------------------------------------
 
 // UpdateConfig updates the Claude configuration.

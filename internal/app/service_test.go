@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"feidex/internal/composition"
 	"feidex/internal/config"
 )
 
@@ -59,12 +60,12 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 		},
 	}
 
-	svc, err := NewService(cfg, filepath.Join(t.TempDir(), "config.toml"))
+	svc, err := composition.NewService(cfg, filepath.Join(t.TempDir(), "config.toml"), NewFrontend)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	if len(svc.apps) != 2 {
-		t.Fatalf("NewService() apps = %d, want 2", len(svc.apps))
+	if len(svc.Frontends) != 2 {
+		t.Fatalf("NewService() apps = %d, want 2", len(svc.Frontends))
 	}
 	if len(codexClients) != 1 {
 		t.Fatalf("newCodexClient calls = %d, want 1", len(codexClients))
@@ -76,8 +77,8 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 		t.Fatalf("newFeishuClient app_ids = %+v", got)
 	}
 
-	codexApp := svc.apps[0]
-	claudeApp := svc.apps[1]
+	codexApp := svc.Frontends[0]
+	claudeApp := svc.Frontends[1]
 	if codexApp.store != claudeApp.store {
 		t.Fatal("frontend apps should share one store")
 	}
@@ -128,17 +129,17 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 		},
 	}}
 
-	svc, err := NewService(cfg, filepath.Join(t.TempDir(), "config.toml"))
+	svc, err := composition.NewService(cfg, filepath.Join(t.TempDir(), "config.toml"), NewFrontend)
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	if len(svc.apps) != 1 {
-		t.Fatalf("NewService() apps = %d, want 1", len(svc.apps))
+	if len(svc.Frontends) != 1 {
+		t.Fatalf("NewService() apps = %d, want 1", len(svc.Frontends))
 	}
 	if codexCalls != 0 || claudeCalls != 0 {
 		t.Fatalf("runtime constructors should not run for unset backend, codex=%d claude=%d", codexCalls, claudeCalls)
 	}
-	if svc.apps[0].backend != "" || svc.apps[0].composition.codex != nil || svc.apps[0].composition.claude != nil {
-		t.Fatalf("unset backend app = %+v", svc.apps[0])
+	if svc.Frontends[0].backend != "" || svc.Frontends[0].composition.codex != nil || svc.Frontends[0].composition.claude != nil {
+		t.Fatalf("unset backend app = %+v", svc.Frontends[0])
 	}
 }

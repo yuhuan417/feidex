@@ -1,6 +1,6 @@
 // Package appcore provides shared helpers and interfaces used by the app
 // orchestrator and its sub-packages. Sub-packages cannot import parent app/,
-// so helpers that need *App access go through the AppConfig interface here.
+// so helpers that need *App access go through the ConfigurationSource interface here.
 package appcore
 
 import (
@@ -17,28 +17,23 @@ func NormalizeRuntimeBackend(value string) string {
 	return domainbackend.NormalizeBackend(value)
 }
 
-// AppConfig is the narrow interface that shared helpers use to access
-// *App fields. *App satisfies this via its accessor methods.
-type AppConfig interface {
+type ConfigurationSource interface {
 	Config() *config.Config
 	ConfigMu() *sync.RWMutex
 	Backend() string
-	FrontendID() string
 	FrontendConfigIndex() int
-	Store() *state.Store
 }
-
-// AppExtended adds mutation and runtime methods needed by sub-packages
-// that manage backend state. Not all sub-packages need all methods.
-type AppExtended interface {
-	AppConfig
-	SetBackend(backend string)
-	ConfigPath() string
+type FrontendIdentity interface{ FrontendID() string }
+type WorkspaceSource interface {
+	WorkspaceSelectionSource
+	ConfigurationSource
+	FrontendIdentity
+	Store() *state.Store
 }
 
 // FeishuConfigUnlocked returns the active Feishu config without acquiring
 // ConfigMu. Caller must hold at least a read lock.
-func FeishuConfigUnlocked(a AppConfig) *config.FeishuConfig {
+func FeishuConfigUnlocked(a ConfigurationSource) *config.FeishuConfig {
 	if a == nil || a.Config() == nil {
 		return nil
 	}
@@ -51,7 +46,7 @@ func FeishuConfigUnlocked(a AppConfig) *config.FeishuConfig {
 }
 
 // FeishuConfig returns the active Feishu config, acquiring ConfigMu.
-func FeishuConfig(a AppConfig) *config.FeishuConfig {
+func FeishuConfig(a ConfigurationSource) *config.FeishuConfig {
 	if a == nil {
 		return nil
 	}
@@ -61,12 +56,12 @@ func FeishuConfig(a AppConfig) *config.FeishuConfig {
 }
 
 // ReplyInThreadEnabled returns the fixed Feishu reply mode.
-func ReplyInThreadEnabled(_ AppConfig, _ string) bool {
+func ReplyInThreadEnabled(_ ConfigurationSource, _ string) bool {
 	return false
 }
 
 // DebugAllowFrom returns the debug allow list from Feishu config.
-func DebugAllowFrom(a AppConfig) []string {
+func DebugAllowFrom(a ConfigurationSource) []string {
 	cfg := FeishuConfig(a)
 	if cfg == nil {
 		return nil
@@ -76,7 +71,7 @@ func DebugAllowFrom(a AppConfig) []string {
 
 // AllowLegacyFrontendFallback returns true if the app has exactly one
 // configured frontend, allowing sessions without an explicit frontend ID.
-func AllowLegacyFrontendFallback(a AppConfig) bool {
+func AllowLegacyFrontendFallback(a ConfigurationSource) bool {
 	if a == nil || a.Config() == nil {
 		return false
 	}
@@ -87,7 +82,7 @@ func AllowLegacyFrontendFallback(a AppConfig) bool {
 
 // ConfiguredBackend returns the active backend name, checking the runtime
 // override first, then falling back to the Feishu config.
-func ConfiguredBackend(a AppConfig) string {
+func ConfiguredBackend(a ConfigurationSource) string {
 	if a == nil {
 		return ""
 	}
@@ -103,7 +98,7 @@ func ConfiguredBackend(a AppConfig) string {
 }
 
 // CurrentRuntimeBackend returns the raw runtime backend override (normalized).
-func CurrentRuntimeBackend(a AppConfig) string {
+func CurrentRuntimeBackend(a ConfigurationSource) string {
 	if a == nil {
 		return ""
 	}
@@ -113,13 +108,13 @@ func CurrentRuntimeBackend(a AppConfig) string {
 }
 
 // HasConfiguredBackend returns true if a backend is configured.
-func HasConfiguredBackend(a AppConfig) bool {
+func HasConfiguredBackend(a ConfigurationSource) bool {
 	return strings.TrimSpace(ConfiguredBackend(a)) != ""
 }
 
 // DefaultWorkspaceID returns the default workspace ID from the first
 // configured workspace, or "default" if none.
-func DefaultWorkspaceID(a AppConfig) string {
+func DefaultWorkspaceID(a ConfigurationSource) string {
 	if a == nil || a.Config() == nil {
 		return "default"
 	}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"feidex/internal/app/modelconfig"
 	"feidex/internal/claudecli"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -17,13 +17,13 @@ import (
 
 func TestEffectiveConfiguredModelAndEffortUsesCatalogDefaultsWhenUnset(t *testing.T) {
 	cfg := config.Default()
-	result := codexrpc.ModelListResult{
-		Data: []codexrpc.ModelListEntry{
+	result := catalog.ModelListResult{
+		Data: []catalog.ModelListEntry{
 			{
 				ID:                     "gpt-5.3-codex",
 				IsDefault:              true,
 				DefaultReasoningEffort: "medium",
-				SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+				SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 					{ReasoningEffort: "low"},
 					{ReasoningEffort: "medium"},
 				},
@@ -43,8 +43,8 @@ func TestEffectivePlanConfiguredModelAndEffortUsesPlanOverridesAndPreset(t *test
 	cfg := config.Default()
 	cfg.Codex.Model = "global-model"
 	cfg.Codex.PlanModel = "plan-model"
-	result := codexrpc.ModelListResult{
-		Data: []codexrpc.ModelListEntry{
+	result := catalog.ModelListResult{
+		Data: []catalog.ModelListEntry{
 			{
 				ID:        "global-model",
 				IsDefault: true,
@@ -55,7 +55,7 @@ func TestEffectivePlanConfiguredModelAndEffortUsesPlanOverridesAndPreset(t *test
 		},
 	}
 	presetEffort := "medium"
-	model, effort := modelconfig.EffectivePlanConfiguredModelAndEffort(cfg, result, &codexrpc.CollaborationModeMask{
+	model, effort := modelconfig.EffectivePlanConfiguredModelAndEffort(cfg, result, &catalog.CollaborationModeMask{
 		ReasoningEffort: &presetEffort,
 	})
 	if model == nil || model.ID != "plan-model" {
@@ -73,20 +73,20 @@ func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 	a := &App{cfg: cfg, cfgPath: cfgPath}
-	result := codexrpc.ModelListResult{
-		Data: []codexrpc.ModelListEntry{
+	result := catalog.ModelListResult{
+		Data: []catalog.ModelListEntry{
 			{
 				ID:                     "model-a",
 				IsDefault:              true,
 				DefaultReasoningEffort: "medium",
-				SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+				SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 					{ReasoningEffort: "medium"},
 				},
 			},
 			{
 				ID:                     "model-b",
 				DefaultReasoningEffort: "low",
-				SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+				SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 					{ReasoningEffort: "low"},
 				},
 			},
@@ -149,20 +149,20 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	cfg := config.Default()
 	a := &App{cfg: cfg}
 	presetEffort := "medium"
-	card := newModelConfigService(a).renderModelConfigCard(codexrpc.ModelListResult{
-		Data: []codexrpc.ModelListEntry{
+	card := newModelConfigService(a).renderModelConfigCard(catalog.ModelListResult{
+		Data: []catalog.ModelListEntry{
 			{
 				ID:                     "gpt-5",
 				DisplayName:            "GPT-5",
 				DefaultReasoningEffort: "medium",
-				SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+				SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 					{ReasoningEffort: "low"},
 					{ReasoningEffort: "medium"},
 				},
 				IsDefault: true,
 			},
 		},
-	}, &codexrpc.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model")
+	}, &catalog.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model")
 	if got := cardSelectStaticForTest(card); len(got) != 2 {
 		t.Fatalf("model config selects = %+v, want 2 primary select_static elements", got)
 	}
@@ -175,7 +175,7 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	if firstCardActionValueForTest(card, "menu.model_auxiliary") == nil {
 		t.Fatalf("model config card missing auxiliary model entry: %+v", cardButtonsForTest(card))
 	}
-	aux := newModelConfigService(a).renderCodexAuxiliaryModelConfigCard(codexrpc.ModelListResult{Data: []codexrpc.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{{ReasoningEffort: "low"}}}}}, &codexrpc.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model_auxiliary")
+	aux := newModelConfigService(a).renderCodexAuxiliaryModelConfigCard(catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{{ReasoningEffort: "low"}}}}}, &catalog.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model_auxiliary")
 	if got := cardSelectStaticForTest(aux); len(got) != 5 {
 		t.Fatalf("auxiliary model config selects = %+v, want 5 select_static elements", got)
 	}
@@ -198,8 +198,8 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 		}
 	}
 	assertLastModelConfigButtonIsBack("single-chat Codex", card)
-	groupCard := newBindingService(a).renderBindingCodexModelConfigCard("sess-1", &state.AgentBinding{}, codexrpc.ModelListResult{
-		Data: []codexrpc.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}},
+	groupCard := newBindingService(a).renderBindingCodexModelConfigCard("sess-1", &state.AgentBinding{}, catalog.ModelListResult{
+		Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}},
 	})
 	if groupBody := cardMarkdownContent(t, groupCard); strings.Contains(groupBody, "Plan 模式模型") || strings.Contains(groupBody, "Plan 推理强度") {
 		t.Fatalf("group model config body still contains legacy Plan summary: %q", groupBody)
@@ -696,12 +696,12 @@ func TestCodexModelCardShowsEffectiveAuxiliaryModels(t *testing.T) {
 	a.cfg.Codex.ReviewModel = "gpt-5-mini"
 	a.cfg.Codex.SubagentModel = "gpt-5-nano"
 
-	result := codexrpc.ModelListResult{Data: []codexrpc.ModelListEntry{{
+	result := catalog.ModelListResult{Data: []catalog.ModelListEntry{{
 		ID:                     "gpt-5",
 		DisplayName:            "GPT-5",
 		IsDefault:              true,
 		DefaultReasoningEffort: "medium",
-		SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+		SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 			{ReasoningEffort: "medium"},
 		},
 	}}}

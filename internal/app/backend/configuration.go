@@ -4,9 +4,9 @@ import (
 	"context"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	"fmt"
 	"strings"
-	"time"
 
 	"feidex/internal/adapter/feishu/cardactions"
 	appdebugview "feidex/internal/adapter/feishu/debugview"
@@ -16,10 +16,8 @@ import (
 	appmodelconfig "feidex/internal/app/modelconfig"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/buildinfo"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	apputil "feidex/internal/formatutil"
 	appruntime "feidex/internal/runtime"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -33,7 +31,7 @@ const (
 // ConfigurationService handles backend-specific configuration display and
 // model/workspace configuration card rendering.
 type ConfigurationService struct {
-	App  Dependencies
+	App  PermissionDependencies
 	deps ConfigurationDeps
 }
 
@@ -55,14 +53,16 @@ type ConfigurationClaudeDeps struct {
 }
 
 type ConfigurationCodexDeps struct {
-	FetchModelList                   func(ctx context.Context) (codexrpc.ModelListResult, error)
-	FetchPlanCollaborationModePreset func(ctx context.Context) (*codexrpc.CollaborationModeMask, error)
-	UpdateGlobalModelConfig          func(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error
-	RenderModelConfigCard            func(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any
+	CompleteCodexGlobalModelSet           func(*feishu.CardAction, string) (*callback.CardActionTriggerResponse, error)
+	CompleteCodexGlobalReasoningEffortSet func(*feishu.CardAction, string) (*callback.CardActionTriggerResponse, error)
+	FetchModelList                        func(ctx context.Context) (catalog.ModelListResult, error)
+	FetchPlanCollaborationModePreset      func(ctx context.Context) (*catalog.CollaborationModeMask, error)
+	UpdateGlobalModelConfig               func(mutate func(*config.CodexConfig), result catalog.ModelListResult) error
+	RenderModelConfigCard                 func(result catalog.ModelListResult, planPreset *catalog.CollaborationModeMask, sessionKey, menuAction string) map[string]any
 }
 
 type ConfigurationDeps struct {
-	App        Dependencies
+	App        PermissionDependencies
 	Driver     Driver
 	Formatting ConfigurationFormattingDeps
 	Commands   ConfigurationCommandDeps
@@ -143,21 +143,21 @@ func (s ConfigurationService) CompleteClaudeModelOptionRemove(action *feishu.Car
 	return s.deps.Claude.CompleteModelOptionRemove(action)
 }
 
-func (s ConfigurationService) FetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
+func (s ConfigurationService) FetchModelList(ctx context.Context) (catalog.ModelListResult, error) {
 	if s.deps.Codex.FetchModelList == nil {
-		return codexrpc.ModelListResult{}, fmt.Errorf("Codex model list fetcher not configured")
+		return catalog.ModelListResult{}, fmt.Errorf("Codex model list fetcher not configured")
 	}
 	return s.deps.Codex.FetchModelList(ctx)
 }
 
-func (s ConfigurationService) UpdateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {
+func (s ConfigurationService) UpdateGlobalModelConfig(mutate func(*config.CodexConfig), result catalog.ModelListResult) error {
 	if s.deps.Codex.UpdateGlobalModelConfig == nil {
 		return fmt.Errorf("Codex model config updater not configured")
 	}
 	return s.deps.Codex.UpdateGlobalModelConfig(mutate, result)
 }
 
-func (s ConfigurationService) RenderModelConfigCard(result codexrpc.ModelListResult, sessionKey, menuAction string) map[string]any {
+func (s ConfigurationService) RenderModelConfigCard(result catalog.ModelListResult, sessionKey, menuAction string) map[string]any {
 	if s.deps.Codex.RenderModelConfigCard == nil {
 		return nil
 	}
@@ -234,7 +234,7 @@ func claudePermissionModeLabel(value string) string {
 	return "`" + value + "`"
 }
 
-func autoRetryEnabled(app Dependencies) bool {
+func autoRetryEnabled(app appcore.ConfigurationSource) bool {
 	cfg := appcore.FeishuConfig(app)
 	return cfg != nil && cfg.AutoRetry
 }
@@ -245,7 +245,7 @@ func (s ConfigurationService) renderBackendRequiredCard(sessionKey string) map[s
 		{Text: "后端选择 /backend", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.group.backend", SessionKey: sessionKey}.Map()},
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
-	return s.App.Feishu().SimpleStatusCard("模型配置", "orange", body, buttons)
+	return feishu.SimpleStatusCard("模型配置", "orange", body, buttons)
 }
 
 func (s ConfigurationService) backendRequiredStatusBody() string {
@@ -334,7 +334,7 @@ func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[s
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
 	body = s.FormatMenuBody("menu.group.model", body)
-	return s.App.Feishu().SimpleStatusCard("模型配置", "blue", body, buttons)
+	return feishu.SimpleStatusCard("模型配置", "blue", body, buttons)
 }
 
 // RenderCodexModelMenuCard renders the Codex model menu card.
@@ -359,7 +359,7 @@ func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[st
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
 	}
 	body = s.FormatMenuBody("menu.group.model", body)
-	return s.App.Feishu().SimpleStatusCard("模型配置", "blue", body, buttons)
+	return feishu.SimpleStatusCard("模型配置", "blue", body, buttons)
 }
 
 // CompleteGlobalModelSet completes a global model set action, dispatching
@@ -379,30 +379,11 @@ func (s ConfigurationService) CompleteGlobalModelSet(action *feishu.CardAction, 
 }
 
 // CompleteCodexGlobalModelSet completes a Codex global model set action.
-func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	sessionKey := apputil.StringValue(action.ActionValue["session_key"])
-	menuAction := apputil.StringValue(action.ActionValue["menu_action"])
-	if strings.TrimSpace(menuAction) == "" {
-		menuAction = "menu.model"
+func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAction, value string) (*callback.CardActionTriggerResponse, error) {
+	if s.deps.Codex.CompleteCodexGlobalModelSet == nil {
+		return nil, fmt.Errorf("Codex model operations not configured")
 	}
-	if s.deps.Codex.FetchModelList == nil || s.deps.Codex.UpdateGlobalModelConfig == nil || s.deps.Codex.RenderModelConfigCard == nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Codex model operations not configured"}}, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	result, err := s.FetchModelList(ctx)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	if err := s.UpdateGlobalModelConfig(func(c *config.CodexConfig) {
-		c.Model = strings.TrimSpace(modelID)
-	}, result); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已保存 Bot 默认模型；本轮不变，下一轮启动前应用"},
-		Card:  RawCard(s.RenderModelConfigCard(result, sessionKey, menuAction)),
-	}, nil
+	return s.deps.Codex.CompleteCodexGlobalModelSet(action, value)
 }
 
 // CompleteGlobalReasoningEffortSet completes a global reasoning effort set
@@ -423,34 +404,11 @@ func (s ConfigurationService) CompleteGlobalReasoningEffortSet(action *feishu.Ca
 
 // CompleteCodexGlobalReasoningEffortSet completes a Codex global reasoning
 // effort set action.
-func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	sessionKey := apputil.StringValue(action.ActionValue["session_key"])
-	menuAction := apputil.StringValue(action.ActionValue["menu_action"])
-	if strings.TrimSpace(menuAction) == "" {
-		menuAction = "menu.model"
+func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feishu.CardAction, value string) (*callback.CardActionTriggerResponse, error) {
+	if s.deps.Codex.CompleteCodexGlobalReasoningEffortSet == nil {
+		return nil, fmt.Errorf("Codex model operations not configured")
 	}
-	if s.deps.Codex.FetchModelList == nil || s.deps.Codex.UpdateGlobalModelConfig == nil || s.deps.Codex.RenderModelConfigCard == nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Codex model operations not configured"}}, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	result, err := s.FetchModelList(ctx)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	selectedModel, _ := appmodelconfig.EffectiveConfiguredModelAndEffort(configurationSnapshot(s.App), result)
-	if strings.TrimSpace(reasoningEffort) != "" && !appmodelconfig.ModelSupportsEffort(selectedModel, reasoningEffort) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前模型不支持这个推理强度"}}, nil
-	}
-	if err := s.UpdateGlobalModelConfig(func(c *config.CodexConfig) {
-		c.ReasoningEffort = strings.TrimSpace(reasoningEffort)
-	}, result); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已保存 Bot 默认推理强度；本轮不变，下一轮启动前应用"},
-		Card:  RawCard(s.RenderModelConfigCard(result, sessionKey, menuAction)),
-	}, nil
+	return s.deps.Codex.CompleteCodexGlobalReasoningEffortSet(action, value)
 }
 
 // StatusCardBody returns the status card body text for the given session,
@@ -554,7 +512,7 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *conversation.Session) 
 	return strings.Join(lines, "\n")
 }
 
-func configurationSnapshot(app appcore.AppConfig) *config.Config {
+func configurationSnapshot(app appcore.ConfigurationSource) *config.Config {
 	app.ConfigMu().RLock()
 	defer app.ConfigMu().RUnlock()
 	return config.Clone(app.Config())

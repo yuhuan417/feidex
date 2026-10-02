@@ -1,12 +1,14 @@
-package serverrequest
+package interactionreply
 
 import (
 	"encoding/json"
+	interactionapp "feidex/internal/application/interaction"
+	"feidex/internal/domain/interaction"
 	"fmt"
 	"strings"
 
+	"feidex/internal/adapter/feishu/claudesupport"
 	"feidex/internal/adapter/feishu/pendingforms"
-	"feidex/internal/app/claudesupport"
 	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 )
@@ -30,8 +32,8 @@ type unsupportedAdapter struct {
 	backend string
 }
 
-// NewUnsupportedAdapter returns a BackendAdapter that returns errors for all methods.
-func NewUnsupportedAdapter(backend string) BackendAdapter {
+// NewUnsupportedAdapter returns a interactionapp.BackendReply that returns errors for all methods.
+func NewUnsupportedAdapter(backend string) interactionapp.BackendReply {
 	return unsupportedAdapter{backend: strings.TrimSpace(backend)}
 }
 
@@ -48,13 +50,13 @@ func (u unsupportedAdapter) err() error {
 func (u unsupportedAdapter) ReplyApproval(*state.PendingRequest, string, any) error {
 	return u.err()
 }
-func (u unsupportedAdapter) ReplyQuickUserInput(*state.PendingRequest, ToolUserInputPayload, string, string) (string, error) {
+func (u unsupportedAdapter) ReplyQuickUserInput(*state.PendingRequest, interaction.ToolUserInputPayload, string, string) (string, error) {
 	return "", u.err()
 }
-func (u unsupportedAdapter) ReplyFormUserInput(*state.PendingRequest, ToolUserInputPayload, map[string]string) (string, error) {
+func (u unsupportedAdapter) ReplyFormUserInput(*state.PendingRequest, interaction.ToolUserInputPayload, map[string]string) (string, error) {
 	return "", u.err()
 }
-func (u unsupportedAdapter) ReplyTextUserInput(*state.PendingRequest, ToolUserInputPayload, string) (string, error) {
+func (u unsupportedAdapter) ReplyTextUserInput(*state.PendingRequest, interaction.ToolUserInputPayload, string) (string, error) {
 	return "", u.err()
 }
 func (u unsupportedAdapter) ReplyElicitationAction(*state.PendingRequest, string) error {
@@ -63,7 +65,7 @@ func (u unsupportedAdapter) ReplyElicitationAction(*state.PendingRequest, string
 func (u unsupportedAdapter) ReplyElicitationContent(*state.PendingRequest, map[string]any) error {
 	return u.err()
 }
-func (u unsupportedAdapter) ReplyElicitationForm(*state.PendingRequest, ElicitationFormPayload, string) (string, error) {
+func (u unsupportedAdapter) ReplyElicitationForm(*state.PendingRequest, interaction.ElicitationFormPayload, string) (string, error) {
 	return "", u.err()
 }
 func (u unsupportedAdapter) ReplyElicitationURL(*state.PendingRequest, string) (string, error) {
@@ -80,8 +82,8 @@ type codexAdapter struct {
 	kind_  string
 }
 
-// NewCodexAdapter returns a BackendAdapter for the Codex backend.
-func NewCodexAdapter(client CodexReplyClient, backendKind string) BackendAdapter {
+// NewCodexAdapter returns a interactionapp.BackendReply for the Codex backend.
+func NewCodexAdapter(client CodexReplyClient, backendKind string) interactionapp.BackendReply {
 	return codexAdapter{client: client, kind_: backendKind}
 }
 
@@ -91,7 +93,7 @@ func (c codexAdapter) ReplyApproval(pending *state.PendingRequest, _ string, rep
 	return c.client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
-func (c codexAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, questionID, answer string) (string, error) {
+func (c codexAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payload interaction.ToolUserInputPayload, questionID, answer string) (string, error) {
 	replyPayload := map[string]any{
 		"answers": map[string]any{
 			questionID: map[string]any{
@@ -109,15 +111,15 @@ func (c codexAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payload
 	return summary, c.client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
-func (c codexAdapter) ReplyFormUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, selections map[string]string) (string, error) {
+func (c codexAdapter) ReplyFormUserInput(pending *state.PendingRequest, payload interaction.ToolUserInputPayload, selections map[string]string) (string, error) {
 	replyPayload, summary, err := pendingforms.BuildToolUserInputResponseFromSelections(payload, selections)
 	if err != nil {
-		return "", UIWarningError{Message: err.Error()}
+		return "", interactionapp.Warning{Message: err.Error()}
 	}
 	return summary, c.client.Reply(pendingRequestIDRaw(pending), replyPayload)
 }
 
-func (c codexAdapter) ReplyTextUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, text string) (string, error) {
+func (c codexAdapter) ReplyTextUserInput(pending *state.PendingRequest, payload interaction.ToolUserInputPayload, text string) (string, error) {
 	replyPayload, summary, err := pendingforms.ParseToolUserInputResponse(strings.TrimSpace(text), payload)
 	if err != nil {
 		return "", err
@@ -142,7 +144,7 @@ func (c codexAdapter) ReplyElicitationContent(pending *state.PendingRequest, con
 	})
 }
 
-func (c codexAdapter) ReplyElicitationForm(pending *state.PendingRequest, payload ElicitationFormPayload, text string) (string, error) {
+func (c codexAdapter) ReplyElicitationForm(pending *state.PendingRequest, payload interaction.ElicitationFormPayload, text string) (string, error) {
 	content, summary, err := pendingforms.ParseElicitationFormResponse(strings.TrimSpace(text), payload)
 	if err != nil {
 		return "", err
@@ -179,8 +181,8 @@ type claudeAdapter struct {
 	kind_  string
 }
 
-// NewClaudeAdapter returns a BackendAdapter for the Claude backend.
-func NewClaudeAdapter(client ClaudeReplyClient, backendKind string) BackendAdapter {
+// NewClaudeAdapter returns a interactionapp.BackendReply for the Claude backend.
+func NewClaudeAdapter(client ClaudeReplyClient, backendKind string) interactionapp.BackendReply {
 	return claudeAdapter{client: client, kind_: backendKind}
 }
 
@@ -189,17 +191,17 @@ func (c claudeAdapter) Kind() string { return c.kind_ }
 func (c claudeAdapter) ReplyApproval(pending *state.PendingRequest, actionName string, _ any) error {
 	resolution, resolutionWarning := claudesupport.ClaudeApprovalResolutionForAction(actionName)
 	if strings.TrimSpace(resolutionWarning) != "" {
-		return UIWarningError{Message: resolutionWarning}
+		return interactionapp.Warning{Message: resolutionWarning}
 	}
 	return c.client.ResolveApproval(strings.TrimSpace(pending.ID), resolution)
 }
 
-func (c claudeAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, questionID, answer string) (string, error) {
+func (c claudeAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payload interaction.ToolUserInputPayload, questionID, answer string) (string, error) {
 	answers, _, err := claudesupport.ClaudeAnswersFromSelections(payload, map[string]string{
 		strings.TrimSpace(questionID): strings.TrimSpace(answer),
 	})
 	if err != nil {
-		return "", UIWarningError{Message: err.Error()}
+		return "", interactionapp.Warning{Message: err.Error()}
 	}
 	summary := strings.TrimSpace(answer)
 	for _, q := range payload.Questions {
@@ -211,15 +213,15 @@ func (c claudeAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payloa
 	return summary, c.client.ResolveUserInput(strings.TrimSpace(pending.ID), answers)
 }
 
-func (c claudeAdapter) ReplyFormUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, selections map[string]string) (string, error) {
+func (c claudeAdapter) ReplyFormUserInput(pending *state.PendingRequest, payload interaction.ToolUserInputPayload, selections map[string]string) (string, error) {
 	answers, summary, err := claudesupport.ClaudeAnswersFromSelections(payload, selections)
 	if err != nil {
-		return "", UIWarningError{Message: err.Error()}
+		return "", interactionapp.Warning{Message: err.Error()}
 	}
 	return summary, c.client.ResolveUserInput(strings.TrimSpace(pending.ID), answers)
 }
 
-func (c claudeAdapter) ReplyTextUserInput(pending *state.PendingRequest, payload ToolUserInputPayload, text string) (string, error) {
+func (c claudeAdapter) ReplyTextUserInput(pending *state.PendingRequest, payload interaction.ToolUserInputPayload, text string) (string, error) {
 	answers, summary, err := claudesupport.ParseClaudeToolUserInputResponse(strings.TrimSpace(text), payload)
 	if err != nil {
 		return "", err
@@ -235,7 +237,7 @@ func (claudeAdapter) ReplyElicitationContent(*state.PendingRequest, map[string]a
 	return fmt.Errorf("claude backend does not support elicitation form replies")
 }
 
-func (claudeAdapter) ReplyElicitationForm(*state.PendingRequest, ElicitationFormPayload, string) (string, error) {
+func (claudeAdapter) ReplyElicitationForm(*state.PendingRequest, interaction.ElicitationFormPayload, string) (string, error) {
 	return "", fmt.Errorf("claude backend does not support elicitation form replies")
 }
 
@@ -250,4 +252,19 @@ func (c claudeAdapter) CancelPending(pending *state.PendingRequest) error {
 	default:
 		return nil
 	}
+}
+
+func pendingRequestIDRaw(pending *state.PendingRequest) json.RawMessage {
+	if pending == nil {
+		return nil
+	}
+	if raw := strings.TrimSpace(pending.RequestIDRaw); raw != "" {
+		return json.RawMessage(raw)
+	}
+	value := strings.TrimSpace(pending.ID)
+	if value == "" {
+		return nil
+	}
+	encoded, _ := json.Marshal(value)
+	return encoded
 }

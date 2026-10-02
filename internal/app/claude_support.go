@@ -10,8 +10,8 @@ import (
 	appapproval "feidex/internal/adapter/feishu/approval"
 	apputil "feidex/internal/formatutil"
 
+	"feidex/internal/adapter/feishu/claudesupport"
 	"feidex/internal/adapter/feishu/pendingforms"
-	"feidex/internal/app/claudesupport"
 	"feidex/internal/feishu"
 	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/state"

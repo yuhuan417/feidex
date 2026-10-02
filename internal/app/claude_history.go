@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	claudesession "feidex/internal/adapter/backend/claude/catalog"
+	"feidex/internal/adapter/feishu/claudesupport"
 	history "feidex/internal/adapter/feishu/history"
-	"feidex/internal/app/claudesupport"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	appruntime "feidex/internal/runtime"

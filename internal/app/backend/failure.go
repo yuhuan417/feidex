@@ -2,7 +2,6 @@ package backend
 
 import (
 	"context"
-	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
@@ -17,7 +16,6 @@ import (
 // BackendFailureService handles backend failure logic: iterating sessions,
 // failing submissions, and resolving pending requests.
 type BackendFailureService struct {
-	App  Dependencies
 	deps FailureDeps
 }
 
@@ -58,7 +56,7 @@ type FailureAsyncDeps struct {
 }
 
 type FailureDeps struct {
-	App      Dependencies
+	Context  func() context.Context
 	State    FailureStateDeps
 	Sessions FailureSessionDeps
 	Runtime  FailureRuntimeDeps
@@ -68,7 +66,7 @@ type FailureDeps struct {
 
 // NewBackendFailureService creates a new service.
 func NewBackendFailureService(deps FailureDeps) BackendFailureService {
-	return BackendFailureService{App: deps.App, deps: deps}
+	return BackendFailureService{deps: deps}
 }
 
 func (s BackendFailureService) AllSessions() []*conversation.Session {
@@ -371,7 +369,7 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 	}
 	flush := appturnstream.FlushResult{}
 	if turnID != "" {
-		flush = s.FlushTurnStream(appcore.Context(s.App), threadID, turnID)
+		flush = s.FlushTurnStream(s.context(), threadID, turnID)
 	}
 	s.ResolvePendingRequestsForTerminalFailure(sessionKey, threadID, turnID)
 	_ = s.FinalizeSubmission(sub.ID, domainsubmission.SubmissionStatusFailed.String())
@@ -410,7 +408,7 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 		attentionUserID := s.TurnStopAttentionUserID(sub, turnID)
 		body := s.PrependAttentionMention(terminalText, attentionUserID)
 		s.ReplaceTurnEventCard(
-			appcore.Context(s.App),
+			s.context(),
 			sub,
 			"任务状态",
 			"grey",
@@ -443,4 +441,11 @@ func isPendingRequestOpen(req *state.PendingRequest) bool {
 	default:
 		return false
 	}
+}
+
+func (s BackendFailureService) context() context.Context {
+	if s.deps.Context != nil {
+		return s.deps.Context()
+	}
+	return context.Background()
 }

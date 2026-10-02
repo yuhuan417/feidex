@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/codexrpc"
+	codexadapter "feidex/internal/adapter/backend/codex"
 )
 
 func isTerminalTurnStatus(status string) bool {
@@ -49,11 +49,8 @@ func reconcileCompletedCodexTurn(a *App, sessionKey string, sess *conversation.S
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var result codexrpc.ThreadReadResult
-	if err := client.Call(ctx, "thread/read", map[string]any{
-		"threadId":     threadID,
-		"includeTurns": true,
-	}, &result); err != nil {
+	result, err := (codexadapter.Gateway{Client: client}).ReadThreadTurns(ctx, threadID)
+	if err != nil {
 		slog.Warn("codex terminal turn reconciliation skipped",
 			"session_key", sessionKey,
 			"thread_id", threadID,
@@ -63,7 +60,7 @@ func reconcileCompletedCodexTurn(a *App, sessionKey string, sess *conversation.S
 		return sess
 	}
 
-	for _, turn := range result.Thread.Turns {
+	for _, turn := range result.Turns {
 		if strings.TrimSpace(turn.ID) != turnID {
 			continue
 		}

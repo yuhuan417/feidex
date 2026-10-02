@@ -3,7 +3,7 @@ package appstate
 import (
 	"strings"
 
-	"feidex/internal/app/appcore"
+	"feidex/internal/domain/identity"
 	"feidex/internal/state"
 )
 
@@ -43,7 +43,7 @@ func (s *Store) SavePending(req *state.PendingRequest) error {
 	if sess := s.Session(cp.SessionKey); sess != nil {
 		chatType = sess.ChatType
 	} else {
-		_, parsedChatType, chatID, _, _ := appcore.ParseSessionKey(cp.SessionKey)
+		_, parsedChatType, chatID, _, _ := identity.ParseSessionKey(cp.SessionKey)
 		chatType = parsedChatType
 		if chatType == "" && chatID != "" {
 			if bindings := s.stateStore().AgentBindingsByChat(s.scopeFrontendID(), "group", chatID); len(bindings) > 0 {

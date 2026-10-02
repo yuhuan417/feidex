@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/app/appcore"
 	applifecycle "feidex/internal/app/lifecycle"
 	"feidex/internal/domain/interaction"
+	"feidex/internal/state"
 )
 
 // Now is a testable clock.
@@ -33,20 +33,26 @@ func SessionHasActiveWork(sess *conversation.Session) bool {
 
 // MaintenanceStateService provides maintenance tracker operations.
 type MaintenanceStateService struct {
-	App Dependencies
+	Trackers   TrackerMap
+	Repository MaintenanceRepository
 }
 
 // NewMaintenanceStateService creates a new service.
-func NewMaintenanceStateService(app Dependencies) MaintenanceStateService {
-	return MaintenanceStateService{App: app}
+type MaintenanceRepository interface {
+	Sessions() []*conversation.Session
+	PendingRequests() []*state.PendingRequest
+}
+
+func NewMaintenanceStateService(trackers TrackerMap, repository MaintenanceRepository) MaintenanceStateService {
+	return MaintenanceStateService{Trackers: trackers, Repository: repository}
 }
 
 // MaintenanceTracker returns the tracker for the given key.
 func (s MaintenanceStateService) MaintenanceTracker(key BackendKey) *MaintenanceTracker {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return nil
 	}
-	trackers := s.App.MaintenanceTrackers()
+	trackers := s.Trackers
 	if trackers == nil {
 		return nil
 	}
@@ -55,7 +61,7 @@ func (s MaintenanceStateService) MaintenanceTracker(key BackendKey) *Maintenance
 
 // UpgradeState returns a snapshot of the upgrade state.
 func (s MaintenanceStateService) UpgradeState(key BackendKey) BackendUpgradeSnapshot {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return BackendUpgradeSnapshot{}
 	}
 	return s.MaintenanceTracker(key).UpgradeState()
@@ -63,7 +69,7 @@ func (s MaintenanceStateService) UpgradeState(key BackendKey) BackendUpgradeSnap
 
 // RestartState returns a snapshot of the restart state.
 func (s MaintenanceStateService) RestartState(key BackendKey) BackendRestartSnapshot {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return BackendRestartSnapshot{}
 	}
 	return s.MaintenanceTracker(key).RestartState()
@@ -71,7 +77,7 @@ func (s MaintenanceStateService) RestartState(key BackendKey) BackendRestartSnap
 
 // Active reports whether maintenance is active for the given key.
 func (s MaintenanceStateService) Active(key BackendKey) bool {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return false
 	}
 	return s.MaintenanceTracker(key).Active()
@@ -79,7 +85,7 @@ func (s MaintenanceStateService) Active(key BackendKey) bool {
 
 // BeginUpgrade starts an upgrade.
 func (s MaintenanceStateService) BeginUpgrade(key BackendKey, snapshot BackendUpgradeSnapshot) bool {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return false
 	}
 	return s.MaintenanceTracker(key).BeginUpgrade(snapshot)
@@ -87,7 +93,7 @@ func (s MaintenanceStateService) BeginUpgrade(key BackendKey, snapshot BackendUp
 
 // BeginRestart starts a restart.
 func (s MaintenanceStateService) BeginRestart(key BackendKey, snapshot BackendRestartSnapshot) bool {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return false
 	}
 	return s.MaintenanceTracker(key).BeginRestart(snapshot)
@@ -95,7 +101,7 @@ func (s MaintenanceStateService) BeginRestart(key BackendKey, snapshot BackendRe
 
 // UpdateUpgrade applies a mutation to the upgrade snapshot.
 func (s MaintenanceStateService) UpdateUpgrade(key BackendKey, mutate func(*BackendUpgradeSnapshot)) BackendUpgradeSnapshot {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return BackendUpgradeSnapshot{}
 	}
 	return s.MaintenanceTracker(key).UpdateUpgrade(mutate)
@@ -103,7 +109,7 @@ func (s MaintenanceStateService) UpdateUpgrade(key BackendKey, mutate func(*Back
 
 // UpdateRestart applies a mutation to the restart snapshot.
 func (s MaintenanceStateService) UpdateRestart(key BackendKey, mutate func(*BackendRestartSnapshot)) BackendRestartSnapshot {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return BackendRestartSnapshot{}
 	}
 	return s.MaintenanceTracker(key).UpdateRestart(mutate)
@@ -121,11 +127,11 @@ func (s MaintenanceStateService) FinishRestart(key BackendKey, result, message s
 
 // BlockingPendingCount returns the count of pending requests that block upgrades.
 func (s MaintenanceStateService) BlockingPendingCount() int {
-	if s.App == nil || s.App.Store() == nil {
+	if s.Repository == nil {
 		return 0
 	}
 	count := 0
-	for _, req := range s.App.Store().AllPendingRequests() {
+	for _, req := range s.Repository.PendingRequests() {
 		if req == nil || !interaction.IsServerResolvedPendingKind(req.Kind) || !applifecycle.IsPendingRequestOpen(req) {
 			continue
 		}
@@ -136,12 +142,12 @@ func (s MaintenanceStateService) BlockingPendingCount() int {
 
 // RuntimeBusyReason returns a reason if the runtime is busy, or empty string.
 func (s MaintenanceStateService) RuntimeBusyReason(key BackendKey) string {
-	if s.App == nil || s.App.Store() == nil {
+	if s.Repository == nil {
 		return ""
 	}
 	activeSessions := 0
-	for _, sess := range s.App.Store().AllSessions() {
-		if sess != nil && appcore.SessionBelongsToFrontend(s.App, sess.Key) && SessionHasActiveWork(sess) {
+	for _, sess := range s.Repository.Sessions() {
+		if sess != nil && SessionHasActiveWork(sess) {
 			activeSessions++
 		}
 	}
@@ -156,7 +162,7 @@ func (s MaintenanceStateService) RuntimeBusyReason(key BackendKey) string {
 
 // EnsureUpgradeReady checks if upgrade is possible.
 func (s MaintenanceStateService) EnsureUpgradeReady(key BackendKey, displayName string) error {
-	if s.App == nil {
+	if s.Trackers == nil {
 		return nil
 	}
 	if s.Active(key) {

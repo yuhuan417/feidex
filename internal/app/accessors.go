@@ -1,11 +1,10 @@
 package app
 
 import (
-	"strings"
 	"sync"
 
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/appstate"
 	appbackend "feidex/internal/app/backend"
 	frontendruntime "feidex/internal/runtime"
 
@@ -85,21 +84,10 @@ func (a *App) State() *appstate.Store {
 	a.stateMu.Lock()
 	defer a.stateMu.Unlock()
 	if a.stateView == nil {
-		a.stateView = appstate.New(a)
+		a.stateView = appstate.NewScoped(a.store, a.FrontendID(), configuredBackend(a), allowLegacyFrontendFallback(a))
+		a.stateView.RevisionMutex = a.ConfigMu()
 	}
 	return a.stateView
-}
-
-// BotProfileWorkspaceID returns the p2p BotProfile workspace, if configured.
-// It is an optional appcore capability used by shared workspace resolution.
-func (a *App) BotProfileWorkspaceID() string {
-	if a == nil || a.State() == nil {
-		return ""
-	}
-	if profile := a.State().BotProfile(); profile != nil {
-		return strings.TrimSpace(profile.WorkspaceID)
-	}
-	return ""
 }
 
 // BotProfile returns the current frontend's persisted default profile.
@@ -108,17 +96,6 @@ func (a *App) BotProfile() *state.BotProfile {
 		return nil
 	}
 	return a.State().BotProfile()
-}
-
-// SetBotProfileWorkspaceID updates the p2p BotProfile workspace. Group
-// workspace selection is intentionally handled by ConversationBinding.
-func (a *App) SetBotProfileWorkspaceID(workspaceID string) error {
-	workspaceID = strings.TrimSpace(workspaceID)
-	if a == nil || workspaceID == "" {
-		return nil
-	}
-	_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.WorkspaceID = workspaceID })
-	return err
 }
 
 // AgentBindingsForChat returns local binding configuration for one logical
@@ -260,59 +237,6 @@ func (a *App) SetBackend(backend string) {
 	if a.stateView != nil {
 		a.stateView.SetBackend(a.backend)
 	}
-}
-
-// BackendStateMu returns the backend state mutex.
-func (a *App) BackendStateMu() *sync.Mutex {
-	if a == nil {
-		return nil
-	}
-	return &a.backendStateMu
-}
-
-// BackendSwitchMu returns the backend switch mutex.
-func (a *App) BackendSwitchMu() *sync.Mutex {
-	if a == nil {
-		return nil
-	}
-	return &a.backendSwitchMu
-}
-
-// BackendSwitching returns whether a backend switch is in progress.
-func (a *App) BackendSwitching() bool {
-	if a == nil {
-		return false
-	}
-	return a.backendSwitching
-}
-
-// SetBackendSwitching sets the backend switching flag.
-func (a *App) SetBackendSwitching(v bool) {
-	if a == nil {
-		return
-	}
-	a.backendSwitching = v
-}
-
-// BackendSwitchTarget returns the target backend during a switch.
-func (a *App) BackendSwitchTarget() string {
-	if a == nil {
-		return ""
-	}
-	return a.backendSwitchTarget
-}
-
-// SetBackendSwitchTarget sets the target backend during a switch.
-func (a *App) SetBackendSwitchTarget(v string) {
-	if a == nil {
-		return
-	}
-	a.backendSwitchTarget = v
-}
-
-// DefaultWorkspaceID returns the default workspace ID.
-func (a *App) DefaultWorkspaceID() string {
-	return appcore.DefaultWorkspaceID(a)
 }
 
 // MaintenanceTrackers returns the maintenance tracker map, lazily initializing it.

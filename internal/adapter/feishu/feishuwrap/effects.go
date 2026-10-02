@@ -2,6 +2,7 @@ package feishuwrap
 
 import (
 	"context"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
@@ -37,18 +38,18 @@ func (c *EffectClient) SendText(ctx context.Context, chatID, text string) error 
 
 func (c *EffectClient) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
 	return c.Runner.RunSendCard(ctx, application.SendCard{
-		Frontend: c.Frontend, ReplyMessageID: messageID, View: card, InThread: inThread,
+		Frontend: c.Frontend, ReplyMessageID: messageID, View: feishuoutbound.Card(card), InThread: inThread,
 	})
 }
 
 func (c *EffectClient) SendCard(ctx context.Context, chatID string, card map[string]any) (string, error) {
 	return c.Runner.RunSendCard(ctx, application.SendCard{
-		Frontend: c.Frontend, Chat: identity.ChatRef{ID: chatID}, View: card,
+		Frontend: c.Frontend, Chat: identity.ChatRef{ID: chatID}, View: feishuoutbound.Card(card),
 	})
 }
 
 func (c *EffectClient) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
 	return c.Runner.Run(ctx, []application.Effect{application.PatchCard{
-		Frontend: c.Frontend, MessageID: messageID, View: card,
+		Frontend: c.Frontend, MessageID: messageID, View: feishuoutbound.Card(card),
 	}})
 }

@@ -4,6 +4,7 @@ package serverrequest
 
 import (
 	"encoding/json"
+	interactionapp "feidex/internal/application/interaction"
 	"strings"
 	"time"
 
@@ -40,11 +41,7 @@ type PendingCardDelivery struct {
 	TTL             time.Duration
 }
 
-// UIWarningError is an error that should be displayed as a warning toast
-// in the Feishu UI rather than logged as a server error.
-type UIWarningError struct{ Message string }
-
-func (e UIWarningError) Error() string { return e.Message }
+type UIWarningError = interactionapp.Warning
 
 // IsUIWarningError reports whether err is a UIWarningError.
 func IsUIWarningError(err error) bool {

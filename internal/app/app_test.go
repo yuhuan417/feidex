@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/textutil"
 
@@ -3117,13 +3118,13 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 
 func TestMoreActionAndModelHandlers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
-	models := codexrpc.ModelListResult{
-		Data: []codexrpc.ModelListEntry{
+	models := catalog.ModelListResult{
+		Data: []catalog.ModelListEntry{
 			{
 				ID:                     "gpt-5",
 				DisplayName:            "GPT-5",
 				DefaultReasoningEffort: "medium",
-				SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+				SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 					{ReasoningEffort: "low"},
 					{ReasoningEffort: "medium"},
 					{ReasoningEffort: "high"},
@@ -3135,11 +3136,11 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
 		switch method {
 		case "model/list":
-			*out.(*codexrpc.ModelListResult) = models
+			*out.(*catalog.ModelListResult) = models
 			return nil
 		case "collaborationMode/list":
-			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
-				Data: []codexrpc.CollaborationModeMask{
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
 					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
 				},
 			}
@@ -3279,12 +3280,12 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
 		switch method {
 		case "model/list":
-			*out.(*codexrpc.ModelListResult) = codexrpc.ModelListResult{
-				Data: []codexrpc.ModelListEntry{{
+			*out.(*catalog.ModelListResult) = catalog.ModelListResult{
+				Data: []catalog.ModelListEntry{{
 					ID:                     "gpt-5",
 					DisplayName:            "GPT-5",
 					DefaultReasoningEffort: "medium",
-					SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+					SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 						{ReasoningEffort: "medium"},
 					},
 					IsDefault: true,
@@ -3292,8 +3293,8 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 			}
 			return nil
 		case "collaborationMode/list":
-			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
-				Data: []codexrpc.CollaborationModeMask{
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
 					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
 				},
 			}

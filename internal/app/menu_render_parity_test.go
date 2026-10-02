@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	"fmt"
 	"reflect"
 	"strings"
@@ -57,8 +58,8 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render group thread menu: %v", err)
 	}
-	p2pModelConfig := newModelConfigService(a).renderModelConfigCard(codexrpc.ModelListResult{Data: []codexrpc.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}}, nil, p2pKey, "menu.model")
-	groupModelConfig := newBindingService(a).renderBindingCodexModelConfigCard(groupKey, binding, codexrpc.ModelListResult{Data: []codexrpc.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}})
+	p2pModelConfig := newModelConfigService(a).renderModelConfigCard(catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}}, nil, p2pKey, "menu.model")
+	groupModelConfig := newBindingService(a).renderBindingCodexModelConfigCard(groupKey, binding, catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}})
 
 	families := []struct {
 		name  string

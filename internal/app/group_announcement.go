@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/appstate"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

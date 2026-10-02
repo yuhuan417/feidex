@@ -8,13 +8,13 @@ import (
 // lowercase method names used throughout app/.
 type runtimeStateService struct {
 	app   *App
-	inner backend.RuntimeStateService
+	inner *backend.RuntimeStateService
 }
 
 func newRuntimeStateService(app *App) runtimeStateService {
 	return runtimeStateService{
 		app:   app,
-		inner: backend.NewRuntimeStateService(app),
+		inner: &app.switchState,
 	}
 }
 

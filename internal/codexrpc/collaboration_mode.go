@@ -1,16 +1,7 @@
 package codexrpc
-
-type CollaborationModeListResponse struct {
-	Data []CollaborationModeMask `json:"data"`
-}
-
-type CollaborationModeMask struct {
-	Name            string  `json:"name"`
-	Mode            *string `json:"mode"`
-	Model           *string `json:"model"`
-	ReasoningEffort *string `json:"reasoning_effort"`
-}
-
+import "feidex/internal/domain/modelconfig"
+type CollaborationModeListResponse = modelconfig.CollaborationModeListResponse
+type CollaborationModeMask = modelconfig.CollaborationModeMask
 type CollaborationMode struct {
 	Mode     string                    `json:"mode"`
 	Settings CollaborationModeSettings `json:"settings"`

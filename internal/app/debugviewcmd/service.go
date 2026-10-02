@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	codexadapter "feidex/internal/adapter/backend/codex"
+	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
 	"fmt"
@@ -102,7 +103,7 @@ type WorkspaceRenderProvider interface {
 // Dependencies is the explicit debug/usage capability set assembled by the
 // composition root. The service does not depend on the application root.
 type Dependencies struct {
-	ConfigProvider                    appcore.AppConfig
+	ConfigProvider                    appcore.WorkspaceSource
 	FeishuClient                      FeishuClient
 	StateProvider                     StateProvider
 	RuntimeStateProvider              RuntimeStateProvider
@@ -835,4 +836,11 @@ func RenderDownloadFailedCard(a Dependencies, selectedPath, workspaceCWD, errTex
 		lines = append(lines, "", "错误: "+strings.TrimSpace(errText))
 	}
 	return a.DebugFeishu().SimpleStatusCard("文件下载", "orange", strings.Join(lines, "\n"), nil)
+}
+
+func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
+	if d.ConfigProvider == nil {
+		return workspace.SelectionService{}
+	}
+	return d.ConfigProvider.WorkspaceSelection()
 }

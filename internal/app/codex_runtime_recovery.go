@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
@@ -151,4 +152,9 @@ func recoverCodexRuntimeAfterTransportFailure(a *App, failed CodexClient, skipFr
 			setCodex(a, next)
 		}
 	}
+}
+
+func requireCodexGateway(a *App) (codexadapter.Gateway, error) {
+	client, err := requireCodexClient(a)
+	return codexadapter.Gateway{Client: client}, err
 }

@@ -26,8 +26,8 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 		func(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
 			return newUpgradeRenderService(s.app).renderUpgradeOperationCard(upgraderender.ClaudeSpec, sessionKey, snapshot)
 		},
-		appbackend.NewMaintenanceStateService(s.app).UpdateClaudeUpgrade,
-		appbackend.NewMaintenanceStateService(s.app).FinishClaudeUpgrade,
+		newMaintenanceStateService(s.app).UpdateClaudeUpgrade,
+		newMaintenanceStateService(s.app).FinishClaudeUpgrade,
 		func(snapshot *appbackend.BackendUpgradeSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
@@ -47,13 +47,13 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 	previousVersion := textutil.FirstNonEmpty(probe.CurrentVersion, payload.CurrentVersion)
 	targetVersion := textutil.FirstNonEmpty(payload.TargetVersion, "latest")
 	updateCommand := textutil.FirstNonEmpty(probe.UpdateCommand, payload.UpdateCommand, "update")
-	appbackend.NewMaintenanceStateService(s.app).UpdateClaudeUpgrade(func(snapshot *appbackend.BackendUpgradeSnapshot) {
+	newMaintenanceStateService(s.app).UpdateClaudeUpgrade(func(snapshot *appbackend.BackendUpgradeSnapshot) {
 		snapshot.CurrentVersion = previousVersion
 		snapshot.PreviousVersion = previousVersion
 		snapshot.TargetVersion = targetVersion
 		snapshot.LatestVersion = targetVersion
 	})
-	if reason := appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
+	if reason := newMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
 		finalize("failed", "升级前检查失败: "+reason)
 		return
 	}
@@ -75,7 +75,7 @@ func (s backendUpgradeService) runClaudeUpgradeOperation(messageID, sessionKey s
 		installedVersion = textutil.FirstNonEmpty(afterProbe.CurrentVersion, installedVersion)
 	}
 	if strings.TrimSpace(installedVersion) != "" {
-		appbackend.NewMaintenanceStateService(s.app).UpdateClaudeUpgrade(func(snapshot *appbackend.BackendUpgradeSnapshot) {
+		newMaintenanceStateService(s.app).UpdateClaudeUpgrade(func(snapshot *appbackend.BackendUpgradeSnapshot) {
 			snapshot.TargetVersion = installedVersion
 			snapshot.LatestVersion = installedVersion
 		})
@@ -239,25 +239,25 @@ func (s backendUpgradeService) startClaudeRestartFromMessage(msg *feishu.Inbound
 			return newUpgradeRenderService(s.app).renderRestartOperationCard(upgraderender.ClaudeSpec, sessionKey, snapshot)
 		},
 		func(message string) {
-			appbackend.NewMaintenanceStateService(s.app).FinishClaudeRestart("failed", message)
+			newMaintenanceStateService(s.app).FinishClaudeRestart("failed", message)
 		},
 	)
 }
 
 func (s backendUpgradeService) beginClaudeRestartOperation() (appbackend.BackendRestartSnapshot, error) {
-	if err := appbackend.NewMaintenanceStateService(s.app).EnsureClaudeUpgradeReady(); err != nil {
+	if err := newMaintenanceStateService(s.app).EnsureClaudeUpgradeReady(); err != nil {
 		return appbackend.BackendRestartSnapshot{}, err
 	}
 	snapshot := appbackend.BackendRestartSnapshot{
 		Running:        true,
 		Phase:          "preflight",
 		Message:        "正在校验重启前置条件",
-		CurrentVersion: textutil.FirstNonEmpty(appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeState().CurrentVersion, appbackend.NewMaintenanceStateService(s.app).ClaudeRestartState().CurrentVersion),
+		CurrentVersion: textutil.FirstNonEmpty(newMaintenanceStateService(s.app).ClaudeUpgradeState().CurrentVersion, newMaintenanceStateService(s.app).ClaudeRestartState().CurrentVersion),
 	}
-	if !appbackend.NewMaintenanceStateService(s.app).BeginClaudeRestart(snapshot) {
+	if !newMaintenanceStateService(s.app).BeginClaudeRestart(snapshot) {
 		return appbackend.BackendRestartSnapshot{}, appbackend.ErrString("Claude 正在维护中，请稍后再试")
 	}
-	return appbackend.NewMaintenanceStateService(s.app).ClaudeRestartState(), nil
+	return newMaintenanceStateService(s.app).ClaudeRestartState(), nil
 }
 
 func (s backendUpgradeService) runClaudeRestartOperation(messageID, sessionKey string) {
@@ -269,8 +269,8 @@ func (s backendUpgradeService) runClaudeRestartOperation(messageID, sessionKey s
 		func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
 			return newUpgradeRenderService(s.app).renderRestartOperationCard(upgraderender.ClaudeSpec, sessionKey, snapshot)
 		},
-		appbackend.NewMaintenanceStateService(s.app).UpdateClaudeRestart,
-		appbackend.NewMaintenanceStateService(s.app).FinishClaudeRestart,
+		newMaintenanceStateService(s.app).UpdateClaudeRestart,
+		newMaintenanceStateService(s.app).FinishClaudeRestart,
 		func(snapshot *appbackend.BackendRestartSnapshot, phase, message string) {
 			snapshot.Phase = phase
 			snapshot.Message = message
@@ -286,10 +286,10 @@ func (s backendUpgradeService) runClaudeRestartOperation(messageID, sessionKey s
 		finalize("failed", "重启前检查失败: "+err.Error())
 		return
 	}
-	appbackend.NewMaintenanceStateService(s.app).UpdateClaudeRestart(func(snapshot *appbackend.BackendRestartSnapshot) {
+	newMaintenanceStateService(s.app).UpdateClaudeRestart(func(snapshot *appbackend.BackendRestartSnapshot) {
 		snapshot.CurrentVersion = textutil.FirstNonEmpty(probe.CurrentVersion, snapshot.CurrentVersion)
 	})
-	if reason := appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
+	if reason := newMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(); strings.TrimSpace(reason) != "" {
 		finalize("failed", "重启前检查失败: "+reason)
 		return
 	}

@@ -2,12 +2,12 @@ package app
 
 import (
 	"context"
+	catalog "feidex/internal/domain/modelconfig"
 	"feidex/internal/textutil"
 	"sync"
 	"time"
 
 	"feidex/internal/app/modelconfig"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -23,6 +23,7 @@ func newModelConfigService(app *App) modelConfigService {
 	return modelConfigService{
 		app: app,
 		inner: modelconfig.ModelConfigService{
+			Backend:     func() string { return configuredBackend(app) },
 			GetConfig:   func() *config.Config { return app.cfg },
 			GetCfgPath:  func() string { return app.cfgPath },
 			GetConfigMu: func() *sync.RWMutex { return app.ConfigMu() },
@@ -41,7 +42,7 @@ func newModelConfigService(app *App) modelConfigService {
 				return currentClaudeCore(app) != nil
 			},
 			RequireCodexClient: func() (modelconfig.CodexClient, error) {
-				return requireCodexClient(app)
+				return requireCodexGateway(app)
 			},
 			MakeSessionKey: func(msg *feishu.InboundMessage) string {
 				return makeSessionKey(app, msg)
@@ -58,16 +59,7 @@ func newModelConfigService(app *App) modelConfigService {
 			SessionConfig: func(sessionKey string) *config.Config {
 				return sessionScopedConfigForApp(app, sessionKey)
 			},
-			MenuBackAction: menuBackAction,
-			CompleteGlobalModelSet: func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-				return newBackendConfigurationService(app).completeGlobalModelSet(action, modelID)
-			},
-			CompleteGlobalReasoningEffortSet: func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
-				return newBackendConfigurationService(app).completeGlobalReasoningEffortSet(action, effort)
-			},
-			HandleBackendModelCommand: func(msg *feishu.InboundMessage, args []string) error {
-				return newBackendConfigurationService(app).handleBackendModelCommand(msg, args)
-			},
+			MenuBackAction:           menuBackAction,
 			FormatMenuBody:           menuCardBody,
 			ModelConfigBlockedReason: func() string { return modelConfigBlockedReason(app) },
 			ModelConfigStatus:        func(sessionKey string) string { return modelConfigStatus(app, sessionKey) },
@@ -78,19 +70,19 @@ func newModelConfigService(app *App) modelConfigService {
 	}
 }
 
-func (s modelConfigService) fetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {
+func (s modelConfigService) fetchModelList(ctx context.Context) (catalog.ModelListResult, error) {
 	return s.inner.FetchModelList(ctx)
 }
 
-func (s modelConfigService) fetchPlanCollaborationModePreset(ctx context.Context) (*codexrpc.CollaborationModeMask, error) {
+func (s modelConfigService) fetchPlanCollaborationModePreset(ctx context.Context) (*catalog.CollaborationModeMask, error) {
 	return s.inner.FetchPlanCollaborationModePreset(ctx)
 }
 
-func (s modelConfigService) renderModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
+func (s modelConfigService) renderModelConfigCard(result catalog.ModelListResult, planPreset *catalog.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
 	return s.inner.RenderModelConfigCard(result, planPreset, sessionKey, menuAction)
 }
 
-func (s modelConfigService) renderCodexAuxiliaryModelConfigCard(result codexrpc.ModelListResult, planPreset *codexrpc.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
+func (s modelConfigService) renderCodexAuxiliaryModelConfigCard(result catalog.ModelListResult, planPreset *catalog.CollaborationModeMask, sessionKey, menuAction string) map[string]any {
 	service := s.inner
 	if cfg := s.auxiliaryConfigForSession(sessionKey); cfg != nil {
 		service.GetConfig = func() *config.Config { return cfg }
@@ -158,7 +150,7 @@ func (s modelConfigService) completeClaudeAuxiliaryModelSet(action *feishu.CardA
 	return s.inner.CompleteClaudeAuxiliaryModelSet(action, role, value)
 }
 
-func (s modelConfigService) updateGlobalModelConfig(mutate func(*config.CodexConfig), result codexrpc.ModelListResult) error {
+func (s modelConfigService) updateGlobalModelConfig(mutate func(*config.CodexConfig), result catalog.ModelListResult) error {
 	return s.inner.UpdateGlobalModelConfig(mutate, result)
 }
 

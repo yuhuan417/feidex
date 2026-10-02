@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"os"
@@ -306,8 +307,8 @@ func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 	}
 	assertStatus := func(applied string, pending bool) {
 		t.Helper()
-		card := newBindingService(a).renderBindingCodexModelConfigCard(key, binding, codexrpc.ModelListResult{
-			Data: []codexrpc.ModelListEntry{{ID: "gpt-6.1-sol", Model: "gpt-6.1-sol"}},
+		card := newBindingService(a).renderBindingCodexModelConfigCard(key, binding, catalog.ModelListResult{
+			Data: []catalog.ModelListEntry{{ID: "gpt-6.1-sol", Model: "gpt-6.1-sol"}},
 		})
 		got := mustJSON(card)
 		if strings.Contains(got, "gpt-5.6-sol") || !strings.Contains(got, "下一轮本地启动模型：`gpt-6.1-sol`") ||
@@ -391,7 +392,7 @@ func TestModelConfigSnapshotConcurrentWritesRemainCoherent(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		// Configuration cards and starts can read concurrently with writes.
 		if i%10 == 0 {
-			_ = newModelConfigService(a).inner.RenderModelConfigCard(codexrpc.ModelListResult{}, nil, "", "menu.model")
+			_ = newModelConfigService(a).inner.RenderModelConfigCard(catalog.ModelListResult{}, nil, "", "menu.model")
 		}
 		got := modelConfigSnapshot(a, nil, backendCodex)
 		if got.Model != got.Effort {

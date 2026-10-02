@@ -1,6 +1,7 @@
 package attachments
 
 import (
+	"feidex/internal/adapter/backend/codex"
 	domainsubmission "feidex/internal/domain/submission"
 	"os"
 	"path/filepath"
@@ -38,12 +39,12 @@ func TestAttachmentHelpers(t *testing.T) {
 			{Kind: "audio", LocalPath: "/tmp/audio.wav"},
 		},
 	}
-	inputs := BuildTurnInputs(sub)
+	inputs := codex.BuildTurnInputs(sub)
 	if len(inputs) != 5 || inputs[0]["type"] != "skill" || inputs[1]["type"] != "text" || inputs[2]["type"] != "localImage" {
-		t.Fatalf("BuildTurnInputs() = %+v, want skill + text + localImage + prompts", inputs)
+		t.Fatalf("codex.BuildTurnInputs() = %+v, want skill + text + localImage + prompts", inputs)
 	}
 	if inputs[0]["name"] != "openai-docs" || inputs[0]["path"] != "/skills/openai-docs" {
-		t.Fatalf("BuildTurnInputs() skill item = %+v, want name/path", inputs[0])
+		t.Fatalf("codex.BuildTurnInputs() skill item = %+v, want name/path", inputs[0])
 	}
 	if got := AttachmentPrompt(domainsubmission.SubmissionAttachment{Kind: "audio", LocalPath: "/tmp/a.wav"}); !strings.Contains(got, "audio file") {
 		t.Fatalf("AttachmentPrompt(audio) = %q, want audio text", got)

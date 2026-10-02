@@ -1,6 +1,7 @@
 package app
 
 import (
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
 	appruntime "feidex/internal/runtime"
 
@@ -112,7 +113,7 @@ func patchClaudePermissionMenuRuntimeFailure(a *App, messageID, sessionKey strin
 	if err := newEffectRunner(a).Run(context.Background(), []application.Effect{application.PatchCard{
 		Frontend:  identity.FrontendID(a.FrontendID()),
 		MessageID: messageID,
-		View:      card,
+		View:      feishuoutbound.Card(card),
 	}}); err != nil {
 		slog.Warn("patch claude permission menu failed",
 			"session_key", sessionKey,
@@ -139,7 +140,7 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
-		View:           card,
+		View:           feishuoutbound.Card(card),
 		InThread:       replyInThreadEnabled(a, msg.ChatType),
 	}})
 }
@@ -160,7 +161,7 @@ func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
-		View:           card,
+		View:           feishuoutbound.Card(card),
 		InThread:       replyInThreadEnabled(a, msg.ChatType),
 	}})
 }

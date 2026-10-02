@@ -5,7 +5,9 @@ package skillscmd
 
 import (
 	"context"
+	skillselection "feidex/internal/application/skill"
 	"feidex/internal/domain/conversation"
+	skillcatalog "feidex/internal/domain/skill"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
@@ -14,8 +16,7 @@ import (
 
 	appcommandmatch "feidex/internal/app/commandmatch"
 
-	appskills "feidex/internal/app/skills"
-	"feidex/internal/codexrpc"
+	appskills "feidex/internal/adapter/feishu/skills"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -27,7 +28,7 @@ import (
 // ---------------------------------------------------------------------------
 
 // SubmissionSkillResolution describes how a submission's skill was resolved.
-type SubmissionSkillResolution = appskills.SubmissionSkillResolution
+type SubmissionSkillResolution = skillselection.SubmissionSkillResolution
 
 // PendingSkillTracker tracks per-session pending skills.
 type PendingSkillTracker struct {
@@ -80,7 +81,7 @@ type FeishuClient interface {
 // CodexClient is the narrow interface for the Codex RPC client methods
 // used by the skills service.
 type CodexClient interface {
-	Call(ctx context.Context, method string, params any, result any) error
+	ListSkills(context.Context, string, bool) (skillcatalog.SkillsListEntry, error)
 }
 
 const (
@@ -163,47 +164,29 @@ func (s *Service) WorkspaceByID(workspaceID string) (*config.Workspace, error) {
 // ---------------------------------------------------------------------------
 
 // FetchSkillsForCWD fetches skills for the given working directory.
-func (s *Service) FetchSkillsForCWD(ctx context.Context, cwd string, forceReload bool) (codexrpc.SkillsListEntry, error) {
-	var result codexrpc.SkillsListResult
+func (s *Service) FetchSkillsForCWD(ctx context.Context, cwd string, forceReload bool) (skillcatalog.SkillsListEntry, error) {
 	client, err := s.RequireCodexClient()
 	if err != nil {
-		return codexrpc.SkillsListEntry{}, err
+		return skillcatalog.SkillsListEntry{}, err
 	}
-	params := map[string]any{
-		"forceReload": forceReload,
-	}
-	if strings.TrimSpace(cwd) != "" {
-		params["cwds"] = []string{strings.TrimSpace(cwd)}
-	}
-	if err := client.Call(ctx, "skills/list", params, &result); err != nil {
-		return codexrpc.SkillsListEntry{}, err
-	}
-	for _, entry := range result.Data {
-		if strings.TrimSpace(entry.Cwd) == strings.TrimSpace(cwd) {
-			return entry, nil
-		}
-	}
-	if len(result.Data) > 0 {
-		return result.Data[0], nil
-	}
-	return codexrpc.SkillsListEntry{Cwd: strings.TrimSpace(cwd)}, nil
+	return client.ListSkills(ctx, cwd, forceReload)
 }
 
 // FetchSkillsForSessionKey fetches skills for the workspace associated with
 // the given session key.
-func (s *Service) FetchSkillsForSessionKey(ctx context.Context, sessionKey string, forceReload bool) (codexrpc.SkillsListEntry, error) {
+func (s *Service) FetchSkillsForSessionKey(ctx context.Context, sessionKey string, forceReload bool) (skillcatalog.SkillsListEntry, error) {
 	ws, err := s.CurrentWorkspaceForSessionKey(sessionKey)
 	if err != nil {
-		return codexrpc.SkillsListEntry{}, err
+		return skillcatalog.SkillsListEntry{}, err
 	}
 	return s.FetchSkillsForCWD(ctx, ws.Cwd, forceReload)
 }
 
 // FetchSkillsForWorkspaceID fetches skills for the given workspace ID.
-func (s *Service) FetchSkillsForWorkspaceID(ctx context.Context, workspaceID string, forceReload bool) (codexrpc.SkillsListEntry, error) {
+func (s *Service) FetchSkillsForWorkspaceID(ctx context.Context, workspaceID string, forceReload bool) (skillcatalog.SkillsListEntry, error) {
 	ws, err := s.WorkspaceByID(workspaceID)
 	if err != nil {
-		return codexrpc.SkillsListEntry{}, err
+		return skillcatalog.SkillsListEntry{}, err
 	}
 	return s.FetchSkillsForCWD(ctx, ws.Cwd, forceReload)
 }
@@ -354,14 +337,14 @@ func (s *Service) ResolveSubmissionSkill(sessionKey, workspaceID, inputText stri
 		resolution.ConsumePending = true
 	}
 
-	parsed := appskills.ParseLeadingPrefix(inputText)
+	parsed := skillselection.ParseLeadingPrefix(inputText)
 	switch parsed.Mode {
-	case appskills.PrefixNone:
+	case skillselection.PrefixNone:
 		if hasPending {
 			resolution.Skills = []domainsubmission.SubmissionSkill{pending}
 		}
 		return resolution
-	case appskills.PrefixInvalid:
+	case skillselection.PrefixInvalid:
 		return resolution
 	}
 
@@ -371,7 +354,7 @@ func (s *Service) ResolveSubmissionSkill(sessionKey, workspaceID, inputText stri
 	if err != nil {
 		return resolution
 	}
-	skill, ok := appskills.FindEnabledByName(entry.Skills, parsed.Name)
+	skill, ok := skillselection.FindEnabledByName(entry.Skills, parsed.Name)
 	if !ok {
 		return resolution
 	}

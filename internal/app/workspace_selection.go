@@ -1,7 +1,10 @@
 package app
 
 import (
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	"feidex/internal/textutil"
 	"strings"
 
@@ -80,4 +83,12 @@ func agentBindingForChat(a *App, chatType, chatID string) *state.AgentBinding {
 		return binding
 	}
 	return nil
+}
+
+// WorkspaceSelection binds the use case directly to scoped repositories.
+func (a *App) WorkspaceSelection() workspace.SelectionService {
+	if a == nil {
+		return workspace.SelectionService{}
+	}
+	return workspace.SelectionService{Frontend: identity.FrontendID(a.FrontendID()), DefaultWorkspace: defaultWorkspaceID(a), Repository: appstate.WorkspaceSelections{Store: a.State()}}
 }

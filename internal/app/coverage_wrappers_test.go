@@ -5,7 +5,7 @@ import (
 
 	"context"
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
-	"feidex/internal/app/appstate"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

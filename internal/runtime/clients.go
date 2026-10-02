@@ -1,4 +1,4 @@
-package appcore
+package runtime
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
-	appruntime "feidex/internal/runtime"
 )
 
 // CodexClient is the interface for the Codex RPC client.
@@ -31,7 +30,7 @@ type ClaudeCore interface {
 	SetModel(context.Context, string, string) (bool, error)
 	SetEffort(context.Context, string, string) (bool, error)
 	SetPermissionMode(context.Context, string, string) error
-	ResolveApproval(string, appruntime.ClaudeApprovalResolution) error
+	ResolveApproval(string, ClaudeApprovalResolution) error
 	ResolveUserInput(string, map[string]string) error
 	ResolvePlanFeedback(string, string) error
 	CancelPending(string, string) error

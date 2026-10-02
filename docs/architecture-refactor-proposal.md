@@ -518,3 +518,20 @@ Codex server request
 - Feishu wrapper 与 transport 接口整体迁入 internal/adapter/feishu；删除旧 internal/app/feishuwrap 路径和 appcore.FeishuClient，不留兼容别名。
 - composition 持有 transport 和 client 读写锁；恢复后替换 Codex client 与队列恢复读取使用同一锁，消除 race 检测发现的竞争。
 - 新增真实 New 构造路径回归，覆盖六种 outbound、返回 ID、capture、取消、transport error 和权限通知去重。全量 go test、go test -race、go vet、staticcheck、diff check 通过；不运行 live token-consuming integration tests。
+
+### 2026-10-02 阶段性收敛记录
+
+- 增加 `internal/composition`：它创建共享 state/config scope，并将每个 frontend 交给 runtime supervisor；单 frontend 启动也复用同一 supervisor 生命周期。
+- 增加 `internal/runtime/FrontendGroup`，固定 prepare → recovery → serve → background 顺序，prepare/serve 失败逆序停止已接纳 frontend；新增生命周期顺序和回滚测试。
+- Codex `Gateway` 现在承担 turn/start、turn/steer、thread/read、goal、review、model、collaboration、skills 的 method 名称和 wire 参数；业务层使用 `backendops` 请求/结果值。
+- Codex input、review target、model/skill catalog、goal budget、opaque response token 的协议编码分别归入 Codex/backend、review/domain、modelconfig/skill/domain、interaction/backendops 和 adapter；增加 omit/null/number、numeric/string token 与 turn snapshot 回归测试。
+- server request reply 通过 `ResolveBackendRequest` effect 进入 Codex adapter；reply 成功仍只变为 `replied`，后端 `serverRequest/resolved` 仍是 authoritative resolve。
+- async user input 的 session 校验、原子 claim、steer/queue 选择和失败恢复归入 `internal/application/asyncinput`；问题卡仍由 Feishu adapter 渲染，回调保持快速 ack。
+- scoped JSON repository 已从 `internal/app/appstate` 移到 `internal/adapter/storage/json/scoped`；scope 由 composition 显式注入，旧 appstate package 已删除。
+- attachment prompt、skill selection、Claude support、pending reply adapter 和 card view 均移向 application/domain/adapter；`CardView` 约束禁止 effect 层继续接收无类型的 Feishu map。
+- backend selection/maintenance/action/failure 的宿主 capability 已拆为 configuration、selection、repository、tracker、runtime callback 等使用方端口；切换状态自持锁，维护查询只读当前 frontend scope。
+- 模型 desired/applied/turn snapshot 优先级保持不变；“最近已应用模型”只来自 session 的 applied snapshot，不再混读单聊/global desired 配置。
+- 工作区选择策略迁入 `internal/application/workspace`，由 scoped repository 提供持久化；appcore 只保留兼容的薄转发，业务服务通过 `WorkspaceSelection` capability 获取用例。
+- Codex thread/read 的恢复路径只接收语义化 turn 状态，业务层不再依赖协议响应 DTO；协作模式发送前统一裁剪空白值。
+
+当前完成标准：新增能力需声明 domain owner、application use case、consumer-owned ports、effects、adapter、协议状态机影响及 frontend/chat/session scope；新增业务代码不得以 `*App` 作为跨模块能力容器。现有 `internal/app` 仍包含 Feishu 入口和少量历史编排，后续新增代码不得扩大该层；其余迁移应按同一边界继续收敛。

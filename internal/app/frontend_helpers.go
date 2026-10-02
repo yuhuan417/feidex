@@ -17,3 +17,12 @@ func startFrontend(a *App, ctx context.Context) error {
 	}
 	return a.feishu.Start(ctx)
 }
+
+func allowLegacyFrontendFallback(a *App) bool {
+	if a == nil || a.cfg == nil {
+		return false
+	}
+	a.configMutex().RLock()
+	defer a.configMutex().RUnlock()
+	return len(a.cfg.ResolvedFrontends()) == 1
+}

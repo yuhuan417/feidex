@@ -1,6 +1,6 @@
 // Package submission provides pure helper functions for working with
 // submissions, staged images, and turn completion status. These functions
-// have no dependency on *App or service structs.
+// have no dependency on host or service structs.
 package submission
 
 import (

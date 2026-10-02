@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"feidex/internal/application"
+	"feidex/internal/application/backendops"
 	"fmt"
 )
 
@@ -10,14 +11,18 @@ import (
 // completed its state transition. It stops on the first failed effect, so an
 // unsuccessful save cannot accidentally start a backend turn.
 type EffectRunner struct {
-	Save           func(context.Context, application.SaveState) error
-	Send           func(context.Context, application.SendMessage) error
-	SendWithID     func(context.Context, application.SendMessage) (string, error)
-	SendCard       func(context.Context, application.SendCard) error
-	SendCardWithID func(context.Context, application.SendCard) (string, error)
-	Patch          func(context.Context, application.PatchCard) error
-	Start          func(context.Context, application.StartTurn) error
-	Resolve        func(context.Context, application.ResolveBackendRequest) error
+	RefreshGroup    func(context.Context, application.RefreshGroupStatus) error
+	Steer           func(context.Context, application.SteerTurn) error
+	Enqueue         func(context.Context, application.EnqueueInput) error
+	Save            func(context.Context, application.SaveState) error
+	Send            func(context.Context, application.SendMessage) error
+	SendWithID      func(context.Context, application.SendMessage) (string, error)
+	SendCard        func(context.Context, application.SendCard) error
+	SendCardWithID  func(context.Context, application.SendCard) (string, error)
+	Patch           func(context.Context, application.PatchCard) error
+	Start           func(context.Context, application.StartTurn) error
+	StartWithResult func(context.Context, application.StartTurn) (backendops.TurnResult, error)
+	Resolve         func(context.Context, application.ResolveBackendRequest) error
 }
 
 func (r EffectRunner) RunSendMessage(ctx context.Context, effect application.SendMessage) (string, error) {
@@ -62,6 +67,11 @@ func (r EffectRunner) Run(ctx context.Context, effects []application.Effect) err
 		}
 		var err error
 		switch e := effect.(type) {
+		case application.RefreshGroupStatus:
+			if r.RefreshGroup == nil {
+				return fmt.Errorf("group refresh effect unavailable")
+			}
+			err = r.RefreshGroup(ctx, e)
 		case application.SaveState:
 			if r.Save == nil {
 				return fmt.Errorf("save effect unavailable")
@@ -83,10 +93,17 @@ func (r EffectRunner) Run(ctx context.Context, effects []application.Effect) err
 			}
 			err = r.Patch(ctx, e)
 		case application.StartTurn:
-			if r.Start == nil {
-				return fmt.Errorf("start effect unavailable")
+			_, err = r.RunStartTurn(ctx, e)
+		case application.SteerTurn:
+			if r.Steer == nil {
+				return fmt.Errorf("steer effect unavailable")
 			}
-			err = r.Start(ctx, e)
+			err = r.Steer(ctx, e)
+		case application.EnqueueInput:
+			if r.Enqueue == nil {
+				return fmt.Errorf("enqueue effect unavailable")
+			}
+			err = r.Enqueue(ctx, e)
 		case application.ResolveBackendRequest:
 			if r.Resolve == nil {
 				return fmt.Errorf("resolve effect unavailable")
@@ -100,4 +117,21 @@ func (r EffectRunner) Run(ctx context.Context, effects []application.Effect) err
 		}
 	}
 	return nil
+}
+
+// RunStartTurn preserves the returned ID; notifications can still race the RPC.
+func (r EffectRunner) RunStartTurn(ctx context.Context, effect application.StartTurn) (backendops.TurnResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return backendops.TurnResult{}, err
+	}
+	if r.StartWithResult != nil {
+		return r.StartWithResult(ctx, effect)
+	}
+	if r.Start == nil {
+		return backendops.TurnResult{}, fmt.Errorf("start effect unavailable")
+	}
+	return backendops.TurnResult{}, r.Start(ctx, effect)
 }

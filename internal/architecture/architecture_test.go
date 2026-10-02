@@ -2,6 +2,7 @@ package architecture
 
 import (
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -13,6 +14,88 @@ import (
 )
 
 const modulePath = "feidex"
+
+func TestTargetPackagesDoNotReintroduceGodInterfaces(t *testing.T) {
+	root := repositoryRoot(t)
+	forbidden := map[string][]string{"internal/application": {"appcore.AppConfig", "appcore.AppExtended", "type App struct"}, "internal/domain": {"type App struct", "internal/adapter", "internal/app"}, "internal/composition": {"internal/app/appstate"}}
+	for relative, patterns := range forbidden {
+		violations, err := textMatches(root, relative, patterns)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(violations) > 0 {
+			t.Fatalf("%s contains forbidden host capabilities: %v", relative, violations)
+		}
+	}
+}
+
+func TestTargetPackagesUseCapabilityFieldsInsteadOfAppPointers(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, relative := range []string{"internal/application", "internal/domain", "internal/adapter", "internal/runtime"} {
+		base := filepath.Join(root, relative)
+		err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".go") {
+				return nil
+			}
+			file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+			if parseErr != nil {
+				return parseErr
+			}
+			ast.Inspect(file, func(node ast.Node) bool {
+				field, ok := node.(*ast.Field)
+				if !ok || field.Type == nil {
+					return true
+				}
+				if selectorContainsApp(field.Type) {
+					t.Errorf("%s: capability field embeds a concrete App type", path)
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func selectorContainsApp(expr ast.Expr) bool {
+	found := false
+	ast.Inspect(expr, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if ok && selector.Sel != nil && (selector.Sel.Name == "App" || selector.Sel.Name == "AppConfig" || selector.Sel.Name == "AppExtended") {
+			found = true
+		}
+		return !found
+	})
+	return found
+}
+func textMatches(root, relative string, patterns []string) ([]string, error) {
+	var out []string
+	err := filepath.Walk(filepath.Join(root, relative), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		for _, pattern := range patterns {
+			if strings.Contains(string(data), pattern) {
+				out = append(out, path+" contains "+pattern)
+			}
+		}
+		return nil
+	})
+	sort.Strings(out)
+	return out, err
+}
 
 func TestLayerImportRules(t *testing.T) {
 	root := repositoryRoot(t)

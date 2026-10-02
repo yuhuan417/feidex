@@ -102,6 +102,13 @@ func buildBackendConfigurationService(app *App) backendConfigurationService {
 			},
 		},
 		Codex: appbackend.ConfigurationCodexDeps{
+			CompleteCodexGlobalModelSet: func(action *feishu.CardAction, value string) (*callback.CardActionTriggerResponse, error) {
+				return newModelConfigService(app).inner.CompleteCodexGlobalModelSet(action, value)
+			},
+			CompleteCodexGlobalReasoningEffortSet: func(action *feishu.CardAction, value string) (*callback.CardActionTriggerResponse, error) {
+				return newModelConfigService(app).inner.CompleteCodexGlobalReasoningEffortSet(action, value)
+			},
+
 			FetchModelList:                   newModelConfigService(app).fetchModelList,
 			FetchPlanCollaborationModePreset: newModelConfigService(app).fetchPlanCollaborationModePreset,
 			UpdateGlobalModelConfig:          newModelConfigService(app).updateGlobalModelConfig,

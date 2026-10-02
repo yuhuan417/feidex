@@ -1,6 +1,7 @@
 package app
 
 import (
+	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
@@ -99,12 +100,12 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 		t.Fatalf("UpsertSession(active submission) error = %v", err)
 	}
 
-	models := codexrpc.ModelListResult{
-		Data: []codexrpc.ModelListEntry{{
+	models := catalog.ModelListResult{
+		Data: []catalog.ModelListEntry{{
 			ID:                     "gpt-5",
 			DisplayName:            "GPT-5",
 			DefaultReasoningEffort: "medium",
-			SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+			SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 				{ReasoningEffort: "medium"},
 				{ReasoningEffort: "high"},
 			},
@@ -115,10 +116,10 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "model/list":
-			*out.(*codexrpc.ModelListResult) = models
+			*out.(*catalog.ModelListResult) = models
 		case "collaborationMode/list":
-			*out.(*codexrpc.CollaborationModeListResponse) = codexrpc.CollaborationModeListResponse{
-				Data: []codexrpc.CollaborationModeMask{
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
 					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
 				},
 			}

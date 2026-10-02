@@ -14,61 +14,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-// botProfileForApp returns the frontend-scoped profile, creating an empty
-// profile lazily so every p2p configuration command has one stable target.
-func botProfileForApp(a *App) (*state.BotProfile, error) {
-	if a == nil {
-		return nil, fmt.Errorf("app not initialized")
-	}
-	if profile := a.State().BotProfile(); profile != nil {
-		return profile, nil
-	}
-	profile := &state.BotProfile{
-		ID:         "bot-profile-" + sanitizeProfileID(a.FrontendID()),
-		FrontendID: a.FrontendID(),
-	}
-	if err := a.State().SaveBotProfile(profile); err != nil {
-		return nil, err
-	}
-	return a.State().BotProfile(), nil
-}
-
-func sanitizeProfileID(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "default"
-	}
-	var b strings.Builder
-	for _, r := range value {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
-			b.WriteRune(r)
-		} else {
-			b.WriteByte('-')
-		}
-	}
-	return strings.Trim(b.String(), "-")
-}
-
-func updateBotProfile(a *App, mutate func(*state.BotProfile)) (*state.BotProfile, error) {
-	profile, err := botProfileForApp(a)
-	if err != nil {
-		return nil, err
-	}
-	store := a.State()
-	a.ConfigMu().Lock()
-	defer a.ConfigMu().Unlock()
-	if latest := store.BotProfile(); latest != nil {
-		profile = latest
-	}
-	if mutate != nil {
-		mutate(profile)
-	}
-	if err := store.SaveBotProfile(profile); err != nil {
-		return nil, err
-	}
-	return store.BotProfile(), nil
-}
-
 func commandWorkspaceProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
 	if err := commandWorkspace(a, msg, args); err != nil {
 		return err
@@ -93,7 +38,7 @@ func commandWorkspaceProfileAware(a *App, msg *feishu.InboundMessage, args []str
 			field = func(profile *state.BotProfile) { profile.ClaudePermissionMode = value }
 		}
 		if field != nil {
-			_, err := updateBotProfile(a, field)
+			_, err := newRoutingConfiguration(a).UpdateProfile(field)
 			return err
 		}
 	}
@@ -107,7 +52,7 @@ func commandWorkspaceProfileAware(a *App, msg *feishu.InboundMessage, args []str
 	if workspaceID == "" {
 		return nil
 	}
-	_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.WorkspaceID = workspaceID })
+	_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) { profile.WorkspaceID = workspaceID })
 	return err
 }
 
@@ -143,7 +88,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 				}
 				return replyTextEffect(a, msg, "已更新当前 session 的 "+role+" model")
 			}
-			_, err := updateBotProfile(a, func(profile *state.BotProfile) {
+			_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) {
 				if backend == config.RuntimeBackendClaude {
 					switch role {
 					case "small":
@@ -180,7 +125,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 			}
 			return replyTextEffect(a, msg, "已更新当前 session 的 subagent reasoning effort")
 		}
-		_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.SubagentReasoningEffort = value })
+		_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) { profile.SubagentReasoningEffort = value })
 		if err != nil {
 			return err
 		}
@@ -198,7 +143,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 			}
 			return replyTextEffect(a, msg, "已更新当前 session 的 Plan reasoning effort")
 		}
-		_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.PlanReasoningEffort = value })
+		_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) { profile.PlanReasoningEffort = value })
 		if err != nil {
 			return err
 		}
@@ -210,7 +155,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 		}
 		backend := configuredBackend(a)
 		value := clearableArg(args[1])
-		_, err := updateBotProfile(a, func(profile *state.BotProfile) {
+		_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) {
 			if backend == config.RuntimeBackendClaude {
 				profile.ClaudeModel = value
 			} else {
@@ -239,7 +184,7 @@ func commandEffortProfileAware(a *App, msg *feishu.InboundMessage, args []string
 			return err
 		}
 		value := clearableArg(args[0])
-		_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.ReasoningEffort = value })
+		_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) { profile.ReasoningEffort = value })
 		if err != nil {
 			return err
 		}
@@ -256,12 +201,12 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 		return commandFast(a, msg, args)
 	}
 	if len(args) == 0 || (len(args) == 1 && strings.EqualFold(strings.TrimSpace(args[0]), "toggle")) {
-		profile, err := botProfileForApp(a)
+		profile, err := newRoutingConfiguration(a).EnsureProfile()
 		if err != nil {
 			return err
 		}
 		next := appservicetiercmd.ToggleServiceTier(profile.ServiceTier)
-		_, err = updateBotProfile(a, func(p *state.BotProfile) { p.ServiceTier = next })
+		_, err = newRoutingConfiguration(a).UpdateProfile(func(p *state.BotProfile) { p.ServiceTier = next })
 		if err != nil {
 			return err
 		}
@@ -277,7 +222,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 				return fmt.Errorf("unsupported service tier %q", args[0])
 			}
 		}
-		_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.ServiceTier = value })
+		_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) { profile.ServiceTier = value })
 		if err != nil {
 			return err
 		}
@@ -305,7 +250,7 @@ func completeBotProfileModelSet(a *App, action *feishu.CardAction, modelID strin
 		return resp, err
 	}
 	value := clearableArg(modelID)
-	_, err = updateBotProfile(a, func(profile *state.BotProfile) {
+	_, err = newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) {
 		if configuredBackend(a) == config.RuntimeBackendClaude {
 			profile.ClaudeModel = value
 		} else {
@@ -320,7 +265,7 @@ func completeBotProfileEffortSet(a *App, action *feishu.CardAction, effort strin
 	if err != nil || resp == nil || (resp.Toast != nil && strings.EqualFold(resp.Toast.Type, "error")) {
 		return resp, err
 	}
-	_, err = updateBotProfile(a, func(profile *state.BotProfile) { profile.ReasoningEffort = clearableArg(effort) })
+	_, err = newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) { profile.ReasoningEffort = clearableArg(effort) })
 	return resp, err
 }
 
@@ -352,7 +297,7 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存当前 session 的辅助模型配置；待对应会话边界生效"}}, nil
 	}
-	_, err := updateBotProfile(a, func(profile *state.BotProfile) {
+	_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) {
 		if backend == config.RuntimeBackendClaude {
 			switch role {
 			case "small":
@@ -389,7 +334,7 @@ func completeBotProfileServiceTierSet(a *App, action *feishu.CardAction, service
 	if strings.TrimSpace(serviceTier) != "" && value == "" && !strings.EqualFold(strings.TrimSpace(serviceTier), "default") && !strings.EqualFold(strings.TrimSpace(serviceTier), "off") {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "unsupported service tier"}}, nil
 	}
-	_, err := updateBotProfile(a, func(profile *state.BotProfile) { profile.ServiceTier = value })
+	_, err := newRoutingConfiguration(a).UpdateProfile(func(profile *state.BotProfile) { profile.ServiceTier = value })
 	if err != nil {
 		return nil, err
 	}

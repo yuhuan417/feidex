@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"strings"
 
 	"feidex/internal/application"
@@ -51,7 +52,7 @@ func sendClaudeBackgroundTaskNotification(a *App, ctx context.Context, target ap
 			Frontend:       identity.FrontendID(a.FrontendID()),
 			Chat:           identity.ChatRef{ID: target.ChatID},
 			ReplyMessageID: triggerID,
-			View:           card,
+			View:           feishuoutbound.Card(card),
 		}}); err != nil {
 			// The original message can be unavailable after retention or recall;
 			// fall back to a standalone card when a chat ID is known.

@@ -717,3 +717,24 @@ frontend 的有效 client，审批 reply/resolved、turn/start timeout 和 revie
 - 新消息 ID 由 RunSendMessage/RunSendCard 原样返回；goal continuation 的新根卡、pending 请求的消息关联和 final card reuse 保持原有绑定。command capture 和权限诊断仍在独立 transport wrapper 内执行。
 - 删除 App 的五个 runtime 兼容镜像，client 唯一 owner 为 composition。Codex 恢复安装与队列读取使用同一 client 锁，不持锁执行网络操作，也不跨 frontend 共享 client。
 - 原有状态机契约测试、真实 composition outbound 回归和全量 race 检查通过；未运行消耗 token 的 live integration 测试。
+
+## 2026-10-02 application boundary migration verification
+
+- SM-03/04/05：Codex gateway now accepts semantic turn requests and returns
+  turn identifiers/status; `thread/read` recovery converts wire turns to
+  semantic status values before application code sees them. `turn/steer`
+  continues to carry the active `expectedTurnId`.
+- SM-09/10/11/22/23：server-request reply remains a `ResolveBackendRequest`
+  effect. A successful reply only reaches `replied`; authoritative
+  `serverRequest/resolved` still closes the interaction. Async user input
+  continues through its independent `SteerTurn`/queue path and never creates a
+  fake JSON-RPC server-request response.
+- SM-14/24/25：review targets, skill/model catalogs, goal budget omission/null/
+  number encoding, and opaque response tokens are encoded in backend/domain
+  adapters. Goal continuation still creates a fresh outbound root and binds
+  subsequent items to its returned message ID.
+- SM-26：pending async input validation and atomic claim are application-owned;
+  Feishu rendering and callback acknowledgement remain adapter concerns.
+- Frontend and session scope remains explicit for state repositories, binding
+  replay, workspace selection, effects, and runtime supervision. No live
+  token-consuming integration tests were run during this migration.

@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	appworkspace "feidex/internal/app/workspace"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -51,12 +50,8 @@ func contentCardTitleForSession(a *App, sessionKey, workspaceID, title string) s
 	return planmode.ContentCardTitleForSession(newPlanModeAppAdapter(a), sessionKey, workspaceID, title)
 }
 
-func codexCollaborationModeForTurnStart(a *App, sessionKey, threadID string) *codexrpc.CollaborationMode {
-	return planmode.CodexCollaborationModeForTurnStart(newPlanModeAppAdapter(a), sessionKey, threadID)
-}
-
-func codexCollaborationModeFromState(mode *conversation.SessionCollaborationMode) *codexrpc.CollaborationMode {
-	return planmode.CodexCollaborationModeFromState(mode)
+func planModeStateForTurnStart(a *App, sessionKey, threadID string) *conversation.SessionCollaborationMode {
+	return planmode.StateForTurnStart(newPlanModeAppAdapter(a), sessionKey, threadID)
 }
 
 func normalizeThreadCollaborationMode(mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
@@ -141,7 +136,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		ContextProvider:        a,
 		StateProvider:          a.State(),
 		FeishuClient:           a.feishu,
-		CodexClientProvider:    func() (planmode.CodexClient, error) { return requireCodexClient(a) },
+		CodexClientProvider:    func() (planmode.CodexClient, error) { return requireCodexGateway(a) },
 		MakeSessionKeyFn:       func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
 		ReplyInThreadEnabledFn: func(chatType string) bool { return replyInThreadEnabled(a, chatType) },
 		SessionHasActiveWorkFn: sessionHasActiveWork,

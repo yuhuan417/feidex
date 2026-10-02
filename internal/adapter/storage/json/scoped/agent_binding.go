@@ -1,6 +1,7 @@
 package appstate
 
 import (
+	"fmt"
 	"strings"
 
 	"feidex/internal/state"
@@ -121,4 +122,45 @@ func (s *Store) DeleteAgentBinding(id string) error {
 		}
 	}
 	return s.stateStore().DeleteScopedAgentBinding(s.scopeFrontendID(), id)
+}
+
+func (s *Store) UpdateAgentBinding(fallback *state.AgentBinding, mutate func(*state.AgentBinding)) (*state.AgentBinding, error) {
+	if s == nil || s.stateStore() == nil || fallback == nil {
+		return nil, fmt.Errorf("binding repository or fallback is nil")
+	}
+	mu := s.revisionMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	binding := fallback
+	if latest := s.AgentBinding(fallback.ID); latest != nil {
+		binding = latest
+	}
+	current := *binding
+	if mutate != nil {
+		mutate(&current)
+	}
+	if err := s.SaveAgentBinding(&current); err != nil {
+		return nil, err
+	}
+	return s.AgentBinding(current.ID), nil
+}
+func (s *Store) UpdateBotProfile(fallback *state.BotProfile, mutate func(*state.BotProfile)) (*state.BotProfile, error) {
+	if s == nil || s.stateStore() == nil || fallback == nil {
+		return nil, fmt.Errorf("profile repository or fallback is nil")
+	}
+	mu := s.revisionMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	profile := fallback
+	if latest := s.BotProfile(); latest != nil {
+		profile = latest
+	}
+	current := *profile
+	if mutate != nil {
+		mutate(&current)
+	}
+	if err := s.SaveBotProfile(&current); err != nil {
+		return nil, err
+	}
+	return s.BotProfile(), nil
 }

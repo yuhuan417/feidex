@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	catalog "feidex/internal/domain/modelconfig"
 	"os"
 	"path/filepath"
 	"testing"
@@ -616,12 +617,12 @@ func TestActionHelperBranches(t *testing.T) {
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
 		case "model/list":
-			*out.(*codexrpc.ModelListResult) = codexrpc.ModelListResult{
-				Data: []codexrpc.ModelListEntry{{
+			*out.(*catalog.ModelListResult) = catalog.ModelListResult{
+				Data: []catalog.ModelListEntry{{
 					ID:                     "gpt-5",
 					DisplayName:            "GPT-5",
 					DefaultReasoningEffort: "medium",
-					SupportedReasoningEfforts: []codexrpc.ModelReasoningEffortEntry{
+					SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
 						{ReasoningEffort: "medium"},
 						{ReasoningEffort: "high"},
 					},

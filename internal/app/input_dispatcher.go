@@ -6,12 +6,16 @@ import (
 	"feidex/internal/adapter/backend/codex"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
+	"feidex/internal/application/backendops"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/identity"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
+	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -116,13 +120,78 @@ func newEffectRunner(a *App) frontendruntime.EffectRunner {
 	if a != nil && a.composition != nil && a.composition.effectRunner != nil {
 		return *a.composition.effectRunner
 	}
-	if a != nil && a.composition != nil && a.composition.feishuTransport != nil {
-		return feishuoutbound.NewEffectRunner(a.composition.feishuTransport)
-	}
 	if a == nil {
 		return frontendruntime.EffectRunner{}
 	}
-	return feishuoutbound.NewEffectRunner(a.feishu)
+	transport := a.feishu
+	if a.composition != nil && a.composition.feishuTransport != nil {
+		transport = a.composition.feishuTransport
+	}
+	runner := feishuoutbound.NewEffectRunner(transport)
+	runner.Save = func(ctx context.Context, e application.SaveState) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if string(e.Frontend) != a.FrontendID() {
+			return fmt.Errorf("state effect frontend mismatch")
+		}
+		return a.State().SaveSession(e.Session)
+	}
+	runner.StartWithResult = func(ctx context.Context, e application.StartTurn) (backendops.TurnResult, error) {
+		if string(e.Frontend) != a.FrontendID() {
+			return backendops.TurnResult{}, fmt.Errorf("turn effect frontend mismatch")
+		}
+		client, err := requireCodexGateway(a)
+		if err != nil {
+			return backendops.TurnResult{}, err
+		}
+		return client.StartTurn(ctx, e.Request)
+	}
+	runner.Resolve = func(ctx context.Context, e application.ResolveBackendRequest) error {
+		if string(e.Frontend) != a.FrontendID() {
+			return fmt.Errorf("response effect frontend mismatch")
+		}
+		if e.Backend != backendCodex {
+			return fmt.Errorf("unsupported response backend %q", e.Backend)
+		}
+		client, err := requireCodexClient(a)
+		if err != nil {
+			return err
+		}
+		return codex.Respond(ctx, client, e.Response)
+	}
+	runner.Steer = func(ctx context.Context, e application.SteerTurn) error {
+		if string(e.Frontend) != a.FrontendID() {
+			return fmt.Errorf("steer effect frontend mismatch")
+		}
+		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		gateway, err := requireCodexGateway(a)
+		if err != nil {
+			return err
+		}
+		return gateway.SteerTurn(ctx, e.ThreadID, e.ExpectedTurnID, &domainsubmission.Submission{InputText: strings.TrimSpace(e.Text)})
+	}
+	runner.Enqueue = func(ctx context.Context, e application.EnqueueInput) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if string(e.Frontend) != a.FrontendID() {
+			return fmt.Errorf("enqueue effect frontend mismatch")
+		}
+		return newSubmissionQueueServiceFromApp(a).EnqueueSubmission(&e.Message, e.SessionKey, e.BindOnlyCurrentRoot)
+	}
+	runner.RefreshGroup = func(ctx context.Context, e application.RefreshGroupStatus) error {
+		if string(e.Frontend) != a.FrontendID() {
+			return fmt.Errorf("group refresh effect frontend mismatch")
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		scheduleGroupAnnouncementStatusRefresh(a, e.ChatID, e.Reason)
+		return nil
+	}
+	return runner
 }
 func dispatchCardAction(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	if action == nil {

@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/app/upgraderender"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -99,9 +98,9 @@ func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includ
 	}
 	view := backendUpgradeView{
 		Probe:      probe,
-		BusyReason: appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(),
-		Snapshot:   appbackend.NewMaintenanceStateService(s.app).ClaudeUpgradeState(),
-		Restart:    appbackend.NewMaintenanceStateService(s.app).ClaudeRestartState(),
+		BusyReason: newMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(),
+		Snapshot:   newMaintenanceStateService(s.app).ClaudeUpgradeState(),
+		Restart:    newMaintenanceStateService(s.app).ClaudeRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)
@@ -122,9 +121,9 @@ func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, include
 	}
 	view := backendUpgradeView{
 		Probe:      probe,
-		BusyReason: appbackend.NewMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(),
-		Snapshot:   appbackend.NewMaintenanceStateService(s.app).CodexUpgradeState(),
-		Restart:    appbackend.NewMaintenanceStateService(s.app).CodexRestartState(),
+		BusyReason: newMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(),
+		Snapshot:   newMaintenanceStateService(s.app).CodexUpgradeState(),
+		Restart:    newMaintenanceStateService(s.app).CodexRestartState(),
 	}
 	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
 		latest, latestErr := manager.LatestVersion(ctx)
