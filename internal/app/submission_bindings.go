@@ -149,10 +149,10 @@ func (a submissionAppAdapter) SubmissionQueueRunAsync(fn func()) {
 	runAsync(a.app, fn)
 }
 func (a submissionAppAdapter) SubmissionQueueTryBeginStart(sessionKey string) bool {
-	return tryBeginSessionSubmissionStart(a.app, sessionKey)
+	return a.app.trackers.submissionStarts.TryBegin(sessionKey)
 }
 func (a submissionAppAdapter) SubmissionQueueFinishStart(sessionKey string) bool {
-	return finishSessionSubmissionStart(a.app, sessionKey)
+	return a.app.trackers.submissionStarts.Finish(sessionKey)
 }
 func (a submissionAppAdapter) SubmissionQueueLogSessionState(event, sessionKey string, sess *state.Session) {
 	logSessionState(event, sessionKey, sess)
