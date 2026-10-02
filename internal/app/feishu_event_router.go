@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"feidex/internal/app/apputil"
+	domainrouting "feidex/internal/domain/routing"
 	"feidex/internal/feishu"
 )
 
@@ -62,7 +63,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		// mention open_id from the event as the authoritative routing signal so
 		// two frontends in one process cannot disagree about the target bot.
 		msg.MentionedSelf = messageMentionsCurrentBot(a, msg.MentionedOpenIDs, msg.MentionedSelf)
-		if _, ok := groupPrimaryAssignmentFromMessage(msg); ok && parseEmptyBotMentionFromText(msg.Text) {
+		if _, ok := groupPrimaryAssignmentFromMessage(msg); ok && domainrouting.ParseEmptyBotMention(msg.Text) {
 			msg.Text = "/primary on"
 		}
 		if isGroupPrimaryControlMessage(msg) {

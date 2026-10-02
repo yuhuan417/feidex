@@ -6,17 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"feidex/internal/textutil"
 )
 
 // FirstNonEmpty returns the first string from vals that is non-empty after
 // trimming whitespace. If all values are empty, it returns "".
 func FirstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(vals...)
 }
 
 // CopyPermissionUpdates deep-copies a slice of permission update maps.
@@ -81,14 +78,7 @@ func PrettyJSON(v any) string {
 // Truncate truncates s to at most n runes, appending "…" if truncated.
 // If n <= 0, s is returned as-is.
 func Truncate(s string, n int) string {
-	runes := []rune(s)
-	if n <= 0 || len(runes) <= n {
-		return s
-	}
-	if n <= 1 {
-		return "…"
-	}
-	return string(runes[:n-1]) + "…"
+	return textutil.Truncate(s, n)
 }
 
 // MarkdownCodeBlock wraps s in a fenced code block.

@@ -6,6 +6,7 @@ import (
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/modelconfig"
 	"feidex/internal/config"
+	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/state"
 )
 
@@ -29,28 +30,52 @@ func modelConfigSnapshot(a *App, sess *state.Session, backend string) state.Mode
 		}
 	}
 	cfg := a.cfg
-	result := state.ModelConfigSnapshot{Valid: true, Backend: backend}
-	if backend == backendClaude {
-		result.Model = apputil.FirstNonEmpty(sess.ModelOverride, binding.ModelOverride, profile.ClaudeModel, cfg.Claude.Model)
-		result.Effort = apputil.FirstNonEmpty(binding.ReasoningEffortOverride, profile.ReasoningEffort, cfg.Claude.Effort)
-		result.SmallModel = apputil.FirstNonEmpty(sess.SmallModelOverride, binding.SmallModelOverride, profile.ClaudeSmallModel, cfg.Claude.SmallModel)
-		result.SubagentModel = apputil.FirstNonEmpty(sess.SubagentModelOverride, binding.SubagentModelOverride, profile.ClaudeSubagentModel, cfg.Claude.SubagentModel, result.Model)
-		return result
+	sources := domainmodelconfig.Sources{
+		Session: domainmodelconfig.SessionValues{
+			Model: sess.ModelOverride, PlanModel: sess.PlanModelOverride,
+			PlanEffort: sess.PlanReasoningEffortOverride, ReviewModel: sess.ReviewModelOverride,
+			SubagentModel: sess.SubagentModelOverride, SubagentEffort: sess.SubagentReasoningEffortOverride,
+			SmallModel: sess.SmallModelOverride,
+		},
+		Binding: domainmodelconfig.ScopeValues{
+			Model: binding.ModelOverride, Effort: binding.ReasoningEffortOverride,
+			PlanModel: binding.PlanModelOverride, PlanEffort: binding.PlanReasoningEffortOverride,
+			ReviewModel: binding.ReviewModelOverride, SubagentModel: binding.SubagentModelOverride,
+			SubagentEffort: binding.SubagentReasoningEffortOverride, SmallModel: binding.SmallModelOverride,
+		},
+		Profile: domainmodelconfig.ProfileValues{
+			Model: profile.Model, ClaudeModel: profile.ClaudeModel, Effort: profile.ReasoningEffort,
+			PlanModel: profile.PlanModel, PlanEffort: profile.PlanReasoningEffort,
+			ReviewModel: profile.ReviewModel, SubagentModel: profile.SubagentModel,
+			SubagentEffort: profile.SubagentReasoningEffort, ClaudeSubagent: profile.ClaudeSubagentModel,
+			ClaudeSmallModel: profile.ClaudeSmallModel,
+		},
+		Global: domainmodelconfig.GlobalValues{
+			Model: cfg.Codex.Model, Effort: cfg.Codex.ReasoningEffort,
+			PlanModel: cfg.Codex.PlanModel, PlanEffort: cfg.Codex.PlanReasoningEffort,
+			ReviewModel: cfg.Codex.ReviewModel, SubagentModel: cfg.Codex.SubagentModel,
+			SubagentEffort: cfg.Codex.SubagentReasoningEffort,
+			ClaudeModel:    cfg.Claude.Model, ClaudeEffort: cfg.Claude.Effort,
+			ClaudeSmallModel: cfg.Claude.SmallModel, ClaudeSubagent: cfg.Claude.SubagentModel,
+		},
 	}
-	result.Model = apputil.FirstNonEmpty(sess.ModelOverride, binding.ModelOverride, profile.Model, cfg.Codex.Model)
-	result.Effort = apputil.FirstNonEmpty(binding.ReasoningEffortOverride, profile.ReasoningEffort, cfg.Codex.ReasoningEffort)
-	result.PlanModel = apputil.FirstNonEmpty(sess.PlanModelOverride, binding.PlanModelOverride, profile.PlanModel, cfg.Codex.PlanModel, result.Model)
-	result.PlanEffort = apputil.FirstNonEmpty(sess.PlanReasoningEffortOverride, binding.PlanReasoningEffortOverride, profile.PlanReasoningEffort, cfg.Codex.PlanReasoningEffort)
-	result.ReviewModel = apputil.FirstNonEmpty(sess.ReviewModelOverride, binding.ReviewModelOverride, profile.ReviewModel, cfg.Codex.ReviewModel, result.Model)
-	result.SubagentModel = apputil.FirstNonEmpty(sess.SubagentModelOverride, binding.SubagentModelOverride, profile.SubagentModel, cfg.Codex.SubagentModel, result.Model)
-	result.SubagentEffort = apputil.FirstNonEmpty(sess.SubagentReasoningEffortOverride, binding.SubagentReasoningEffortOverride, profile.SubagentReasoningEffort, cfg.Codex.SubagentReasoningEffort, result.Effort)
 	if sess.ActiveThreadCollaborationMode != nil {
-		result.CollaborationMode = sess.ActiveThreadCollaborationMode.Mode
-		result.PlanEffort = apputil.FirstNonEmpty(result.PlanEffort, sess.ActiveThreadCollaborationMode.PresetReasoningEffort)
-		result.Model = apputil.FirstNonEmpty(result.Model, sess.ActiveThreadCollaborationMode.Model)
-		result.PlanModel = apputil.FirstNonEmpty(result.PlanModel, result.Model)
+		sources.Active = &domainmodelconfig.ActiveCollaboration{
+			Mode:         sess.ActiveThreadCollaborationMode.Mode,
+			Model:        sess.ActiveThreadCollaborationMode.Model,
+			PresetEffort: sess.ActiveThreadCollaborationMode.PresetReasoningEffort,
+		}
 	}
-	return result
+	return stateSnapshotFromDomain(domainmodelconfig.Resolve(backend, sources))
+}
+
+func stateSnapshotFromDomain(snapshot domainmodelconfig.Snapshot) state.ModelConfigSnapshot {
+	return state.ModelConfigSnapshot{
+		Valid: snapshot.Valid, Backend: snapshot.Backend, Model: snapshot.Model, Effort: snapshot.Effort,
+		PlanModel: snapshot.PlanModel, PlanEffort: snapshot.PlanEffort, ReviewModel: snapshot.ReviewModel,
+		SubagentModel: snapshot.SubagentModel, SubagentEffort: snapshot.SubagentEffort,
+		SmallModel: snapshot.SmallModel, CollaborationMode: snapshot.CollaborationMode,
+	}
 }
 
 func (a submissionAppAdapter) SubmissionQueueResolveModelConfig(sess *state.Session, sub *state.Submission) state.ModelConfigSnapshot {
@@ -98,10 +123,12 @@ func modelConfigStatus(a *App, sessionKey string) string {
 }
 
 func modelConfigTurnSettings(snapshot state.ModelConfigSnapshot) (string, string) {
-	if snapshot.Backend == backendCodex && snapshot.CollaborationMode == "plan" {
-		return apputil.FirstNonEmpty(snapshot.PlanModel, snapshot.Model), snapshot.PlanEffort
-	}
-	return snapshot.Model, snapshot.Effort
+	model, effort := domainmodelconfig.TurnSettings(domainmodelconfig.Snapshot{
+		Backend: snapshot.Backend, Model: snapshot.Model, Effort: snapshot.Effort,
+		PlanModel: snapshot.PlanModel, PlanEffort: snapshot.PlanEffort,
+		CollaborationMode: snapshot.CollaborationMode,
+	})
+	return apputil.FirstNonEmpty(model, ""), effort
 }
 
 func modelConfigReadCopy(a *App) *config.Config {

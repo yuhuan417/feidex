@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	domainrouting "feidex/internal/domain/routing"
 	"feidex/internal/feishu"
 )
 
@@ -50,18 +51,18 @@ func shouldDeliverGroupMessageToApp(a *App, input feishu.GroupMessagePolicyInput
 	return shouldProbeGroupPrimaryForMessage(a, input.ChatID, input.RootMessageID, input.ParentMessageID, mentionedSelf, mentionedAny)
 }
 
-func groupPrimaryAssignmentFromPolicyInput(input feishu.GroupMessagePolicyInput) (groupPrimaryAssignment, bool) {
-	return groupPrimaryAssignmentFromTextAndMentions(input.Text, input.MentionedOpenIDs)
+func groupPrimaryAssignmentFromPolicyInput(input feishu.GroupMessagePolicyInput) (domainrouting.GroupPrimaryAssignment, bool) {
+	return domainrouting.ParseGroupPrimaryAssignment(input.Text, input.MentionedOpenIDs)
 }
 
 func isGroupPrimaryControlInput(input feishu.GroupMessagePolicyInput) bool {
 	// @所有人 is not a primary assignment. A bare "@_all" looks like a bare bot
-	// mention to parseEmptyBotMentionFromText, but it names nobody, so the
+	// mention to ParseEmptyBotMention, but it names nobody, so the
 	// assignment branch would swallow it and no bot would answer at all.
 	if input.MentionAll {
 		return false
 	}
-	return parsePrimaryOnCommandFromText(input.Text) || parseEmptyBotMentionFromText(input.Text)
+	return domainrouting.ParsePrimaryOnCommand(input.Text) || domainrouting.ParseEmptyBotMention(input.Text)
 }
 
 func messageMentionsCurrentBot(a *App, mentionedOpenIDs []string, fallback bool) bool {

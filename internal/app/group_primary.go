@@ -6,7 +6,10 @@ import (
 	"log/slog"
 	"strings"
 
-	"feidex/internal/app/appstate"
+	statejson "feidex/internal/adapter/storage/json"
+	approuting "feidex/internal/application/routing"
+	"feidex/internal/domain/identity"
+	domainrouting "feidex/internal/domain/routing"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -25,10 +28,6 @@ type liveBotOpenIDProvider interface {
 
 type botNameProvider interface {
 	BotName() string
-}
-
-type groupPrimaryAssignment struct {
-	TargetBotOpenID string
 }
 
 func configureGroupPrimaryEvents(a *App) {
@@ -164,24 +163,15 @@ func setGroupPrimaryState(a *App, chatType, chatID string, enabled bool, assignm
 	if chatType != "group" || chatID == "" {
 		return nil, fmt.Errorf("group chat is required")
 	}
-	record := groupPrimaryForChat(a, chatType, chatID)
-	if record != nil && staleGroupPrimaryAssignment(record, assignment) {
-		return record, nil
+	input := approuting.ChangePrimary{
+		Frontend: identity.FrontendID(a.FrontendID()),
+		Chat:     identity.ChatRef{Type: identity.ChatType(chatType), ID: chatID},
+		Enabled:  enabled,
 	}
-	if record == nil {
-		record = &state.GroupPrimary{
-			ID:         appstate.DefaultGroupPrimaryID(a.FrontendID(), chatType, chatID),
-			FrontendID: a.FrontendID(),
-			ChatID:     chatID,
-			ChatType:   chatType,
-		}
-	}
-	record.Enabled = enabled
 	if assignment != nil {
-		record.LastAssignmentMessageID = strings.TrimSpace(assignment.MessageID)
-		record.LastAssignmentCreatedAt = assignment.CreatedAt
+		input.Assignment = &domainrouting.AssignmentStamp{MessageID: assignment.MessageID, CreatedAt: assignment.CreatedAt}
 	}
-	if err := a.State().SaveGroupPrimary(record); err != nil {
+	if _, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).SetPrimary(input); err != nil {
 		return nil, err
 	}
 	updated := groupPrimaryForChat(a, chatType, chatID)
@@ -232,113 +222,31 @@ func isGroupPrimaryControlMessage(msg *feishu.InboundMessage) bool {
 	if msg == nil || strings.TrimSpace(msg.ChatType) != "group" {
 		return false
 	}
-	return parsePrimaryOnCommandFromText(msg.Text) || parseEmptyBotMentionFromText(msg.Text)
+	return domainrouting.ParsePrimaryOnCommand(msg.Text) || domainrouting.ParseEmptyBotMention(msg.Text)
 }
 
 func staleGroupPrimaryAssignment(record *state.GroupPrimary, assignment *feishu.InboundMessage) bool {
 	if record == nil || assignment == nil {
 		return false
 	}
-	messageID := strings.TrimSpace(assignment.MessageID)
-	if messageID != "" && messageID == strings.TrimSpace(record.LastAssignmentMessageID) {
-		return true
-	}
-	if assignment.CreatedAt == 0 || record.LastAssignmentCreatedAt == 0 {
-		return false
-	}
-	return assignment.CreatedAt < record.LastAssignmentCreatedAt
+	return domainrouting.StaleAssignment(
+		record.LastAssignmentMessageID,
+		record.LastAssignmentCreatedAt,
+		assignment.MessageID,
+		assignment.CreatedAt,
+	)
 }
 
-func groupPrimaryAssignmentFromMessage(msg *feishu.InboundMessage) (groupPrimaryAssignment, bool) {
+func groupPrimaryAssignmentFromMessage(msg *feishu.InboundMessage) (domainrouting.GroupPrimaryAssignment, bool) {
 	if msg == nil || strings.TrimSpace(msg.ChatType) != "group" {
-		return groupPrimaryAssignment{}, false
+		return domainrouting.GroupPrimaryAssignment{}, false
 	}
-	return groupPrimaryAssignmentFromTextAndMentions(msg.Text, msg.MentionedOpenIDs)
+	return domainrouting.ParseGroupPrimaryAssignment(msg.Text, msg.MentionedOpenIDs)
 }
 
-func groupPrimaryAssignmentFromTextAndMentions(text string, mentionedOpenIDs []string) (groupPrimaryAssignment, bool) {
-	if !hasExactlyOneMentionedOpenID(mentionedOpenIDs) {
-		return groupPrimaryAssignment{}, false
-	}
-	targetBotOpenID := singleMentionedOpenID(mentionedOpenIDs)
-	if parsePrimaryOnCommandFromText(text) || parseEmptyBotMentionFromText(text) {
-		return groupPrimaryAssignment{TargetBotOpenID: targetBotOpenID}, true
-	}
-	return groupPrimaryAssignment{}, false
-}
-
-func groupPrimaryAssignmentForCommand(msg *feishu.InboundMessage) (groupPrimaryAssignment, bool) {
+func groupPrimaryAssignmentForCommand(msg *feishu.InboundMessage) (domainrouting.GroupPrimaryAssignment, bool) {
 	if msg == nil || strings.TrimSpace(msg.ChatType) != "group" {
-		return groupPrimaryAssignment{}, false
+		return domainrouting.GroupPrimaryAssignment{}, false
 	}
-	return groupPrimaryAssignmentFromTextAndMentions("/primary on", msg.MentionedOpenIDs)
-}
-
-func hasExactlyOneMentionedOpenID(mentionedOpenIDs []string) bool {
-	return singleMentionedOpenID(mentionedOpenIDs) != "" && countMentionedOpenIDs(mentionedOpenIDs) == 1
-}
-
-func countMentionedOpenIDs(mentionedOpenIDs []string) int {
-	count := 0
-	for _, openID := range mentionedOpenIDs {
-		if strings.TrimSpace(openID) != "" {
-			count++
-		}
-	}
-	return count
-}
-
-func singleMentionedOpenID(mentionedOpenIDs []string) string {
-	var target string
-	for _, openID := range mentionedOpenIDs {
-		value := strings.TrimSpace(openID)
-		if value == "" {
-			continue
-		}
-		if target != "" {
-			return ""
-		}
-		target = value
-	}
-	return target
-}
-
-func parsePrimaryOnCommandFromText(text string) bool {
-	fields := strings.Fields(strings.TrimSpace(text))
-	if len(fields) < 2 {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(fields[len(fields)-1]), "on") {
-		return false
-	}
-	prefix := fields[:len(fields)-2]
-	switch strings.TrimSpace(fields[len(fields)-2]) {
-	case "/primary":
-	case "primary":
-		if len(prefix) == 0 || strings.TrimSpace(prefix[len(prefix)-1]) != "/workspace" {
-			return false
-		}
-		prefix = prefix[:len(prefix)-1]
-	default:
-		return false
-	}
-	for _, field := range prefix {
-		if !strings.HasPrefix(strings.TrimSpace(field), "@") {
-			return false
-		}
-	}
-	return true
-}
-
-func parseEmptyBotMentionFromText(text string) bool {
-	fields := strings.Fields(strings.TrimSpace(text))
-	if len(fields) == 0 {
-		return false
-	}
-	for _, field := range fields {
-		if !strings.HasPrefix(strings.TrimSpace(field), "@") {
-			return false
-		}
-	}
-	return true
+	return domainrouting.ParseGroupPrimaryAssignment("/primary on", msg.MentionedOpenIDs)
 }

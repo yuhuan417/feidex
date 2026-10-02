@@ -136,6 +136,7 @@ Worktree 适合让多个 bot、多个群或多个任务同时在同一个 Git �
 - [使用指南](docs/usage.md) —— 会话语义、菜单与命令、Plan 模式、审批/表单/下载卡片、故障排查
 - [运行与升级](docs/operations.md) —— daemon 模式、自动升级、发布流程
 - [架构与开发](docs/architecture.md) —— 目录结构、架构视图、开发与测试
+- [长期架构重构提案](docs/architecture-refactor-proposal.md) —— 目标边界、事件/effect 编排、状态所有权与迁移顺序
 - [DEVELOPER.md](DEVELOPER.md) —— 开发契约：模块边界、构建产物规则、变更检查清单
 - [Codex App Server 状态机审计](docs/codex-app-server-state-machine-audit.md) —— 协议状态机约束
 

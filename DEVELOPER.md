@@ -24,12 +24,12 @@ Feidex is not a general chat bot. It is a bridge between Feishu message flows an
 Keep these rules visible in day-to-day work:
 
 - `frontend` is the top-level runtime isolation boundary. Backend binding, session lineage, pending requests, and runtime caches must remain frontend-scoped.
-- `internal/app` owns product semantics. Backend-specific protocol methods, envelope quirks, and transport details belong in backend adapters, not in app orchestration.
+- Product semantics are split between `internal/domain` (state and invariants) and `internal/application` (use cases and effects). `internal/app` is a transitional composition and Feishu entrypoint layer. Backend-specific protocol methods, envelope quirks, and transport details belong in backend adapters.
 - Any capability exposed in a Feishu menu must also have a direct slash-command style entrypoint.
 - Slow workflows must follow `fast callback ack -> async work -> card patch/follow-up`. Do not run clone, review, upgrade, download, or similar work inline in card callbacks.
 - Backend switching remains idle-only. Model configuration writes save desired settings and are allowed during active work, queued/staged input and open forms; applying them must respect the turn/session boundaries below.
 - New user-visible item or workflow types must update normalization, rendering, quiet-mode behavior, and tests together.
-- Each frontend owns an App lifecycle context. Background network/process work must derive cancellation from `App.Context()` (or `appcore.Context(host)` across capability interfaces); keep operation-specific timeouts. Shutdown cancels this context before closing transports, rejects new `runAsync` work, and waits for admitted work up to the shutdown deadline. Cleanup itself uses the separate shutdown context. Backend startup probe timeouts must not become the lifetime of an already-started backend process.
+- Each frontend owns a runtime lifecycle context. During migration, background work may derive cancellation from `App.Context()` (or `appcore.Context(host)` across compatibility interfaces); the target runtime uses `FrontendRuntime.Context()`. Keep operation-specific timeouts. Shutdown cancels the frontend context before closing transports, rejects new async work, and waits for admitted work up to the shutdown deadline. Cleanup itself uses the separate shutdown context. Backend startup probe timeouts must not become the lifetime of an already-started backend process.
 
 ## Frontend Topology
 
@@ -56,7 +56,12 @@ Use these boundaries when placing code:
 | --- | --- | --- |
 | `cmd/feidex` | CLI entrypoints and command parsing | Keep business logic out of `cmd/`; call into `internal/*`. |
 | `cmd/feishu_card_demo` | Card rendering demo binary | Demo-only; do not couple production paths to it. |
-| `internal/app` | Main product logic | Orchestrates sessions, submissions, menus, approvals, rendering, delivery, and protocol reactions. |
+| `internal/domain` | Domain state and invariants | Pure aggregates and transitions. Must not depend on adapters, storage, SDKs, config, or `App`. |
+| `internal/application` | Product use cases | Consumes domain and consumer-owned ports; emits semantic effects. Must not expose SDK or raw backend protocol types. |
+| `internal/adapter` | External adapters | Converts Feishu/backend/storage protocols to application inputs and effects. Must not own product policy. |
+| `internal/runtime` | Frontend/backend runtime | Owns lifecycle, process supervision, workers, cancellation, recovery, and effect execution. |
+| `internal/composition` | Composition root | Constructs repositories, adapters, application services, and runtime. |
+| `internal/app` | Transitional entrypoint | Feishu entrypoints and legacy orchestration being migrated into domain/application/runtime. New product logic should not default here. |
 | `internal/feishu` | Feishu adapter layer | Owns SDK calls, outbound pacing, local file link rewrite, file sharing, and permission issue handling. Do not put app policy here. |
 | `internal/codexrpc` | Codex App Server client and protocol types | Keep this transport/protocol-focused. No Feishu or app orchestration here. |
 | `internal/config` | Config parsing, normalization, Feishu setup flows | Owns config file semantics and setup helpers. |
@@ -70,8 +75,11 @@ Use these boundaries when placing code:
 Dependency direction should stay simple:
 
 - `cmd/*` may depend on `internal/*`.
-- `internal/app` may depend on lower-level packages.
-- Lower-level packages should not depend on `internal/app`.
+- `internal/composition` and transitional `internal/app` may depend on domain/application/adapter/runtime packages.
+- `internal/domain` must not depend on application, adapters, runtime, storage, or `internal/app`.
+- `internal/application` must not depend on concrete adapters, SDKs, raw backend protocols, or `internal/app`.
+- `internal/adapter` must not depend on `internal/app`; adapters communicate through application ports and semantic values.
+- New code must follow the target direction even while legacy `internal/app` callers remain.
 
 ## Interaction Constraints
 

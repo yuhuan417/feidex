@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	apputil "feidex/internal/app/apputil"
+	"feidex/internal/textutil"
 )
 
 // CloneCapturedCard deep-clones a card map.
@@ -74,7 +74,7 @@ func RenderPermissionIssueBody(issue *PermissionIssue) string {
 		lines = append(lines, fmt.Sprintf("返回: code=`%d` msg=`%s`", issue.Code, EscapeInlineBackticks(msg)))
 	}
 	if cause := strings.TrimSpace(issue.Cause); cause != "" && cause != strings.TrimSpace(issue.Message) {
-		lines = append(lines, "错误: `"+EscapeInlineBackticks(apputil.Truncate(cause, 300))+"`")
+		lines = append(lines, "错误: `"+EscapeInlineBackticks(textutil.Truncate(cause, 300))+"`")
 	}
 	if logID := strings.TrimSpace(issue.LogID); logID != "" {
 		lines = append(lines, "log_id: `"+EscapeInlineBackticks(logID)+"`")
@@ -87,7 +87,7 @@ func RenderPermissionIssueBody(issue *PermissionIssue) string {
 	}
 	for _, violation := range issue.PermissionViolations {
 		item := JoinNonEmpty(" | ",
-			apputil.FirstNonEmpty(strings.TrimSpace(violation.Description), ""),
+			textutil.FirstNonEmpty(strings.TrimSpace(violation.Description), ""),
 			LabelledValue("type", violation.Type),
 			LabelledValue("subject", violation.Subject),
 		)
@@ -98,14 +98,14 @@ func RenderPermissionIssueBody(issue *PermissionIssue) string {
 	for _, detail := range issue.Details {
 		item := JoinNonEmpty(" = ", strings.TrimSpace(detail.Key), strings.TrimSpace(detail.Value))
 		if item != "" {
-			lines = append(lines, "细节: `"+EscapeInlineBackticks(apputil.Truncate(item, 300))+"`")
+			lines = append(lines, "细节: `"+EscapeInlineBackticks(textutil.Truncate(item, 300))+"`")
 		}
 	}
 	for _, violation := range issue.FieldViolations {
 		item := JoinNonEmpty(" | ",
 			LabelledValue("field", violation.Field),
 			LabelledValue("value", violation.Value),
-			apputil.FirstNonEmpty(strings.TrimSpace(violation.Description), ""),
+			textutil.FirstNonEmpty(strings.TrimSpace(violation.Description), ""),
 		)
 		if item != "" {
 			lines = append(lines, "字段校验: "+item)

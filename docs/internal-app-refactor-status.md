@@ -13,13 +13,23 @@
 
 ## 结论
 
+本文记录的是上一轮 `internal/app` 拆包的历史快照。新的长期重构已经进入 domain/application/adapter/runtime 方向；source of truth 是 [长期架构重构提案](architecture-refactor-proposal.md) 和更新后的 [DEVELOPER.md](../DEVELOPER.md)。
+
 `internal/app` 的阶段化重构已经完成。旧的 phase / wave 执行计划不再作为当前工作的 source of truth；现在以边界文档、状态机审计和 root 现状审计为准。
 
-截至 2026-07-10:
+截至 2026-10-02:
 
 - root `internal/app` 保留 `146` 个生产文件，共 `14,246` 行。
 - root `internal/app` 保留 `89` 个测试文件，共 `27,538` 行。
 - `internal/app` 目录下已有 `62` 个直接子包。
+
+本轮目标架构迁移新增了三个已落地切片：
+
+- `internal/domain/routing`：primary assignment 解析、scope 不变量和状态转换。
+- `internal/application/routing` + `internal/adapter/storage/json`：primary use case、持久化 port 以及 frontend-scoped JSON adapter。
+- `internal/domain/modelconfig`：session、group binding、BotProfile、global 配置的模型优先级解析，以及 Plan/普通轮次的 turn snapshot 选择。
+
+`internal/app` 仍负责把旧 `state`/`config` DTO 转成领域输入并协调 Feishu 入口；它不再拥有上述切片的纯业务规则。模型配置的 Codex/Claude 协议应用和生命周期仍留在现有 app/runtime 路径，迁移时继续受状态机审计约束。
 
 这说明重构已经从“执行计划阶段”进入“稳定边界阶段”。后续工作只做增量收敛，不再继续维护旧的阶段编号文档。
 

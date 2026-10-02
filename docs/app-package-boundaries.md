@@ -1,4 +1,6 @@
-# App Package Boundaries
+# App Package Boundaries (Migration Reference)
+
+> This document describes the legacy `internal/app` extraction boundaries. It is retained for migration context only. The target ownership and dependency direction are defined by [architecture-refactor-proposal.md](architecture-refactor-proposal.md) and [DEVELOPER.md](../DEVELOPER.md); new code must not preserve these boundaries merely for compatibility.
 
 `internal/app` is the Feishu-facing application coordinator. This document is the source of truth for where app-layer code belongs after the refactor. Historical phase plans are complete; new work should follow these steady-state boundaries.
 

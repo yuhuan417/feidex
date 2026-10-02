@@ -1,6 +1,6 @@
 # 架构与开发
 
-本文给出代码结构与架构总览，便于快速定位模块。工程契约（仓库结构、构建产物规则、变更边界、协议约束）以 [DEVELOPER.md](../DEVELOPER.md) 为准；Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-audit.md](codex-app-server-state-machine-audit.md)。
+本文给出代码结构与架构总览，便于快速定位模块。工程契约（仓库结构、构建产物规则、变更边界、协议约束）以 [DEVELOPER.md](../DEVELOPER.md) 为准；Codex App Server 协议状态机约束见 [docs/codex-app-server-state-machine-audit.md](codex-app-server-state-machine-audit.md)。长期目标架构见 [长期架构重构提案](architecture-refactor-proposal.md)。
 
 ## 目录结构
 
@@ -8,6 +8,10 @@
 cmd/feidex/                 主程序入口
 cmd/feishu_card_demo/       飞书卡片 demo
 internal/app/               应用协调层（frontend、session、菜单、审批、turn lifecycle）
+internal/application/       用例层（统一输入、effect、routing 等）
+internal/domain/             纯领域模型与状态转换
+internal/adapter/            Feishu、backend 和 storage 适配器
+internal/architecture/       依赖方向与分层架构测试
 internal/app/appcore/       核心组合（client 接口、session key、workspace 选择）
 internal/app/apphistory/    进程历史
 internal/app/appstate/      应用状态 store
@@ -29,7 +33,8 @@ internal/app/finalcardpatch/最终卡片 patch 逻辑
 internal/app/historycmd/    历史命令处理
 internal/app/lifecycle/     pending request / lifecycle 共享谓词
 internal/app/maintenance/   backend-agnostic 升级/维护 workflow
-internal/app/modelconfig/   模型配置流
+internal/app/modelconfig/   模型配置卡片与命令入口（迁移中的 adapter）
+internal/domain/modelconfig/ 模型 scope resolution 与 turn snapshot 规则
 internal/app/pathpick/      路径选择器
 internal/app/pendingforms/  待处理表单
 internal/app/replycontinuation/ 回复接续处理
@@ -57,6 +62,7 @@ internal/codexrpc/          Codex App Server RPC 客户端与类型
 internal/claudecli/         Claude CLI stream-json 适配层
 internal/config/            配置与飞书绑定流程
 internal/state/             本地状态存储（session/submission/message links）
+internal/textutil/          不依赖 app 的通用文本 helper
 internal/daemon/            daemon 安装、运行与升级
 internal/release/           GitHub Release 查询与版本比较
 internal/codexinstall/      Codex CLI 安装与探测
@@ -67,12 +73,12 @@ config.example.toml         配置样例
 
 ## 架构视图
 
-当前主路径是：飞书事件进入 `internal/feishu`，由 `internal/app` 做 frontend/session/thread 归属、命令分发、审批与卡片渲染，再通过 backend runtime facade 调用 `internal/codexrpc` 或 `internal/claudecli`，运行时和可恢复状态写入 `internal/state`。
+当前兼容主路径是：飞书事件进入 `internal/feishu`，由 `internal/app` 转发到逐步迁移中的 application use case，再通过 backend adapter 调用 `internal/codexrpc` 或 `internal/claudecli`，运行时和可恢复状态写入 `internal/state`。长期目标路径见 [长期架构重构提案](architecture-refactor-proposal.md)。
 
 关键边界：
 
 - `frontend` 是运行时隔离边界；backend 选择、session lineage、pending request、message link 和运行时缓存都必须按 frontend 隔离。
-- `internal/app` 拥有产品语义；Codex/Claude 协议细节应收敛在 backend adapter/facade（`internal/app/backend/`），避免散落到消息、菜单和审批编排里。已物理拆出的 50+ 子包只承载无 `*App` 依赖的纯逻辑、值对象或窄职责 helper。
+- `internal/domain` 和 `internal/application` 拥有 backend-neutral 产品语义；Codex/Claude 协议细节应收敛在 backend adapter，避免散落到消息、菜单和审批编排里。`internal/app` 只保留迁移期间的入口、组合和协议敏感兼容编排。
 - `internal/codexrpc` 只负责 Codex App Server 传输和协议类型；`internal/claudecli` 只负责 Claude CLI stream-json 协议。不要让它们理解飞书、session 或卡片。
 - 命令与菜单通过 `internal/app/features/` 统一注册，按 backend 自动过滤可用命令。
 - app 物理子包的职责边界见 [docs/app-package-boundaries.md](app-package-boundaries.md)；新增子包不得反向 import `internal/app`。
@@ -81,10 +87,10 @@ config.example.toml         配置样例
 - 异步操作使用 `RunAsync` + `sync.WaitGroup` 追踪，测试通过 `a.waitAsync()` 同步而非 `time.Sleep`。
 - 触碰 `internal/app`、`internal/codexrpc`、`internal/claudecli`、审批、turn/thread lifecycle、review、compaction、tool input 或 server request 时，要同步检查状态机审计文档。
 
-### 目前的架构问题
+### 迁移中的架构状态
 
-- God package 拆分基本完成：`internal/app` 已从单一巨型 package 收敛为 50+ 子包，卡片渲染、升级流程、审批、命令行、review、compaction、turn 生命周期等各有关键包。剩余的高耦合区域主要在 lifecycle coordinator 和多后端共享状态。
-- backend 抽象通过 `backend/driver.go` + `backendRuntimeFacade` 统一，但部分 Codex/Claude 专用状态仍在 `internal/app`。新增 backend 时应先补 facade，不要在命令和卡片路径继续增加 `if backend == ...`。
+- 现有 `internal/app` 已拆成多个子包，但仍存在 callback、宽 `App` interface 和 root glue。新的拆分以 [长期架构重构提案](architecture-refactor-proposal.md) 为准，优先把状态和用例迁移到 `internal/domain`、`internal/application`。
+- backend adapter 不再以 `internal/app/backend` 作为最终归属；Codex/Claude 协议转换应逐步移动到 `internal/adapter/backend`，application 只消费 backend-neutral event 和 gateway。
 - 状态同时存在内存 map 与 `internal/state` 持久化快照。新增 pending/form/message-link/session 数据时，必须明确 frontend scope。
 - README、`DEVELOPER.md` 和状态机审计共同构成开发契约。协议行为变化不能只改代码。
 - 升级链路是救援路径，相关改动要保持 daemon/release/pending store 最小依赖。

@@ -1,10 +1,17 @@
 # Backend Layering
 
-这份说明描述 `internal/app` 当前的 backend 分层约定。目标不是把 Codex 和 Claude 强行抹平成一套假抽象，而是把 Feishu 前端编排、backend 能力差异、以及具体协议实现放到明确且可验证的边界里。
+这份说明记录从旧 `internal/app` backend 分层迁移到目标架构的边界。目标不是把 Codex 和 Claude 强行抹平成一套假抽象，而是把 Feishu 前端编排、backend 能力差异、以及具体协议实现放到明确且可验证的边界里。最终结构以 [长期架构重构提案](architecture-refactor-proposal.md) 为准。
 
-## 1. Feishu Orchestration Layer
+## 1. Application Use Case Layer
 
-- 位于 root `internal/app`。
+- 最终位于 `internal/application`。
+- 负责 frontend/session 路由、submission、turn、approval、model config 和 workspace 用例。
+- 只依赖 domain 和 consumer-owned ports，不直接调用 Feishu SDK 或 Codex/Claude raw protocol。
+- 迁移期间，`internal/app` 仍作为入口和兼容协调层调用这些用例。
+
+## 2. Feishu Entry / Compatibility Layer
+
+- 迁移期间位于 root `internal/app`，最终由 `internal/adapter/feishu` 和 `internal/composition` 承接。
 - 负责 Feishu 事件入口、session 路由、submission 队列、卡片动作、恢复流程、审批与 turn/thread 生命周期收口。
 - 这层是产品行为层，不直接实现具体 backend 的 CLI / RPC 细节，但会协调 runtime 安装、pending request 路由、以及协议敏感恢复逻辑。
 - 任何涉及 Codex app-server turn / thread / approval 生命周期的改动，都必须继续对照 [docs/codex-app-server-state-machine-audit.md](/home/yuhuan/feidex/docs/codex-app-server-state-machine-audit.md)。
@@ -18,7 +25,7 @@
 - `internal/app/turn_lifecycle.go`
 - `internal/app/server_request_state.go`
 
-## 2. Backend Capability / Selection Layer
+## 3. Backend Capability / Selection Layer
 
 - 主要位于 `internal/app/backend` 和 `internal/app/backendcaps`。
 - 负责“当前 frontend 选中的 backend 能做什么、前端该如何展示什么、同一入口在不同 backend 下如何解释”。
@@ -37,9 +44,9 @@
 - `internal/app/backend/maintenance.go`
 - `internal/app/backendcaps/capability.go`
 
-## 3. Conversation Implementation Layer
+## 4. Backend Adapter Layer
 
-- 主要位于 `internal/app/convbackend`、`internal/app/clauderuntime`、`internal/app/claudesession`、`internal/app/claudesupport`、`internal/app/codexruntime`，以及 `internal/codexrpc`。
+- 最终位于 `internal/adapter/backend/codex` 和 `internal/adapter/backend/claude`，底层协议客户端仍位于 `internal/codexrpc` 与 `internal/claudecli`。迁移期间实现仍分散在 `internal/app/convbackend`、`internal/app/clauderuntime`、`internal/app/claudesession`、`internal/app/claudesupport`、`internal/app/codexruntime`。
 - 负责真正的 Codex / Claude 行为实现。
 - 只有这一层应该知道具体协议方法、CLI 特性、session/thread 启停细节、权限模式热更新、或 backend 内部恢复策略。
 
@@ -57,11 +64,11 @@
 - `internal/app/codexruntime/upgrade.go`
 - `internal/codexrpc/*`
 
-## 4. Runtime Bridge / Root Glue Layer
+## 5. Runtime Layer
 
-- 位于 root `internal/app`。
+- 最终位于 `internal/runtime`。
 - 这层的职责是把 backend runtime 和前端编排层接起来，因为这里需要直接读写 `*App` 的 runtime 字段、frontend-scoped session 状态和恢复逻辑。
-- 它不是新的业务 owner，只是薄胶水；不能重新长成旧的 facade / shim 文件群。
+- 迁移期间 root glue 只允许作为临时桥接；它不是新的业务 owner，不能继续扩张。
 
 当前入口:
 
