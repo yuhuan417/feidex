@@ -82,39 +82,28 @@ func messageMentionsCurrentBot(a *App, mentionedOpenIDs []string, fallback bool)
 }
 
 func shouldProbeGroupPrimaryForMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny bool) bool {
-	if a == nil || hasGroupPrimaryState(a, "group", chatID) {
+	if a == nil {
 		return false
 	}
-	if mentionedSelf {
-		return true
-	}
-	if mentionedAny {
-		return false
-	}
-	return strings.TrimSpace(rootMessageID) == "" && strings.TrimSpace(parentMessageID) == ""
+	return domainrouting.ProbeGroupPrimary(domainrouting.GroupMessageInput{
+		MentionedSelf:   mentionedSelf,
+		MentionedAny:    mentionedAny,
+		InReplyChain:    strings.TrimSpace(rootMessageID) != "" || strings.TrimSpace(parentMessageID) != "",
+		HasPrimaryState: hasGroupPrimaryState(a, "group", chatID),
+	})
 }
 
 func shouldAcceptGroupMessage(a *App, chatID, rootMessageID, parentMessageID string, mentionedSelf, mentionedAny bool) bool {
 	if a == nil {
 		return false
 	}
-	if mentionedSelf {
-		return true
-	}
-	// An explicit mention of another person or bot must not fall through to the
-	// local primary frontend.
-	if mentionedAny {
-		return false
-	}
-	if rootMessageID != "" || parentMessageID != "" {
-		// Message links are frontend-scoped, so a local link proves that this
-		// bot owns the reply chain. A missing link is intentionally ignored.
-		if hasLocalGroupMessageLink(a, rootMessageID, parentMessageID) {
-			return true
-		}
-		return false
-	}
-	return isGroupPrimary(a, "group", chatID)
+	return domainrouting.AcceptGroupMessage(domainrouting.GroupMessageInput{
+		MentionedSelf: mentionedSelf,
+		MentionedAny:  mentionedAny,
+		InReplyChain:  strings.TrimSpace(rootMessageID) != "" || strings.TrimSpace(parentMessageID) != "",
+		HasLocalLink:  hasLocalGroupMessageLink(a, rootMessageID, parentMessageID),
+		IsPrimary:     isGroupPrimary(a, "group", chatID),
+	})
 }
 
 func hasLocalGroupMessageLink(a *App, messageIDs ...string) bool {
