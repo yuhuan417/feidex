@@ -480,5 +480,6 @@ Codex server request
 - `appstate.Store` 已改为显式持有 state store、frontend、backend 和 legacy fallback scope，删除 `appcore.AppStateFacade`；旧 facade 不再作为生产状态入口存在。
 - `backend.ConfigurationService` 已由 composition root 注入当前 `Driver`；模型、workspace 和 status 展示不再在每次调用时通过宿主动态回查 driver。
 - `App.State()` 已改为 frontend 生命周期内唯一的 scoped gateway；backend runtime 切换通过显式 scope 更新，不再在每次状态访问时重建 gateway。
+- frontend runtime 现在同时持有当前 `backend.Driver`，并在 runtime 安装或 backend 切换时更新；workspace、thread menu、Claude permission 和 autoretry 绑定从 composition root 接收该 driver，不再在业务调用中动态回查宿主。
 
 当前剩余：遗留 message/card command 编排，backend dependency carrier 与 permission driver 的宿主动态回查，Claude stream presentation 回调，完整 session event 串行 owner，effect pipeline 的同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

@@ -12,6 +12,10 @@ import (
 	"feidex/internal/state"
 )
 
+func backendDriverForKind(kind string) appbackend.Driver {
+	return appbackend.DriverForKind(kind)
+}
+
 // Feishu returns the Feishu client. Sub-packages should define narrow
 // interfaces for the methods they need rather than depending on this type.
 func (a *App) Feishu() FeishuClient {
@@ -43,6 +47,19 @@ func (a *App) Backend() string {
 		return ""
 	}
 	return a.backend
+}
+
+// BackendDriver returns the driver selected for this frontend runtime.
+// Composition code updates it together with the runtime backend; the fallback
+// keeps manually constructed test apps working during migration.
+func (a *App) BackendDriver() appbackend.Driver {
+	if a == nil {
+		return appbackend.DriverForKind("")
+	}
+	if a.backendDriver != nil {
+		return a.backendDriver
+	}
+	return appbackend.DriverForConfig(a)
 }
 
 // Claude returns the Claude core client.
@@ -168,6 +185,7 @@ func (a *App) SetBackend(backend string) {
 	a.configMutex().Lock()
 	defer a.configMutex().Unlock()
 	a.backend = appcore.NormalizeRuntimeBackend(backend)
+	a.backendDriver = appbackend.DriverForKind(a.backend)
 	if a.stateView != nil {
 		a.stateView.SetBackend(a.backend)
 	}

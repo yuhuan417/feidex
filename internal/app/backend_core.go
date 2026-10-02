@@ -43,6 +43,7 @@ func setRuntimeBackend(a *App, backend string) {
 	a.configMutex().Lock()
 	defer a.configMutex().Unlock()
 	a.backend = normalizeRuntimeBackend(backend)
+	a.backendDriver = backendDriverForKind(a.backend)
 	if a.stateView != nil {
 		a.stateView.SetBackend(a.backend)
 	}

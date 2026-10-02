@@ -48,6 +48,7 @@ type App struct {
 	configMu               sync.RWMutex
 	sharedConfigMu         *sync.RWMutex
 	backend                string
+	backendDriver          backend.Driver
 	codex                  CodexClient
 	claude                 ClaudeCore
 	feishu                 FeishuClient
@@ -134,6 +135,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		frontendID:          strings.TrimSpace(frontend.ID),
 		frontendConfigIndex: frontend.ConfigIndex,
 		backend:             backend,
+		backendDriver:       backendDriverForKind(backend),
 		feishu:              FeishuClient,
 		started:             time.Now(),
 		deduper:             frontendruntime.NewInboundDeduper(),

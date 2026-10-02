@@ -1,7 +1,6 @@
 package app
 
 import (
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
@@ -17,7 +16,7 @@ func workspaceCommandApp(a *App) appworkspacecmd.App {
 	if a == nil {
 		return appworkspacecmd.App{}
 	}
-	return appworkspacecmd.App{ConfigProvider: a, FeishuClient: a.feishu, ContextProvider: a, BackendDriver: appbackend.DriverForConfig(a)}
+	return appworkspacecmd.App{ConfigProvider: a, FeishuClient: a.feishu, ContextProvider: a, BackendDriver: a.BackendDriver()}
 }
 
 func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {

@@ -18,7 +18,7 @@ type backendConfigurationService struct {
 }
 
 func newBackendConfigurationService(app *App) backendConfigurationService {
-	driver := appbackend.DriverForConfig(app)
+	driver := app.BackendDriver()
 
 	inner := appbackend.NewConfigurationService(appbackend.ConfigurationDeps{
 		App:    app,
