@@ -1,10 +1,13 @@
 package json
 
 import (
+	"context"
 	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/runtime/turnbinding"
 	"feidex/internal/state"
 	"sync"
 	"testing"
@@ -36,8 +39,20 @@ func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
 
 	app := newConcurrentStartTestApp(store, sessionKey)
 	svc := appsubmission.NewSubmissionQueueService(appsubmission.Dependencies{
-		AppState:                 &app.state,
-		ConversationBackend:      app.backend,
+		AppState: &app.state,
+		StartConversation: func(context.Context, *config.Workspace, *conversation.Session, *domainsubmission.Submission, string) (appsubmission.ConversationStarted, error) {
+			return appsubmission.ConversationStarted{ID: "thread-1"}, nil
+		},
+		StartSubmissionTurn: func(ctx context.Context, key, thread string, sub *domainsubmission.Submission, cwd, policy, sandbox, tier, model, effort, multi string) (string, error) {
+			return "turn-1", app.backend.StartQueuedSubmission(key, nil, sub, nil, false)
+		},
+		ResolveModelConfig: func(*conversation.Session, *domainsubmission.Submission) modelconfig.Snapshot {
+			return modelconfig.Snapshot{Valid: true, Backend: "codex"}
+		},
+		LiveThread: concurrencyLive{}, RuntimeState: concurrencyRuntime{Tracker: turnbinding.NewTracker(store)},
+		MarkSubmissionRunningReactions: func(*domainsubmission.Submission) {}, IsReviewSubmission: func(*domainsubmission.Submission) bool { return false },
+		ReplyContinuation: concurrencyLinks{}, TurnStream: concurrencyStream{},
+
 		Workspace:                app.SubmissionQueueWorkspace,
 		DefaultWorkspaceID:       app.SubmissionQueueDefaultWorkspaceID,
 		ConfiguredInflightMode:   app.SubmissionQueueConfiguredInflightMode,
@@ -278,3 +293,23 @@ func (concurrentStartNoopAutoRetry) ObserveAutoRetryTerminal(string, string, str
 }
 
 func (concurrentStartNoopAutoRetry) HasBlockingAutoRetry(string) bool { return false }
+
+type concurrencyLive struct{}
+
+func (concurrencyLive) MarkSessionThreadLive(string, string)     {}
+func (concurrencyLive) SessionHasLiveThread(string, string) bool { return true }
+func (concurrencyLive) ClearSessionLiveThread(string)            {}
+
+type concurrencyLinks struct{}
+
+func (concurrencyLinks) RecordSubmissionSourceLinks(*domainsubmission.Submission) {}
+func (concurrencyLinks) RecordRootTurnBinding(string, string, string, string)     {}
+
+type concurrencyStream struct{}
+
+func (concurrencyStream) NoteTurnStarted(string, *domainsubmission.Submission) {}
+func (concurrencyStream) DeleteTurnStream(string)                              {}
+
+type concurrencyRuntime struct{ *turnbinding.Tracker }
+
+func (concurrencyRuntime) ClearTurnItemStates(string) {}

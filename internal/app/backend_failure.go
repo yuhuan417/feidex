@@ -5,7 +5,6 @@ import (
 
 	"context"
 	"encoding/json"
-	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/domain/conversation"
 	apputil "feidex/internal/formatutil"
 	"log/slog"
@@ -13,9 +12,7 @@ import (
 
 	appbackend "feidex/internal/app/backend"
 
-	appmaintenance "feidex/internal/app/maintenance"
-
-	appturnstream "feidex/internal/app/turnstream"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
 )
@@ -139,7 +136,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 				return newTurnStreamService(a).flushTurnStream(ctx, threadID, turnID)
 			},
 			FailStandaloneCompactTurn: func(threadID, turnID, message string) bool {
-				return failStandaloneCompactTurn(a, threadID, turnID, message)
+				return newCompactionService(a).FailStandaloneCompactTurn(threadID, turnID, message)
 			},
 			BackendRuntimeFailsStandaloneCompaction: func(backend string) bool {
 				if runtime := backendRuntimeForKind(backend); runtime != nil {
@@ -155,7 +152,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 		},
 		Cards: appbackend.FailureCardDeps{
 			ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool {
-				return appautoretry.NewService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
+				return newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
 			},
 			ReplaceTurnEventCard: func(ctx context.Context, sub *domainsubmission.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
 				newOutboundCardService(a).replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
@@ -169,7 +166,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 		},
 		Async: appbackend.FailureAsyncDeps{
 			CleanupSubmissionRuntimeState: func(sub *domainsubmission.Submission) {
-				appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(sub)
+				newSubmissionCleanup(a).CleanupSubmissionRuntimeState(sub)
 			},
 			ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
 				newPendingQueueService(a).clearSubmissionProcessingReactions(sub)

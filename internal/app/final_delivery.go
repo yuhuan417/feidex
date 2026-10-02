@@ -88,7 +88,7 @@ func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *domai
 	for _, result := range results {
 		recordMessageLink(a, result.MessageID, "final_message", sub, "")
 		if result.CardID != "" {
-			newFinalCardPatchService(a).registerFinalCardPatchState(result.CardID, sub, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
+			newFinalCardPatchService(a).RegisterFinalCardPatchState(result.CardID, sub, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
 			scheduleLocalFileLinkPatch(a, sub, result.CardID, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
 		}
 	}

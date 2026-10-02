@@ -507,3 +507,19 @@ func activeOperationMatches(op SessionActiveOperation, submissionID, turnID stri
 func firstNonEmpty(values ...string) string {
 	return textutil.FirstNonEmpty(values...)
 }
+
+// HasActiveWork includes standalone compaction and the admitted startup window.
+func HasActiveWork(sess *Session) bool {
+	if sess == nil {
+		return false
+	}
+	if HasActiveOperations(sess) {
+		return true
+	}
+	switch NormalizeSessionStatus(sess.Status) {
+	case SessionStatusCompacting, SessionStatusTurnStarting:
+		return true
+	default:
+		return false
+	}
+}

@@ -23,7 +23,7 @@ func New(a appcore.AppConfig) *Store {
 }
 
 func cloneSession(sess *conversation.Session) *conversation.Session {
-	return appcore.StateCloneSession(sess)
+	return conversation.CloneSession(sess)
 }
 
 // Session returns a session by key.

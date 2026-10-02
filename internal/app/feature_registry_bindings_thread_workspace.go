@@ -81,7 +81,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				return nil, false
 			}
 			sessionKey = threadMenuEffectiveSessionKey(a, sessionKey)
-			card, err := conversationBackend(a).RenderThreadsCard(sessionKey, false)
+			card, err := renderThreadsCard(a, sessionKey, false)
 			if err != nil {
 				return nil, false
 			}

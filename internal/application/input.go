@@ -14,23 +14,10 @@ type Input interface{ input() }
 type MessageReceived struct {
 	Frontend identity.FrontendID
 	Chat     identity.ChatRef
-	Message  Message
+	Message  InboundMessage
 }
 
 func (MessageReceived) input() {}
-
-// Message contains only transport-independent fields needed by use cases.
-type Message struct {
-	ID                   string
-	UserID               string
-	Text                 string
-	RootMessageID        string
-	ParentMessageID      string
-	MentionedOpenIDs     []string
-	MentionedAll         bool
-	CreatedAtUnix        int64
-	ExpandedMergeForward bool
-}
 
 // CardActionReceived is a normalized Feishu card action. The Feishu adapter
 // owns conversion from SDK form values to these plain values.
@@ -43,13 +30,16 @@ func (CardActionReceived) input() {}
 
 // CardAction contains no Feishu SDK types.
 type CardAction struct {
-	ID         string
-	Name       string
-	MessageID  string
-	Chat       identity.ChatRef
-	UserID     string
-	Values     map[string]string
-	FormValues map[string]string
+	ActionValue map[string]any
+	FormValue   map[string]any
+	UserID      string
+	ChatID      string
+	MessageID   string
+	Name        string
+	Option      string
+	InputValue  string
+	Options     []string
+	Checked     bool
 }
 
 // BackendEventReceived carries a backend-neutral event emitted by a concrete
@@ -66,13 +56,14 @@ func (BackendEventReceived) input() {}
 // envelopes or stream-json values. Payload is adapter-normalized data owned by
 // the event kind and must not contain protocol envelope types.
 type BackendEvent struct {
-	Kind      string
-	ThreadID  string
-	TurnID    string
-	RequestID string
-	Status    string
-	Message   string
-	Payload   any
+	Kind          string
+	ThreadID      string
+	TurnID        string
+	ResponseToken string
+	RequestID     string
+	Status        string
+	Message       string
+	Payload       any
 }
 
 const (
@@ -81,3 +72,26 @@ const (
 	EventTurnError       = "turn_error"
 	EventRequestResolved = "request_resolved"
 )
+
+type MessageRecalled struct {
+	Frontend          identity.FrontendID
+	MessageID, ChatID string
+}
+
+func (MessageRecalled) input() {}
+
+type MessageReacted struct {
+	Frontend                             identity.FrontendID
+	MessageID, ChatID, UserID, EmojiType string
+}
+
+func (MessageReacted) input() {}
+
+// RetryTimerFired carries a generation token; stale or cancelled timers cannot start work.
+type RetryTimerFired struct {
+	Frontend   identity.FrontendID
+	SessionKey identity.SessionKey
+	Sequence   uint64
+}
+
+func (RetryTimerFired) input() {}

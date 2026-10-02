@@ -7,7 +7,6 @@ import (
 
 	"feidex/internal/app/appcore"
 	appworkspace "feidex/internal/app/workspace"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -43,15 +42,6 @@ type RuntimeDriver interface {
 	AutoRetryTitle() string
 }
 
-type WorkspaceThreadOps interface {
-	EnsureCodexWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
-	EnsureClaudeWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
-	ListCodexWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
-	ListClaudeWorkspaceThreads(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
-	StartCodexWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
-	StartClaudeWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
-}
-
 type ConversationDriver interface {
 	PrimarySlash() string
 	Noun() string
@@ -59,9 +49,6 @@ type ConversationDriver interface {
 	WorkspaceSwitchInFlightNotice() string
 	WorkspaceSwitchBindingFailureNotice() string
 	WorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string
-	EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
-	ListWorkspaceThreads(ops WorkspaceThreadOps, sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
-	StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
 }
 
 type PermissionApp interface {

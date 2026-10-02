@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"

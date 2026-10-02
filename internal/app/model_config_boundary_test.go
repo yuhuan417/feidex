@@ -12,7 +12,6 @@ import (
 	"sync"
 	"testing"
 
-	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -163,7 +162,7 @@ func TestModelConfigCodexResumeAcknowledgesAuxiliarySettings(t *testing.T) {
 		return nil
 	}
 	sess := a.store.GetSession(sub.SessionKey)
-	_, err := (convBackendConversationAdapter{}).ResumeCodexThread(a, sub.SessionKey, sess, &a.cfg.Workspaces[0], appconvbackend.ThreadResumeSelection{ThreadID: "old-thread", Cwd: a.cfg.Workspaces[0].Cwd})
+	_, err := newConversationService(a).ResumeSelectedThread(sub.SessionKey, sess, &a.cfg.Workspaces[0], conversation.ThreadSelection{ThreadID: "old-thread", Cwd: a.cfg.Workspaces[0].Cwd})
 	if err != nil {
 		t.Fatal(err)
 	}

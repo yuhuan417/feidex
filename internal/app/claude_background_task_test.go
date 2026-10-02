@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/claudecli"
+	appclauderuntime "feidex/internal/runtime/claude"
 )
 
 func TestSendClaudeBackgroundTaskNotificationRepliesWithStatusCard(t *testing.T) {

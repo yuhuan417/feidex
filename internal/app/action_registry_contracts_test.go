@@ -8,9 +8,9 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		handlers map[string]cardActionHandler
 	}{
 		{name: "menu", handlers: menuCardActionHandlers()},
-		{name: "workspace", handlers: workspaceCardActionHandlers},
-		{name: "maintenance", handlers: maintenanceCardActionHandlers},
-		{name: "pending", handlers: pendingCardActionHandlers},
+		{name: "workspace", handlers: workspaceCardActionHandlers()},
+		{name: "maintenance", handlers: maintenanceCardActionHandlers()},
+		{name: "pending", handlers: pendingCardActionHandlers()},
 	}
 
 	seen := map[string]string{}

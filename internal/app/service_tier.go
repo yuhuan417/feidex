@@ -1,38 +1,21 @@
 package app
 
 import (
-	appcore "feidex/internal/app/appcore"
-	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	tier "feidex/internal/adapter/feishu/servicetier"
+	"feidex/internal/application/threadsettings"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 )
 
-type serviceTierAppAdapter struct{ *App }
-
-func newServiceTierService(app *App) appservicetiercmd.Service {
-	return appservicetiercmd.NewService(serviceTierAppAdapter{App: app})
+func newServiceTierService(a *App) tier.Service {
+	return tier.Service{Service: threadsettings.Service{Repository: a.State()}, Context: a.Context, Client: a.feishu, SessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) }}
 }
-
-func (a serviceTierAppAdapter) Feishu() appcore.FeishuClient {
-	return a.feishu
+func renderServiceTierMenuCard(a *App, key string) map[string]any {
+	return tier.RenderMenuCard(key, a.State().Session(key))
 }
-
-func (a serviceTierAppAdapter) ServiceTierAppState() appservicetiercmd.AppStateProvider {
-	return a.State()
+func setThreadServiceTier(a *App, key, threadID, value string) (*conversation.Session, error) {
+	return threadsettings.Service{Repository: a.State()}.SetThreadServiceTier(key, threadID, value)
 }
-
-func (a serviceTierAppAdapter) MenuCardBody(action, body string) string {
-	return menuCardBody(action, body)
-}
-
-func renderServiceTierMenuCard(a *App, sessionKey string) map[string]any {
-	return newServiceTierService(a).RenderMenuCard(sessionKey)
-}
-
-func setThreadServiceTier(a *App, sessionKey, threadID, serviceTier string) (*conversation.Session, error) {
-	return newServiceTierService(a).SetThreadServiceTier(sessionKey, threadID, serviceTier)
-}
-
 func commandFast(a *App, msg *feishu.InboundMessage, args []string) error {
 	return newServiceTierService(a).CommandFast(msg, args)
 }

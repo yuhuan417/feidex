@@ -23,7 +23,7 @@ func commandFork(a *App, msg *feishu.InboundMessage, args []string) error {
 	if err != nil {
 		return err
 	}
-	reply := conversationBackend(a).ForkReplyMessage(forkedID)
+	reply := forkReplyMessage(a, forkedID)
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
@@ -52,7 +52,7 @@ func startThreadFork(a *App, sessionKey string) (int, string, error) {
 	if sess == nil {
 		return 0, "", fmt.Errorf("session %q disappeared", sessionKey)
 	}
-	forkedID, err := conversationBackend(a).ForkActiveConversation(sessionKey, sess, ws)
+	forkedID, err := newConversationService(a).ForkActiveConversation(sessionKey, sess, ws)
 	if err != nil {
 		return 0, "", err
 	}

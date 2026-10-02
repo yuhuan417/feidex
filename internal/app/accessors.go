@@ -7,7 +7,7 @@ import (
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/appstate"
 	appbackend "feidex/internal/app/backend"
-	appconvbackend "feidex/internal/app/convbackend"
+
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -129,11 +129,6 @@ func (a *App) FrontendID() string {
 // BackendRuntime returns the runtime facade for the currently configured backend.
 func (a *App) BackendRuntime() backendRuntimeFacade {
 	return backendRuntime(a)
-}
-
-// ConversationBackend returns the conversation backend facade for the active backend.
-func (a *App) ConversationBackend() appconvbackend.ConversationBackendFacade {
-	return conversationBackend(a)
 }
 
 // Trackers returns the per-service runtime tracker bundle.

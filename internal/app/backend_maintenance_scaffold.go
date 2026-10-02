@@ -3,6 +3,10 @@ package app
 import (
 	"context"
 	appmaintenance "feidex/internal/app/maintenance"
+	"feidex/internal/application"
+	"feidex/internal/domain/identity"
+	"log/slog"
+	"strings"
 
 	"feidex/internal/feishu"
 
@@ -13,7 +17,12 @@ func patchMaintenanceCard(a *App, messageID string, card map[string]any, warnMsg
 	if a == nil {
 		return
 	}
-	appmaintenance.PatchCard(a.feishu, messageID, card, warnMsg, attrs...)
+	if strings.TrimSpace(messageID) == "" || card == nil {
+		return
+	}
+	if err := newEffectRunner(a).Run(a.Context(), []application.Effect{application.PatchCard{Frontend: identity.FrontendID(a.FrontendID()), MessageID: messageID, View: card}}); err != nil {
+		slog.Warn(warnMsg, append(attrs, "error", err)...)
+	}
 }
 
 func completeMaintenanceAsyncAction(a *App,

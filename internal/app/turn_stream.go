@@ -7,7 +7,7 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 
-	appturnstream "feidex/internal/app/turnstream"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
 )
 
 // Type aliases — exported types from the turnstream sub-package.
@@ -27,7 +27,7 @@ type turnStreamService struct {
 func newTurnStreamService(app *App) turnStreamService {
 	return turnStreamService{
 		app:     app,
-		service: appturnstream.NewService(app),
+		service: newTurnPresentation(app),
 	}
 }
 

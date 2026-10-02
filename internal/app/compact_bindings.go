@@ -1,57 +1,54 @@
 package app
 
 import (
-	"feidex/internal/app/appstate"
-	appcompact "feidex/internal/app/compact"
+	"context"
+	codexadapter "feidex/internal/adapter/backend/codex"
+	compaction "feidex/internal/application/compaction"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
+	"fmt"
 )
 
 type compactSessionStoreAdapter struct {
-	store *appstate.Store
+	Session  func(string) *conversation.Session
+	Sessions func() []*conversation.Session
+	Save     func(*conversation.Session) error
 }
 
-func (a compactSessionStoreAdapter) GetSession(key string) *conversation.Session {
-	if a.store == nil {
-		return nil
+func (s compactSessionStoreAdapter) GetSession(key string) *conversation.Session {
+	return s.Session(key)
+}
+func (s compactSessionStoreAdapter) AllSessions() []*conversation.Session { return s.Sessions() }
+func (s compactSessionStoreAdapter) SaveSession(sess *conversation.Session) error {
+	return s.Save(sess)
+}
+func newCompactionService(a *App) compaction.Service {
+	if a == nil {
+		return compaction.Service{}
 	}
-	return a.store.Session(key)
-}
-
-func (a compactSessionStoreAdapter) AllSessions() []*conversation.Session {
-	if a.store == nil {
-		return nil
+	st := a.State()
+	return compaction.Service{
+		Context: a.Context, Repository: compactSessionStoreAdapter{Session: st.Session, Sessions: st.Sessions, Save: st.SaveSession},
+		Gateway: codexadapter.CompactionGateway{Client: currentCodexClient(a)},
+		Notices: func(ctx context.Context, sess *conversation.Session, text string) {
+			if a.feishu != nil && sess.ChatID != "" {
+				_ = a.feishu.SendText(ctx, sess.ChatID, text)
+			}
+		},
 	}
-	return a.store.Sessions()
 }
-
-func (a compactSessionStoreAdapter) SaveSession(sess *conversation.Session) error {
-	if a.store == nil {
-		return nil
+func commandCompact(a *App, msg *feishu.InboundMessage, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("usage: /compact")
 	}
-	return a.store.SaveSession(sess)
-}
-
-// ---------------------------------------------------------------------------
-// *App methods satisfying compact.App
-// ---------------------------------------------------------------------------
-
-func (a *App) SessionStore() appcompact.SessionStore {
 	if a == nil {
 		return nil
 	}
-	return compactSessionStoreAdapter{store: a.State()}
+	return newBackendActionService(a).HandleCompactCommand(msg, newCompactionService(a))
 }
-
-func (a *App) HandleBackendCompactCommand(msg *feishu.InboundMessage) error {
-	svc := appcompact.NewService(a)
-	return newBackendActionService(a).HandleCompactCommand(msg, &svc)
-}
-
-func (a *App) RunBackendCompactAction(sessionKey string, svc *appcompact.Service, action any) error {
-	var cardAction *feishu.CardAction
-	if action != nil {
-		cardAction, _ = action.(*feishu.CardAction)
+func runMenuCompactAction(a *App, action *feishu.CardAction, key string) error {
+	if a == nil {
+		return nil
 	}
-	return newBackendActionService(a).RunMenuCompactAction(cardAction, sessionKey, svc)
+	return newBackendActionService(a).RunMenuCompactAction(action, key, newCompactionService(a))
 }

@@ -4,7 +4,6 @@ import (
 	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
 
-	appautoretry "feidex/internal/app/autoretry"
 	"strings"
 )
 
@@ -35,7 +34,7 @@ func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowedMessage
 	if newRuntimeStateService(a).frontendMessageTrafficCount() > allowedMessageTraffic {
 		return "当前仍有消息处理中"
 	}
-	autoRetrySvc := appautoretry.NewService(a)
+	autoRetrySvc := newAutoRetryService(a)
 	for _, sess := range a.State().Sessions() {
 		if sess == nil || !sessionBelongsToFrontend(a, sess.Key) {
 			continue

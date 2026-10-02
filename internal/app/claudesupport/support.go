@@ -14,7 +14,7 @@ import (
 	"feidex/internal/adapter/feishu/cardactions"
 
 	"feidex/internal/adapter/feishu/pendingforms"
-	appclauderuntime "feidex/internal/app/clauderuntime"
+	appclauderuntime "feidex/internal/runtime/claude"
 
 	"feidex/internal/feishu"
 	appruntime "feidex/internal/runtime"

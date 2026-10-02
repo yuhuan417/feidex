@@ -11,9 +11,9 @@ import (
 	apputil "feidex/internal/formatutil"
 
 	"feidex/internal/adapter/feishu/pendingforms"
-	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/claudesupport"
 	"feidex/internal/feishu"
+	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"

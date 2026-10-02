@@ -2,9 +2,9 @@ package app
 
 import (
 	appbackend "feidex/internal/app/backend"
-	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/upgraderender"
 	appruntime "feidex/internal/runtime"
+	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/textutil"
 
 	"context"

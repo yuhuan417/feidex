@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	appclauderuntime "feidex/internal/app/clauderuntime"
 	applifecycle "feidex/internal/app/lifecycle"
+	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/state"
 )
 

@@ -5,8 +5,6 @@ import (
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"time"
-
-	appconvbackend "feidex/internal/app/convbackend"
 )
 
 type backendRuntimeHandle struct {
@@ -56,7 +54,6 @@ type backendRuntimeFacade interface {
 	// asynchronous (e.g. Claude), this prevents the session from getting stuck
 	// in "queuing" state if the interrupt doesn't trigger a turn completion.
 	clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *conversation.Session) *conversation.Session
-	conversationBackend(a *App) appconvbackend.ConversationBackendFacade
 	buildRuntime(a *App) *backendRuntimeHandle
 	startRuntime(ctx context.Context, a *App, handle *backendRuntimeHandle) error
 	maintenanceActive(a *App) bool

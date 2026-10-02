@@ -42,7 +42,6 @@ type Dependencies struct {
 	ReplyContinuation                  QueueReplyContinuationProvider
 	TurnStream                         QueueTurnStreamProvider
 	AutoRetry                          QueueAutoRetryProvider
-	ConversationBackend                QueueConversationBackendProvider
 	BackendRuntime                     QueueBackendRuntimeProvider
 	DefaultWorkspaceID                 func() string
 	Workspace                          func(id string) *workspace.Workspace
@@ -161,11 +160,6 @@ type QueueTurnStreamProvider interface {
 type QueueAutoRetryProvider interface {
 	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool
 	HasBlockingAutoRetry(sessionKey string) bool
-}
-
-// QueueConversationBackendProvider narrows conversation backend.
-type QueueConversationBackendProvider interface {
-	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace, notifyFailure bool) error
 }
 
 // QueueBackendRuntimeProvider narrows backend runtime.
@@ -726,9 +720,6 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 			"cwd", ws.Cwd,
 			"thread_id", sess.ActiveThreadID,
 		)
-		if a.ConversationBackend != nil {
-			return a.ConversationBackend.StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
-		}
 		if a.Backend != nil && a.Backend() == "claude" {
 			return s.StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 		}
@@ -1217,3 +1208,10 @@ func (d Dependencies) context() context.Context {
 
 // ConversationStarted is the semantic result of starting a backend conversation.
 type ConversationStarted struct{ ID, Name, Preview string }
+
+func (s SubmissionQueueService) StartQueuedSubmission(key string, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace, notify bool) error {
+	if s.Deps.Backend != nil && s.Deps.Backend() == "claude" {
+		return s.StartNextClaudeSubmissionWithFailureNotice(key, sess, sub, ws, notify)
+	}
+	return s.StartNextCodexSubmissionWithFailureNotice(key, sess, sub, ws, notify)
+}

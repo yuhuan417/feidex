@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	appworkspace "feidex/internal/app/workspace"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -86,18 +85,6 @@ func (d unsupportedConversationDriver) WorkspaceSwitchBindingFailureNotice() str
 
 func (d unsupportedConversationDriver) WorkspaceSwitchBindingNotice(*appworkspace.ThreadBinding) string {
 	return "。当前 frontend 还没有设置 backend，请先选择。"
-}
-
-func (d unsupportedConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
-	return nil, unsupportedBackendError(d.rawKind)
-}
-
-func (d unsupportedConversationDriver) ListWorkspaceThreads(ops WorkspaceThreadOps, sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return nil, unsupportedBackendError(d.rawKind)
-}
-
-func (d unsupportedConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
-	return nil, unsupportedBackendError(d.rawKind)
 }
 
 func (d unsupportedPermissionDriver) SupportedScopes() []PermissionScope { return nil }

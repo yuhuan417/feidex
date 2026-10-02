@@ -1,21 +1,21 @@
 package app
 
 import (
-	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
+	"feidex/internal/runtime/maintenance"
 )
 
 func recoverRuntimeState(a *App) {
-	appmaintenance.NewRuntimeMaintenanceService(a).RecoverRuntimeState()
+	newStartupRecovery(a).RecoverRuntimeState()
 }
 
 func recoverSharedRuntimeState(a *App) {
-	appmaintenance.NewRuntimeMaintenanceService(a).RecoverSharedRuntimeState()
+	newStartupRecovery(a).RecoverSharedRuntimeState()
 }
 
 func recoverFrontendRuntimeState(a *App) {
-	appmaintenance.NewRuntimeMaintenanceService(a).RecoverFrontendRuntimeState()
+	newStartupRecovery(a).RecoverFrontendRuntimeState()
 }
 
 func resetLiveThreadState(a *App) {
@@ -26,9 +26,9 @@ func resetLiveThreadState(a *App) {
 }
 
 func startupReadyChatIDs(sessions []*conversation.Session) []string {
-	return appmaintenance.StartupReadyChatIDs(sessions)
+	return maintenance.StartupReadyChatIDs(sessions)
 }
 
 func sendStartupReadyNotifications(a *App) {
-	appmaintenance.NewRuntimeMaintenanceService(a).SendStartupReadyNotifications()
+	newStartupRecovery(a).SendStartupReadyNotifications()
 }

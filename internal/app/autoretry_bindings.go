@@ -1,91 +1,86 @@
 package app
 
 import (
-	domainsubmission "feidex/internal/domain/submission"
-
-	appautoretry "feidex/internal/app/autoretry"
-
-	appconvbackend "feidex/internal/app/convbackend"
+	retryview "feidex/internal/adapter/feishu/autoretry"
+	appbackend "feidex/internal/app/backend"
+	"feidex/internal/application"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	retry "feidex/internal/runtime/autoretry"
+	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-// ---------------------------------------------------------------------------
-// Provider adapters — satisfy autoretry narrow interfaces
-// ---------------------------------------------------------------------------
-
-type backendRuntimeAdapter struct {
-	app     *App
-	runtime backendRuntimeFacade
-}
-
-func (a backendRuntimeAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
-	if a.runtime == nil {
-		return false
+func newAutoRetryService(a *App) retryview.Service {
+	view := retryview.Service{
+		Context: a.Context, Client: a.feishu, MenuBody: menuCardBody,
+		Settings: func() retryview.Settings {
+			cfg := feishuConfig(a)
+			return retryview.Settings{FrontendID: a.FrontendID(), Backend: configuredBackend(a), Title: appbackend.DriverForApp(a).Runtime().AutoRetryTitle(), Enabled: cfg != nil && cfg.AutoRetry}
+		},
+		SaveEnabled: func(enabled bool) error {
+			if a.cfg == nil {
+				return fmt.Errorf("nil config")
+			}
+			a.ConfigMu().Lock()
+			defer a.ConfigMu().Unlock()
+			cfg := feishuConfigUnlocked(a)
+			if cfg == nil {
+				return fmt.Errorf("frontend config not found")
+			}
+			cfg.AutoRetry = enabled
+			if strings.TrimSpace(a.cfgPath) == "" {
+				return nil
+			}
+			if err := a.cfg.Normalize(filepath.Dir(a.cfgPath)); err != nil {
+				return err
+			}
+			return config.Save(a.cfgPath, a.cfg)
+		},
+		SessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
+		ReplyAction: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+			return replyCommandActionResponse(a, msg, resp)
+		},
 	}
-	return a.runtime.deferQueuedSubmissionsDuringRecovery(a.app)
+	view.Engine = retry.NewEngine(retry.Dependencies{
+		Context: a.Context, Tracker: a.AutoRetries(), Repository: a.State(), Live: sqLiveThreadAdapter{app: a},
+		Enabled: func() bool { return view.Settings().Enabled },
+		Recovering: func() bool {
+			runtime := backendRuntime(a)
+			return runtime != nil && runtime.deferQueuedSubmissionsDuringRecovery(a)
+		},
+		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
+		Workspace:          func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
+		Starter:            func() retry.SubmissionStarter { return newSubmissionQueueServiceFromApp(a) },
+		DispatchTimer: func(key string, seq uint64) {
+			runAsync(a, func() {
+				_, _ = dispatchInput(a, application.RetryTimerFired{Frontend: identity.FrontendID(a.FrontendID()), SessionKey: identity.SessionKey(key), Sequence: seq})
+			})
+		},
+		Presenter: view,
+	})
+	return view
 }
 
-type conversationBackendAdapter struct {
-	backend appconvbackend.ConversationBackendFacade
-}
-
-func (a conversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
-	return a.backend.StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
-}
-
-// ---------------------------------------------------------------------------
-// *App methods satisfying autoretry.App
-// ---------------------------------------------------------------------------
-
-func (a *App) AutoRetries() *appautoretry.Tracker {
+func (a *App) AutoRetries() *retry.Tracker {
 	if a == nil {
 		return nil
 	}
 	if a.autoRetries == nil {
-		a.autoRetries = appautoretry.NewTracker()
+		a.autoRetries = retry.NewTracker()
 	}
 	return a.autoRetries
 }
-
-func (a *App) AppState() appautoretry.AppStateProvider {
-	if a == nil {
-		return nil
-	}
-	return a.State()
-}
-
-func (a *App) AutoRetryBackendRuntime() appautoretry.BackendRuntimeProvider {
-	return backendRuntimeAdapter{app: a, runtime: backendRuntime(a)}
-}
-
-func (a *App) AutoRetryConversationBackend() appautoretry.ConversationBackendProvider {
-	return conversationBackendAdapter{backend: conversationBackend(a)}
-}
-
-func (a *App) RunAsync(fn func()) {
-	runAsync(a, fn)
-}
-
-func (a *App) MenuCardBody(action, body string) string {
-	return menuCardBody(action, body)
-}
-
+func (a *App) RunAsync(fn func())                      { runAsync(a, fn) }
+func (a *App) MenuCardBody(action, body string) string { return menuCardBody(action, body) }
 func (a *App) SessionHasActiveWork(sess *conversation.Session) bool {
-	return sessionHasActiveWork(sess)
+	return conversation.HasActiveWork(sess)
 }
-
-func (a *App) SessionHasLiveThread(sessionKey, threadID string) bool {
-	return sessionHasLiveThread(a, sessionKey, threadID)
-}
-
-func (a *App) ClearSessionLiveThread(sessionKey string) {
-	clearSessionLiveThread(a, sessionKey)
-}
-
 func (a *App) ReplyCommandActionResponse(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 	return replyCommandActionResponse(a, msg, resp)
 }

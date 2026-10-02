@@ -1,9 +1,9 @@
 package app
 
 import (
-	appautoretry "feidex/internal/app/autoretry"
 	appbackend "feidex/internal/app/backend"
 	"feidex/internal/domain/conversation"
+	appautoretry "feidex/internal/runtime/autoretry"
 
 	"path/filepath"
 	"testing"

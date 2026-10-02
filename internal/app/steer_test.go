@@ -10,16 +10,16 @@ import (
 
 func TestSteerHelperBranches(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	if got := newReplyContinuationService(a).replyRootTurnLink(nil); got != nil {
+	if got := newReplyContinuationService(a).ReplyRootTurnLink(nil); got != nil {
 		t.Fatalf("replyRootTurnLink(nil) = %+v, want nil", got)
 	}
-	if got := newReplyContinuationService(a).sessionKeyForInboundMessage(&feishu.InboundMessage{ChatID: "chat", ChatType: "p2p", UserID: "u"}, &state.MessageLink{SessionKey: "sess-1"}); got != "sess-1" {
+	if got := newReplyContinuationService(a).SessionKeyForInboundMessage(&feishu.InboundMessage{ChatID: "chat", ChatType: "p2p", UserID: "u"}, &state.MessageLink{SessionKey: "sess-1"}); got != "sess-1" {
 		t.Fatalf("sessionKeyForInboundMessage() = %q, want sess-1", got)
 	}
-	if got := newReplyContinuationService(a).pendingInputSessionKey(nil); got != "" {
+	if got := newReplyContinuationService(a).PendingInputSessionKey(nil); got != "" {
 		t.Fatalf("pendingInputSessionKey(nil) = %q, want empty", got)
 	}
-	if got, err := newReplyContinuationService(a).trySteerInboundReply(nil, nil); got || err != nil {
+	if got, err := newReplyContinuationService(a).TrySteerInboundReply(nil, nil); got || err != nil {
 		t.Fatalf("trySteerInboundReply(nil) = %v, %v", got, err)
 	}
 
@@ -31,7 +31,7 @@ func TestSteerHelperBranches(t *testing.T) {
 		}
 		return nil
 	}
-	got, err := newReplyContinuationService(a).trySteerInboundReply(msg, link)
+	got, err := newReplyContinuationService(a).TrySteerInboundReply(msg, link)
 	if err != nil || !got {
 		t.Fatalf("trySteerInboundReply() = %v, %v", got, err)
 	}

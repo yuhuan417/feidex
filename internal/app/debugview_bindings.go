@@ -106,7 +106,7 @@ type debugConversationBackendAdapter struct {
 }
 
 func (a debugConversationBackendAdapter) RenderUsageBody(sess *conversation.Session) string {
-	return conversationBackend(a.app).RenderUsageBody(sess)
+	return renderConversationUsage(a.app, sess)
 }
 
 type debugWorkspaceConfigAdapter struct {

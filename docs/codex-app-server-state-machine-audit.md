@@ -7,7 +7,7 @@
 
 本地对照来源:
 - `internal/codexrpc/client.go`
-- `internal/app/codex_event_router.go`
+- `internal/adapter/backend/codex/events.go`
 - `internal/app/backend/codex_event_router.go`
 - `internal/app/app.go`
 - `internal/app/submission_queue.go`
@@ -159,7 +159,7 @@
   - `internal/app/thread_feature_actions.go` 发 `thread/resume`。
   - `internal/app/fork.go` 发 `thread/fork`。
   - 上述三条主链路都直接使用 RPC response 中返回的 thread 信息更新本地 session。
-  - `internal/app/codex_event_router.go` 没有 `thread/started`、`thread/archived`、`thread/unarchived`、`thread/closed`、`thread/status/changed` 的处理分支。
+  - `internal/adapter/backend/codex/events.go` 没有 `thread/started`、`thread/archived`、`thread/unarchived`、`thread/closed`、`thread/status/changed` 的处理分支。
 - 差异点:
   - thread bootstrap 主链路可用，本地 thread 上下文由请求响应直接驱动，而不是等待后续 `thread/started` 通知。
   - thread 生命周期通知整体未接入，但当前场景也不要求做跨客户端 thread 状态同步。
@@ -181,16 +181,16 @@
 - 我们当前实现:
   - `internal/app/app.go` 发送 `turn/start`。
   - `internal/app/submission_queue.go` 和 `internal/app/turn_lifecycle.go` 会处理返回的 `turn.id` 以及 `turn/started`。
-  - `internal/app/codex_event_router.go` 现在同时消费 `item/started` 与 `item/completed`。
+  - `internal/adapter/backend/codex/events.go` 现在同时消费 `item/started` 与 `item/completed`。
   - `internal/app/backend/codex_event_router.go` 额外消费 `item/mcpToolCall/progress`，并把它视为已 started item 的 in-flight 更新，而不是独立终态。
   - `internal/app/turn_item_state.go` 为每个 `turnId + itemId` 维护 started/completed 快照，并在 completed 时合并成最终 item 载荷。
   - `internal/adapter/feishu/turnitem/payload.go` 会把 `item(type=plan)` 当成普通 completed item 渲染成计划文本；这条线属于 plan mode item 生命周期。
-  - `internal/app/codex_event_router.go` 消费 `turn/started` 和 `turn/completed`。
-  - `internal/app/codex_event_router.go` 单独消费 `turn/plan/updated`，并把 `[{step,status}]` 转成 checklist markdown；这条线只是执行中 checklist 展示，不属于 `item(type=plan)` 生命周期。
+  - `internal/adapter/backend/codex/events.go` 消费 `turn/started` 和 `turn/completed`。
+  - `internal/adapter/backend/codex/events.go` 单独消费 `turn/plan/updated`，并把 `[{step,status}]` 转成 checklist markdown；这条线只是执行中 checklist 展示，不属于 `item(type=plan)` 生命周期。
   - `internal/adapter/feishu/turnitem/payload.go` 按 completed item 渲染最终内容。
   - `internal/app/planmode/service.go` 通过 `internal/app/plan_mode_bindings.go` 接入 `/plan`，开启时为 `collaborationMode.mode=plan` 明确带上 model；reasoning effort 优先取本地 `codex.plan_reasoning_effort`，否则透传 app-server 的 plan preset，若 preset 未提供则保持为空。
   - `/plan off` 或 plan-exit 的当前 thread 实现路径会把本地 mode 写回 `collaborationMode.mode=default`，并带上普通 `codex.reasoning_effort`；因为 `collaborationMode` 会覆盖 `turn/start` 顶层 model/effort，default mode 不能丢掉已配置的普通推理强度。
-  - `internal/app/turnstream/service.go` / `internal/app/server_request_delivery_scaffold.go` 维护 Quiet Mode `工作中` 卡的复用边界: 只有只包含 reasoning placeholder (`思考中...`) 的 `工作中` 卡可以被第一条实质 turn 内容复用；一旦 `工作中` 卡已经包含 command/file/search/tool progress，它自身就是实质内容，不得再被审批、final 或 terminal output patch 覆盖。
+  - `internal/adapter/feishu/turnstream/service.go` / `internal/app/server_request_delivery_scaffold.go` 维护 Quiet Mode `工作中` 卡的复用边界: 只有只包含 reasoning placeholder (`思考中...`) 的 `工作中` 卡可以被第一条实质 turn 内容复用；一旦 `工作中` 卡已经包含 command/file/search/tool progress，它自身就是实质内容，不得再被审批、final 或 terminal output patch 覆盖。
   - 对同一 turn，approval、tool user input、MCP elicitation、agent message、plan、final output、terminal status 都属于实质内容。若 approval 等 server request 复用了 reasoning-only `工作中` 卡，后续 final output 必须新发回复卡，不能继续 patch 这张已变成审批卡的消息。
   - 当本地已经看到了 final output，但后续缺失 `turn/completed`、导致 session 卡在 in-flight 时，`internal/app/codex_turn_recovery.go` 会在下一次 `enqueue` 或显式 `/stop` 时，通过 `thread/read(includeTurns=true)` 对账该 `turnId` 的服务端终态；只有确认 turn 已进入 `completed|failed|interrupted` 后，才复用现有 `finishTurn` 收口本地状态。
   - `internal/codexrpc/client.go` 通过 `optOutNotificationMethods` 明确退订当前不接入的 item delta 通知。
@@ -263,7 +263,7 @@
   - 协议节点: `error -> turn/completed(status=failed)`
   - 来源: OpenAI 官方页面 `Notifications`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 记录 `error`，保留 message、codexErrorInfo（含上游 HTTP 状态码）和 additionalDetails；`turn/completed` 自带的 error 同样在 finalize 前记录。
+  - `internal/adapter/backend/codex/events.go` 记录 `error`，保留 message、codexErrorInfo（含上游 HTTP 状态码）和 additionalDetails；`turn/completed` 自带的 error 同样在 finalize 前记录。
   - 自动重试卡片展示最近一次失败原因，在等待和重试过程中保留；每次失败刷新，无详情时明确提示后端未提供。错误通知本身不触发重试，仍以 failed 终态为边界。
   - `internal/app/turn_lifecycle.go` 最终仍在 `turn/completed` 处 finalize。
   - `/stop` 标记取消的 auto-retry 在迟到的 `failed` 终态到达时只清理，不得重新置为未取消或创建新定时器；已派发的旧 timer callback 也不能启动后来的新重试循环。
@@ -301,12 +301,12 @@
   - 协议节点: `item/started(commandExecution) -> item/commandExecution/requestApproval -> client decision -> serverRequest/resolved -> item/completed`
   - 来源: OpenAI 官方页面 `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 会先接 `item/started`，再处理 `item/commandExecution/requestApproval`。
+  - `internal/adapter/backend/codex/events.go` 会先接 `item/started`，再处理 `item/commandExecution/requestApproval`。
   - `internal/app/turn_item_state.go` 会把 started item 和 request payload 合并，审批卡片不再丢失 command item 上的上下文。
   - `internal/app/serverrequest/approval.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并且只在 reply 成功后把本地请求推进到 `replied`。
   - `internal/app/server_request_state.go` 把 `serverRequest/resolved` 作为唯一 `resolved` 边界，并在同 turn 其他 open request 清空后才恢复 submission。
   - `internal/app/server_request_delivery_scaffold.go` 会优先把审批卡投递到同一 Feishu 回复上下文；如果当前 turn 只有 reasoning-only `工作中` 卡，审批卡可以 patch 复用该占位卡。复用后该消息已经是实质审批内容，后续 final output 不能再 patch 它。
-  - `internal/app/codex_event_router.go` 仍会在最终 `item/completed` 时收口 item。
+  - `internal/adapter/backend/codex/events.go` 仍会在最终 `item/completed` 时收口 item。
 - 差异点:
   - command approval 的生命周期边界已经对齐。
   - schema 里虽然还有 `acceptWithExecpolicyAmendment`、`applyNetworkPolicyAmendment` 两类 amendment decision，但当前产品已明确不做这类 persistent amendment，因此不视为实现缺口。
@@ -333,11 +333,11 @@
   - 协议节点: `item/started(fileChange) -> item/fileChange/requestApproval -> client decision -> serverRequest/resolved -> item/completed`
   - 来源: OpenAI 官方页面 `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 会先接 `item/started(fileChange)`，再处理 `item/fileChange/requestApproval`。
+  - `internal/adapter/backend/codex/events.go` 会先接 `item/started(fileChange)`，再处理 `item/fileChange/requestApproval`。
   - `internal/app/turn_item_state.go` 会把 started item 上的 `changes` 合并进审批请求，文件审批卡片可从 started item 补齐缺失文件列表。
   - `internal/adapter/feishu/approval/summary.go` 会显式渲染请求里的 `grantRoot`，避免文件列表存在时该字段被摘要逻辑吞掉。
   - `internal/app/serverrequest/approval.go` 和 `internal/app/server_request_state.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并改成 `pending -> replied -> resolved`，等待 `serverRequest/resolved` 再最终收口。
-  - `internal/app/codex_event_router.go` 仍会在最终 `item/completed` 时收口 item。
+  - `internal/adapter/backend/codex/events.go` 仍会在最终 `item/completed` 时收口 item。
 - 差异点:
   - 无。
 - 修改建议:
@@ -353,7 +353,7 @@
   - 协议节点: `item/tool/requestUserInput -> client response -> serverRequest/resolved`
   - 来源: OpenAI 官方页面 `API overview`, `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 收到 request 后发送 UI。
+  - `internal/adapter/backend/codex/events.go` 收到 request 后发送 UI。
   - `internal/app/serverrequest/user_input.go`、`internal/app/tool_user_input_forms.go`、`internal/adapter/feishu/submissionforms/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
   - `internal/app/server_request_state.go` 统一把 `serverRequest/resolved` 当作唯一 `resolved` 边界，并负责恢复 submission。
 - 差异点:
@@ -387,7 +387,7 @@
   - 协议节点: `item/started(dynamicToolCall) -> item/tool/call -> client result -> item/completed`
   - 来源: OpenAI 官方页面 `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 没有 `item/tool/call` 分支，默认直接 `ReplyError(... unsupported server request)`。
+  - `internal/adapter/backend/codex/events.go` 没有 `item/tool/call` 分支，默认直接 `ReplyError(... unsupported server request)`。
 - 差异点:
   - 当前将该状态机视为 experimental 范围外能力，不纳入实现范围。
   - 因此 `item/tool/call` 仍会被拒绝，`item/started(dynamicToolCall)` 也没有单独接入层。
@@ -566,7 +566,7 @@
   - 协议节点: `item/permissions/requestApproval -> client decision -> serverRequest/resolved`
   - 来源: `tmp/appserver-schema/ServerRequest.json`、`tmp/appserver-schema/codex_app_server_protocol.schemas.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 会接住请求并展示卡片。
+  - `internal/adapter/backend/codex/events.go` 会接住请求并展示卡片。
   - `internal/app/serverrequest/approval.go` 会回 `permissions` 和 `scope`。
   - `internal/app/server_request_state.go` 已把 permissions approval 纳入 `pending -> replied -> resolved` 两阶段状态机，并等待 `serverRequest/resolved` 再恢复 submission。
   - `internal/adapter/feishu/approval/permission_summary.go` 会显式渲染 `RequestPermissionProfile.fileSystem` / `network` 结构，并兼容旧字段摘要。
@@ -588,7 +588,7 @@
   - 协议节点: `mcpServer/elicitation/request -> client response -> serverRequest/resolved`
   - 来源: `tmp/appserver-schema/ServerRequest.json`、`tmp/appserver-schema/codex_app_server_protocol.schemas.json`
 - 我们当前实现:
-  - `internal/app/codex_event_router.go` 有 form/url 两种处理。
+  - `internal/adapter/backend/codex/events.go` 有 form/url 两种处理。
   - `internal/app/serverrequest/elicitation.go` 与 `internal/adapter/feishu/submissionforms/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
   - `internal/app/server_request_state.go` 统一等待 `serverRequest/resolved` 才最终 resolve 并恢复 submission。
   - 本次新增 MCP send tool 只复用独立的本地 MCP HTTP server，不改动 `mcpServer/elicitation/request` 的 pending / reply / resolved 契约。
@@ -614,7 +614,7 @@
   - `skills.select` 会重新读取当前 cwd 的 skills，拒绝 disabled skill，并把选中的 skill 存为当前 session 的 pending skill。
   - `ResolveSubmissionSkill` 支持 `$skill-name <内容>` 显式前缀和 pending skill；最终 `turn/start` input 会把 `type=skill` 放在文本输入前，并在创建 submission 后消费 pending skill。
   - `internal/application/features/data.go` 把 `/skills`、`/skills reload`、`$skill-name <内容>` 和 `menu.skills` 作为 Codex-only 本地能力暴露；Claude backend 隐藏并 passthrough。
-  - `internal/app/codex_event_router.go` 仍没有 `skills/changed` 通知分支。
+  - `internal/adapter/backend/codex/events.go` 仍没有 `skills/changed` 通知分支。
   - `internal/app/apphistory/history.go` 会在 `/history` 里把 `thread/read` 返回的 `userMessage.content[type=skill]` 显示为 `[skill] ...`。
 - 差异点:
   - 当前没有客户端侧 skills catalog 长期缓存，也不会在收到 `skills/changed` 时主动刷新已打开的 skills 卡片；当前 UX 依赖用户重新打开 `/skills` 或显式 `/skills reload`。
@@ -639,7 +639,7 @@
   - `internal/codexrpc/goal.go` 定义 `ThreadGoal`、goal 请求/响应/通知类型，并用 `NullableInt64` 表达 optional nullable `tokenBudget`。
   - `internal/app/goalcmd/service.go` 通过 `internal/app/goal_bindings.go` 接入 `/goal`，暴露 get/set/pause/resume/clear/edit；`/goal <objective>` 不解析 `--tokens`，整段尾部文本按 objective 发送；无参数 `/goal` 在没有当前 goal 时渲染 objective 输入表单，提交后创建 active goal。
   - `internal/application/features/data.go` 把 `任务目标` 加入常用工具菜单，并保留直接 `/goal` 命令入口；Claude backend 隐藏并 passthrough。
-  - `internal/app/codex_event_router.go` / `internal/app/backend/codex_event_router.go` 消费 `thread/goal/updated` 和 `thread/goal/cleared`，更新 frontend 内存 tracker。
+  - `internal/adapter/backend/codex/events.go` / `internal/application/backendevents/service.go` 消费 `thread/goal/updated` 和 `thread/goal/cleared`，更新 frontend 内存 tracker。
   - `internal/application/turn/service.go` 在普通 pending submission 和 standalone compact 都未绑定时，尝试用 active goal tracker 将 orphan `turn/started` 合成为本地 `kind=goal` submission，并绑定 `threadId + turnId`，后续 item/turn 仍沿用标准 turn 生命周期。
   - goal continuation 绑定前会先主动发送一张新的 Feishu outbound card，header 简洁显示 goal continuation 的 `Turn #N` 和 objective，正文只显示耗时与 token 统计；返回的 message ID 作为合成 submission 的 `TriggerMessageID`、唯一 source root，以及后续 turn item 的回复锚点。
   - `/goal` status/set/edit/replace/pause/resume/clear 产生的管理卡只记录 session/chat 上下文，不记录 message ID；Codex turn 输出永远不能回复到 goal 管理卡。
@@ -661,7 +661,7 @@
   - 来源: 本地 `codex app-server generate-json-schema --experimental` 生成的 `tmp/appserver-schema/v2/ItemCompletedNotification.json`（`AgentMessageDelivery`、`AsyncUserInputQuestion`），以及 2026-09-10 的实际 rollout item 记录。
 - 我们当前实现:
   - `internal/adapter/feishu/turnitem/payload.go` 将 async agentMessage 归一化为 `user_input`，保留单选选项和自由文本入口；无结构化 questions 的 async 文本仍按非 final 内容展示。
-  - `internal/app/turnstream/service.go` 排除 async question 的 final 标志及 final candidate，并清除跨过问题卡的旧 final 复用目标。
+  - `internal/adapter/feishu/turnstream/service.go` 排除 async question 的 final 标志及 final candidate，并清除跨过问题卡的旧 final 复用目标。
   - `internal/app/async_user_input.go` 复用现有 pending form 和卡片投递助手，在所有 quiet 模式下发送独立输入卡；仅 reasoning-only 工作占位卡允许被复用。
   - 本地 pending kind 为 `async_user_input`；展示不把 submission 切到 `waiting_user_input`，回答不调用 server-request reply/resolved/resume。
   - 回调只做校验及原子认领，立即返回 toast；后台回传含原问题的答案：当前 thread 有 active turn 时通过现有 continuation adapter 使用 `turn/steer(expectedTurnId)`，空闲时沿用 submission queue 在同一 thread 发起下一轮。
@@ -699,3 +699,13 @@ frontend 实例持有，移除进程全局 client/recovering/auto-thread-recover
 的 client；尚未初始化的 frontend 仍返回 client unavailable。请求回复使用当前
 frontend 的有效 client，审批 reply/resolved、turn/start timeout 和 review turn
 权威边界保持原契约。`TestCodexRecoveryIsFrontendScoped` 覆盖隔离要求。
+
+
+## 2026-10-02 Dispatcher、conversation 与 runtime 核对
+
+- Codex notifications/server requests 在 backend adapter 解码后进入 frontend-scoped application dispatcher；wire request ID 保留 opaque response token，numeric/string ID 回包不被重新编码成另一种类型。
+- 对照 SM-03～SM-11、SM-14、SM-22～SM-26：turn completion 的错误记录先于 terminal，standalone compact 优先处理其自身错误；server request 仍由 resolved 通知关闭。async question 不生成 server request response。
+- conversation start/resume/fork 本地状态在持久化成功后才发布 live thread；恢复中的旧 client resume 失败时不得在已替换的 client 上悄悄创建 fresh thread。
+- 自动重试 timer 携带 generation token，通过统一输入 dispatch；/stop 的串行启动锁、cancel marker、backoff 和“继续”语义保持原行为。
+- startup recovery 与 turn cleanup 的 owner 移至 runtime；async question 和 Claude open control request 仍保留到其独立终点。后台维护与 final card patch 使用 frontend context 和任务准入，shutdown 继续先取消再 drain。
+- standalone compact 状态 owner 移至 application；仅 backend adapter 调用 thread/compact/start，失败时仍只在 thread/status 未被后续事件推进的条件下恢复旧状态。

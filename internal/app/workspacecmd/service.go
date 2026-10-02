@@ -343,15 +343,6 @@ type RenderDeps struct {
 	WorkspaceMenuIsGroup   func(sessionKey string) bool
 }
 
-type ThreadServiceDeps struct {
-	App            App
-	State          StateDeps
-	Threads        ThreadDeps
-	SessionContext SessionContextDeps
-	Codex          CodexDeps
-	Claude         ClaudeDeps
-}
-
 // ---------------------------------------------------------------------------
 // ConfigService
 // ---------------------------------------------------------------------------
@@ -932,89 +923,4 @@ func (s RenderService) DefaultWorkspaceCloneParent(ws *config.Workspace) string 
 		return ""
 	}
 	return s.deps.Management.DefaultWorkspaceCloneParent(ws)
-}
-
-// ---------------------------------------------------------------------------
-// ThreadService
-// ---------------------------------------------------------------------------
-
-// ThreadService handles workspace thread management (binding, starting,
-// resuming) for both Claude and Codex backends.
-type ThreadService struct {
-	App  App
-	deps ThreadServiceDeps
-}
-
-// NewThreadService creates a new ThreadService.
-func NewThreadService(deps ThreadServiceDeps) *ThreadService {
-	return &ThreadService{App: deps.App, deps: deps}
-}
-
-func (s ThreadService) GetSession(key string) *conversation.Session {
-	if s.deps.State.GetSession == nil {
-		return nil
-	}
-	return s.deps.State.GetSession(key)
-}
-func (s ThreadService) SaveSession(sess *conversation.Session) error {
-	if s.deps.State.SaveSession == nil {
-		return nil
-	}
-	return s.deps.State.SaveSession(sess)
-}
-func (s ThreadService) MarkSessionThreadLive(sessionKey, threadID string) {
-	if s.deps.Threads.MarkSessionThreadLive != nil {
-		s.deps.Threads.MarkSessionThreadLive(sessionKey, threadID)
-	}
-}
-func (s ThreadService) SessionHasInFlight(sess *conversation.Session) bool {
-	if s.deps.SessionContext.SessionHasInFlight == nil {
-		return false
-	}
-	return s.deps.SessionContext.SessionHasInFlight(sess)
-}
-func (s ThreadService) SwitchSessionWorkspace(sess *conversation.Session, workspaceID string) {
-	if s.deps.SessionContext.SwitchSessionWorkspace != nil {
-		s.deps.SessionContext.SwitchSessionWorkspace(sess, workspaceID)
-	}
-}
-func (s ThreadService) ClearSessionThreadCtx(sess *conversation.Session) {
-	if s.deps.SessionContext.ClearSessionThreadCtx != nil {
-		s.deps.SessionContext.ClearSessionThreadCtx(sess)
-	}
-}
-func (s ThreadService) SetSessionThreadCtx(sess *conversation.Session, workspaceID, threadID, name, preview string) {
-	if s.deps.SessionContext.SetSessionThreadCtx != nil {
-		s.deps.SessionContext.SetSessionThreadCtx(sess, workspaceID, threadID, name, preview)
-	}
-}
-func (s ThreadService) SessionResetActiveOps(sess *conversation.Session) {
-	if s.deps.SessionContext.SessionResetActiveOps != nil {
-		s.deps.SessionContext.SessionResetActiveOps(sess)
-	}
-}
-func (s ThreadService) RequireCodexClient() (CodexClient, error) {
-	if s.deps.Codex.RequireCodexClient == nil {
-		return nil, nil
-	}
-	return s.deps.Codex.RequireCodexClient()
-}
-func (s ThreadService) BuildThreadStartParams(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
-	if s.deps.Codex.BuildThreadStartParams == nil {
-		return codexrpc.ThreadStartParams{}
-	}
-	return s.deps.Codex.BuildThreadStartParams(ws, sess, effectiveModel)
-}
-
-func (s ThreadService) BuildThreadConfig(sess *conversation.Session) map[string]any {
-	if s.deps.Codex.BuildThreadConfig == nil {
-		return nil
-	}
-	return s.deps.Codex.BuildThreadConfig(sess)
-}
-func (s ThreadService) RequireClaudeCore() (appcore.ClaudeCore, error) {
-	if s.deps.Claude.RequireClaudeCore == nil {
-		return nil, nil
-	}
-	return s.deps.Claude.RequireClaudeCore()
 }

@@ -5,7 +5,7 @@ import (
 
 	"context"
 	"encoding/json"
-	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	"feidex/internal/domain/conversation"
 	"os"
 	"testing"

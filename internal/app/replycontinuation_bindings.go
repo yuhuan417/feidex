@@ -1,39 +1,23 @@
 package app
 
 import (
-	"feidex/internal/app/appcore"
-	"feidex/internal/app/replycontinuation"
+	"context"
+	"feidex/internal/app/attachments"
+	"feidex/internal/application/continuation"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
-	"sync"
 )
 
-// replyContinuationAppAdapter satisfies replycontinuation.App by delegating
-// to *App accessor methods.
-type replyContinuationAppAdapter struct{ app *App }
-
-func (a replyContinuationAppAdapter) Config() *config.Config   { return a.app.Config() }
-func (a replyContinuationAppAdapter) ConfigMu() *sync.RWMutex  { return a.app.ConfigMu() }
-func (a replyContinuationAppAdapter) Backend() string          { return a.app.Backend() }
-func (a replyContinuationAppAdapter) FrontendID() string       { return a.app.FrontendID() }
-func (a replyContinuationAppAdapter) FrontendConfigIndex() int { return a.app.FrontendConfigIndex() }
-func (a replyContinuationAppAdapter) Store() *state.Store      { return a.app.Store() }
-func (a replyContinuationAppAdapter) DefaultWorkspaceID() string {
-	return appcore.DefaultWorkspaceID(a.app)
-}
-
-// replyContinuationService wraps replycontinuation.Service to preserve the
-// lowercase method names used throughout app/.
-type replyContinuationService struct {
-	inner *replycontinuation.Service
-}
-
-func newReplyContinuationService(a *App) replyContinuationService {
-
-	svc := replycontinuation.NewService(replyContinuationAppAdapter{app: a})
+func newReplyContinuationService(a *App) *continuation.Service {
+	svc := &continuation.Service{
+		Backend:    func() string { return configuredBackend(a) },
+		FrontendID: a.FrontendID(), DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
+		Workspace:      func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
+		MakeSessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
+	}
 
 	// Wire callback function fields that need *App internals.
 	svc.GetSession = func(key string) *conversation.Session {
@@ -75,7 +59,21 @@ func newReplyContinuationService(a *App) replyContinuationService {
 		return conversation.HasInFlightSubmission(sess)
 	}
 	svc.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
-		return conversationBackend(a).TryReplyContinuation(msg, link, sessionKey, sess)
+		if configuredBackend(a) == backendClaude {
+			return svc.TryClaudeReplyContinuation(msg, link, sessionKey, sess)
+		}
+		return continuation.TryCodexReplyContinuation(continuation.CodexReplyContinuationDeps{
+			Context: a.Context, Steer: func(ctx context.Context, threadID, turnID string, sub *domainsubmission.Submission) error {
+				client, err := requireCodexClient(a)
+				if err != nil {
+					return err
+				}
+				return client.Call(ctx, "turn/steer", map[string]any{"threadId": threadID, "expectedTurnId": turnID, "input": attachments.BuildTurnInputs(sub)}, nil)
+			},
+			ResolveInboundAttachments: svc.ResolveInboundAttachments,
+			PendingInputSessionKey:    svc.PendingInputSessionKey, CollectPendingStagedImages: svc.CollectPendingStagedImages,
+			ClearPendingStagedImages: svc.ClearPendingStagedImages, SaveSession: svc.SaveSession, DefaultWorkspaceID: svc.DefaultWorkspaceID,
+		}, msg, link, sessionKey, sess)
 	}
 	svc.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
@@ -87,56 +85,5 @@ func newReplyContinuationService(a *App) replyContinuationService {
 		return resolveInboundAttachments(a, msg, workspaceID, sessionKey)
 	}
 
-	return replyContinuationService{inner: svc}
+	return svc
 }
-
-func (s replyContinuationService) replyRootTurnLink(msg *feishu.InboundMessage) *state.MessageLink {
-	return s.inner.ReplyRootTurnLink(msg)
-}
-
-func (s replyContinuationService) sessionKeyForInboundMessage(msg *feishu.InboundMessage, link *state.MessageLink) string {
-	return s.inner.SessionKeyForInboundMessage(msg, link)
-}
-
-func (s replyContinuationService) pendingInputSessionKey(msg *feishu.InboundMessage) string {
-	return s.inner.PendingInputSessionKey(msg)
-}
-
-func (s replyContinuationService) collectPendingStagedImages(targetSessionKey, bucketSessionKey string) []conversation.SessionStagedImage {
-	return s.inner.CollectPendingStagedImages(targetSessionKey, bucketSessionKey)
-}
-
-func (s replyContinuationService) clearPendingStagedImages(targetSessionKey, bucketSessionKey string) error {
-	return s.inner.ClearPendingStagedImages(targetSessionKey, bucketSessionKey)
-}
-
-func (s replyContinuationService) trySteerInboundReply(msg *feishu.InboundMessage, link *state.MessageLink) (bool, error) {
-	return s.inner.TrySteerInboundReply(msg, link)
-}
-
-func (s replyContinuationService) tryClaudeReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
-	return s.inner.TryClaudeReplyContinuation(msg, link, sessionKey, sess)
-}
-
-func (s replyContinuationService) continueClaudeSessionWithText(sessionKey, text string) error {
-	return s.inner.ContinueClaudeSessionWithText(sessionKey, text)
-}
-
-func (s replyContinuationService) recordSubmissionSourceLinks(sub *domainsubmission.Submission) {
-	s.inner.RecordSubmissionSourceLinks(sub)
-}
-
-func (s replyContinuationService) recordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string) {
-	s.inner.RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID)
-}
-
-// Exported wrappers for sub-package interface satisfaction.
-func (s replyContinuationService) RecordSubmissionSourceLinks(sub *domainsubmission.Submission) {
-	s.recordSubmissionSourceLinks(sub)
-}
-func (s replyContinuationService) RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string) {
-	s.recordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID)
-}
-
-// Re-export staged image helpers for use by other app/ code.
-var ()

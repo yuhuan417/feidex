@@ -10,7 +10,6 @@ import (
 	appthreadview "feidex/internal/adapter/feishu/threadview"
 	appcore "feidex/internal/app/appcore"
 	appworkspace "feidex/internal/app/workspace"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	appruntime "feidex/internal/runtime"
@@ -104,30 +103,6 @@ func (claudeConversationDriver) WorkspaceSwitchBindingNotice(binding *appworkspa
 		return "。已自动恢复该工作区最近使用的会话。"
 	}
 	return "。已自动创建新会话。"
-}
-
-func (codexConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
-	return ops.EnsureCodexWorkspaceThreadBinding(sessionKey, sess, ws)
-}
-
-func (claudeConversationDriver) EnsureWorkspaceThreadBinding(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
-	return ops.EnsureClaudeWorkspaceThreadBinding(sessionKey, sess, ws)
-}
-
-func (codexConversationDriver) ListWorkspaceThreads(ops WorkspaceThreadOps, sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return ops.ListCodexWorkspaceThreads(sessionKey, ws, includeAll)
-}
-
-func (claudeConversationDriver) ListWorkspaceThreads(ops WorkspaceThreadOps, sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error) {
-	return ops.ListClaudeWorkspaceThreads(sessionKey, ws, includeAll)
-}
-
-func (codexConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
-	return ops.StartCodexWorkspaceThread(sessionKey, sess, ws)
-}
-
-func (claudeConversationDriver) StartWorkspaceThread(ops WorkspaceThreadOps, sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
-	return ops.StartClaudeWorkspaceThread(sessionKey, sess, ws)
 }
 
 func (codexPermissionDriver) SupportedScopes() []PermissionScope {

@@ -5,7 +5,7 @@ import (
 	"errors"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appclauderuntime "feidex/internal/app/clauderuntime"
+	appclauderuntime "feidex/internal/runtime/claude"
 
 	appreviewcmd "feidex/internal/app/reviewcmd"
 
@@ -1826,7 +1826,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	if sess == nil {
 		t.Fatal("session missing")
 	}
-	steered, err := newReplyContinuationService(a).tryClaudeReplyContinuation(&feishu.InboundMessage{
+	steered, err := newReplyContinuationService(a).TryClaudeReplyContinuation(&feishu.InboundMessage{
 		MessageID:       "reply-1",
 		ChatID:          "chat-1",
 		ChatType:        "group",

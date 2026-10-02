@@ -1,7 +1,6 @@
 package app
 
 import (
-	appautoretry "feidex/internal/app/autoretry"
 	appcommandmatch "feidex/internal/app/commandmatch"
 
 	"strings"
@@ -108,7 +107,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			case "backend.select":
 				return newBackendSelectionService(s.app).completeBackendSelect(action, sessionKey, actionStringValue(action, "backend"))
 			case "auto_retry.set":
-				return appautoretry.NewService(s.app).CompleteAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
+				return newAutoRetryService(s.app).CompleteAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
 			default:
 				return nil, nil
 			}

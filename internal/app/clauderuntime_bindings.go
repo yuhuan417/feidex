@@ -9,7 +9,7 @@ import (
 
 	appapproval "feidex/internal/adapter/feishu/approval"
 
-	appclauderuntime "feidex/internal/app/clauderuntime"
+	appclauderuntime "feidex/internal/runtime/claude"
 
 	appdelivery "feidex/internal/adapter/feishu/delivery"
 
@@ -33,8 +33,8 @@ type claudeRuntime struct {
 
 func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 	svc := appclauderuntime.NewService(appclauderuntime.Deps{
-		App: app,
-		Cfg: cfg,
+		Context: app.Context,
+		Cfg:     cfg,
 		Lifecycle: appclauderuntime.LifecycleDeps{
 			BindClaudeSessionThread: func(sessionKey, turnID, threadID string) {
 				bindClaudeSessionThread(app, sessionKey, turnID, threadID)

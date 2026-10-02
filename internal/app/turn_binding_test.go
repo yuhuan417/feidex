@@ -5,9 +5,9 @@ import (
 
 	"context"
 	"encoding/json"
-	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
+	appautoretry "feidex/internal/runtime/autoretry"
 	"strings"
 	"testing"
 	"time"
@@ -172,16 +172,16 @@ func TestCommentaryOnlyTurnPromotesLastAgentMessageToFinalOnCompletion(t *testin
 func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
-	appautoretry.NewService(a).AutoRetryTracker().After = func(time.Duration, func()) appautoretry.DelayedTask {
+	newAutoRetryService(a).AutoRetryTracker().After = func(time.Duration, func()) appautoretry.DelayedTask {
 		return &fakeDelayedTask{}
 	}
-	if err := appautoretry.NewService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	markSessionThreadLive(a, "sess-1", "thread-1")
 
-	newCodexEventRouter(a).handleNotification("error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"upstream rejected","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":501}},"additionalDetails":"Not Implemented"}}`))
+	dispatchCodexNotification(a, "error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"upstream rejected","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":501}},"additionalDetails":"Not Implemented"}}`))
 	if len(ff.replyCards) != 0 {
 		t.Fatal("error notification must not start retry before completion")
 	}

@@ -402,7 +402,7 @@ func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target str
 		if sess == nil || !appcore.SessionBelongsToFrontend(s.App, sess.Key) {
 			continue
 		}
-		cp := appcore.StateCloneSession(sess)
+		cp := conversation.CloneSession(sess)
 		if cp == nil {
 			continue
 		}

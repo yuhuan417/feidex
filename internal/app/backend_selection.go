@@ -1,8 +1,6 @@
 package app
 
 import (
-	appautoretry "feidex/internal/app/autoretry"
-
 	"context"
 	"os/exec"
 
@@ -59,7 +57,7 @@ func newBackendSelectionService(app *App) backendSelectionService {
 		},
 		Commands: backend.SelectionCommandDeps{
 			CommandAutoRetry: func(msg *feishu.InboundMessage, args []string) error {
-				return appautoretry.NewService(app).CommandAutoRetry(msg, args)
+				return newAutoRetryService(app).CommandAutoRetry(msg, args)
 			},
 		},
 	})

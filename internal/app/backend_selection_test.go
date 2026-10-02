@@ -410,7 +410,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "child-1", ParentMessageID: "parent-1", RootMessageID: "root-1"}
-	if link := newReplyContinuationService(a).replyRootTurnLink(msg); link != nil {
+	if link := newReplyContinuationService(a).ReplyRootTurnLink(msg); link != nil {
 		t.Fatalf("replyRootTurnLink(claude current) = %+v, want nil", link)
 	}
 
@@ -423,7 +423,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(codex) error = %v", err)
 	}
-	if link := newReplyContinuationService(a).replyRootTurnLink(msg); link == nil || link.ThreadID != "codex-thread-1" {
+	if link := newReplyContinuationService(a).ReplyRootTurnLink(msg); link == nil || link.ThreadID != "codex-thread-1" {
 		t.Fatalf("replyRootTurnLink(codex current) = %+v, want codex link", link)
 	}
 }

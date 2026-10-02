@@ -134,7 +134,7 @@ func submitAsyncUserInput(a *App, pending *state.PendingRequest, userID, text st
 		return err
 	}
 	if strings.TrimSpace(sess.ActiveTurnID) != "" {
-		return conversationBackend(a).ContinueActiveTurn(pending.SessionKey, text)
+		return newConversationService(a).ContinueActiveTurn(pending.SessionKey, text)
 	}
 	msg := &feishu.InboundMessage{
 		SessionKey: pending.SessionKey, MessageID: pending.FeishuMsgID,

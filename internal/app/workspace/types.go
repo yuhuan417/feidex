@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 	"time"
@@ -149,12 +150,7 @@ type SettingOption struct {
 }
 
 // ThreadBinding represents the result of binding a session to a workspace thread.
-type ThreadBinding struct {
-	ThreadID string
-	Name     string
-	Preview  string
-	Resumed  bool
-}
+type ThreadBinding = conversation.ThreadBinding
 
 // SandboxOptions returns the available sandbox mode options.
 func SandboxOptions() []SettingOption {

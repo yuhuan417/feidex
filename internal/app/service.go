@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
@@ -78,8 +77,8 @@ func (s *Service) Start(ctx context.Context) error {
 		}
 	}
 	for _, app := range s.apps {
-		appmaintenance.NewRuntimeMaintenanceService(app).StartDriveArtifactGCLoop(app.Context())
-		appmaintenance.NewRuntimeMaintenanceService(app).StartUpgradeCheckLoop(app.Context())
+		newRuntimeMaintenanceService(app).StartDriveArtifactGCLoop(app.Context())
+		newRuntimeMaintenanceService(app).StartUpgradeCheckLoop(app.Context())
 		go sendStartupReadyNotifications(app)
 		runAsync(app, func() { runFeishuAppConfigHeal(app) })
 	}

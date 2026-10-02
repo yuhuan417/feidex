@@ -27,7 +27,7 @@ func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 		},
 		Threads: appworkspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-				return newWorkspaceThreadService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+				return newConversationService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 		},
 		Backend: appworkspacecmd.BackendConfigDeps{

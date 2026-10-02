@@ -35,12 +35,12 @@ func newWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService {
 		},
 		Threads: appworkspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-				return newWorkspaceThreadService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+				return newConversationService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 			MarkSessionThreadLive:  func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
 			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
 			StartWorkspaceThread: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-				return newWorkspaceThreadService(a).StartWorkspaceThread(sessionKey, sess, ws)
+				return newConversationService(a).StartWorkspaceThread(sessionKey, sess, ws)
 			},
 		},
 		Clone: appworkspacecmd.CloneDeps{

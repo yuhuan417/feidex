@@ -23,10 +23,11 @@ func (SaveState) effect() {}
 // SendMessage is a semantic outbound message. Feishu-specific request types
 // are created only inside the Feishu adapter.
 type SendMessage struct {
-	Frontend identity.FrontendID
-	Chat     identity.ChatRef
-	Text     string
-	InThread bool
+	Frontend       identity.FrontendID
+	Chat           identity.ChatRef
+	Text           string
+	ReplyMessageID string
+	InThread       bool
 }
 
 func (SendMessage) effect() {}

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"feidex/internal/app/claudesession"
+	claudesession "feidex/internal/adapter/backend/claude/catalog"
 	"feidex/internal/feishu"
 )
 

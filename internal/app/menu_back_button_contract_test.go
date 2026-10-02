@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	appcompact "feidex/internal/app/compact"
+	compactview "feidex/internal/adapter/feishu/compaction"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -140,7 +140,7 @@ func TestMenuBackControlIsTheFinalAction(t *testing.T) {
 	}
 	assertBackControlIsFinal(t, "auxiliary model config", buttonLabelsForTest(auxCard))
 
-	compactButtons := appcompact.CompactMenuButtons(sessionKey, true)
+	compactButtons := compactview.CompactMenuButtons(sessionKey, true)
 	compactLabels := make([]string, 0, len(compactButtons))
 	for _, button := range compactButtons {
 		compactLabels = append(compactLabels, button.Text)

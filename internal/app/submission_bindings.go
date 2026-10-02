@@ -4,11 +4,8 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
-	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/domain/conversation"
 	"strings"
-
-	appmaintenance "feidex/internal/app/maintenance"
 
 	appreviewcmd "feidex/internal/app/reviewcmd"
 
@@ -106,13 +103,13 @@ func (a sqAttachmentResolverFullAdapter) ResolveInboundAttachments(msg *feishu.I
 type sqPendingQueueFullAdapter struct{ app *App }
 
 func (a sqPendingQueueFullAdapter) PendingInputSessionKey(msg *feishu.InboundMessage) string {
-	return newReplyContinuationService(a.app).pendingInputSessionKey(msg)
+	return newReplyContinuationService(a.app).PendingInputSessionKey(msg)
 }
 func (a sqPendingQueueFullAdapter) CollectPendingStagedImages(sessionKey, bucketSessionKey string) []conversation.SessionStagedImage {
-	return newReplyContinuationService(a.app).collectPendingStagedImages(sessionKey, bucketSessionKey)
+	return newReplyContinuationService(a.app).CollectPendingStagedImages(sessionKey, bucketSessionKey)
 }
 func (a sqPendingQueueFullAdapter) ClearPendingStagedImages(sessionKey, bucketSessionKey string) error {
-	return newReplyContinuationService(a.app).clearPendingStagedImages(sessionKey, bucketSessionKey)
+	return newReplyContinuationService(a.app).ClearPendingStagedImages(sessionKey, bucketSessionKey)
 }
 
 type sqBackendRuntimeFullAdapter struct{ app *App }
@@ -148,7 +145,7 @@ func newPendingQueueServiceFromApp(a *App) appsubmission.PendingQueueService {
 	return appsubmission.NewPendingQueueService(appsubmission.PendingDependencies{
 		Context:            a.Context,
 		State:              a.State(),
-		Maintenance:        appmaintenance.NewRuntimeMaintenanceService(a),
+		Maintenance:        newSubmissionCleanup(a),
 		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
 		AddReaction: func(ctx context.Context, messageID, emoji string) error {
 			if a.feishu == nil {
@@ -182,10 +179,10 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 		LiveThread:         sqLiveThreadAdapter{app: a},
 		PendingQueue:       sqPendingQueueFullAdapter{app: a},
 		RuntimeState:       newRuntimeStateService(a),
-		RuntimeMaintenance: appmaintenance.NewRuntimeMaintenanceService(a),
+		RuntimeMaintenance: newSubmissionCleanup(a),
 		ReplyContinuation:  newReplyContinuationService(a),
 		TurnStream:         newTurnStreamService(a),
-		AutoRetry:          appautoretry.NewService(a),
+		AutoRetry:          newAutoRetryService(a),
 
 		BackendRuntime: sqBackendRuntimeFullAdapter{app: a},
 		DefaultWorkspaceID: func() string {

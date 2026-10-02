@@ -72,9 +72,9 @@ type cardActionHandler func(s cardActionService, action *feishu.CardAction) (*ca
 func cardActionHandlers() map[string]cardActionHandler {
 	return mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
-		workspaceCardActionHandlers,
-		maintenanceCardActionHandlers,
-		pendingCardActionHandlers,
+		workspaceCardActionHandlers(),
+		maintenanceCardActionHandlers(),
+		pendingCardActionHandlers(),
 	)
 }
 

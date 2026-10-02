@@ -55,13 +55,22 @@ type historyConversationBackendAdapter struct {
 }
 
 func (a historyConversationBackendAdapter) HistoryIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	return conversationBackend(a.app).HistoryIndexForOrdinal(sessionKey, ordinal)
+	if configuredBackend(a.app) == backendClaude {
+		return historyTurnIndexForOrdinal(a.app, sessionKey, ordinal)
+	}
+	return newHistoryService(a.app).CodexHistoryIndexForOrdinal(sessionKey, ordinal)
 }
 
 func (a historyConversationBackendAdapter) RenderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	return conversationBackend(a.app).RenderHistoryCard(sessionKey, page)
+	if configuredBackend(a.app) == backendClaude {
+		return renderClaudeHistoryCard(a.app, sessionKey, page)
+	}
+	return newHistoryService(a.app).RenderCodexHistoryCard(sessionKey, page)
 }
 
 func (a historyConversationBackendAdapter) RenderHistoryDetailCard(sessionKey string, index int) (map[string]any, error) {
-	return conversationBackend(a.app).RenderHistoryDetailCard(sessionKey, index)
+	if configuredBackend(a.app) == backendClaude {
+		return renderClaudeHistoryDetailCard(a.app, sessionKey, index)
+	}
+	return newHistoryService(a.app).RenderCodexHistoryDetailCard(sessionKey, index)
 }

@@ -4,9 +4,10 @@ import (
 	"context"
 	"feidex/internal/adapter/feishu/turn"
 	"feidex/internal/adapter/feishu/turnitem"
+	"feidex/internal/config"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appturnstream "feidex/internal/app/turnstream"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
 )
 
 // ---------------------------------------------------------------------------
@@ -34,7 +35,7 @@ func (a turnStreamOutboundCardAdapter) SendTurnItemCardWithReuse(ctx context.Con
 	return newOutboundCardService(a.app).sendTurnItemCardWithReuse(ctx, sub, payload, reuseMessageID)
 }
 func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, turnID string, item turnitem.ProtocolItem) bool {
-	return completeStandaloneCompactItem(a.app, threadID, turnID, item.MergedRaw())
+	return newCompactionService(a.app).CompleteStandaloneCompactItem(threadID, turnID, item.MergedRaw())
 }
 
 type turnStreamQuietCardExecutorAdapter struct{ app *App }
@@ -43,58 +44,20 @@ func (a turnStreamQuietCardExecutorAdapter) ExecuteQuietWorkingCardOp(ctx contex
 	executeQuietWorkingCardOp(a.app, ctx, sub, op)
 }
 
-// ---------------------------------------------------------------------------
-// *App methods satisfying turnstream.App
-// ---------------------------------------------------------------------------
-
-// TurnStreamState returns the narrowed state provider for the turn stream service.
-func (a *App) TurnStreamState() appturnstream.StateProvider {
-	if a == nil {
-		return nil
-	}
-	return a.State()
-}
-
-// TurnStreamSubmissionFinder returns the narrowed submission finder for the turn stream service.
-func (a *App) TurnStreamSubmissionFinder() appturnstream.SubmissionFinderProvider {
-	if a == nil {
-		return nil
-	}
-	return turnStreamSubmissionFinderAdapter{app: a}
-}
-
-// TurnStreamTurnLifecycle returns the narrowed turn lifecycle provider for the turn stream service.
-func (a *App) TurnStreamTurnLifecycle() appturnstream.TurnLifecycleProvider {
-	return turnStreamTurnLifecycleAdapter{app: a}
-}
-
-// TurnStreamRuntimeState returns the narrowed runtime state provider for the turn stream service.
-func (a *App) TurnStreamRuntimeState() appturnstream.RuntimeStateProvider {
-	return newRuntimeStateService(a)
-}
-
-// TurnStreamOutboundCards returns the narrowed outbound card provider for the turn stream service.
-func (a *App) TurnStreamOutboundCards() appturnstream.OutboundCardProvider {
-	return turnStreamOutboundCardAdapter{app: a}
-}
-
-// TurnStreamQuietCardExecutor returns the quiet card executor for the turn stream service.
-func (a *App) TurnStreamQuietCardExecutor() appturnstream.QuietCardExecutorProvider {
-	return turnStreamQuietCardExecutorAdapter{app: a}
-}
-
-// SendSubmissionStartedNotice sends the "turn started" notice for a submission.
-func (a *App) SendSubmissionStartedNotice(ctx context.Context, sub *domainsubmission.Submission) {
-	sendSubmissionStartedNotice(a, ctx, sub)
-}
-
-// TurnStreamTracker returns the turn stream tracker, lazily initializing it.
-func (a *App) TurnStreamTracker() *appturnstream.Tracker {
-	if a == nil {
-		return nil
-	}
+func newTurnPresentation(a *App) appturnstream.Service {
 	if a.trackers.turnStreams == nil {
 		a.trackers.turnStreams = appturnstream.NewTracker()
 	}
-	return a.trackers.turnStreams
+	return appturnstream.NewService(appturnstream.Dependencies{
+		Tracker: a.trackers.turnStreams, Finder: turnStreamSubmissionFinderAdapter{app: a}, Lifecycle: turnStreamTurnLifecycleAdapter{app: a}, Runtime: newRuntimeStateService(a),
+		Outbound: turnStreamOutboundCardAdapter{app: a}, Quiet: turnStreamQuietCardExecutorAdapter{app: a},
+		SendStartedNotice: func(ctx context.Context, sub *domainsubmission.Submission) { sendSubmissionStartedNotice(a, ctx, sub) },
+		WorkspaceCwd: func(id string) string {
+			if ws := config.FindWorkspace(a.cfg, id); ws != nil {
+				return ws.Cwd
+			}
+			return ""
+		},
+		FeishuConfig: func() *config.FeishuConfig { return feishuConfig(a) },
+	})
 }

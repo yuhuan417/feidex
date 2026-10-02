@@ -1,81 +1,35 @@
 package app
 
 import (
-	appcompact "feidex/internal/app/compact"
+	compactview "feidex/internal/adapter/feishu/compaction"
+	compaction "feidex/internal/application/compaction"
 	"feidex/internal/domain/conversation"
-	"feidex/internal/feishu"
 )
 
 const sessionStatusCompacting = "compacting"
 
-// ---------------------------------------------------------------------------
-// Thin wrappers — canonical logic lives in compact.Service
-// ---------------------------------------------------------------------------
-
-func sessionHasActiveWork(sess *conversation.Session) bool {
-	return appcompact.SessionHasActiveWork(sess)
-}
-
-func commandCompact(a *App, msg *feishu.InboundMessage, args []string) error {
-	return appcompact.NewService(a).CommandCompact(msg, args)
-}
-
-func renderCompactPreparingCard(a *App, sessionKey string) map[string]any {
-	return appcompact.NewService(a).RenderCompactPreparingCard(sessionKey)
-}
-
-func renderCompactAcceptedCard(a *App, sessionKey string) map[string]any {
-	return appcompact.NewService(a).RenderCompactAcceptedCard(sessionKey)
-}
-
-func renderCompactFailedCard(a *App, sessionKey, errText string) map[string]any {
-	return appcompact.NewService(a).RenderCompactFailedCard(sessionKey, errText)
-}
-
-func runMenuCompactAction(a *App, action *feishu.CardAction, sessionKey string) error {
-	return appcompact.NewService(a).RunMenuCompactAction(sessionKey, action)
-}
-
-func startThreadCompaction(a *App, sessionKey string) (*conversation.Session, error) {
-	return appcompact.NewService(a).StartThreadCompaction(sessionKey)
-}
-
-func bindStandaloneCompactTurn(a *App, threadID, turnID string) bool {
-	return appcompact.NewService(a).BindStandaloneCompactTurn(threadID, turnID)
-}
-
-func noteStandaloneCompactItemStarted(a *App, threadID, turnID string, item map[string]any) bool {
-	return appcompact.NewService(a).NoteStandaloneCompactItemStarted(threadID, turnID, item)
-}
-
-func completeStandaloneCompactTurn(a *App, threadID, turnID string) bool {
-	return appcompact.NewService(a).CompleteStandaloneCompactTurn(threadID, turnID)
-}
-
-func completeStandaloneCompactItem(a *App, threadID, turnID string, item map[string]any) bool {
-	return appcompact.NewService(a).CompleteStandaloneCompactItem(threadID, turnID, item)
-}
-
-func finishStandaloneCompactTurn(a *App, threadID, turnID, status string) bool {
-	return appcompact.NewService(a).FinishStandaloneCompactTurn(threadID, turnID, status)
-}
-
-func failStandaloneCompactTurn(a *App, threadID, turnID, message string) bool {
-	return appcompact.NewService(a).FailStandaloneCompactTurn(threadID, turnID, message)
-}
-
-func restoreStandaloneCompactSession(a *App, sessionKey, threadID, previousStatus string) {
-	appcompact.NewService(a).RestoreStandaloneCompactSession(sessionKey, threadID, previousStatus)
-}
-
-func sendStandaloneCompactResult(a *App, sess *conversation.Session, status string) {
-	text := appcompact.StandaloneCompactResultText(status)
-	if text == "" {
-		return
+func sessionHasActiveWork(sess *conversation.Session) bool { return conversation.HasActiveWork(sess) }
+func compactCardTitle(a *App, key string) string {
+	ws := ""
+	if a != nil {
+		if sess := a.State().Session(key); sess != nil {
+			ws = sess.WorkspaceID
+		}
 	}
-	appcompact.NewService(a).SendSessionTextNotice(sess, text)
+	return contentCardTitleForSession(a, key, ws, "压缩上下文")
 }
-
+func renderCompactPreparingCard(a *App, key string) map[string]any {
+	return compactview.RenderCompactPreparingCard(compactCardTitle(a, key), key)
+}
+func renderCompactAcceptedCard(a *App, key string) map[string]any {
+	return compactview.RenderCompactAcceptedCard(compactCardTitle(a, key), key)
+}
+func renderCompactFailedCard(a *App, key, text string) map[string]any {
+	return compactview.RenderCompactFailedCard(compactCardTitle(a, key), key, text)
+}
+func sendStandaloneCompactResult(a *App, sess *conversation.Session, status string) {
+	newCompactionService(a).SendSessionTextNotice(sess, compaction.StandaloneCompactResultText(status))
+}
 func standaloneCompactResultText(status string) string {
-	return appcompact.StandaloneCompactResultText(status)
+	return compaction.StandaloneCompactResultText(status)
 }

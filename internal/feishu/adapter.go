@@ -57,18 +57,7 @@ type MessageReaction struct {
 	EmojiType string
 }
 
-type CardAction struct {
-	ActionValue map[string]any
-	FormValue   map[string]any
-	UserID      string
-	ChatID      string
-	MessageID   string
-	Name        string
-	Option      string
-	InputValue  string
-	Options     []string
-	Checked     bool
-}
+type CardAction = application.CardAction
 
 type BotGroupEvent struct {
 	ChatID   string
@@ -903,6 +892,11 @@ func (a *Adapter) DownloadMessageResource(ctx context.Context, messageID string,
 }
 
 func (a *Adapter) SimpleStatusCard(title, color, body string, buttons []Button) map[string]any {
+	return SimpleStatusCard(title, color, body, buttons)
+}
+
+// SimpleStatusCard is a pure renderer shared by transport adapters.
+func SimpleStatusCard(title, color, body string, buttons []Button) map[string]any {
 	card := map[string]any{
 		"schema": "2.0",
 		"config": map[string]any{

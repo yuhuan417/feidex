@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 )
@@ -659,7 +658,7 @@ func TestResumeSelectedThreadClearsThreadCollaborationMode(t *testing.T) {
 	}
 
 	sess := a.State().Session(sessionKey)
-	_, err := conversationBackend(a).ResumeSelectedThread(sessionKey, sess, &a.cfg.Workspaces[0], appconvbackend.ThreadResumeSelection{
+	_, err := newConversationService(a).ResumeSelectedThread(sessionKey, sess, &a.cfg.Workspaces[0], conversation.ThreadSelection{
 		ThreadID: "thread-new",
 	})
 	if err != nil {
@@ -705,7 +704,7 @@ func TestForkActiveConversationClearsThreadCollaborationMode(t *testing.T) {
 	}
 
 	sess := a.State().Session(sessionKey)
-	_, err := conversationBackend(a).ForkActiveConversation(sessionKey, sess, &a.cfg.Workspaces[0])
+	_, err := newConversationService(a).ForkActiveConversation(sessionKey, sess, &a.cfg.Workspaces[0])
 	if err != nil {
 		t.Fatalf("ForkActiveConversation() error = %v", err)
 	}

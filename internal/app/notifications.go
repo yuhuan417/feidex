@@ -9,7 +9,7 @@ import (
 )
 
 func handleNotification(a *App, method string, params json.RawMessage) {
-	newCodexEventRouter(a).handleNotification(method, params)
+	dispatchCodexNotification(a, method, params)
 }
 
 func onThreadTokenUsageUpdated(a *App, threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
@@ -21,27 +21,32 @@ func onTurnStartedNotification(a *App, threadID, turnID string) {
 }
 
 func handleServerRequest(a *App, req codexrpc.RequestEnvelope) {
-	newCodexEventRouter(a).handleServerRequest(req)
+	dispatchCodexRequest(a, req)
 }
 
 func onCommandApproval(a *App, req codexrpc.RequestEnvelope) {
-	newCodexEventRouter(a).onCommandApproval(req)
+	req.Method = "item/commandExecution/requestApproval"
+	dispatchCodexRequest(a, req)
 }
 
 func onFileApproval(a *App, req codexrpc.RequestEnvelope) {
-	newCodexEventRouter(a).onFileApproval(req)
+	req.Method = "item/fileChange/requestApproval"
+	dispatchCodexRequest(a, req)
 }
 
 func onPermissionsApproval(a *App, req codexrpc.RequestEnvelope) {
-	newCodexEventRouter(a).onPermissionsApproval(req)
+	req.Method = "item/permissions/requestApproval"
+	dispatchCodexRequest(a, req)
 }
 
 func onToolUserInput(a *App, req codexrpc.RequestEnvelope) {
-	newCodexEventRouter(a).onToolUserInput(req)
+	req.Method = "item/tool/requestUserInput"
+	dispatchCodexRequest(a, req)
 }
 
 func onMcpElicitationRequest(a *App, req codexrpc.RequestEnvelope) {
-	newCodexEventRouter(a).onMcpElicitationRequest(req)
+	req.Method = "mcpServer/elicitation/request"
+	dispatchCodexRequest(a, req)
 }
 
 func finishTurn(a *App, threadID, turnID, status string) {

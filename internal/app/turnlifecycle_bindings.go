@@ -47,7 +47,7 @@ func (a *App) NextQueuedSubmissionSessionKey(sessionKey string) string {
 }
 
 func (a *App) BindStandaloneCompactTurn(threadID, turnID string) bool {
-	return bindStandaloneCompactTurn(a, threadID, turnID)
+	return newCompactionService(a).BindStandaloneCompactTurn(threadID, turnID)
 }
 
 func (a *App) BindGoalContinuationTurn(threadID, turnID string) bool {
@@ -55,7 +55,7 @@ func (a *App) BindGoalContinuationTurn(threadID, turnID string) bool {
 }
 
 func (a *App) FinishStandaloneCompactTurn(threadID, turnID, status string) bool {
-	return finishStandaloneCompactTurn(a, threadID, turnID, status)
+	return newCompactionService(a).FinishStandaloneCompactTurn(threadID, turnID, status)
 }
 
 func (a *App) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {

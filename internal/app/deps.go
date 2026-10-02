@@ -39,7 +39,7 @@ type claudeInstallManager interface {
 
 var (
 	newCodexClient   = func(cfg config.CodexConfig) CodexClient { return codexrpc.New(cfg) }
-	newClaudeCore    = func(app *App, cfg config.ClaudeConfig) ClaudeCore { return newClaudeRuntime(app, cfg) }
+	newClaudeCore    func(*App, config.ClaudeConfig) ClaudeCore
 	newFeishuClient  = func(cfg config.FeishuConfig) FeishuClient { return feishu.New(cfg) }
 	newDaemonManager = daemon.NewManager
 	newReleaseClient = func() releaseClient {
@@ -47,9 +47,17 @@ var (
 	}
 	newCodexInstallManager  = func(command string) codexInstallManager { return install.New(install.Codex(), command) }
 	newClaudeInstallManager = func(command string) claudeInstallManager { return install.New(install.Claude(), command) }
-	runClaudeSmokeTest      = func(a *App, ctx context.Context) error { return newBackendUpgradeService(a).claudeSmokeTest(ctx) }
+	runClaudeSmokeTest      func(*App, context.Context) error
 	startDaemonUpgrade      = daemon.StartBackgroundUpgrade
 	currentVersion          = buildinfo.CurrentVersion
 	currentGOOS             = func() string { return runtime.GOOS }
 	currentGOARCH           = func() string { return runtime.GOARCH }
 )
+
+// Runtime factories are installed after package initialization. Input handlers
+// now share one dispatch graph, so eagerly binding these mutable test seams
+// would create a Go global-initialization cycle through command handlers.
+func init() {
+	newClaudeCore = func(a *App, cfg config.ClaudeConfig) ClaudeCore { return newClaudeRuntime(a, cfg) }
+	runClaudeSmokeTest = func(a *App, ctx context.Context) error { return newBackendUpgradeService(a).claudeSmokeTest(ctx) }
+}

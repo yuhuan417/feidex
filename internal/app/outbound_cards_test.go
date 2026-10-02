@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	appcompact "feidex/internal/app/compact"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
@@ -71,7 +70,7 @@ func TestPlanModeSessionCardsPrefixWorkspaceAndPlan(t *testing.T) {
 		{name: "status", card: renderStatusCard(a, sessionKey)},
 		{name: "quiet", card: renderQuietModeMenuCard(a, sessionKey)},
 		{name: "interrupt", card: renderInterruptPreparingCard(a, sessionKey, "menu.tools")},
-		{name: "compact", card: appcompact.NewService(a).RenderCompactPreparingCard(sessionKey)},
+		{name: "compact", card: renderCompactPreparingCard(a, sessionKey)},
 		{name: "help", card: renderHelpCard(a, sessionKey)},
 	}
 	for _, tc := range cases {

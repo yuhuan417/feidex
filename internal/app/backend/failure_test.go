@@ -6,7 +6,7 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 	"testing"
 
-	appturnstream "feidex/internal/app/turnstream"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
 )
 
 func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelectorBlocks(t *testing.T) {

@@ -452,4 +452,19 @@ Codex server request
 
 - Codex runtime recovery/upgrade 已迁入 `internal/runtime/codex`，全局 recovery state 已删除；每个 frontend 单独拥有 client、恢复状态和自动 thread recovery exclusion。新增并验证 frontend 隔离回归测试。
 
-仍待迁移：conversation 用例编排、完整 submission/turn aggregate、统一 dispatcher、session actor、backend event adapter、Feishu presentation/effect runner，以及其余宽 App interface 和跨 owner callback 的删除。以上条目完成前不能将整份提案标记为完成。
+后续迁移状态以本文末尾“核心边界整块迁移”记录为准；提案仍在实施中。
+
+### 2026-10-02 核心边界整块迁移
+
+- conversation 创建、恢复、显式选择、fork、interrupt 和 continue 用例迁入 application；Codex/Claude gateway 只执行外部操作。删除 convbackend、conversation backend facade、workspace thread service 及回调自己的 queue 路径。
+- dispatcher 覆盖 Feishu message、card action、recall、reaction、Codex notification/server request 和 retry timer；跨 frontend 输入在调用 owner 前被拒绝。重试定时器携带 generation token，过期回调不会启动 submission。
+- Codex adapter 完成 notification/request 解码、numeric/string request ID 保真和 protocol rejection；application 消费 semantic event，删除两层旧 event router。
+- 自动重试状态、退避和定时 dispatch 归属 `internal/runtime/autoretry`，卡片和入口归属 Feishu adapter，删除旧宽 App 接口。
+- startup recovery 与 submission runtime cleanup 归属 `internal/runtime/maintenance`；原维护服务只保留环境清理和升级查询，使用固定依赖，不再访问宿主。
+- standalone compaction 生命周期归属 application，协议调用归属 Codex adapter，卡片归属 Feishu adapter，删除 compact 到 App 的回调链。
+- Claude runtime 不再持有 App；Claude catalogue/history 位于 backend adapter。turnstream 和 finalcardpatch 位于 Feishu adapter，删除宿主访问器及纯转发包装。
+- effect runner 已执行实际 SendMessage/PatchCard，保存或外部 effect 失败会阻止后续 effect；其余同步端口仍需收敛为 effect。
+- session snapshot 复制与 active-work 判定归属 conversation domain。显式 resume 保存失败时保留调用方旧 lineage，不发布 live thread。
+- 回归覆盖 frontend 隔离、cancelled effect、save-before-start、request ID 保真、workspace 拒绝和 conversation persistence failure。原审批、模型、菜单、review、goal 和 compaction 契约继续运行。
+
+当前剩余：遗留 message/card command 编排，thread/history/debug/goal/workspace/review/planmode/upgrade/MCP 的宽宿主接口，Claude stream presentation 回调，完整 session event 串行 owner，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

@@ -152,15 +152,7 @@ type PendingRequest struct {
 	ExpiresAt    int64  `json:"expires_at"`
 }
 
-type MessageLink struct {
-	FrontendID   string `json:"frontend_id,omitempty"`
-	Backend      string `json:"backend,omitempty"`
-	MessageID    string `json:"message_id"`
-	SessionKey   string `json:"session_key,omitempty"`
-	SubmissionID string `json:"submission_id,omitempty"`
-	ThreadID     string `json:"thread_id,omitempty"`
-	TurnID       string `json:"turn_id,omitempty"`
-}
+type MessageLink = conversation.MessageLink
 
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

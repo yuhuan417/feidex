@@ -1,6 +1,8 @@
 package app
 
 import (
+	"feidex/internal/application"
+	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
@@ -15,11 +17,10 @@ import (
 	"sync"
 	"time"
 
-	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/app/backend"
 	"feidex/internal/app/goalcmd"
+	appautoretry "feidex/internal/runtime/autoretry"
 
-	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/app/serverrequest"
 
 	"feidex/internal/adapter/feishu/turnitem"
@@ -184,8 +185,8 @@ func (a *App) Start(ctx context.Context) error {
 		_ = stopMCPService(a, context.Background())
 		return err
 	}
-	appmaintenance.NewRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(ctx)
-	appmaintenance.NewRuntimeMaintenanceService(a).StartUpgradeCheckLoop(ctx)
+	newRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(ctx)
+	newRuntimeMaintenanceService(a).StartUpgradeCheckLoop(ctx)
 	scheduleStartupGroupAnnouncementRefreshes(a)
 	go sendStartupReadyNotifications(a)
 	runAsync(a, func() { runFeishuAppConfigHeal(a) })
@@ -253,15 +254,21 @@ func buildThreadStartParams(a *App, ws *config.Workspace, sess *conversation.Ses
 }
 
 func (a *App) HandleFeishuMessage(msg *feishu.InboundMessage) {
-	newFeishuEventRouter(a).handleMessage(msg)
+	if msg != nil {
+		_, _ = dispatchInput(a, application.MessageReceived{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{Type: identity.ChatType(msg.ChatType), ID: msg.ChatID}, Message: *msg})
+	}
 }
 
 func (a *App) HandleFeishuRecall(recall *feishu.MessageRecall) {
-	newFeishuEventRouter(a).handleRecall(recall)
+	if recall != nil {
+		_, _ = dispatchInput(a, application.MessageRecalled{Frontend: identity.FrontendID(a.FrontendID()), MessageID: recall.MessageID, ChatID: recall.ChatID})
+	}
 }
 
 func (a *App) HandleFeishuReaction(reaction *feishu.MessageReaction) {
-	newFeishuEventRouter(a).handleReaction(reaction)
+	if reaction != nil {
+		_, _ = dispatchInput(a, application.MessageReacted{Frontend: identity.FrontendID(a.FrontendID()), MessageID: reaction.MessageID, ChatID: reaction.ChatID, UserID: reaction.UserID, EmojiType: reaction.EmojiType})
+	}
 }
 
 func isStaleInboundMessage(started time.Time, msg *feishu.InboundMessage) bool {
@@ -281,7 +288,7 @@ func nonZero(values ...int64) int64 {
 }
 
 func (a *App) HandleCardAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	return newCardActionService(a).dispatch(action)
+	return dispatchCardAction(a, action)
 }
 
 func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
@@ -388,10 +395,7 @@ func replyError(a *App, msg *feishu.InboundMessage, err error) error {
 	if msg == nil || err == nil {
 		return nil
 	}
-	if msg.MessageID != "" {
-		return a.feishu.ReplyText(context.Background(), msg.MessageID, "执行失败: "+err.Error(), replyInThreadEnabled(a, msg.ChatType))
-	}
-	return a.feishu.SendText(context.Background(), msg.ChatID, "执行失败: "+err.Error())
+	return newEffectRunner(a).Run(a.Context(), []application.Effect{application.SendMessage{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)}, ReplyMessageID: msg.MessageID, Text: "执行失败: " + err.Error(), InThread: replyInThreadEnabled(a, msg.ChatType)}})
 }
 
 func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {

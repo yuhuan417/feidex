@@ -3,6 +3,9 @@ package workspacecmd
 import (
 	"context"
 	"errors"
+	claudeadapter "feidex/internal/adapter/backend/claude"
+	codexadapter "feidex/internal/adapter/backend/codex"
+	conversationapp "feidex/internal/application/conversation"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"os"
@@ -166,21 +169,35 @@ func testSessionContextDeps() SessionContextDeps {
 	}
 }
 
-func newTestThreadService(app *testWorkspaceApp, session *conversation.Session, opts threadServiceOptions) *ThreadService {
-	return NewThreadService(ThreadServiceDeps{
-		App:   app,
-		State: newTestStateDeps(&session),
-		Threads: ThreadDeps{
-			MarkSessionThreadLive: opts.markLive,
-		},
-		SessionContext: testSessionContextDeps(),
-		Codex: CodexDeps{
-			RequireCodexClient: func() (CodexClient, error) { return nil, opts.codexErr },
-		},
-		Claude: ClaudeDeps{
-			RequireClaudeCore: func() (appcore.ClaudeCore, error) { return opts.claude, nil },
-		},
-	})
+type threadTestRepository struct{ session *conversation.Session }
+
+func (r *threadTestRepository) Session(key string) *conversation.Session {
+	if r.session.Key == key {
+		return r.session
+	}
+	return nil
+}
+func (r *threadTestRepository) SaveSession(sess *conversation.Session) error {
+	r.session = sess
+	return nil
+}
+
+type threadTestLive struct{ mark func(string, string) }
+
+func (l threadTestLive) MarkSessionThreadLive(k, id string) {
+	if l.mark != nil {
+		l.mark(k, id)
+	}
+}
+func (l threadTestLive) ClearSessionLiveThread(string) {}
+func newTestThreadService(app *testWorkspaceApp, session *conversation.Session, opts threadServiceOptions) *conversationapp.Service {
+	svc := &conversationapp.Service{Backend: app.backend, Repository: &threadTestRepository{session: session}, Live: threadTestLive{mark: opts.markLive}, ResolveModel: func(*conversation.Session, *config.Workspace) string { return app.cfg.Claude.Model }}
+	if app.backend == domainbackend.BackendClaude {
+		svc.Gateway = claudeadapter.ConversationGateway{Client: opts.claude}
+	} else {
+		svc.Gateway = codexadapter.ConversationGateway{Client: func() (codexadapter.ConversationClient, error) { return nil, opts.codexErr }}
+	}
+	return svc
 }
 
 type testClaudeCore struct {

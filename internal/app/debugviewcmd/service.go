@@ -19,7 +19,6 @@ import (
 	appdelivery "feidex/internal/adapter/feishu/delivery"
 	turnitem "feidex/internal/adapter/feishu/turnitem"
 	appcore "feidex/internal/app/appcore"
-	appclauderuntime "feidex/internal/app/clauderuntime"
 	apppathpick "feidex/internal/app/pathpick"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	appworkspace "feidex/internal/app/workspace"
@@ -29,6 +28,7 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/logcontrol"
+	appclauderuntime "feidex/internal/runtime/claude"
 	turnbinding "feidex/internal/runtime/turnbinding"
 	"feidex/internal/state"
 

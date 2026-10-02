@@ -1,7 +1,5 @@
 package app
 
-import appconvbackend "feidex/internal/app/convbackend"
+import "feidex/internal/domain/conversation"
 
-var (
-	newUIWarningError = appconvbackend.NewUIWarningError
-)
+var newUIWarningError = conversation.NewWarning

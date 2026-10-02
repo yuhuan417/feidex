@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"feidex/internal/app/claudesession"
+	claudesession "feidex/internal/adapter/backend/claude/catalog"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -106,7 +106,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	card, err := conversationBackend(a).RenderThreadsCard(sessionKey, false)
+	card, err := renderThreadsCard(a, sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}

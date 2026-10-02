@@ -1,13 +1,12 @@
 package app
 
 import (
-	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/domain/conversation"
 
 	"context"
 
 	appbackend "feidex/internal/app/backend"
-	appconvbackend "feidex/internal/app/convbackend"
+
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -20,28 +19,23 @@ import (
 // ---------------------------------------------------------------------------
 
 type threadMenuConversationBackendAdapter struct {
-	backend appconvbackend.ConversationBackendFacade
+	app *App
 }
 
 func (a threadMenuConversationBackendAdapter) RenderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return a.backend.RenderThreadsCard(sessionKey, includeAll)
+	return renderThreadsCard(a.app, sessionKey, includeAll)
 }
 func (a threadMenuConversationBackendAdapter) InterruptActiveTurn(ctx context.Context, sessionKey string, sess *conversation.Session) error {
-	return a.backend.InterruptActiveTurn(ctx, sessionKey, sess)
+	return interruptConversation(a.app, ctx, sessionKey, sess)
 }
 func (a threadMenuConversationBackendAdapter) ContinueActiveTurn(sessionKey string, text string) error {
-	return a.backend.ContinueActiveTurn(sessionKey, text)
+	return newConversationService(a.app).ContinueActiveTurn(sessionKey, text)
 }
 func (a threadMenuConversationBackendAdapter) ResumeSelectedThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, selection appthreadmenu.ThreadResumeSelection) (*appthreadmenu.ThreadBinding, error) {
-	return a.backend.ResumeSelectedThread(sessionKey, sess, ws, appconvbackend.ThreadResumeSelection{
-		ThreadID: selection.ThreadID,
-		Name:     selection.Name,
-		Preview:  selection.Preview,
-		Cwd:      selection.Cwd,
-	})
+	return newConversationService(a.app).ResumeSelectedThread(sessionKey, sess, ws, conversation.ThreadSelection(selection))
 }
 func (a threadMenuConversationBackendAdapter) ForkReplyMessage(forkedID string) string {
-	return a.backend.ForkReplyMessage(forkedID)
+	return forkReplyMessage(a.app, forkedID)
 }
 
 type threadMenuBackendRuntimeAdapter struct {
@@ -87,7 +81,7 @@ func (a *App) ThreadMenuEffectiveSessionKey(sessionKey string) string {
 }
 
 func (a *App) ThreadMenuConversationBackend() appthreadmenu.ConversationBackendProvider {
-	return threadMenuConversationBackendAdapter{backend: conversationBackend(a)}
+	return threadMenuConversationBackendAdapter{app: a}
 }
 
 func (a *App) ThreadMenuBackendRuntime() appthreadmenu.BackendRuntimeProvider {
@@ -99,7 +93,7 @@ func (a *App) ThreadMenuPendingQueue() appthreadmenu.PendingQueueProvider {
 }
 
 func (a *App) ThreadMenuWorkspaceThread() appthreadmenu.WorkspaceThreadProvider {
-	return newWorkspaceThreadService(a)
+	return newConversationService(a)
 }
 
 func (a *App) ThreadMenuWorkspaceConfig() appthreadmenu.WorkspaceConfigProvider {
@@ -127,7 +121,7 @@ func (a *App) MenuCardBodyForBackend(backend, action, body string) string {
 }
 
 func (a *App) CancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice string) bool {
-	return appautoretry.NewService(a).CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
+	return newAutoRetryService(a).CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
 }
 
 func (a *App) NormalizeRequestedClaudePermissionMode(ctx context.Context, raw string) (string, string, error) {

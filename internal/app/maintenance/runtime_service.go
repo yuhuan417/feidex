@@ -6,9 +6,8 @@ package maintenance
 import (
 	"context"
 	"encoding/json"
-	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
-	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/runtime/maintenance"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -18,7 +17,6 @@ import (
 	appattachments "feidex/internal/app/attachments"
 
 	appfeishuwrap "feidex/internal/app/feishuwrap"
-	"feidex/internal/app/lifecycle"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
@@ -43,89 +41,6 @@ const ArtifactGCTimeout = 5 * time.Minute
 // FrontendCardNotificationKindFeishuPermissionIssue is the notification kind
 // for Feishu permission diagnostic cards.
 const FrontendCardNotificationKindFeishuPermissionIssue = "feishu_permission_issue"
-
-// ---------------------------------------------------------------------------
-// App interface — what the service needs from the host application
-// ---------------------------------------------------------------------------
-
-// App defines the interface the runtime maintenance service requires from the
-// host application. It embeds appcore.AppConfig so that appcore helpers like
-// FeishuConfig, ConfiguredBackend, etc. can be called directly.
-type App interface {
-	appcore.AppConfig
-
-	// Feishu returns the Feishu bot client.
-	Feishu() appcore.FeishuClient
-	// AppState returns the narrowed app state provider.
-	MaintenanceAppState() AppStateProvider
-	// RuntimeState returns the narrowed runtime state provider.
-	MaintenanceRuntimeState() RuntimeStateProvider
-	// MenuCardBody formats a menu card body with breadcrumb navigation.
-	MenuCardBody(action, body string) string
-	// QueueFrontendCardNotification queues a card notification for later delivery.
-	QueueFrontendCardNotification(note state.FrontendCardNotification)
-	// MaintenanceResetLiveThreadState clears the in-memory live-thread tracker.
-	MaintenanceResetLiveThreadState()
-	// MaintenanceWithFrontendRecoveryLock runs fn while holding the frontend
-	// recovery mutex.
-	MaintenanceWithFrontendRecoveryLock(fn func())
-	// MaintenanceBeginBackendStartupRecovery begins a backend-specific startup
-	// recovery scope and returns its end callback.
-	MaintenanceBeginBackendStartupRecovery() func()
-	// MaintenanceSessionBelongsToFrontend reports whether the session belongs to
-	// the current frontend.
-	MaintenanceSessionBelongsToFrontend(sessionKey string) bool
-	// MaintenanceClearSessionThreadContext clears the active thread lineage from
-	// the session.
-	MaintenanceClearSessionThreadContext(sess *conversation.Session)
-	// MaintenanceResetSessionActiveOperations clears active session operations.
-	MaintenanceResetSessionActiveOperations(sess *conversation.Session)
-	// MaintenanceSessionHasInFlightSubmission reports whether the session still
-	// has in-flight submission state.
-	MaintenanceSessionHasInFlightSubmission(sess *conversation.Session) bool
-	// MaintenanceClearSessionLiveThread clears live-thread tracking for the
-	// session.
-	MaintenanceClearSessionLiveThread(sessionKey string)
-	// MaintenanceEffectiveModel resolves startup recovery settings for this session.
-	MaintenanceEffectiveModel(sess *conversation.Session) string
-	// MaintenanceRecoverStartupConversation rebuilds backend-specific startup
-	// conversation state for an active thread.
-	MaintenanceRecoverStartupConversation(sessionKey, workspaceID string, sess *conversation.Session, ws *config.Workspace, effectiveModel string)
-}
-
-// ---------------------------------------------------------------------------
-// Narrow provider interfaces
-// ---------------------------------------------------------------------------
-
-// AppStateProvider narrows app state access to the methods used by the service.
-type AppStateProvider interface {
-	// PendingRequests returns all pending requests in the store.
-	PendingRequests() []*state.PendingRequest
-	// UpdatePending applies a mutation to a pending request by ID.
-	UpdatePending(id string, mutate func(*state.PendingRequest)) error
-	// DeleteMessageLinks removes message links matching the predicate.
-	DeleteMessageLinks(match func(*state.MessageLink) bool)
-	// DeletePendingRequests removes pending requests matching the predicate.
-	DeletePendingRequests(match func(*state.PendingRequest) bool)
-	// DeleteSubmission removes a submission by ID.
-	DeleteSubmission(id string)
-	// Sessions returns all sessions in the store.
-	Sessions() []*conversation.Session
-	// SaveSession persists a session snapshot.
-	SaveSession(sess *conversation.Session) error
-}
-
-// RuntimeStateProvider narrows runtime state access to the methods used by
-// the service for turn binding and item state cleanup.
-type RuntimeStateProvider interface {
-	// ClearTurnBinding removes the turn binding for the given turn ID.
-	ClearTurnBinding(turnID string)
-	// ClearTurnItemStates removes all turn item states for the given turn ID.
-	ClearTurnItemStates(turnID string)
-	// ClearPendingTurnBindingForSubmission removes pending turn bindings for the
-	// given thread/submission pair.
-	ClearPendingTurnBindingForSubmission(threadID, submissionID string)
-}
 
 // ---------------------------------------------------------------------------
 // PermissionIssueDiagnosticSender — local interface for direct notifications
@@ -167,14 +82,32 @@ type UpgradePendingPayload struct {
 
 // RuntimeMaintenanceService manages background maintenance tasks such as
 // attachment cleanup, drive artifact GC, and upgrade status polling.
-type RuntimeMaintenanceService struct {
-	app App
+type Dependencies struct {
+	Context           func() context.Context
+	Workspaces        func() []config.Workspace
+	Store             *state.Store
+	Repository        maintenance.AppStateProvider
+	Client            Client
+	MenuBody          func(string, string) string
+	QueueNotification func(state.FrontendCardNotification)
+	ReadyChatIDs      func([]*conversation.Session) []string
+	RunAsync          func(func())
 }
+type Client interface {
+	CleanupArtifactsBefore(context.Context, time.Time) (feishu.PreviewDriveCleanupResult, error)
+	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
+	PatchCard(context.Context, string, map[string]any) error
+}
+type RuntimeMaintenanceService struct{ deps Dependencies }
 
-// NewRuntimeMaintenanceService creates a new maintenance service bound to the
-// given app.
-func NewRuntimeMaintenanceService(app App) RuntimeMaintenanceService {
-	return RuntimeMaintenanceService{app: app}
+func NewRuntimeMaintenanceService(deps Dependencies) RuntimeMaintenanceService {
+	return RuntimeMaintenanceService{deps: deps}
+}
+func (s RuntimeMaintenanceService) context() context.Context {
+	if s.deps.Context != nil {
+		return s.deps.Context()
+	}
+	return context.Background()
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +117,7 @@ func NewRuntimeMaintenanceService(app App) RuntimeMaintenanceService {
 // ExpirePendingRequestsOnStartup marks all pending/replied requests as expired
 // so that stale state from a previous run does not leak into the new session.
 func (s RuntimeMaintenanceService) ExpirePendingRequestsOnStartup() {
-	store := s.app.Store()
+	store := s.deps.Store
 	if store == nil {
 		return
 	}
@@ -213,11 +146,7 @@ func (s RuntimeMaintenanceService) ExpirePendingRequestsOnStartup() {
 // CleanupExpiredAttachments removes attachment directories older than
 // AttachmentRetention across all configured workspaces.
 func (s RuntimeMaintenanceService) CleanupExpiredAttachments() {
-	cfg := s.app.Config()
-	if cfg == nil {
-		return
-	}
-	for _, ws := range cfg.Workspaces {
+	for _, ws := range s.deps.Workspaces() {
 		root := filepath.Join(ws.Cwd, appattachments.AttachmentsDirName)
 		entries, err := os.ReadDir(root)
 		if err != nil {
@@ -253,76 +182,18 @@ func (s RuntimeMaintenanceService) CleanupAttachmentDir(root string) {
 }
 
 // ---------------------------------------------------------------------------
-// Submission runtime state cleanup
-// ---------------------------------------------------------------------------
-
-// CleanupSubmissionRuntimeState removes message links, pending requests, turn
-// bindings, and turn item states associated with the given submission.
-func (s RuntimeMaintenanceService) CleanupSubmissionRuntimeState(sub *domainsubmission.Submission) {
-	if sub == nil {
-		return
-	}
-	stateProvider := s.app.MaintenanceAppState()
-	runtimeProvider := s.app.MaintenanceRuntimeState()
-	if stateProvider == nil || runtimeProvider == nil {
-		return
-	}
-	submissionID := strings.TrimSpace(sub.ID)
-	turnID := strings.TrimSpace(sub.TurnID)
-	threadID := strings.TrimSpace(sub.ThreadID)
-	// Async questions and Claude interactive requests can be answered after
-	// their producing turn completes. Keep their local form and reply anchor
-	// while clearing turn runtime state.
-	survivingRequests := map[string]bool{}
-	survivingMessages := map[string]bool{}
-	for _, req := range stateProvider.PendingRequests() {
-		if req != nil && req.TurnID == turnID && lifecycle.OutlivesTurn(req) {
-			survivingRequests[req.ID] = true
-			survivingMessages[req.FeishuMsgID] = true
-		}
-	}
-	stateProvider.DeleteMessageLinks(func(link *state.MessageLink) bool {
-		if link == nil || survivingMessages[link.MessageID] {
-			return false
-		}
-		if submissionID != "" && strings.TrimSpace(link.SubmissionID) == submissionID {
-			return true
-		}
-		if turnID != "" && strings.TrimSpace(link.TurnID) == turnID {
-			return true
-		}
-		return false
-	})
-	if turnID != "" {
-		stateProvider.DeletePendingRequests(func(req *state.PendingRequest) bool {
-			return req != nil && strings.TrimSpace(req.TurnID) == turnID && !survivingRequests[req.ID]
-		})
-	}
-	if submissionID != "" {
-		stateProvider.DeleteSubmission(submissionID)
-	}
-	if turnID != "" {
-		runtimeProvider.ClearTurnBinding(turnID)
-		runtimeProvider.ClearTurnItemStates(turnID)
-	}
-	if submissionID != "" && threadID != "" {
-		runtimeProvider.ClearPendingTurnBindingForSubmission(threadID, submissionID)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Drive artifact GC loop
 // ---------------------------------------------------------------------------
 
 // StartDriveArtifactGCLoop launches a background goroutine that runs drive
 // artifact garbage collection on startup and then every 24 hours.
 func (s RuntimeMaintenanceService) StartDriveArtifactGCLoop(ctx context.Context) {
-	feishuClient := s.app.Feishu()
+	feishuClient := s.deps.Client
 	if feishuClient == nil {
 		return
 	}
-	go s.RunDriveArtifactGC("startup")
-	go func() {
+	s.deps.RunAsync(func() { s.RunDriveArtifactGC("startup") })
+	s.deps.RunAsync(func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -333,17 +204,17 @@ func (s RuntimeMaintenanceService) StartDriveArtifactGCLoop(ctx context.Context)
 				s.RunDriveArtifactGC("ticker")
 			}
 		}
-	}()
+	})
 }
 
 // RunDriveArtifactGC performs a single artifact GC pass, deleting drive files
 // older than ArtifactRetention.
 func (s RuntimeMaintenanceService) RunDriveArtifactGC(source string) {
-	feishuClient := s.app.Feishu()
+	feishuClient := s.deps.Client
 	if feishuClient == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(appcore.Context(s.app), ArtifactGCTimeout)
+	ctx, cancel := context.WithTimeout(s.context(), ArtifactGCTimeout)
 	defer cancel()
 	result, err := feishuClient.CleanupArtifactsBefore(ctx, time.Now().Add(-ArtifactRetention))
 	if err != nil {
@@ -368,7 +239,7 @@ func (s RuntimeMaintenanceService) RunDriveArtifactGC(source string) {
 // NotifyDriveArtifactGCPermissionIssue sends a diagnostic notification when
 // artifact GC fails due to a Feishu permission issue.
 func (s RuntimeMaintenanceService) NotifyDriveArtifactGCPermissionIssue(source string, err error) {
-	feishuClient := s.app.Feishu()
+	feishuClient := s.deps.Client
 	if feishuClient == nil || err == nil {
 		return
 	}
@@ -381,13 +252,13 @@ func (s RuntimeMaintenanceService) NotifyDriveArtifactGCPermissionIssue(source s
 		return
 	}
 	notifier, _ := feishuClient.(PermissionIssueDiagnosticSender)
-	appState := s.app.MaintenanceAppState()
+	appState := s.deps.Repository
 	if appState == nil {
 		return
 	}
-	chatIDs := s.FrontendStartupReadyChatIDs(appState.Sessions())
+	chatIDs := s.deps.ReadyChatIDs(appState.Sessions())
 	if len(chatIDs) == 0 {
-		s.app.QueueFrontendCardNotification(state.FrontendCardNotification{
+		s.deps.QueueNotification(state.FrontendCardNotification{
 			Kind:        FrontendCardNotificationKindFeishuPermissionIssue,
 			CollapseKey: FrontendCardNotificationKindFeishuPermissionIssue,
 			Title:       "飞书权限错误",
@@ -402,7 +273,7 @@ func (s RuntimeMaintenanceService) NotifyDriveArtifactGCPermissionIssue(source s
 		return
 	}
 	if notifier == nil {
-		s.app.QueueFrontendCardNotification(state.FrontendCardNotification{
+		s.deps.QueueNotification(state.FrontendCardNotification{
 			Kind:        FrontendCardNotificationKindFeishuPermissionIssue,
 			CollapseKey: FrontendCardNotificationKindFeishuPermissionIssue,
 			Title:       "飞书权限错误",
@@ -428,12 +299,12 @@ func (s RuntimeMaintenanceService) NotifyDriveArtifactGCPermissionIssue(source s
 // StartUpgradeCheckLoop launches a background goroutine that polls for pending
 // upgrades on startup and then every 30 seconds.
 func (s RuntimeMaintenanceService) StartUpgradeCheckLoop(ctx context.Context) {
-	feishuClient := s.app.Feishu()
+	feishuClient := s.deps.Client
 	if feishuClient == nil {
 		return
 	}
-	go s.CheckPendingUpgrades("startup")
-	go func() {
+	s.deps.RunAsync(func() { s.CheckPendingUpgrades("startup") })
+	s.deps.RunAsync(func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -444,17 +315,17 @@ func (s RuntimeMaintenanceService) StartUpgradeCheckLoop(ctx context.Context) {
 				s.CheckPendingUpgrades("ticker")
 			}
 		}
-	}()
+	})
 }
 
 // CheckPendingUpgrades scans all pending requests for "upgrading" status and
 // checks each one.
 func (s RuntimeMaintenanceService) CheckPendingUpgrades(source string) {
-	store := s.app.Store()
+	store := s.deps.Store
 	if store == nil {
 		return
 	}
-	pendings := s.app.MaintenanceAppState().PendingRequests()
+	pendings := s.deps.Repository.PendingRequests()
 	for _, pending := range pendings {
 		if pending != nil && state.NormalizePendingRequestStatus(pending.Status) == state.PendingRequestStatusUpgrading {
 			s.CheckOneUpgrade(source, pending)
@@ -471,13 +342,13 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 	var payload UpgradePendingPayload
 	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
 		slog.Warn("upgrade check: bad payload", "request_id", pending.ID, "error", err)
-		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
+		s.deps.Repository.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		return
 	}
 	unitName := strings.TrimSpace(payload.UnitName)
 	if unitName == "" {
 		slog.Warn("upgrade check: missing unit name", "request_id", pending.ID)
-		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
+		s.deps.Repository.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		return
 	}
 
@@ -489,7 +360,7 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 	if st == nil {
 		// unit not found (collected or never existed)
 		slog.Warn("upgrade check: unit not found, marking resolved", "unit", unitName, "source", source)
-		s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
+		s.deps.Repository.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 		return
 	}
 	if st.ActiveState == "active" || st.ActiveState == "activating" {
@@ -497,7 +368,7 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 	}
 
 	// Unit has exited — patch card and clean up
-	s.app.MaintenanceAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
+	s.deps.Repository.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	daemon.CleanupUpgradeUnit(unitName)
 
 	sessionKey := strings.TrimSpace(pending.SessionKey)
@@ -513,12 +384,12 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 		return
 	}
 
-	feishuClient := s.app.Feishu()
+	feishuClient := s.deps.Client
 	var card map[string]any
 	if st.Result == "success" {
 		slog.Info("upgrade unit succeeded", "unit", unitName, "source", source)
 		body := "升级已完成，服务已重启。"
-		card = feishuClient.SimpleStatusCard("升级成功", "green", s.app.MenuCardBody("menu.upgrade", body), []feishu.Button{
+		card = feishuClient.SimpleStatusCard("升级成功", "green", s.deps.MenuBody("menu.upgrade", body), []feishu.Button{
 			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})
 	} else {
@@ -528,12 +399,12 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 		if errMsg != "" {
 			body += "\n\n错误: " + errMsg
 		}
-		card = feishuClient.SimpleStatusCard("升级失败", "red", s.app.MenuCardBody("menu.upgrade", body), []feishu.Button{
+		card = feishuClient.SimpleStatusCard("升级失败", "red", s.deps.MenuBody("menu.upgrade", body), []feishu.Button{
 			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})
 	}
 
-	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 10*time.Second)
+	ctx, cancel := context.WithTimeout(s.context(), 10*time.Second)
 	defer cancel()
 	if err := feishuClient.PatchCard(ctx, feishuMsgID, card); err != nil {
 		slog.Error("upgrade check: patch card failed", "unit", unitName, "msg_id", feishuMsgID, "error", err)

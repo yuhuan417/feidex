@@ -10,8 +10,6 @@ import (
 	appapprovalview "feidex/internal/adapter/feishu/approvalview"
 	"feidex/internal/app/attachments"
 
-	appcompact "feidex/internal/app/compact"
-
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 
 	appfeishuwrap "feidex/internal/app/feishuwrap"
@@ -1263,7 +1261,7 @@ func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
 		{name: "tools", title: cardHeaderTitle(t, renderToolsMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderToolsMenuCard(a, sessionKey))},
 		{name: "status", title: cardHeaderTitle(t, renderStatusCard(a, sessionKey)), body: cardMarkdownContent(t, renderStatusCard(a, sessionKey))},
 		{name: "interrupt", title: cardHeaderTitle(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。")), body: cardMarkdownContent(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。"))},
-		{name: "compact", title: cardHeaderTitle(t, appcompact.NewService(a).RenderCompactPreparingCard(sessionKey)), body: cardMarkdownContent(t, appcompact.NewService(a).RenderCompactPreparingCard(sessionKey))},
+		{name: "compact", title: cardHeaderTitle(t, renderCompactPreparingCard(a, sessionKey)), body: cardMarkdownContent(t, renderCompactPreparingCard(a, sessionKey))},
 	}
 	for _, tc := range cases {
 		if !strings.HasPrefix(tc.title, workspacePrefix) {
@@ -2518,7 +2516,7 @@ func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	targetSessionKey := "feishu:chat:chat-1"
-	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	bucketSessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -2892,7 +2890,7 @@ func TestStartNextSubmissionRefreshesRootTurnBinding(t *testing.T) {
 
 func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	sessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	sessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -2956,7 +2954,7 @@ func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	replySessionKey := "feishu:chat:chat-1"
-	bucketSessionKey := newReplyContinuationService(a).pendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	bucketSessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         replySessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -3601,7 +3599,7 @@ func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *t
 		return nil
 	}
 
-	card, err := conversationBackend(a).RenderThreadsCard(sessionKey, false)
+	card, err := renderThreadsCard(a, sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}
@@ -3647,7 +3645,7 @@ func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t
 		return nil
 	}
 
-	card, err := conversationBackend(a).RenderThreadsCard(sessionKey, false)
+	card, err := renderThreadsCard(a, sessionKey, false)
 	if err != nil {
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}

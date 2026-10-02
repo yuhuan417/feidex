@@ -7,8 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-
-	appconvbackend "feidex/internal/app/convbackend"
 )
 
 type codexRuntimeFacade struct{}
@@ -50,10 +48,6 @@ func (codexRuntimeFacade) clearActiveOperationsAfterInterrupt(_ *App, _ string, 
 	// Codex handles interrupt lifecycle asynchronously via turn/completed
 	// notifications, so we don't clear active operations here.
 	return sess
-}
-
-func (codexRuntimeFacade) conversationBackend(a *App) appconvbackend.ConversationBackendFacade {
-	return appconvbackend.NewCodexConversationBackend(a)
 }
 
 func (codexRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {

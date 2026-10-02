@@ -6,8 +6,8 @@ import (
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 
 	"context"
+	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	"feidex/internal/app/appcore"
-	appservicetiercmd "feidex/internal/app/servicetiercmd"
 	"feidex/internal/domain/conversation"
 	"os/exec"
 	"strings"

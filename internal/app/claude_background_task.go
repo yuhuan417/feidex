@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/claudecli"
+	appclauderuntime "feidex/internal/runtime/claude"
 )
 
 // sendClaudeBackgroundTaskNotification delivers the task_notification event

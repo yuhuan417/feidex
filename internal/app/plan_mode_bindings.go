@@ -198,5 +198,5 @@ func (a planModeAppAdapter) StartNextSubmission(sessionKey string) error {
 }
 
 func (a planModeAppAdapter) StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
-	return conversationBackend(a.App).StartWorkspaceThread(sessionKey, sess, ws)
+	return newConversationService(a.App).StartWorkspaceThread(sessionKey, sess, ws)
 }

@@ -1,0 +1,703 @@
+// Package turnstream provides the turn-stream service extracted from the app
+// god package. It manages per-turn stream state, quiet working cards, and
+// turn-item card dispatch.
+package turnstream
+
+import (
+	"context"
+	applicationturn "feidex/internal/application/turn"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
+	"strings"
+	"sync"
+
+	"feidex/internal/adapter/feishu/quietmode"
+	"feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
+	"feidex/internal/config"
+)
+
+// ---------------------------------------------------------------------------
+// Narrow provider interfaces
+// ---------------------------------------------------------------------------
+
+// StateProvider narrows app state access to the methods used by the service.
+type StateProvider interface {
+	Submission(id string) *domainsubmission.Submission
+	UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error
+}
+
+// SubmissionFinderProvider narrows the submission-by-turn lookup to the
+// methods used by the service.
+type SubmissionFinderProvider interface {
+	FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission)
+}
+
+// TurnLifecycleProvider narrows turn lifecycle access to the methods used by
+// the service.
+type TurnLifecycleProvider interface {
+	BindPendingSubmissionTurn(threadID, turnID string, allowReview bool) bool
+}
+
+// RuntimeStateProvider narrows runtime state access to the methods used by
+// the service.
+type RuntimeStateProvider interface {
+	CompleteTurnItemState(threadID, turnID, itemID string, item turnitem.ProtocolItem) turnitem.ProtocolItem
+	ClearTurnItemStates(turnID string)
+}
+
+// OutboundCardProvider narrows outbound card access to the methods used by
+// the service.
+type OutboundCardProvider interface {
+	SendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string
+	SendTurnItemCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, reuseMessageID string) string
+	CompleteStandaloneCompactItem(threadID, turnID string, item turnitem.ProtocolItem) bool
+}
+
+// QuietCardExecutorProvider provides the executeQuietWorkingCardOp callback
+// used by the service to send/patch quiet working cards.
+type QuietCardExecutorProvider interface {
+	ExecuteQuietWorkingCardOp(ctx context.Context, sub *domainsubmission.Submission, op turn.QuietWorkingCardOp)
+}
+
+// ---------------------------------------------------------------------------
+// Local helpers (used by exported methods below)
+// ---------------------------------------------------------------------------
+
+var (
+	firstNonEmpty                = textutil.FirstNonEmpty
+	stringValue                  = turnitem.StringValue
+	normalizeTurnItemType        = turnitem.NormalizeTurnItemType
+	buildTurnItemCardPayload     = turnitem.BuildTurnItemCardPayload
+	isQuietBoundaryTurnItem      = turn.IsQuietBoundaryTurnItem
+	prepareUpdateLocked          = turn.PrepareUpdateLocked
+	prepareBoundaryLocked        = turn.PrepareBoundaryLocked
+	quietMode                    = quietmode.Mode
+	quietModeEnabled             = quietmode.Enabled
+	quietWorkingCardEnabled      = quietmode.WorkingCardEnabled
+	shouldDeliverTurnItemPayload = quietmode.ShouldDeliverTurnItemPayload
+	isClaudeTodoToolPayload      = quietmode.IsClaudeTodoToolPayload
+)
+
+// IsQuietBoundaryTurnPayload reports whether the payload marks a quiet-card boundary.
+func IsQuietBoundaryTurnPayload(payload turnitem.CardPayload) bool {
+	return isQuietBoundaryTurnItem(payload.ItemType) || isClaudeTodoToolPayload(payload.ProtocolItemType, payload.ToolName)
+}
+
+// ---------------------------------------------------------------------------
+// Tracker and Stream — per-turn stream state
+// ---------------------------------------------------------------------------
+
+// Tracker tracks all active turn streams.
+type Tracker struct {
+	Mu      sync.Mutex
+	Streams map[string]*Stream
+}
+
+// NewTracker creates a new empty Tracker.
+func NewTracker() *Tracker {
+	return &Tracker{Streams: map[string]*Stream{}}
+}
+
+// Stream tracks the state of a single turn stream.
+type Stream struct {
+	TurnID       string
+	ThreadID     string
+	SubmissionID string
+	SessionKey   string
+	WorkspaceID  string
+
+	PendingPlan             string
+	LastSentPlan            string
+	PlanMessageID           string
+	SawPlanItem             bool
+	PlanItemID              string
+	PlanMarkdown            string
+	PlanCompleted           bool
+	LastError               string
+	SentFinal               bool
+	FinalMessageID          string
+	FinalCandidate          turnitem.CardPayload
+	FinalCandidateMessageID string
+	ReviewFinal             bool
+	QuietWorking            *turn.QuietWorkingCard
+}
+
+// FlushResult captures the result of flushing a turn stream.
+type FlushResult = applicationturn.StreamSummary
+
+// ---------------------------------------------------------------------------
+// Service — manages turn streams
+// ---------------------------------------------------------------------------
+
+// Service manages turn streams for a single app instance.
+type Dependencies struct {
+	Tracker           *Tracker
+	Finder            SubmissionFinderProvider
+	Lifecycle         TurnLifecycleProvider
+	Runtime           RuntimeStateProvider
+	Outbound          OutboundCardProvider
+	Quiet             QuietCardExecutorProvider
+	SendStartedNotice func(context.Context, *domainsubmission.Submission)
+	WorkspaceCwd      func(string) string
+	FeishuConfig      func() *config.FeishuConfig
+}
+type Service struct{ deps Dependencies }
+
+// NewService creates a new turn-stream service bound to the given app.
+func NewService(deps Dependencies) Service { return Service{deps: deps} }
+
+// Tracker returns the turn stream tracker via the App interface.
+func (svc Service) Tracker() *Tracker {
+	if svc.deps.Tracker == nil {
+		return nil
+	}
+	return svc.deps.Tracker
+}
+
+// NoteTurnStarted records that a turn has started for the given submission.
+func (svc Service) NoteTurnStarted(ctx context.Context, sessionKey string, sub *domainsubmission.Submission) {
+	if sub == nil || strings.TrimSpace(sub.TurnID) == "" {
+		return
+	}
+	svc.deps.SendStartedNotice(ctx, sub)
+	tracker := svc.Tracker()
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	svc.ensureStreamLocked(tracker, sessionKey, sub)
+}
+
+// UpdatePendingPlan records a pending plan update for the given turn.
+func (svc Service) UpdatePendingPlan(turnID, plan string) {
+	sessionKey, sub := svc.deps.Finder.FindSubmissionByTurn("", turnID)
+	if sub == nil {
+		return
+	}
+	tracker := svc.Tracker()
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
+	stream.PendingPlan = strings.TrimSpace(plan)
+}
+
+// RecordTurnError records an error for the given turn.
+func (svc Service) RecordTurnError(threadID, turnID, message string) {
+	sessionKey, sub := svc.deps.Finder.FindSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		return
+	}
+	tracker := svc.Tracker()
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
+	stream.LastError = strings.TrimSpace(message)
+}
+
+// CompleteTurnItem processes a completed turn item, building and sending the
+// appropriate card, managing quiet working cards, and updating stream state.
+func (svc Service) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+	_ = svc.CompleteTurnItemWithResult(ctx, threadID, turnID, itemID, item)
+}
+
+// UpdateInFlightTurnItem projects a started or progress item snapshot without
+// closing the underlying item lifecycle state.
+func (svc Service) UpdateInFlightTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
+	if svc.deps.Tracker == nil {
+		return
+	}
+	svc.deps.Lifecycle.BindPendingSubmissionTurn(threadID, turnID, true)
+	itemID = strings.TrimSpace(item.EffectiveID(itemID))
+	sessionKey, sub := svc.deps.Finder.FindSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		return
+	}
+	workspaceCwd := svc.deps.WorkspaceCwd(sub.WorkspaceID)
+	rawItem := item.MergedRaw()
+	payload, hasPayload := buildTurnItemCardPayload(itemID, rawItem, workspaceCwd)
+
+	var workingUpdate turn.QuietWorkingCardOp
+	if quietWorkingCardEnabled(svc.feishuConfig()) && hasPayload && !IsQuietBoundaryTurnPayload(payload) {
+		tracker := svc.Tracker()
+		tracker.Mu.Lock()
+		stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
+		if strings.TrimSpace(threadID) != "" {
+			stream.ThreadID = threadID
+		}
+		workingUpdate = prepareStreamUpdateLocked(stream, itemID, item, workspaceCwd)
+		tracker.Mu.Unlock()
+	}
+	if quietWorkingCardEnabled(svc.feishuConfig()) {
+		svc.deps.Quiet.ExecuteQuietWorkingCardOp(ctx, sub, workingUpdate)
+	}
+	if hasPayload && (!quietModeEnabled(svc.feishuConfig()) || shouldDeliverTurnItemPayload(quietMode(svc.feishuConfig()), payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)) {
+		svc.deps.Outbound.SendTurnItemCardWithReuse(ctx, sub, payload, "")
+	}
+}
+
+// CompleteTurnItemWithResult processes a completed turn item and returns the
+// merged final item payload after started/completed state has been reconciled.
+func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) turnitem.ProtocolItem {
+	if svc.deps.Tracker == nil {
+		return turnitem.ProtocolItem{}
+	}
+	svc.deps.Lifecycle.BindPendingSubmissionTurn(threadID, turnID, true)
+	item = svc.deps.Runtime.CompleteTurnItemState(threadID, turnID, itemID, item)
+	itemID = strings.TrimSpace(item.EffectiveID(itemID))
+	if svc.deps.Outbound.CompleteStandaloneCompactItem(threadID, turnID, item) {
+		return item
+	}
+	sessionKey, sub := svc.deps.Finder.FindSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		return item
+	}
+	workspaceCwd := svc.deps.WorkspaceCwd(sub.WorkspaceID)
+	rawItem := item.MergedRaw()
+	payload, hasPayload := buildTurnItemCardPayload(itemID, rawItem, workspaceCwd)
+	itemType := normalizeTurnItemType(firstNonEmpty(stringValue(rawItem["type"]), item.Type))
+	planMarkdown := ""
+	if itemType == "plan" {
+		planMarkdown = strings.TrimSpace(stringValue(rawItem["text"]))
+	}
+
+	var (
+		planText                 string
+		planBoundary             turn.QuietWorkingBoundary
+		itemBoundary             turn.QuietWorkingBoundary
+		workingUpdate            turn.QuietWorkingCardOp
+		planReuseMessage         string
+		itemReuseMessage         string
+		rememberFinalMessage     bool
+		rememberCandidateMessage bool
+		skipPayload              bool
+	)
+
+	tracker := svc.Tracker()
+	tracker.Mu.Lock()
+	stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
+	if strings.TrimSpace(threadID) != "" {
+		stream.ThreadID = threadID
+	}
+	if itemType == "plan" {
+		stream.SawPlanItem = true
+		stream.PlanItemID = itemID
+		stream.PlanMarkdown = planMarkdown
+		stream.PlanCompleted = true
+		skipPayload = true
+	}
+	if text := strings.TrimSpace(stream.PendingPlan); text != "" && text != stream.LastSentPlan {
+		planText = text
+		stream.LastSentPlan = text
+		stream.PendingPlan = ""
+		if stream.QuietWorking != nil {
+			planBoundary = prepareStreamBoundaryLocked(stream)
+			planReuseMessage = planBoundary.ReuseMessageID
+		}
+	}
+	if hasPayload && payload.ItemType == "user_input" {
+		// Keep questions in place, including when a later final arrives or
+		// completion would otherwise promote the preceding commentary.
+		stream.FinalMessageID = ""
+		stream.FinalCandidate = turnitem.CardPayload{}
+		stream.FinalCandidateMessageID = ""
+	} else if hasPayload {
+		switch normalizeTurnItemType(firstNonEmpty(payload.ProtocolItemType, payload.ItemType)) {
+		case "exited_review_mode":
+			if payload.IsFinalAnswer {
+				stream.SentFinal = true
+				stream.ReviewFinal = true
+				itemReuseMessage = strings.TrimSpace(stream.FinalMessageID)
+				rememberFinalMessage = true
+			}
+		case "agent_message":
+			if stream.ReviewFinal {
+				skipPayload = true
+			} else if payload.IsFinalAnswer {
+				stream.SentFinal = true
+				itemReuseMessage = strings.TrimSpace(stream.FinalMessageID)
+				rememberFinalMessage = true
+			} else if strings.TrimSpace(turnitem.ReplyTurnItemCardBody(payload)) != "" {
+				stream.FinalCandidate = payload
+				stream.FinalCandidateMessageID = ""
+				rememberCandidateMessage = true
+			}
+		default:
+			if payload.IsFinalAnswer {
+				stream.SentFinal = true
+				itemReuseMessage = strings.TrimSpace(stream.FinalMessageID)
+				rememberFinalMessage = true
+			}
+		}
+	}
+	if hasPayload && IsQuietBoundaryTurnPayload(payload) {
+		if stream.QuietWorking != nil {
+			itemBoundary = prepareStreamBoundaryLocked(stream)
+			if strings.TrimSpace(itemReuseMessage) == "" {
+				itemReuseMessage = itemBoundary.ReuseMessageID
+			}
+			if itemType == "plan" {
+				stream.PlanMessageID = strings.TrimSpace(firstNonEmpty(itemReuseMessage, itemBoundary.Op.MessageID, stream.PlanMessageID))
+			}
+		}
+	} else if quietWorkingCardEnabled(svc.feishuConfig()) {
+		workingUpdate = prepareStreamUpdateLocked(stream, itemID, item, workspaceCwd)
+	}
+	tracker.Mu.Unlock()
+
+	svc.deps.Quiet.ExecuteQuietWorkingCardOp(ctx, sub, planBoundary.Op)
+	if planText != "" {
+		if msgID := strings.TrimSpace(svc.deps.Outbound.SendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)); msgID != "" {
+			svc.rememberPlanMessageID(turnID, msgID)
+		}
+	}
+	svc.deps.Quiet.ExecuteQuietWorkingCardOp(ctx, sub, itemBoundary.Op)
+	if quietWorkingCardEnabled(svc.feishuConfig()) {
+		svc.deps.Quiet.ExecuteQuietWorkingCardOp(ctx, sub, workingUpdate)
+	}
+	if hasPayload && !skipPayload && (!quietModeEnabled(svc.feishuConfig()) || shouldDeliverTurnItemPayload(quietMode(svc.feishuConfig()), payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)) {
+		messageID := svc.deps.Outbound.SendTurnItemCardWithReuse(ctx, sub, payload, itemReuseMessage)
+		if rememberFinalMessage {
+			svc.rememberFinalMessageID(turnID, messageID)
+		} else if rememberCandidateMessage {
+			svc.rememberFinalCandidateMessageID(turnID, itemID, messageID)
+		}
+	}
+	return item
+}
+
+// FlushTurnStream flushes the turn stream for the given turn, sending any
+// pending plan and cleaning up the stream.
+func (svc Service) FlushTurnStream(ctx context.Context, threadID, turnID string) FlushResult {
+	sessionKey, sub := svc.deps.Finder.FindSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		svc.DeleteStream(turnID)
+		svc.deps.Runtime.ClearTurnItemStates(turnID)
+		return FlushResult{}
+	}
+
+	var (
+		planText         string
+		planBoundary     turn.QuietWorkingBoundary
+		planReuseMessage string
+		result           FlushResult
+	)
+
+	tracker := svc.Tracker()
+	tracker.Mu.Lock()
+	stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
+	result.SawFinal = stream.SentFinal
+	result.SawPlanItem = stream.SawPlanItem
+	result.PlanCompleted = stream.PlanCompleted
+	result.PlanMarkdown = strings.TrimSpace(stream.PlanMarkdown)
+	result.PlanMessageID = strings.TrimSpace(stream.PlanMessageID)
+	result.ShouldUsePlanExitPrompt = stream.SawPlanItem && stream.PlanCompleted && result.PlanMarkdown != ""
+	result.LastError = stream.LastError
+	if !stream.SentFinal {
+		result.FinalText = strings.TrimSpace(turnitem.ReplyTurnItemCardBody(stream.FinalCandidate))
+		result.FinalReuseMessageID = strings.TrimSpace(stream.FinalCandidateMessageID)
+	}
+	pendingPlan := strings.TrimSpace(stream.PendingPlan)
+	if stream.QuietWorking != nil && stream.QuietWorking.IsReasoningOnly() && (pendingPlan == "" || pendingPlan == stream.LastSentPlan) {
+		result.WorkingMessageID = strings.TrimSpace(stream.QuietWorking.MessageID)
+	}
+	if pendingPlan != "" && pendingPlan != stream.LastSentPlan {
+		planText = pendingPlan
+		if stream.QuietWorking != nil {
+			planBoundary = prepareStreamBoundaryLocked(stream)
+			planReuseMessage = planBoundary.ReuseMessageID
+		}
+	}
+	delete(tracker.Streams, turnID)
+	tracker.Mu.Unlock()
+
+	svc.deps.Quiet.ExecuteQuietWorkingCardOp(ctx, sub, planBoundary.Op)
+	if planText != "" {
+		if msgID := strings.TrimSpace(svc.deps.Outbound.SendPlanCardWithReuse(ctx, sub, planText, planReuseMessage)); msgID != "" {
+			result.PlanMessageID = msgID
+		}
+	}
+	return result
+}
+
+// StreamSawFinal reports whether the turn stream saw a final item.
+func (svc Service) StreamSawFinal(turnID string) bool {
+	if svc.deps.Tracker == nil || strings.TrimSpace(turnID) == "" {
+		return false
+	}
+	tracker := svc.Tracker()
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	stream := tracker.Streams[strings.TrimSpace(turnID)]
+	return stream != nil && stream.SentFinal
+}
+
+// EnsureStreamLocked ensures a stream entry exists for the given submission,
+// updating it if it already exists. The caller must hold the tracker mutex.
+func (svc Service) EnsureStreamLocked(tracker *Tracker, sessionKey string, sub *domainsubmission.Submission) *Stream {
+	if tracker == nil {
+		return nil
+	}
+	if tracker.Streams == nil {
+		tracker.Streams = map[string]*Stream{}
+	}
+	stream := tracker.Streams[sub.TurnID]
+	if stream != nil {
+		stream.SessionKey = sessionKey
+		stream.SubmissionID = sub.ID
+		stream.WorkspaceID = sub.WorkspaceID
+		if strings.TrimSpace(sub.ThreadID) != "" {
+			stream.ThreadID = sub.ThreadID
+		}
+		return stream
+	}
+	stream = &Stream{
+		TurnID:       sub.TurnID,
+		ThreadID:     sub.ThreadID,
+		SubmissionID: sub.ID,
+		SessionKey:   sessionKey,
+		WorkspaceID:  sub.WorkspaceID,
+	}
+	tracker.Streams[sub.TurnID] = stream
+	return stream
+}
+
+// DeleteStream removes the stream entry for the given turn.
+func (svc Service) DeleteStream(turnID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	delete(tracker.Streams, turnID)
+	tracker.Mu.Unlock()
+}
+
+// MarkStreamFinal marks the stream for the given turn as having sent a final item.
+func (svc Service) MarkStreamFinal(turnID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	if stream := tracker.Streams[turnID]; stream != nil {
+		stream.SentFinal = true
+	}
+	tracker.Mu.Unlock()
+}
+
+// DiscardWorkingCard retires the current working card after a card that is not
+// a progress card became the newest card in the conversation (a question or
+// approval card, for example). Later progress must start a new card: patching
+// the retired card would both update a card that is no longer the newest one
+// and rewrite content the user has already read.
+func (svc Service) DiscardWorkingCard(turnID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	stream := tracker.Streams[turnID]
+	if stream == nil {
+		return
+	}
+	stream.QuietWorking = nil
+}
+
+// TakeReasoningOnlyWorkingMessageID claims a reasoning-only working card for
+// replacement by the first substantive card in the turn.
+func (svc Service) TakeReasoningOnlyWorkingMessageID(turnID string) string {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return ""
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return ""
+	}
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	stream := tracker.Streams[turnID]
+	if stream == nil || stream.QuietWorking == nil || !stream.QuietWorking.IsReasoningOnly() {
+		return ""
+	}
+	messageID := strings.TrimSpace(stream.QuietWorking.MessageID)
+	if messageID == "" {
+		return ""
+	}
+	stream.QuietWorking = nil
+	return messageID
+}
+
+// PrepareStreamQuietBoundary prepares the quiet working card boundary for the
+// given turn stream.
+func (svc Service) PrepareStreamQuietBoundary(turnID string) turn.QuietWorkingBoundary {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return turn.QuietWorkingBoundary{}
+	}
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return turn.QuietWorkingBoundary{}
+	}
+	tracker.Mu.Lock()
+	stream := tracker.Streams[turnID]
+	ss := toStreamState(stream)
+	boundary := prepareBoundaryLocked(ss)
+	if stream != nil {
+		stream.QuietWorking = ss.QuietWorking
+	}
+	tracker.Mu.Unlock()
+	return boundary
+}
+
+// PrepareStreamQuietUpdate prepares a quiet working card update for the given
+// turn stream.
+func (svc Service) PrepareStreamQuietUpdate(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
+	tracker := svc.Tracker()
+	if tracker == nil || sub == nil {
+		return turn.QuietWorkingCardOp{}
+	}
+	tracker.Mu.Lock()
+	stream := svc.ensureStreamLocked(tracker, sessionKey, sub)
+	if strings.TrimSpace(threadID) != "" {
+		stream.ThreadID = strings.TrimSpace(threadID)
+	}
+	op := prepareStreamUpdateLocked(stream, itemID, item, workspaceCwd)
+	tracker.Mu.Unlock()
+	return op
+}
+
+// CommitStreamQuietRender records the rendered body and message ID for a quiet
+// working card.
+func (svc Service) CommitStreamQuietRender(turnID, messageID, body string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	tracker.Mu.Lock()
+	defer tracker.Mu.Unlock()
+	stream := tracker.Streams[strings.TrimSpace(turnID)]
+	if stream == nil || stream.QuietWorking == nil {
+		return
+	}
+	if strings.TrimSpace(messageID) != "" {
+		stream.QuietWorking.MessageID = messageID
+	}
+	stream.QuietWorking.RenderedBody = body
+}
+
+func (svc Service) rememberPlanMessageID(turnID, messageID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	messageID = strings.TrimSpace(messageID)
+	if turnID == "" || messageID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	if stream := tracker.Streams[turnID]; stream != nil {
+		stream.PlanMessageID = messageID
+	}
+	tracker.Mu.Unlock()
+}
+
+func (svc Service) rememberFinalMessageID(turnID, messageID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	messageID = strings.TrimSpace(messageID)
+	if turnID == "" || messageID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	if stream := tracker.Streams[turnID]; stream != nil {
+		stream.FinalMessageID = messageID
+	}
+	tracker.Mu.Unlock()
+}
+
+func (svc Service) rememberFinalCandidateMessageID(turnID, itemID, messageID string) {
+	tracker := svc.Tracker()
+	if tracker == nil {
+		return
+	}
+	turnID = strings.TrimSpace(turnID)
+	itemID = strings.TrimSpace(itemID)
+	messageID = strings.TrimSpace(messageID)
+	if turnID == "" || itemID == "" || messageID == "" {
+		return
+	}
+	tracker.Mu.Lock()
+	if stream := tracker.Streams[turnID]; stream != nil && strings.TrimSpace(stream.FinalCandidate.ItemID) == itemID {
+		stream.FinalCandidateMessageID = messageID
+	}
+	tracker.Mu.Unlock()
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+// feishuConfig returns the active Feishu config for the app.
+func (svc Service) feishuConfig() *config.FeishuConfig {
+	return svc.deps.FeishuConfig()
+}
+
+// ensureStreamLocked ensures a stream exists for the submission. Alias for
+// EnsureStreamLocked for internal use.
+func (svc Service) ensureStreamLocked(tracker *Tracker, sessionKey string, sub *domainsubmission.Submission) *Stream {
+	return svc.EnsureStreamLocked(tracker, sessionKey, sub)
+}
+
+// toStreamState converts a Stream to a turn.StreamState for use with turn
+// package functions.
+func toStreamState(s *Stream) *turn.StreamState {
+	if s == nil {
+		return nil
+	}
+	return &turn.StreamState{
+		TurnID:       s.TurnID,
+		QuietWorking: s.QuietWorking,
+	}
+}
+
+// prepareStreamUpdateLocked wraps turn.PrepareUpdateLocked for use within the
+// service. It converts between Stream and turn.StreamState.
+func prepareStreamUpdateLocked(stream *Stream, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
+	rawItem := item.MergedRaw()
+	if stream == nil {
+		return prepareUpdateLocked(nil, itemID, rawItem, workspaceCwd)
+	}
+	ss := toStreamState(stream)
+	op := prepareUpdateLocked(ss, itemID, rawItem, workspaceCwd)
+	stream.QuietWorking = ss.QuietWorking
+	return op
+}
+
+// prepareStreamBoundaryLocked wraps turn.PrepareBoundaryLocked for use within
+// the service. It converts between Stream and turn.StreamState.
+func prepareStreamBoundaryLocked(stream *Stream) turn.QuietWorkingBoundary {
+	if stream == nil {
+		return prepareBoundaryLocked(nil)
+	}
+	ss := toStreamState(stream)
+	boundary := prepareBoundaryLocked(ss)
+	stream.QuietWorking = ss.QuietWorking
+	return boundary
+}

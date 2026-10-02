@@ -32,7 +32,7 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 			})
 			newRuntimeStateService(a).rebindTurnThreadID(turnID, threadID)
 			if updated := appState.Submission(sub.ID); updated != nil {
-				newReplyContinuationService(a).recordSubmissionSourceLinks(updated)
+				newReplyContinuationService(a).RecordSubmissionSourceLinks(updated)
 			}
 		}
 	}
@@ -70,7 +70,7 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 			if workspaceID == "" {
 				workspaceID = strings.TrimSpace(updated.WorkspaceID)
 			}
-			newReplyContinuationService(a).recordSubmissionSourceLinks(updated)
+			newReplyContinuationService(a).RecordSubmissionSourceLinks(updated)
 		}
 	}
 	updatedSess, _ := appState.UpdateSession(sessionKey, func(current *conversation.Session) {
@@ -94,6 +94,6 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 	markSessionThreadLive(a, sessionKey, threadID)
 
 	if updatedSess != nil && strings.TrimSpace(updatedSess.RootMessageID) != "" && turnID != "" {
-		newReplyContinuationService(a).recordRootTurnBinding(updatedSess.RootMessageID, sessionKey, threadID, turnID)
+		newReplyContinuationService(a).RecordRootTurnBinding(updatedSess.RootMessageID, sessionKey, threadID, turnID)
 	}
 }

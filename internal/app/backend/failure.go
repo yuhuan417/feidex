@@ -10,7 +10,7 @@ import (
 
 	appturnlifecycle "feidex/internal/application/turn"
 
-	appturnstream "feidex/internal/app/turnstream"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/state"
 )
 

@@ -15,7 +15,7 @@ import (
 	appthreadview "feidex/internal/adapter/feishu/threadview"
 	appcore "feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
-	appconvbackend "feidex/internal/app/convbackend"
+
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -138,12 +138,7 @@ type BackendActionProvider interface {
 }
 
 // ThreadResumeSelection describes a thread resume selection from the UI.
-type ThreadResumeSelection struct {
-	ThreadID string
-	Name     string
-	Preview  string
-	Cwd      string
-}
+type ThreadResumeSelection = conversation.ThreadSelection
 
 // ThreadBinding is an alias for the workspace thread binding type.
 type ThreadBinding = appworkspace.ThreadBinding
@@ -158,7 +153,7 @@ func isUIWarningError(err error) bool {
 	if errors.As(err, &target) {
 		return true
 	}
-	return appconvbackend.IsUIWarningError(err)
+	return conversation.IsWarning(err)
 }
 
 // NewUIWarningError creates a new UI warning error.

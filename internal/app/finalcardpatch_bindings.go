@@ -2,70 +2,24 @@ package app
 
 import (
 	"context"
+	"feidex/internal/adapter/feishu/finalcardpatch"
 	domainsubmission "feidex/internal/domain/submission"
-
-	appfinalcardpatch "feidex/internal/app/finalcardpatch"
 )
 
-// ---------------------------------------------------------------------------
-// Provider adapters — satisfy finalcardpatch narrow interfaces
-// ---------------------------------------------------------------------------
-
-type finalCardPatchSubmissionFinderAdapter struct{ app *App }
-
-func (a finalCardPatchSubmissionFinderAdapter) Submission(id string) *domainsubmission.Submission {
-	return a.app.State().Submission(id)
-}
-
-type finalCardPatchFeishuAdapter struct{ app *App }
-
-func (a finalCardPatchFeishuAdapter) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
-	if a.app == nil || a.app.feishu == nil {
-		return nil
-	}
-	return a.app.feishu.PatchCard(ctx, messageID, card)
-}
-
-// ---------------------------------------------------------------------------
-// *App methods satisfying finalcardpatch.App
-// ---------------------------------------------------------------------------
-
-// FinalCardPatchTracker returns the final-card-patch tracker, lazily
-// initializing it.
-func (a *App) FinalCardPatchTracker() *appfinalcardpatch.Tracker {
+func newFinalCardPatchService(a *App) finalcardpatch.Service {
 	if a == nil {
-		return nil
+		return finalcardpatch.Service{}
 	}
 	if a.trackers.finalCardPatches == nil {
-		a.trackers.finalCardPatches = appfinalcardpatch.NewTracker()
+		a.trackers.finalCardPatches = finalcardpatch.NewTracker()
 	}
-	return a.trackers.finalCardPatches
-}
-
-// FinalCardPatchSubmissionFinder returns the narrowed submission finder for the
-// final-card-patch service.
-func (a *App) FinalCardPatchSubmissionFinder() appfinalcardpatch.SubmissionFinderProvider {
-	if a == nil {
-		return nil
-	}
-	return finalCardPatchSubmissionFinderAdapter{app: a}
-}
-
-// FinalCardPatchCardRenderer returns the card renderer callback for the
-// final-card-patch service.
-func (a *App) FinalCardPatchCardRenderer() appfinalcardpatch.CardRendererFunc {
-	return func(ctx context.Context, sub *domainsubmission.Submission, title, color string, showHeader bool, body string, footerLines []string) map[string]any {
-		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, body, nil, true)
-		appendReplyCardFooter(card, footerLines)
-		return card
-	}
-}
-
-// FinalCardPatchFeishu returns the narrowed Feishu client for the
-// final-card-patch service.
-func (a *App) FinalCardPatchFeishu() appfinalcardpatch.FeishuPatcher {
-	if a == nil {
-		return nil
-	}
-	return finalCardPatchFeishuAdapter{app: a}
+	return finalcardpatch.NewService(finalcardpatch.Dependencies{
+		Context: a.Context, Tracker: a.trackers.finalCardPatches, Finder: a.State(), Patcher: a.feishu,
+		RunAsync: func(fn func()) { runAsync(a, fn) },
+		Renderer: func(ctx context.Context, sub *domainsubmission.Submission, title, color string, showHeader bool, body string, footerLines []string) map[string]any {
+			card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, body, nil, true)
+			appendReplyCardFooter(card, footerLines)
+			return card
+		},
+	})
 }

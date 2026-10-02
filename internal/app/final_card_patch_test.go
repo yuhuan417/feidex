@@ -10,17 +10,17 @@ func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	svc := newFinalCardPatchService(a)
-	svc.registerFinalCardPatchState("card-1", sub, "最终答复", "green", true, "original body", []string{"elapsed: 1s"})
-	if !svc.markFinalCardPreviewPending("card-1") {
+	svc.RegisterFinalCardPatchState("card-1", sub, "最终答复", "green", true, "original body", []string{"elapsed: 1s"})
+	if !svc.MarkFinalCardPreviewPending("card-1") {
 		t.Fatal("expected preview patch state to exist")
 	}
-	if !svc.updateFinalCardPatchFooterLines("card-1", []string{"context used: 13.0%", "elapsed: 1s"}) {
+	if !svc.UpdateFinalCardPatchFooterLines("card-1", []string{"context used: 13.0%", "elapsed: 1s"}) {
 		t.Fatal("expected footer update to be accepted")
 	}
-	if !svc.updateFinalCardPatchBody("card-1", "rewritten body") {
+	if !svc.UpdateFinalCardPatchBody("card-1", "rewritten body") {
 		t.Fatal("expected body update to be accepted")
 	}
-	svc.markFinalCardPreviewDone("card-1")
+	svc.MarkFinalCardPreviewDone("card-1")
 
 	waitForTestCondition(t, "final card patch with rewritten body", func() bool {
 		for _, p := range ff.patchedCardsSnapshot() {

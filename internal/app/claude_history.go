@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"feidex/internal/app/claudesession"
+	claudesession "feidex/internal/adapter/backend/claude/catalog"
 	"feidex/internal/app/claudesupport"
 	apphistorycmd "feidex/internal/app/historycmd"
 	appthreadmenu "feidex/internal/app/threadmenu"

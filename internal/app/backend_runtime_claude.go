@@ -8,8 +8,6 @@ import (
 	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
-
-	appconvbackend "feidex/internal/app/convbackend"
 )
 
 type claudeRuntimeFacade struct{}
@@ -100,10 +98,6 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 		return sess
 	}
 	return updatedSess
-}
-
-func (claudeRuntimeFacade) conversationBackend(a *App) appconvbackend.ConversationBackendFacade {
-	return appconvbackend.NewClaudeConversationBackend(a)
 }
 
 func (claudeRuntimeFacade) buildRuntime(a *App) *backendRuntimeHandle {

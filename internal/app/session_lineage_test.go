@@ -3,7 +3,7 @@ package app
 import (
 	domainsubmission "feidex/internal/domain/submission"
 
-	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"testing"

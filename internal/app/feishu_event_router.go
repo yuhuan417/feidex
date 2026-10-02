@@ -169,10 +169,10 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		}
 	}
 	rcs := newReplyContinuationService(a)
-	replyLink := rcs.replyRootTurnLink(msg)
+	replyLink := rcs.ReplyRootTurnLink(msg)
 	targetSessionKey := makeSessionKey(a, msg)
 	if replyLink != nil {
-		targetSessionKey = rcs.sessionKeyForInboundMessage(msg, replyLink)
+		targetSessionKey = rcs.SessionKeyForInboundMessage(msg, replyLink)
 	}
 	pqs := newPendingQueueService(a)
 	if pqs.shouldStageInboundImages(msg) {
@@ -185,7 +185,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return nil
 	}
 	if replyLink != nil {
-		if steered, err := rcs.trySteerInboundReply(msg, replyLink); err == nil && steered {
+		if steered, err := rcs.TrySteerInboundReply(msg, replyLink); err == nil && steered {
 			return nil
 		} else if err != nil {
 			slog.Warn("reply steer failed; falling back to queue",
