@@ -18,22 +18,25 @@ import (
 // Composition explicitly binds input families to owners. Backend event
 // decoding has already completed when Dispatch is called.
 func newInputDispatcher(a *App) application.Dispatcher {
+	router := newFeishuEventRouter(a)
+	cardActions := newCardActionService(a)
+	backendEvents := newBackendEventService(a)
 	return application.Dispatcher{
 		Frontend: identity.FrontendID(a.FrontendID()),
 		Message: func(_ context.Context, event application.MessageReceived) (application.Result, error) {
-			newFeishuEventRouter(a).handleMessage(&event.Message)
+			router.handleMessage(&event.Message)
 			return application.Result{}, nil
 		},
 		Card: func(_ context.Context, event application.CardActionReceived) (application.Result, error) {
-			response, err := newCardActionService(a).dispatch(&event.Action)
+			response, err := cardActions.dispatch(&event.Action)
 			return application.Result{Response: response}, err
 		},
 		Recall: func(_ context.Context, event application.MessageRecalled) (application.Result, error) {
-			newFeishuEventRouter(a).handleRecall(&feishu.MessageRecall{MessageID: event.MessageID, ChatID: event.ChatID})
+			router.handleRecall(&feishu.MessageRecall{MessageID: event.MessageID, ChatID: event.ChatID})
 			return application.Result{}, nil
 		},
 		Reaction: func(_ context.Context, event application.MessageReacted) (application.Result, error) {
-			newFeishuEventRouter(a).handleReaction(&feishu.MessageReaction{MessageID: event.MessageID, ChatID: event.ChatID, UserID: event.UserID, EmojiType: event.EmojiType})
+			router.handleReaction(&feishu.MessageReaction{MessageID: event.MessageID, ChatID: event.ChatID, UserID: event.UserID, EmojiType: event.EmojiType})
 			return application.Result{}, nil
 		},
 		Retry: func(_ context.Context, event application.RetryTimerFired) (application.Result, error) {
@@ -41,7 +44,7 @@ func newInputDispatcher(a *App) application.Dispatcher {
 			return application.Result{}, nil
 		},
 		Backend: func(ctx context.Context, event application.BackendEventReceived) (application.Result, error) {
-			return newBackendEventService(a).Handle(ctx, event.Event)
+			return backendEvents.Handle(ctx, event.Event)
 		},
 	}
 }
