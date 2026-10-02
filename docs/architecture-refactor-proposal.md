@@ -503,4 +503,4 @@ Codex server request
 - group message root anchor normalization 已迁入 application，Feishu router 只负责把 inbound 字段转换为 routing input。
 - composition cache 的锁和生命周期也已从 `App` 移入 `appComposition`，避免宿主继续承担 service registry synchronization。
 
-当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，effect pipeline 尚未覆盖全部同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
+当前剩余：`feishu_event_router.processMessage` 中仍有较宽的 message command 编排，backend runtime facade 仍接收 frontend 宿主上下文，`App` 仍持有部分 runtime/client/tracker 字段。effect outbound pipeline、card action dispatch 和主要 composition cache 已完成；以上宿主边界收窄前保持“实施中”。
