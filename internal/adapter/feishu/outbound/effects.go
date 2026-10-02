@@ -26,7 +26,7 @@ func NewEffectRunner(client Client) runtime.EffectRunner {
 			if client == nil {
 				return fmt.Errorf("feishu outbound unavailable")
 			}
-			if e.ReplyMessageID != "" {
+			if e.ReplyMessageID != "" || e.Chat.ID == "" {
 				return client.ReplyText(ctx, e.ReplyMessageID, e.Text, e.InThread)
 			}
 			return client.SendText(ctx, e.Chat.ID, e.Text)
@@ -35,7 +35,7 @@ func NewEffectRunner(client Client) runtime.EffectRunner {
 			if client == nil {
 				return "", fmt.Errorf("feishu outbound unavailable")
 			}
-			if e.ReplyMessageID != "" {
+			if e.ReplyMessageID != "" || e.Chat.ID == "" {
 				return client.ReplyTextWithID(ctx, e.ReplyMessageID, e.Text, e.InThread)
 			}
 			return "", client.SendText(ctx, e.Chat.ID, e.Text)
@@ -48,7 +48,10 @@ func NewEffectRunner(client Client) runtime.EffectRunner {
 			if client == nil {
 				return fmt.Errorf("feishu outbound unavailable")
 			}
-			if e.ReplyMessageID != "" {
+			// An empty target is preserved as a reply operation for command
+			// capture and legacy callers that intentionally supplied an empty
+			// message ID. A chat target is required for a true send operation.
+			if e.ReplyMessageID != "" || e.Chat.ID == "" {
 				_, err = client.ReplyCard(ctx, e.ReplyMessageID, card, e.InThread)
 				return err
 			}
@@ -63,7 +66,7 @@ func NewEffectRunner(client Client) runtime.EffectRunner {
 			if client == nil {
 				return "", fmt.Errorf("feishu outbound unavailable")
 			}
-			if e.ReplyMessageID != "" {
+			if e.ReplyMessageID != "" || e.Chat.ID == "" {
 				return client.ReplyCard(ctx, e.ReplyMessageID, card, e.InThread)
 			}
 			return client.SendCard(ctx, e.Chat.ID, card)

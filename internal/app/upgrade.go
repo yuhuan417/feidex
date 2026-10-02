@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	appcommandmatch "feidex/internal/app/commandmatch"
 
 	"strings"
@@ -10,6 +11,21 @@ import (
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 )
+
+type upgradeOutbound struct{ app *App }
+
+func (o upgradeOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+}
+
+type upgradeCardRenderer struct{ app *App }
+
+func (r upgradeCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
+	if r.app == nil || r.app.feishu == nil {
+		return nil
+	}
+	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
+}
 
 func newUpgradeService(app *App) appupgradecmd.UpgradeService {
 
@@ -35,10 +51,9 @@ func newUpgradeService(app *App) appupgradecmd.UpgradeService {
 	}
 
 	adapter := &appupgradecmd.DefaultApp{
-		ContextFunc: app.Context,
-		FeishuClientFunc: func() appupgradecmd.FeishuClient {
-			return app.feishu
-		},
+		ContextFunc:      app.Context,
+		OutboundFunc:     func() appupgradecmd.Outbound { return upgradeOutbound{app: app} },
+		CardRendererFunc: func() appupgradecmd.CardRenderer { return upgradeCardRenderer{app: app} },
 		StateFunc: func() appupgradecmd.UpgradeState {
 			return app.State()
 		},

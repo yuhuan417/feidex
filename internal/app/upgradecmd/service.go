@@ -43,15 +43,19 @@ type UpgradeState interface {
 	UpdatePending(id string, mutate func(*state.PendingRequest)) error
 }
 
-type FeishuClient interface {
-	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
+type Outbound interface {
 	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
+}
+
+type CardRenderer interface {
+	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }
 
 // DefaultApp provides an App implementation backed by function callbacks.
 type DefaultApp struct {
 	ContextFunc              func() context.Context
-	FeishuClientFunc         func() FeishuClient
+	OutboundFunc             func() Outbound
+	CardRendererFunc         func() CardRenderer
 	StateFunc                func() UpgradeState
 	CurrentWorkspaceFunc     func(msg *feishu.InboundMessage) (string, *config.Workspace)
 	WorkspaceForSessionFunc  func(sessionKey string) *config.Workspace
@@ -63,8 +67,9 @@ type DefaultApp struct {
 	MenuCardBodyFunc         func(action, body string) string
 }
 
-func (a *DefaultApp) UpgradeFeishu() FeishuClient { return a.FeishuClientFunc() }
-func (a *DefaultApp) UpgradeState() UpgradeState  { return a.StateFunc() }
+func (a *DefaultApp) UpgradeOutbound() Outbound     { return a.OutboundFunc() }
+func (a *DefaultApp) UpgradeRenderer() CardRenderer { return a.CardRendererFunc() }
+func (a *DefaultApp) UpgradeState() UpgradeState    { return a.StateFunc() }
 func (a *DefaultApp) UpgradeCurrentWorkspace(msg *feishu.InboundMessage) (string, *config.Workspace) {
 	return a.CurrentWorkspaceFunc(msg)
 }
@@ -159,7 +164,7 @@ func NewUpgradeService(app *DefaultApp, deps UpgradeServiceDeps) UpgradeService 
 // RenderUpgradePreparingCard renders the "checking for upgrades" card.
 func (s UpgradeService) RenderUpgradePreparingCard(sessionKey string) map[string]any {
 	body := "正在检查可升级版本，请稍候。\n\n这张卡片会自动刷新。"
-	return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "blue", s.app.MenuCardBody("menu.upgrade", body), nil)
+	return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "blue", s.app.MenuCardBody("menu.upgrade", body), nil)
 }
 
 // RenderUpgradeFailedCard renders the "upgrade check failed" card.
@@ -168,7 +173,7 @@ func (s UpgradeService) RenderUpgradeFailedCard(sessionKey, errText string) map[
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text
 	}
-	return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", body), UpgradePanelButtons(sessionKey, nil, true))
+	return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", body), UpgradePanelButtons(sessionKey, nil, true))
 }
 
 // RenderUpgradeCardForVersion renders the upgrade card for a specific version.
@@ -217,7 +222,7 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		if err != nil {
 			if goos != "linux" {
 				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
-				return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
+				return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
 			}
 			return nil, fmt.Errorf("查询开发版 %s 失败: %w", release.DevReleaseTag, err)
 		}
@@ -233,7 +238,7 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		if err != nil {
 			if goos != "linux" {
 				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
-				return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
+				return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
 			}
 			return nil, fmt.Errorf("查询指定版本 %s 失败: %w", requestedVersion, err)
 		}
@@ -243,10 +248,10 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		if err != nil {
 			if goos != "linux" {
 				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
-				return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
+				return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
 			}
 			bodyLines = append(bodyLines, "", "远端版本检查失败。你仍然可以选择本地 Binary 升级。", "错误: "+err.Error())
-			return s.app.UpgradeFeishu().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), UpgradePanelButtons(sessionKey, nil, true)), nil
+			return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), UpgradePanelButtons(sessionKey, nil, true)), nil
 		}
 		bodyLines = append(bodyLines, "最新版本: `"+target.Version+"`")
 	}
@@ -268,13 +273,13 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 				bodyLines = append(bodyLines, "", "当前版本已不落后于远端最新版本。")
 			}
 		}
-		return s.app.UpgradeFeishu().SimpleStatusCard(title, color, s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
+		return s.app.UpgradeRenderer().SimpleStatusCard(title, color, s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
 	}
 
 	if !forceVersion && !useDevRelease {
 		if cmp, cmpErr := release.CompareVersions(current, target.Version); cmpErr == nil && cmp >= 0 {
 			bodyLines = append(bodyLines, "", "当前版本已不落后于远端最新版本。你仍然可以选择本地 Binary 升级。")
-			return s.app.UpgradeFeishu().SimpleStatusCard("已是最新版本", "green", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), UpgradePanelButtons(sessionKey, nil, true)), nil
+			return s.app.UpgradeRenderer().SimpleStatusCard("已是最新版本", "green", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), UpgradePanelButtons(sessionKey, nil, true)), nil
 		}
 	}
 
@@ -355,7 +360,7 @@ func (s UpgradeService) ReplyUpgradeCard(msg *feishu.InboundMessage, targetVersi
 	if err != nil {
 		return err
 	}
-	_, err = s.app.UpgradeFeishu().ReplyCard(s.context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err = s.app.UpgradeOutbound().ReplyCard(s.context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -368,7 +373,7 @@ func (s UpgradeService) ReplyUpgradeDevCard(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.UpgradeFeishu().ReplyCard(s.context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err = s.app.UpgradeOutbound().ReplyCard(s.context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -446,7 +451,7 @@ func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionN
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已开始升级"},
-		Card: rawCard(s.app.UpgradeFeishu().SimpleStatusCard("升级中", "orange", s.app.MenuCardBody("menu.upgrade", body), []feishu.Button{
+		Card: rawCard(s.app.UpgradeRenderer().SimpleStatusCard("升级中", "orange", s.app.MenuCardBody("menu.upgrade", body), []feishu.Button{
 			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})),
 	}, nil
@@ -525,7 +530,7 @@ func (s UpgradeService) RenderUpgradeConfirmCard(title, sessionKey, requestID st
 			"确认后会使用本地制品重启 daemon；如果启动失败会自动回退到旧版本。",
 		)
 	}
-	return s.app.UpgradeFeishu().SimpleStatusCard(title, "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(lines, "\n")), UpgradePanelButtons(sessionKey, map[string]any{
+	return s.app.UpgradeRenderer().SimpleStatusCard(title, "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(lines, "\n")), UpgradePanelButtons(sessionKey, map[string]any{
 		"request_id": requestID,
 		"label":      buttonLabel,
 	}, true))
