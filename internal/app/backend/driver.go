@@ -167,10 +167,6 @@ type Driver interface {
 	Permission() PermissionDriver
 }
 
-func DriverForConfig(app appcore.AppConfig) Driver {
-	return DriverForKind(appcore.ConfiguredBackend(app))
-}
-
 func DriverForKind(kind string) Driver {
 	switch domainbackend.NormalizeBackend(kind) {
 	case domainbackend.BackendCodex:

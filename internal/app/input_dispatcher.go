@@ -11,6 +11,7 @@ import (
 	frontendruntime "feidex/internal/runtime"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -53,16 +54,78 @@ func dispatchInput(a *App, input application.Input) (application.Result, error) 
 	if a != nil && a.dispatcher != nil {
 		dispatcher = *a.dispatcher
 	}
-	result, err := dispatcher.Dispatch(a.Context(), input)
+	var result application.Result
+	var err error
+	if a == nil {
+		result, err = dispatcher.Dispatch(context.Background(), input)
+	} else {
+		a.sessionActorRuntime().Run(sessionActorKey(input), func() {
+			result, err = dispatcher.Dispatch(a.Context(), input)
+		})
+	}
 	if err != nil {
 		return result, err
 	}
 	return result, newEffectRunner(a).Run(a.Context(), result.Effects)
 }
+
+func sessionActorKey(input application.Input) string {
+	const transportPrefix = "transport:"
+	switch event := input.(type) {
+	case application.MessageReceived:
+		if key := strings.TrimSpace(event.Message.SessionKey); key != "" {
+			return "session:" + key
+		}
+		return transportPrefix + string(event.Chat.Type) + ":" + strings.TrimSpace(event.Chat.ID)
+	case application.CardActionReceived:
+		if key, _ := event.Action.ActionValue["session_key"].(string); strings.TrimSpace(key) != "" {
+			return "session:" + strings.TrimSpace(key)
+		}
+		return transportPrefix + strings.TrimSpace(event.Action.ChatID)
+	case application.BackendEventReceived:
+		if key := strings.TrimSpace(string(event.SessionKey)); key != "" {
+			return "session:" + key
+		}
+		return transportPrefix + "backend"
+	case application.RetryTimerFired:
+		return "session:" + strings.TrimSpace(string(event.SessionKey))
+	case application.MessageRecalled:
+		return transportPrefix + strings.TrimSpace(event.ChatID)
+	case application.MessageReacted:
+		return transportPrefix + strings.TrimSpace(event.ChatID)
+	default:
+		return transportPrefix + "unknown"
+	}
+}
 func dispatchBackendEvent(a *App, event application.BackendEvent) {
-	if _, err := dispatchInput(a, application.BackendEventReceived{Frontend: identity.FrontendID(a.FrontendID()), Event: event}); err != nil {
+	if _, err := dispatchInput(a, application.BackendEventReceived{
+		Frontend:   identity.FrontendID(a.FrontendID()),
+		SessionKey: identity.SessionKey(sessionKeyForBackendEvent(a, event)),
+		Event:      event,
+	}); err != nil {
 		slog.Error("backend event dispatch failed", "kind", event.Kind, "error", err)
 	}
+}
+
+func sessionKeyForBackendEvent(a *App, event application.BackendEvent) string {
+	threadID := strings.TrimSpace(event.ThreadID)
+	if a == nil || threadID == "" {
+		return ""
+	}
+	for _, sess := range a.State().Sessions() {
+		if sess == nil {
+			continue
+		}
+		if strings.TrimSpace(sess.ActiveThreadID) == threadID {
+			return sess.Key
+		}
+		for _, lineage := range sess.BackendThreads {
+			if strings.TrimSpace(lineage.ThreadID) == threadID {
+				return sess.Key
+			}
+		}
+	}
+	return ""
 }
 func dispatchCodexNotification(a *App, method string, params json.RawMessage) {
 	event, handled, err := codex.DecodeNotification(method, params)

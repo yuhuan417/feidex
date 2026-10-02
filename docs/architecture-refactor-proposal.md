@@ -481,5 +481,6 @@ Codex server request
 - `backend.ConfigurationService` 已由 composition root 注入当前 `Driver`；模型、workspace 和 status 展示不再在每次调用时通过宿主动态回查 driver。
 - `App.State()` 已改为 frontend 生命周期内唯一的 scoped gateway；backend runtime 切换通过显式 scope 更新，不再在每次状态访问时重建 gateway。
 - frontend runtime 现在同时持有当前 `backend.Driver`，并在 runtime 安装或 backend 切换时更新；workspace、thread menu、Claude permission 和 autoretry 绑定从 composition root 接收该 driver，不再在业务调用中动态回查宿主。
+- `runtime.SessionActors` 已接入 application dispatcher；同一 frontend session 的消息、卡片、backend event 和 retry transition 按 key 串行，不同 session 保持并发。
 
-当前剩余：遗留 message/card command 编排，backend dependency carrier 与 permission driver 的宿主动态回查，Claude stream presentation 回调，完整 session event 串行 owner，effect pipeline 的同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
+当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，Claude stream presentation 回调，effect pipeline 的同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

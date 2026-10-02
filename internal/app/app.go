@@ -67,6 +67,8 @@ type App struct {
 	frontendRecoveryMu     sync.Mutex
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
+	sessionActorsMu        sync.Mutex
+	sessionActors          *frontendruntime.SessionActors
 	backendSwitching       bool
 	backendSwitchTarget    string
 	mcp                    *feidexMCPService
@@ -140,6 +142,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		started:             time.Now(),
 		deduper:             frontendruntime.NewInboundDeduper(),
 		liveThreads:         frontendruntime.NewLiveThreads(),
+		sessionActors:       frontendruntime.NewSessionActors(),
 		autoRetries:         appautoretry.NewTracker(),
 		trackers: appTrackers{
 			turnStreams:        newTurnStreamTracker(),

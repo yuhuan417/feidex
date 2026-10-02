@@ -73,7 +73,7 @@ type ConfigurationDeps struct {
 // NewConfigurationService creates a new ConfigurationService.
 func NewConfigurationService(deps ConfigurationDeps) ConfigurationService {
 	if deps.Driver == nil && deps.App != nil {
-		deps.Driver = DriverForConfig(deps.App)
+		deps.Driver = DriverForKind(appcore.ConfiguredBackend(deps.App))
 	}
 	return ConfigurationService{App: deps.App, deps: deps}
 }

@@ -7,6 +7,7 @@ import (
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/appstate"
 	appbackend "feidex/internal/app/backend"
+	frontendruntime "feidex/internal/runtime"
 
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -59,7 +60,11 @@ func (a *App) BackendDriver() appbackend.Driver {
 	if a.backendDriver != nil {
 		return a.backendDriver
 	}
-	return appbackend.DriverForConfig(a)
+	kind := a.backend
+	if kind == "" {
+		kind = configuredBackend(a)
+	}
+	return appbackend.DriverForKind(kind)
 }
 
 // Claude returns the Claude core client.
@@ -159,6 +164,18 @@ func (a *App) Trackers() *appTrackers {
 		return nil
 	}
 	return &a.trackers
+}
+
+func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {
+	if a == nil {
+		return nil
+	}
+	a.sessionActorsMu.Lock()
+	defer a.sessionActorsMu.Unlock()
+	if a.sessionActors == nil {
+		a.sessionActors = frontendruntime.NewSessionActors()
+	}
+	return a.sessionActors
 }
 
 // ConfigMu returns the config read-write mutex.
