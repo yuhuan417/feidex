@@ -67,7 +67,7 @@ func currentMCPPublication(a *App) mcpbridge.Publication {
 }
 
 func newFeidexMCPService(a *App) (*feidexMCPService, error) {
-	svc, err := mcpbridge.NewService(mcpBridgeAppAdapter{app: a})
+	svc, err := mcpbridge.NewService(mcpDependenciesForApp(a))
 	if err != nil {
 		return nil, err
 	}
@@ -85,59 +85,39 @@ func prepareClaudeMCPConfig(a *App, sessionKey string) (string, []string, func()
 	return mcpbridge.PrepareClaudeConfig(a.cfg.DataDir, currentMCPPublication(a), sessionKey)
 }
 
-type mcpBridgeAppAdapter struct {
-	app *App
-}
-
-func (a mcpBridgeAppAdapter) Feishu() mcpbridge.FeishuClient {
-	if a.app == nil {
-		return nil
+func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {
+	if a == nil {
+		return mcpbridge.Dependencies{}
 	}
-	return a.app.feishu
-}
-
-func (a mcpBridgeAppAdapter) State() mcpbridge.StateProvider {
-	if a.app == nil {
-		return nil
+	return mcpbridge.Dependencies{
+		FeishuClient:  a.feishu,
+		StateProvider: a.store,
+		StartedTurnItemsFn: func() []mcpbridge.StartedTurnItem {
+			tracker := newRuntimeStateService(a).turnItemTracker()
+			if tracker == nil {
+				return nil
+			}
+			tracker.Mu.Lock()
+			defer tracker.Mu.Unlock()
+			items := make([]mcpbridge.StartedTurnItem, 0, len(tracker.Items))
+			for _, itemState := range tracker.Items {
+				if itemState == nil || strings.TrimSpace(itemState.Status) != "started" {
+					continue
+				}
+				raw := itemState.Started.MergedRaw()
+				items = append(items, mcpbridge.StartedTurnItem{
+					ThreadID: strings.TrimSpace(itemState.ThreadID), TurnID: strings.TrimSpace(itemState.TurnID),
+					ItemID: strings.TrimSpace(itemState.ItemID), Type: strings.TrimSpace(itemState.Started.Type),
+					ToolName: strings.TrimSpace(itemState.Started.ToolName), Raw: turnitem.CloneJSONMap(raw),
+				})
+			}
+			return items
+		},
+		FindSubmissionByTurnFn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
+			return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
+		},
+		ReplyInThreadForSubmissionFn: func(sub *domainsubmission.Submission) bool {
+			return replyInThreadForSubmission(a, sub)
+		},
 	}
-	return a.app.store
-}
-
-func (a mcpBridgeAppAdapter) StartedTurnItems() []mcpbridge.StartedTurnItem {
-	if a.app == nil {
-		return nil
-	}
-	tracker := newRuntimeStateService(a.app).turnItemTracker()
-	if tracker == nil {
-		return nil
-	}
-	tracker.Mu.Lock()
-	defer tracker.Mu.Unlock()
-	items := make([]mcpbridge.StartedTurnItem, 0, len(tracker.Items))
-	for _, itemState := range tracker.Items {
-		if itemState == nil || strings.TrimSpace(itemState.Status) != "started" {
-			continue
-		}
-		raw := itemState.Started.MergedRaw()
-		items = append(items, mcpbridge.StartedTurnItem{
-			ThreadID: strings.TrimSpace(itemState.ThreadID),
-			TurnID:   strings.TrimSpace(itemState.TurnID),
-			ItemID:   strings.TrimSpace(itemState.ItemID),
-			Type:     strings.TrimSpace(itemState.Started.Type),
-			ToolName: strings.TrimSpace(itemState.Started.ToolName),
-			Raw:      turnitem.CloneJSONMap(raw),
-		})
-	}
-	return items
-}
-
-func (a mcpBridgeAppAdapter) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
-	if a.app == nil {
-		return "", nil
-	}
-	return newSubmissionQueueServiceFromApp(a.app).FindSubmissionByTurn(threadID, turnID)
-}
-
-func (a mcpBridgeAppAdapter) ReplyInThreadForSubmission(sub *domainsubmission.Submission) bool {
-	return replyInThreadForSubmission(a.app, sub)
 }

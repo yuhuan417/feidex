@@ -59,16 +59,36 @@ type StartedTurnItem struct {
 	Raw      map[string]any
 }
 
-type App interface {
-	Feishu() FeishuClient
-	State() StateProvider
-	StartedTurnItems() []StartedTurnItem
-	FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission)
-	ReplyInThreadForSubmission(sub *domainsubmission.Submission) bool
+// Dependencies is the explicit MCP capability set assembled by the runtime
+// composition root.
+type Dependencies struct {
+	FeishuClient                 FeishuClient
+	StateProvider                StateProvider
+	StartedTurnItemsFn           func() []StartedTurnItem
+	FindSubmissionByTurnFn       func(string, string) (string, *domainsubmission.Submission)
+	ReplyInThreadForSubmissionFn func(*domainsubmission.Submission) bool
+}
+
+func (d Dependencies) Feishu() FeishuClient { return d.FeishuClient }
+func (d Dependencies) State() StateProvider { return d.StateProvider }
+func (d Dependencies) StartedTurnItems() []StartedTurnItem {
+	if d.StartedTurnItemsFn == nil {
+		return nil
+	}
+	return d.StartedTurnItemsFn()
+}
+func (d Dependencies) FindSubmissionByTurn(a, b string) (string, *domainsubmission.Submission) {
+	if d.FindSubmissionByTurnFn == nil {
+		return "", nil
+	}
+	return d.FindSubmissionByTurnFn(a, b)
+}
+func (d Dependencies) ReplyInThreadForSubmission(s *domainsubmission.Submission) bool {
+	return d.ReplyInThreadForSubmissionFn != nil && d.ReplyInThreadForSubmissionFn(s)
 }
 
 type Service struct {
-	app App
+	app Dependencies
 
 	mu      sync.Mutex
 	server  *http.Server
@@ -110,7 +130,7 @@ type toolContext struct {
 	Submission *domainsubmission.Submission
 }
 
-func NewService(a App) (*Service, error) {
+func NewService(a Dependencies) (*Service, error) {
 	token, err := randomToken(24)
 	if err != nil {
 		return nil, err
@@ -295,7 +315,7 @@ func (s *Service) handleToolsCall(raw json.RawMessage, sessionKey string) (map[s
 	if _, err := validateToolLocalFile(path); err != nil {
 		return nil, err
 	}
-	if s == nil || s.app == nil || s.app.Feishu() == nil {
+	if s == nil || s.app.FeishuClient == nil {
 		return nil, &toolError{Code: "send_failed", Message: "Feishu sender unavailable", Retryable: true}
 	}
 	inThread := s.app.ReplyInThreadForSubmission(ctx.Submission)
@@ -333,7 +353,7 @@ func (s *Service) handleToolsCall(raw json.RawMessage, sessionKey string) (map[s
 }
 
 func (s *Service) resolveToolContext(toolName string, arguments map[string]any, sessionKey string) *toolContext {
-	if s == nil || s.app == nil {
+	if s == nil {
 		return nil
 	}
 	canonicalArgs := canonicalMCPArguments(arguments)
@@ -393,7 +413,7 @@ func (s *Service) resolveToolContext(toolName string, arguments map[string]any, 
 }
 
 func (s *Service) resolveToolContextFromSession(sessionKey string) *toolContext {
-	if s == nil || s.app == nil || s.app.State() == nil {
+	if s == nil || s.app.StateProvider == nil {
 		return nil
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
@@ -405,7 +425,7 @@ func (s *Service) resolveToolContextFromSession(sessionKey string) *toolContext 
 }
 
 func (s *Service) resolveOnlyActiveToolContext() *toolContext {
-	if s == nil || s.app == nil || s.app.State() == nil {
+	if s == nil || s.app.StateProvider == nil {
 		return nil
 	}
 	var match *toolContext
@@ -423,7 +443,7 @@ func (s *Service) resolveOnlyActiveToolContext() *toolContext {
 }
 
 func (s *Service) resolveToolContextFromSessionSnapshot(sess *conversation.Session) *toolContext {
-	if s == nil || s.app == nil || s.app.State() == nil || sess == nil {
+	if s == nil || s.app.StateProvider == nil || sess == nil {
 		return nil
 	}
 	conversation.EnsureActiveOperations(sess)

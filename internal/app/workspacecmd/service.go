@@ -6,6 +6,7 @@ import (
 	"context"
 	"feidex/internal/domain/conversation"
 	"strings"
+	"sync"
 
 	"feidex/internal/app/appcore"
 	appworkspace "feidex/internal/app/workspace"
@@ -83,15 +84,74 @@ var (
 )
 
 // ---------------------------------------------------------------------------
-// App interface
+// App is the workspace command capability set. It is assembled at the
+// composition root; workspace commands never receive the application root.
 // ---------------------------------------------------------------------------
 
 // App provides config, state, and Feishu client access. workspacecmd uses
 // appcore helpers (DefaultWorkspaceID, ConfiguredBackend, MakeSessionKey,
 // ReplyInThreadEnabled, FirstNonEmpty) which all accept this interface.
-type App interface {
-	appcore.AppExtended
-	Feishu() appcore.FeishuClient
+type App struct {
+	ConfigProvider  appcore.AppExtended
+	FeishuClient    appcore.FeishuClient
+	ContextProvider interface{ Context() context.Context }
+}
+
+func (a App) Config() *config.Config {
+	if a.ConfigProvider == nil {
+		return nil
+	}
+	return a.ConfigProvider.Config()
+}
+func (a App) ConfigMu() *sync.RWMutex {
+	if a.ConfigProvider == nil {
+		return nil
+	}
+	return a.ConfigProvider.ConfigMu()
+}
+func (a App) Backend() string {
+	if a.ConfigProvider == nil {
+		return ""
+	}
+	return a.ConfigProvider.Backend()
+}
+func (a App) FrontendID() string {
+	if a.ConfigProvider == nil {
+		return ""
+	}
+	return a.ConfigProvider.FrontendID()
+}
+func (a App) FrontendConfigIndex() int {
+	if a.ConfigProvider == nil {
+		return -1
+	}
+	return a.ConfigProvider.FrontendConfigIndex()
+}
+func (a App) Store() *state.Store {
+	if a.ConfigProvider == nil {
+		return nil
+	}
+	return a.ConfigProvider.Store()
+}
+func (a App) ConfigPath() string {
+	if a.ConfigProvider == nil {
+		return ""
+	}
+	return a.ConfigProvider.ConfigPath()
+}
+func (a App) SetBackend(v string) {
+	if a.ConfigProvider != nil {
+		a.ConfigProvider.SetBackend(v)
+	}
+}
+func (a App) Feishu() appcore.FeishuClient { return a.FeishuClient }
+func (a App) Context() context.Context {
+	if a.ContextProvider != nil {
+		if c := a.ContextProvider.Context(); c != nil {
+			return c
+		}
+	}
+	return context.Background()
 }
 
 // ---------------------------------------------------------------------------

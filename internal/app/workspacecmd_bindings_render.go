@@ -18,7 +18,7 @@ func newWorkspaceRenderService(a *App) *appworkspacecmd.RenderService {
 
 	bcfg := newBackendConfigurationService(a)
 	return appworkspacecmd.NewRenderService(appworkspacecmd.RenderDeps{
-		App: a,
+		App: workspaceCommandApp(a),
 		State: appworkspacecmd.StateDeps{
 			GetSession: func(key string) *conversation.Session { return a.State().Session(key) },
 		},

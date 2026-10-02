@@ -473,5 +473,6 @@ Codex server request
 - upgrade service 改为显式依赖集合，取消宽宿主接口和 appcore 生命周期耦合。
 - planmode 与 goalcmd 改为 consumer-owned Dependencies，composition root 只在绑定处组装 capability ports；删除对应宽 App interface 和 adapter。
 - 保持模型生效、thread 生命周期、pending 状态、菜单顺序与 frontend 隔离契约不变；全量 Go 测试 1215 项通过。
+- workspacecmd 的配置、管理和渲染服务改为显式 workspace capability carrier，删除其宿主 App interface；MCP bridge 改为显式 Dependencies，删除 MCP 宿主 adapter。
 
-当前剩余：遗留 message/card command 编排，thread/history/debug/goal/workspace/review/planmode/upgrade/MCP 的宽宿主接口，Claude stream presentation 回调，完整 session event 串行 owner，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
+当前剩余：遗留 message/card command 编排，thread/debug/review 的宽宿主接口，backend permission driver 的宿主动态回查，Claude stream presentation 回调，完整 session event 串行 owner，effect pipeline 的同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

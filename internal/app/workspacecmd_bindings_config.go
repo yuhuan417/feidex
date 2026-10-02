@@ -12,12 +12,19 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+func workspaceCommandApp(a *App) appworkspacecmd.App {
+	if a == nil {
+		return appworkspacecmd.App{}
+	}
+	return appworkspacecmd.App{ConfigProvider: a, FeishuClient: a.feishu, ContextProvider: a}
+}
+
 func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 
 	st := a.State()
 	bcfg := newBackendConfigurationService(a)
 	return appworkspacecmd.NewConfigService(appworkspacecmd.ConfigDeps{
-		App:   a,
+		App:   workspaceCommandApp(a),
 		State: workspaceStateDeps(st),
 		SessionContext: appworkspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,

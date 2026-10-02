@@ -536,7 +536,7 @@ func (s *ManagementService) prepareCloneWorktreePlan(payload ClonePayload, repoN
 }
 
 func (s *ManagementService) worktreeBotLabel() string {
-	if s != nil && s.App != nil {
+	if s != nil && s.App.ConfigProvider != nil {
 		if client := s.App.Feishu(); client != nil {
 			if name := strings.TrimSpace(client.BotName()); name != "" {
 				return name
@@ -627,7 +627,7 @@ func (s *ManagementService) worktreeDefaultAvailable(baseRepoRoot, parentDir, br
 }
 
 func (s *ManagementService) pendingWorktreeDefaultReserved(workspaceID, targetDir, branchName string) bool {
-	if s == nil || s.App == nil || s.App.Store() == nil {
+	if s == nil || s.App.ConfigProvider == nil || s.App.Store() == nil {
 		return false
 	}
 	workspaceID = strings.TrimSpace(workspaceID)

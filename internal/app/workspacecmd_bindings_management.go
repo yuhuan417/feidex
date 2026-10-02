@@ -23,7 +23,7 @@ func newWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService {
 	st := a.State()
 	bcfg := newBackendConfigurationService(a)
 	return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{
-		App:   a,
+		App:   workspaceCommandApp(a),
 		State: workspaceStateDeps(st),
 		SessionContext: appworkspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
