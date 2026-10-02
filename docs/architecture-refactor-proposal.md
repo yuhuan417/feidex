@@ -499,5 +499,6 @@ Codex server request
 - card action 的统一 dispatch、session key normalization、backend switching gate 和 unknown action 处理已迁入 `internal/application/cardaction`；app 只注册具体业务 handlers。
 - backend configuration、selection 和 action service 的缓存已归入 frontend `appComposition`，`App` 不再直接持有这些 service 实例。
 - dispatcher、effect runner 和 server request service 也已归入 `appComposition`；`App` 的字段只保留 frontend state、runtime 和生命周期 owner。
+- thread menu composition cache 也已归入 `appComposition`，backend 切换时通过 composition invalidation 重建。
 
 当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，effect pipeline 尚未覆盖全部同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

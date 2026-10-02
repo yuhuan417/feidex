@@ -182,9 +182,11 @@ func (a *App) invalidateThreadMenuService() {
 	if a == nil {
 		return
 	}
-	a.threadMenuMu.Lock()
-	a.threadMenu = nil
-	a.threadMenuMu.Unlock()
+	if a.composition != nil {
+		a.composition.mu.Lock()
+		a.composition.threadMenu = nil
+		a.composition.mu.Unlock()
+	}
 }
 
 func (a *App) invalidateBackendConfigurationService() {

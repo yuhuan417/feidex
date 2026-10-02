@@ -42,12 +42,15 @@ func threadMenuService(a *App) *appthreadmenu.Service {
 	if a == nil {
 		return appthreadmenu.NewService(appthreadmenu.Dependencies{})
 	}
-	a.threadMenuMu.Lock()
-	defer a.threadMenuMu.Unlock()
-	if a.threadMenu == nil {
-		a.threadMenu = appthreadmenu.NewService(newThreadMenuDependencies(a))
+	if a.composition == nil {
+		a.composition = &appComposition{}
 	}
-	return a.threadMenu
+	a.composition.mu.Lock()
+	defer a.composition.mu.Unlock()
+	if a.composition.threadMenu == nil {
+		a.composition.threadMenu = appthreadmenu.NewService(newThreadMenuDependencies(a))
+	}
+	return a.composition.threadMenu
 }
 
 // ---------------------------------------------------------------------------

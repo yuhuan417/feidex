@@ -57,8 +57,6 @@ type App struct {
 	frontendRuntime        frontendruntime.FrontendRuntime
 	stateMu                sync.Mutex
 	stateView              *appstate.Store
-	threadMenuMu           sync.Mutex
-	threadMenu             *appthreadmenu.Service
 	backendConfigMu        sync.Mutex
 	composition            *appComposition
 	deduper                *frontendruntime.InboundDeduper
@@ -87,6 +85,8 @@ type App struct {
 // these bindings together prevents the frontend aggregate from becoming a
 // second service registry while preserving one cache per frontend runtime.
 type appComposition struct {
+	mu               sync.Mutex
+	threadMenu       *appthreadmenu.Service
 	backendConfig    *backendConfigurationService
 	backendSelection *backendSelectionService
 	backendActions   *backend.ActionService
