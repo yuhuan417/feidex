@@ -41,15 +41,11 @@ func reviewPendingPayloadFromPending(pending *state.PendingRequest) appreviewcmd
 type reviewAppAdapter struct{ *App }
 
 func newReviewAppAdapter(a *App) reviewAppAdapter {
-	return serviceFor(a, "reviewAppAdapter", func() reviewAppAdapter {
-		return reviewAppAdapter{App: a}
-	})
+	return reviewAppAdapter{App: a}
 }
 
 func newReviewFormService(app *App) appreviewcmd.ReviewFormService {
-	return serviceFor(app, "reviewFormService", func() appreviewcmd.ReviewFormService {
-		return appreviewcmd.NewReviewFormService(newReviewAppAdapter(app))
-	})
+	return appreviewcmd.NewReviewFormService(newReviewAppAdapter(app))
 }
 
 func (a reviewAppAdapter) ReviewFeishu() appcore.FeishuClient {

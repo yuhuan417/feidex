@@ -1,8 +1,10 @@
-package submission
+package json
 
 import (
 	"encoding/json"
+	submissionforms "feidex/internal/adapter/feishu/submissionforms"
 	"feidex/internal/application/presentation"
+	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/state"
@@ -24,13 +26,13 @@ func TestUniqueStrings(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := UniqueStrings(tt.input)
+			got := appsubmission.UniqueStrings(tt.input)
 			if len(got) != len(tt.expect) {
-				t.Fatalf("UniqueStrings(%v) = %v, want %v", tt.input, got, tt.expect)
+				t.Fatalf("appsubmission.UniqueStrings(%v) = %v, want %v", tt.input, got, tt.expect)
 			}
 			for i := range got {
 				if got[i] != tt.expect[i] {
-					t.Fatalf("UniqueStrings(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.expect[i])
+					t.Fatalf("appsubmission.UniqueStrings(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.expect[i])
 				}
 			}
 		})
@@ -51,13 +53,13 @@ func TestRemoveString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RemoveString(tt.values, tt.target)
+			got := appsubmission.RemoveString(tt.values, tt.target)
 			if len(got) != len(tt.expect) {
-				t.Fatalf("RemoveString(%v, %q) = %v, want %v", tt.values, tt.target, got, tt.expect)
+				t.Fatalf("appsubmission.RemoveString(%v, %q) = %v, want %v", tt.values, tt.target, got, tt.expect)
 			}
 			for i := range got {
 				if got[i] != tt.expect[i] {
-					t.Fatalf("RemoveString(%v, %q)[%d] = %q, want %q", tt.values, tt.target, i, got[i], tt.expect[i])
+					t.Fatalf("appsubmission.RemoveString(%v, %q)[%d] = %q, want %q", tt.values, tt.target, i, got[i], tt.expect[i])
 				}
 			}
 		})
@@ -66,7 +68,7 @@ func TestRemoveString(t *testing.T) {
 
 func TestStagedImageAttachments(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		if got := StagedImageAttachments(nil); got != nil {
+		if got := appsubmission.StagedImageAttachments(nil); got != nil {
 			t.Fatalf("expected nil, got %v", got)
 		}
 	})
@@ -76,7 +78,7 @@ func TestStagedImageAttachments(t *testing.T) {
 			{Name: "b", LocalPath: "  "},
 			{Name: "c", LocalPath: "/path/c"},
 		}
-		got := StagedImageAttachments(images)
+		got := appsubmission.StagedImageAttachments(images)
 		if len(got) != 2 {
 			t.Fatalf("expected 2 attachments, got %d", len(got))
 		}
@@ -88,7 +90,7 @@ func TestStagedImageAttachments(t *testing.T) {
 
 func TestStagedImageSourceMessageIDs(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		if got := StagedImageSourceMessageIDs(nil); got != nil {
+		if got := appsubmission.StagedImageSourceMessageIDs(nil); got != nil {
 			t.Fatalf("expected nil, got %v", got)
 		}
 	})
@@ -98,7 +100,7 @@ func TestStagedImageSourceMessageIDs(t *testing.T) {
 			{SourceMessageID: "msg-2"},
 			{SourceMessageID: "msg-1"},
 		}
-		got := StagedImageSourceMessageIDs(images)
+		got := appsubmission.StagedImageSourceMessageIDs(images)
 		if len(got) != 2 || got[0] != "msg-1" || got[1] != "msg-2" {
 			t.Fatalf("unexpected result: %v", got)
 		}
@@ -107,7 +109,7 @@ func TestStagedImageSourceMessageIDs(t *testing.T) {
 
 func TestStagedImageRootMessageIDs(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		if got := StagedImageRootMessageIDs(nil); got != nil {
+		if got := appsubmission.StagedImageRootMessageIDs(nil); got != nil {
 			t.Fatalf("expected nil, got %v", got)
 		}
 	})
@@ -116,7 +118,7 @@ func TestStagedImageRootMessageIDs(t *testing.T) {
 			{RootMessageID: "root-1", SourceMessageID: "src-1"},
 			{RootMessageID: "", SourceMessageID: "src-2"},
 		}
-		got := StagedImageRootMessageIDs(images)
+		got := appsubmission.StagedImageRootMessageIDs(images)
 		if len(got) != 2 || got[0] != "root-1" || got[1] != "src-2" {
 			t.Fatalf("unexpected result: %v", got)
 		}
@@ -125,25 +127,25 @@ func TestStagedImageRootMessageIDs(t *testing.T) {
 
 func TestHasSourceMessage(t *testing.T) {
 	t.Run("nil submission", func(t *testing.T) {
-		if HasSourceMessage(nil, "msg-1") {
+		if appsubmission.HasSourceMessage(nil, "msg-1") {
 			t.Fatal("expected false for nil submission")
 		}
 	})
 	t.Run("matches trigger message", func(t *testing.T) {
 		sub := &domainsubmission.Submission{TriggerMessageID: "msg-1"}
-		if !HasSourceMessage(sub, "msg-1") {
+		if !appsubmission.HasSourceMessage(sub, "msg-1") {
 			t.Fatal("expected true for trigger message match")
 		}
 	})
 	t.Run("matches source message", func(t *testing.T) {
 		sub := &domainsubmission.Submission{SourceMessageIDs: []string{"msg-2", "msg-3"}}
-		if !HasSourceMessage(sub, "msg-2") {
+		if !appsubmission.HasSourceMessage(sub, "msg-2") {
 			t.Fatal("expected true for source message match")
 		}
 	})
 	t.Run("no match", func(t *testing.T) {
 		sub := &domainsubmission.Submission{TriggerMessageID: "msg-1"}
-		if HasSourceMessage(sub, "msg-99") {
+		if appsubmission.HasSourceMessage(sub, "msg-99") {
 			t.Fatal("expected false for no match")
 		}
 	})
@@ -151,7 +153,7 @@ func TestHasSourceMessage(t *testing.T) {
 
 func TestSourceMessageIDs(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		if got := SourceMessageIDs(nil); got != nil {
+		if got := appsubmission.SourceMessageIDs(nil); got != nil {
 			t.Fatalf("expected nil, got %v", got)
 		}
 	})
@@ -160,7 +162,7 @@ func TestSourceMessageIDs(t *testing.T) {
 			SourceMessageIDs: []string{"msg-1"},
 			TriggerMessageID: "msg-2",
 		}
-		got := SourceMessageIDs(sub)
+		got := appsubmission.SourceMessageIDs(sub)
 		if len(got) != 2 {
 			t.Fatalf("expected 2 IDs, got %d: %v", len(got), got)
 		}
@@ -170,7 +172,7 @@ func TestSourceMessageIDs(t *testing.T) {
 			SourceMessageIDs: []string{"msg-1"},
 			TriggerMessageID: "msg-1",
 		}
-		got := SourceMessageIDs(sub)
+		got := appsubmission.SourceMessageIDs(sub)
 		if len(got) != 1 {
 			t.Fatalf("expected 1 ID, got %d: %v", len(got), got)
 		}
@@ -204,7 +206,7 @@ func TestCompletionTerminalText(t *testing.T) {
 }
 
 func TestPendingConfirmationText(t *testing.T) {
-	got := PendingConfirmationText(" mySkill ")
+	got := appsubmission.PendingConfirmationText(" mySkill ")
 	if got != "已识别到技能 `mySkill`，请确认是否使用。" {
 		t.Fatalf("unexpected result: %q", got)
 	}
@@ -250,7 +252,7 @@ func TestRefreshPendingStatus(t *testing.T) {
 
 func TestDiscardStagedImageByMessageID(t *testing.T) {
 	t.Run("nil session", func(t *testing.T) {
-		if DiscardStagedImageByMessageID(nil, "msg-1") {
+		if appsubmission.DiscardStagedImageByMessageID(nil, "msg-1") {
 			t.Fatal("expected false for nil session")
 		}
 	})
@@ -261,7 +263,7 @@ func TestDiscardStagedImageByMessageID(t *testing.T) {
 				{SourceMessageID: "msg-2", LocalPath: "/b"},
 			},
 		}
-		if !DiscardStagedImageByMessageID(sess, "msg-1") {
+		if !appsubmission.DiscardStagedImageByMessageID(sess, "msg-1") {
 			t.Fatal("expected true")
 		}
 		if len(sess.StagedImages) != 1 || sess.StagedImages[0].SourceMessageID != "msg-2" {
@@ -274,7 +276,7 @@ func TestDiscardStagedImageByMessageID(t *testing.T) {
 				{SourceMessageID: "msg-1"},
 			},
 		}
-		if DiscardStagedImageByMessageID(sess, "msg-99") {
+		if appsubmission.DiscardStagedImageByMessageID(sess, "msg-99") {
 			t.Fatal("expected false")
 		}
 	})
@@ -290,13 +292,13 @@ func TestPendingTextRequest(t *testing.T) {
 	kinds := map[string]bool{"approval": true}
 
 	t.Run("returns most recent", func(t *testing.T) {
-		got := PendingTextRequest(allPending, "sess-1", "user-1", kinds)
+		got := submissionforms.PendingTextRequest(allPending, "sess-1", "user-1", kinds)
 		if got == nil || got.ID != "new" {
 			t.Fatalf("expected 'new', got %+v", got)
 		}
 	})
 	t.Run("returns nil for wrong session", func(t *testing.T) {
-		got := PendingTextRequest(allPending, "sess-99", "user-1", kinds)
+		got := submissionforms.PendingTextRequest(allPending, "sess-99", "user-1", kinds)
 		if got != nil {
 			t.Fatalf("expected nil, got %+v", got)
 		}
@@ -305,7 +307,7 @@ func TestPendingTextRequest(t *testing.T) {
 		pending := []*state.PendingRequest{
 			{ID: "no-owner", SessionKey: "sess-1", OwnerUserID: "", Kind: "approval", Status: "pending", CreatedAt: now},
 		}
-		got := PendingTextRequest(pending, "sess-1", "anyone", kinds)
+		got := submissionforms.PendingTextRequest(pending, "sess-1", "anyone", kinds)
 		if got == nil || got.ID != "no-owner" {
 			t.Fatalf("expected 'no-owner', got %+v", got)
 		}
@@ -314,23 +316,23 @@ func TestPendingTextRequest(t *testing.T) {
 
 func TestShouldRedactInboundText(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		if ShouldRedactInboundText(nil) {
+		if submissionforms.ShouldRedactInboundText(nil) {
 			t.Fatal("expected false for nil")
 		}
 	})
 	t.Run("mcp_elicitation_form always redacts", func(t *testing.T) {
-		if !ShouldRedactInboundText(&state.PendingRequest{Kind: "mcp_elicitation_form"}) {
+		if !submissionforms.ShouldRedactInboundText(&state.PendingRequest{Kind: "mcp_elicitation_form"}) {
 			t.Fatal("expected true")
 		}
 	})
 	t.Run("form with secret question redacts", func(t *testing.T) {
-		payload := ToolUserInputPayload{
-			Questions: []ToolUserInputQuestion{
+		payload := submissionforms.ToolUserInputPayload{
+			Questions: []submissionforms.ToolUserInputQuestion{
 				{Question: "API key", IsSecret: true},
 			},
 		}
 		b, _ := json.Marshal(payload)
-		if !ShouldRedactInboundText(&state.PendingRequest{
+		if !submissionforms.ShouldRedactInboundText(&state.PendingRequest{
 			Kind:        "tool_request_user_input_form",
 			PayloadJSON: string(b),
 		}) {
@@ -338,13 +340,13 @@ func TestShouldRedactInboundText(t *testing.T) {
 		}
 	})
 	t.Run("form without secrets does not redact", func(t *testing.T) {
-		payload := ToolUserInputPayload{
-			Questions: []ToolUserInputQuestion{
+		payload := submissionforms.ToolUserInputPayload{
+			Questions: []submissionforms.ToolUserInputQuestion{
 				{Question: "name", IsSecret: false},
 			},
 		}
 		b, _ := json.Marshal(payload)
-		if ShouldRedactInboundText(&state.PendingRequest{
+		if submissionforms.ShouldRedactInboundText(&state.PendingRequest{
 			Kind:        "tool_request_user_input_form",
 			PayloadJSON: string(b),
 		}) {
@@ -352,7 +354,7 @@ func TestShouldRedactInboundText(t *testing.T) {
 		}
 	})
 	t.Run("unknown kind does not redact", func(t *testing.T) {
-		if ShouldRedactInboundText(&state.PendingRequest{Kind: "approval"}) {
+		if submissionforms.ShouldRedactInboundText(&state.PendingRequest{Kind: "approval"}) {
 			t.Fatal("expected false for unknown kind")
 		}
 	})
@@ -375,16 +377,16 @@ func TestCancelledPendingTitle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CancelledPendingTitle(tt.pending, tt.planMode, tt.review)
+			got := submissionforms.CancelledPendingTitle(tt.pending, tt.planMode, tt.review)
 			if got != tt.expect {
-				t.Fatalf("CancelledPendingTitle() = %q, want %q", got, tt.expect)
+				t.Fatalf("submissionforms.CancelledPendingTitle() = %q, want %q", got, tt.expect)
 			}
 		})
 	}
 }
 
 func TestParseStructuredLines(t *testing.T) {
-	got := ParseStructuredLines("name: Alice\nage: 30\ninvalid line")
+	got := submissionforms.ParseStructuredLines("name: Alice\nage: 30\ninvalid line")
 	if got["name"] != "Alice" || got["age"] != "30" {
 		t.Fatalf("unexpected result: %v", got)
 	}

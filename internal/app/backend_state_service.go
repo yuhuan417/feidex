@@ -12,12 +12,10 @@ type runtimeStateService struct {
 }
 
 func newRuntimeStateService(app *App) runtimeStateService {
-	return serviceFor(app, "runtimeStateService", func() runtimeStateService {
-		return runtimeStateService{
-			app:   app,
-			inner: backend.NewRuntimeStateService(app),
-		}
-	})
+	return runtimeStateService{
+		app:   app,
+		inner: backend.NewRuntimeStateService(app),
+	}
 }
 
 func (s runtimeStateService) beginBackendSwitchState(target string) {

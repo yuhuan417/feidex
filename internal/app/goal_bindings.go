@@ -35,9 +35,7 @@ func commandGoalRaw(a *App, msg *feishu.InboundMessage, raw string, args []strin
 }
 
 func newGoalService(a *App) goalcmd.Service {
-	return serviceFor(a, "goalService", func() goalcmd.Service {
-		return goalcmd.NewService(goalAppAdapter{app: a})
-	})
+	return goalcmd.NewService(goalAppAdapter{app: a})
 }
 
 func onThreadGoalUpdated(a *App, note codexrpc.ThreadGoalUpdatedNotification) {

@@ -425,7 +425,7 @@ Session / Thread 临时覆盖
 - [GroupPrimary state](../internal/app/group_primary.go)
 - [Group message routing](../internal/app/group_message_policy.go)
 - [Feishu event routing](../internal/app/feishu_event_router.go)
-- [Submission metadata](../internal/app/submission/queue.go)
+- [Submission metadata](../internal/application/submission/queue.go)
 - [Workspace resolution](../internal/app/workspace_selection.go)
 - [Effective config](../internal/app/binding_effective.go)
 - [Current Bot group config service](../internal/app/binding_service.go)

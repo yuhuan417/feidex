@@ -5,7 +5,5 @@ type pendingInputService struct {
 }
 
 func newPendingInputService(app *App) pendingInputService {
-	return serviceFor(app, "pendingInputService", func() pendingInputService {
-		return pendingInputService{app: app}
-	})
+	return pendingInputService{app: app}
 }

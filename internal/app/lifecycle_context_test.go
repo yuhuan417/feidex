@@ -4,14 +4,12 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"feidex/internal/app/appcore"
 )
 
 func TestStopCancelsAndWaitsForBackgroundWork(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.beginLifecycle(context.Background())
-	ctx := appcore.Context(submissionAppAdapter{app: a})
+	ctx := newSubmissionQueueServiceFromApp(a).Deps.Context()
 	started, finished := make(chan struct{}), make(chan struct{})
 	runAsync(a, func() { close(started); <-ctx.Done(); close(finished) })
 	<-started

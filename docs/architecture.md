@@ -23,7 +23,7 @@ internal/adapter/feishu/cards/         飞书卡片构造 helper
 internal/app/clauderuntime/ Claude 运行时集成
 internal/app/claudesession/ Claude session 生命周期
 internal/app/claudesupport/ Claude 诊断/历史 helper
-internal/app/codexruntime/  Codex 运行时集成
+internal/runtime/codex/  Codex 运行时集成
 internal/app/compact/       上下文压缩
 internal/app/convbackend/   会话后端 facade
 internal/adapter/feishu/delivery/      回复卡片分片、markdown 拆分
@@ -44,7 +44,7 @@ internal/app/serverrequest/ 服务端请求处理
 internal/domain/conversation/ 会话、backend lineage 与活动操作领域状态
 internal/app/skills/        技能管理
 internal/app/skillscmd/     技能命令处理
-internal/app/submission/    submission 队列与生命周期
+internal/application/submission/    submission 队列与生命周期
 internal/app/threadmenu/    thread 菜单渲染
 internal/adapter/feishu/threadview/    thread 视图渲染
 internal/adapter/feishu/turn/          turn 管理

@@ -15,74 +15,73 @@ import (
 )
 
 func newWorkspaceRenderService(a *App) *appworkspacecmd.RenderService {
-	return serviceFor(a, "workspaceRenderService", func() *appworkspacecmd.RenderService {
-		bcfg := newBackendConfigurationService(a)
-		return appworkspacecmd.NewRenderService(appworkspacecmd.RenderDeps{
-			App: a,
-			State: appworkspacecmd.StateDeps{
-				GetSession: func(key string) *conversation.Session { return a.State().Session(key) },
+
+	bcfg := newBackendConfigurationService(a)
+	return appworkspacecmd.NewRenderService(appworkspacecmd.RenderDeps{
+		App: a,
+		State: appworkspacecmd.StateDeps{
+			GetSession: func(key string) *conversation.Session { return a.State().Session(key) },
+		},
+		Backend: appworkspacecmd.BackendConfigDeps{
+			BackendWorkspaceSummaryLines:  bcfg.appendBackendWorkspaceSummaryLines,
+			BackendWorkspaceConfigButtons: bcfg.backendWorkspaceConfigButtons,
+		},
+		Formatting: appworkspacecmd.FormattingDeps{
+			FormatMenuBody: menuCardBody,
+		},
+		PathPicker: appworkspacecmd.PathPickerDeps{
+			RenderPathPickerCard: func(requestID string, payload appworkspacecmd.PathPickerPayload) (map[string]any, error) {
+				return apppathpick.RenderCard(requestID, payload)
 			},
-			Backend: appworkspacecmd.BackendConfigDeps{
-				BackendWorkspaceSummaryLines:  bcfg.appendBackendWorkspaceSummaryLines,
-				BackendWorkspaceConfigButtons: bcfg.backendWorkspaceConfigButtons,
-			},
-			Formatting: appworkspacecmd.FormattingDeps{
-				FormatMenuBody: menuCardBody,
-			},
-			PathPicker: appworkspacecmd.PathPickerDeps{
-				RenderPathPickerCard: func(requestID string, payload appworkspacecmd.PathPickerPayload) (map[string]any, error) {
-					return apppathpick.RenderCard(requestID, payload)
-				},
-			},
-			Management: appworkspacecmd.RenderManagementDeps{
-				DefaultWorkspaceCloneRoot: func(*config.Workspace) string { return "/" },
-				DefaultWorkspaceCloneParent: func(ws *config.Workspace) string {
-					if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
-						return filepath.Dir(strings.TrimSpace(ws.Cwd))
-					}
-					if cp := strings.TrimSpace(a.ConfigPath()); cp != "" {
-						return filepath.Dir(cp)
-					}
-					return "."
-				},
-			},
-			WorkspaceIDForSession: func(sessionKey string, sess *conversation.Session) string {
-				if groupBindingSessionScopeActive(a, sessionKey) {
-					if binding := bindingForSessionKey(a, sessionKey); binding != nil {
-						return strings.TrimSpace(binding.WorkspaceID)
-					}
-					return ""
+		},
+		Management: appworkspacecmd.RenderManagementDeps{
+			DefaultWorkspaceCloneRoot: func(*config.Workspace) string { return "/" },
+			DefaultWorkspaceCloneParent: func(ws *config.Workspace) string {
+				if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
+					return filepath.Dir(strings.TrimSpace(ws.Cwd))
 				}
-				return appcore.ResolveWorkspaceSelectionForSession(a, sess)
+				if cp := strings.TrimSpace(a.ConfigPath()); cp != "" {
+					return filepath.Dir(cp)
+				}
+				return "."
 			},
-			WorkspaceMenuIsGroup: func(sessionKey string) bool {
-				return groupBindingSessionScopeActive(a, sessionKey)
-			},
-			WorkspaceMenuBodyLines: func(sessionKey string, sess *conversation.Session, lines []string) []string {
-				if !groupBindingSessionScopeActive(a, sessionKey) {
-					return lines
+		},
+		WorkspaceIDForSession: func(sessionKey string, sess *conversation.Session) string {
+			if groupBindingSessionScopeActive(a, sessionKey) {
+				if binding := bindingForSessionKey(a, sessionKey); binding != nil {
+					return strings.TrimSpace(binding.WorkspaceID)
 				}
-				binding := bindingForSessionKey(a, sessionKey)
-				if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
-					lines = append(lines, "当前 Bot 在本群还没有配置工作区。")
-				}
-				if binding != nil {
-					pending := binding.PendingMessage
-					pendingCount := len(binding.PendingMessages)
-					if pendingCount > 0 {
-						pending = binding.PendingMessages[0]
-					}
-					if preview := pendingBindingMessagePreview(pending); preview != "" {
-						if pendingCount > 0 {
-							lines = append(lines, fmt.Sprintf("已暂存原消息 pending queue `%d`，下一条: `%s`", pendingCount, preview))
-						} else {
-							lines = append(lines, "已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
-						}
-					}
-				}
+				return ""
+			}
+			return appcore.ResolveWorkspaceSelectionForSession(a, sess)
+		},
+		WorkspaceMenuIsGroup: func(sessionKey string) bool {
+			return groupBindingSessionScopeActive(a, sessionKey)
+		},
+		WorkspaceMenuBodyLines: func(sessionKey string, sess *conversation.Session, lines []string) []string {
+			if !groupBindingSessionScopeActive(a, sessionKey) {
 				return lines
-			},
-		})
+			}
+			binding := bindingForSessionKey(a, sessionKey)
+			if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
+				lines = append(lines, "当前 Bot 在本群还没有配置工作区。")
+			}
+			if binding != nil {
+				pending := binding.PendingMessage
+				pendingCount := len(binding.PendingMessages)
+				if pendingCount > 0 {
+					pending = binding.PendingMessages[0]
+				}
+				if preview := pendingBindingMessagePreview(pending); preview != "" {
+					if pendingCount > 0 {
+						lines = append(lines, fmt.Sprintf("已暂存原消息 pending queue `%d`，下一条: `%s`", pendingCount, preview))
+					} else {
+						lines = append(lines, "已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
+					}
+				}
+			}
+			return lines
+		},
 	})
 }
 

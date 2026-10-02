@@ -44,7 +44,6 @@ func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *s
 	}
 	buttons = append(buttons, feishu.Button{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}})
 	return s.app.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", strings.Join(lines, "\n")), buttons)
-
 }
 
 func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
@@ -69,7 +68,6 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 		}, "\n")
 		return s.app.feishu.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
 	}
-
 }
 
 func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, binding *state.AgentBinding, result codexrpc.ModelListResult) map[string]any {
@@ -219,7 +217,6 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	}}))
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
 	return card
-
 }
 
 func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, binding *state.AgentBinding) map[string]any {
@@ -326,7 +323,6 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	}}))
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
 	return card
-
 }
 
 func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
@@ -534,7 +530,6 @@ func (s bindingService) renderBindingFastCard(sessionKey string, binding *state.
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}},
 	}
 	return s.app.feishu.SimpleStatusCard("响应速度", "blue", menuCardBody("menu.fast", body), buttons)
-
 }
 
 func bindingServiceTierOverride(binding *state.AgentBinding) string {
@@ -542,7 +537,6 @@ func bindingServiceTierOverride(binding *state.AgentBinding) string {
 		return ""
 	}
 	return strings.TrimSpace(binding.ServiceTierOverride)
-
 }
 
 func (s bindingService) renderBindingModelConfigOrMenuCard(sessionKey string, binding *state.AgentBinding) map[string]any {

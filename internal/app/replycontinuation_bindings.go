@@ -32,63 +32,62 @@ type replyContinuationService struct {
 }
 
 func newReplyContinuationService(a *App) replyContinuationService {
-	return serviceFor(a, "replyContinuationService", func() replyContinuationService {
-		svc := replycontinuation.NewService(replyContinuationAppAdapter{app: a})
 
-		// Wire callback function fields that need *App internals.
-		svc.GetSession = func(key string) *conversation.Session {
-			st := a.State()
-			if st == nil {
-				return nil
-			}
-			return st.Session(key)
-		}
-		svc.SaveSession = func(sess *conversation.Session) error {
-			st := a.State()
-			if st == nil {
-				return nil
-			}
-			return st.SaveSession(sess)
-		}
-		svc.GetMessageLink = func(messageID string) *state.MessageLink {
-			st := a.State()
-			if st == nil {
-				return nil
-			}
-			return st.MessageLink(messageID)
-		}
-		svc.SaveMessageLink = func(link *state.MessageLink) error {
-			st := a.State()
-			if st == nil {
-				return nil
-			}
-			return st.SaveMessageLink(link)
-		}
-		svc.CreateSubmission = func(sub *domainsubmission.Submission) (string, error) {
-			st := a.State()
-			if st == nil {
-				return "", nil
-			}
-			return st.CreateSubmission(sub)
-		}
-		svc.HasInFlightSubmission = func(sess *conversation.Session) bool {
-			return conversation.HasInFlightSubmission(sess)
-		}
-		svc.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
-			return conversationBackend(a).TryReplyContinuation(msg, link, sessionKey, sess)
-		}
-		svc.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
-			return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
-		}
-		svc.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
-			return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
-		}
-		svc.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
-			return resolveInboundAttachments(a, msg, workspaceID, sessionKey)
-		}
+	svc := replycontinuation.NewService(replyContinuationAppAdapter{app: a})
 
-		return replyContinuationService{inner: svc}
-	})
+	// Wire callback function fields that need *App internals.
+	svc.GetSession = func(key string) *conversation.Session {
+		st := a.State()
+		if st == nil {
+			return nil
+		}
+		return st.Session(key)
+	}
+	svc.SaveSession = func(sess *conversation.Session) error {
+		st := a.State()
+		if st == nil {
+			return nil
+		}
+		return st.SaveSession(sess)
+	}
+	svc.GetMessageLink = func(messageID string) *state.MessageLink {
+		st := a.State()
+		if st == nil {
+			return nil
+		}
+		return st.MessageLink(messageID)
+	}
+	svc.SaveMessageLink = func(link *state.MessageLink) error {
+		st := a.State()
+		if st == nil {
+			return nil
+		}
+		return st.SaveMessageLink(link)
+	}
+	svc.CreateSubmission = func(sub *domainsubmission.Submission) (string, error) {
+		st := a.State()
+		if st == nil {
+			return "", nil
+		}
+		return st.CreateSubmission(sub)
+	}
+	svc.HasInFlightSubmission = func(sess *conversation.Session) bool {
+		return conversation.HasInFlightSubmission(sess)
+	}
+	svc.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
+		return conversationBackend(a).TryReplyContinuation(msg, link, sessionKey, sess)
+	}
+	svc.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
+		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+	}
+	svc.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
+		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
+	}
+	svc.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
+		return resolveInboundAttachments(a, msg, workspaceID, sessionKey)
+	}
+
+	return replyContinuationService{inner: svc}
 }
 
 func (s replyContinuationService) replyRootTurnLink(msg *feishu.InboundMessage) *state.MessageLink {

@@ -20,64 +20,62 @@ type modelConfigService struct {
 }
 
 func newModelConfigService(app *App) modelConfigService {
-	return serviceFor(app, "modelConfigService", func() modelConfigService {
-		return modelConfigService{
-			app: app,
-			inner: modelconfig.ModelConfigService{
-				GetConfig:   func() *config.Config { return app.cfg },
-				GetCfgPath:  func() string { return app.cfgPath },
-				GetConfigMu: func() *sync.RWMutex { return app.ConfigMu() },
-				ReplyText: func(ctx context.Context, msgID string, text string, replyInThread bool) error {
-					return app.feishu.ReplyText(ctx, msgID, text, replyInThread)
-				},
-				ReplyCard: func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error) {
-					return app.feishu.ReplyCard(ctx, msgID, card, replyInThread)
-				},
-				UpdateClaudeConfig: func(cfg config.ClaudeConfig) {
-					if app.claude != nil {
-						app.claude.UpdateConfig(cfg)
-					}
-				},
-				IsClaudeAvailable: func() bool {
-					return app.claude != nil
-				},
-				RequireCodexClient: func() (modelconfig.CodexClient, error) {
-					return requireCodexClient(app)
-				},
-				MakeSessionKey: func(msg *feishu.InboundMessage) string {
-					return makeSessionKey(app, msg)
-				},
-				NormalizeSessionKey: func(sessionKey string) string {
-					return normalizeSessionKey(app, sessionKey)
-				},
-				SessionBelongsToFrontend: func(sessionKey string) bool {
-					return sessionBelongsToFrontend(app, sessionKey)
-				},
-				ReplyInThreadEnabled: func(chatType string) bool {
-					return replyInThreadEnabled(app, chatType)
-				},
-				SessionConfig: func(sessionKey string) *config.Config {
-					return sessionScopedConfigForApp(app, sessionKey)
-				},
-				MenuBackAction: menuBackAction,
-				CompleteGlobalModelSet: func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-					return newBackendConfigurationService(app).completeGlobalModelSet(action, modelID)
-				},
-				CompleteGlobalReasoningEffortSet: func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
-					return newBackendConfigurationService(app).completeGlobalReasoningEffortSet(action, effort)
-				},
-				HandleBackendModelCommand: func(msg *feishu.InboundMessage, args []string) error {
-					return newBackendConfigurationService(app).handleBackendModelCommand(msg, args)
-				},
-				FormatMenuBody:           menuCardBody,
-				ModelConfigBlockedReason: func() string { return modelConfigBlockedReason(app) },
-				ModelConfigStatus:        func(sessionKey string) string { return modelConfigStatus(app, sessionKey) },
-				ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-					return replyCommandActionResponse(app, msg, resp)
-				},
+	return modelConfigService{
+		app: app,
+		inner: modelconfig.ModelConfigService{
+			GetConfig:   func() *config.Config { return app.cfg },
+			GetCfgPath:  func() string { return app.cfgPath },
+			GetConfigMu: func() *sync.RWMutex { return app.ConfigMu() },
+			ReplyText: func(ctx context.Context, msgID string, text string, replyInThread bool) error {
+				return app.feishu.ReplyText(ctx, msgID, text, replyInThread)
 			},
-		}
-	})
+			ReplyCard: func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error) {
+				return app.feishu.ReplyCard(ctx, msgID, card, replyInThread)
+			},
+			UpdateClaudeConfig: func(cfg config.ClaudeConfig) {
+				if app.claude != nil {
+					app.claude.UpdateConfig(cfg)
+				}
+			},
+			IsClaudeAvailable: func() bool {
+				return app.claude != nil
+			},
+			RequireCodexClient: func() (modelconfig.CodexClient, error) {
+				return requireCodexClient(app)
+			},
+			MakeSessionKey: func(msg *feishu.InboundMessage) string {
+				return makeSessionKey(app, msg)
+			},
+			NormalizeSessionKey: func(sessionKey string) string {
+				return normalizeSessionKey(app, sessionKey)
+			},
+			SessionBelongsToFrontend: func(sessionKey string) bool {
+				return sessionBelongsToFrontend(app, sessionKey)
+			},
+			ReplyInThreadEnabled: func(chatType string) bool {
+				return replyInThreadEnabled(app, chatType)
+			},
+			SessionConfig: func(sessionKey string) *config.Config {
+				return sessionScopedConfigForApp(app, sessionKey)
+			},
+			MenuBackAction: menuBackAction,
+			CompleteGlobalModelSet: func(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+				return newBackendConfigurationService(app).completeGlobalModelSet(action, modelID)
+			},
+			CompleteGlobalReasoningEffortSet: func(action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
+				return newBackendConfigurationService(app).completeGlobalReasoningEffortSet(action, effort)
+			},
+			HandleBackendModelCommand: func(msg *feishu.InboundMessage, args []string) error {
+				return newBackendConfigurationService(app).handleBackendModelCommand(msg, args)
+			},
+			FormatMenuBody:           menuCardBody,
+			ModelConfigBlockedReason: func() string { return modelConfigBlockedReason(app) },
+			ModelConfigStatus:        func(sessionKey string) string { return modelConfigStatus(app, sessionKey) },
+			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+				return replyCommandActionResponse(app, msg, resp)
+			},
+		},
+	}
 }
 
 func (s modelConfigService) fetchModelList(ctx context.Context) (codexrpc.ModelListResult, error) {

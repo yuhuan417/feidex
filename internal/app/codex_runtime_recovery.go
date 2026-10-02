@@ -7,18 +7,28 @@ import (
 	"fmt"
 	"strings"
 
-	appcodexruntime "feidex/internal/app/codexruntime"
+	appcodexruntime "feidex/internal/runtime/codex"
 )
 
-// codexRecoveryState is the app-level recovery state, lazily initialized.
-var codexRecoveryState = appcodexruntime.NewRecoveryState()
+// recoveryState belongs to one frontend; clients and recovery exclusion never cross runtimes.
+func recoveryState(a *App) *appcodexruntime.RecoveryState {
+	if a == nil {
+		return nil
+	}
+	a.codexRuntimeMu.Lock()
+	defer a.codexRuntimeMu.Unlock()
+	if a.codexRecovery == nil {
+		a.codexRecovery = appcodexruntime.NewRecoveryState()
+	}
+	return a.codexRecovery
+}
 
 // buildCodexRecoveryService builds a codexruntime.RecoveryService with
 // all callbacks wired to *App dependencies. The StartVerifiedCodexClient
 // callback is set separately to avoid circular initialization.
 func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 	return appcodexruntime.RecoveryService{
-		State:   codexRecoveryState,
+		State:   recoveryState(a),
 		Context: a.Context,
 		FrontendID: func() string {
 			return a.frontendID
@@ -106,7 +116,9 @@ func replaceCodexClient(a *App, next CodexClient) CodexClient {
 }
 
 func replyCodexError(a *App, requestID json.RawMessage, code int, message string) {
-	buildCodexRecoveryService(a).ReplyError(requestID, code, message)
+	if client := currentCodexClient(a); client != nil {
+		_ = client.ReplyError(requestID, code, message)
+	}
 }
 
 func beginCodexAutoThreadRecoveryScope(a *App) func() {

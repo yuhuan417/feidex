@@ -2,30 +2,27 @@ package submission
 
 import (
 	"context"
+	"feidex/internal/application"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
-	"feidex/internal/feishu"
 	"log/slog"
 	"strings"
 	"time"
 )
 
 // ---------------------------------------------------------------------------
-// App interface — what the pending queue service needs
+// Explicit pending input dependencies
 // ---------------------------------------------------------------------------
 
-// PendingQueueApp defines the interface the pending queue service requires
-// from the host application.
-type PendingQueueApp interface {
-	// Provider accessors.
-	PendingQueueAppState() PendingQueueAppStateProvider
-	PendingQueueRuntimeMaintenance() PendingQueueRuntimeMaintenanceProvider
-
-	// Direct app methods.
-	PendingQueueDefaultWorkspaceID() string
-	PendingQueueAddReaction(ctx context.Context, messageID, emoji string) error
-	PendingQueueRemoveReaction(ctx context.Context, messageID, emoji string) error
-	PendingQueueLogSessionState(event, sessionKey string, sess *conversation.Session)
+// PendingDependencies contains the repository, cleanup and presentation ports for pending input.
+type PendingDependencies struct {
+	Context            func() context.Context
+	State              PendingQueueAppStateProvider
+	Maintenance        PendingQueueRuntimeMaintenanceProvider
+	DefaultWorkspaceID func() string
+	AddReaction        func(context.Context, string, string) error
+	RemoveReaction     func(context.Context, string, string) error
+	LogSessionState    func(string, string, *conversation.Session)
 }
 
 // PendingQueueAppStateProvider narrows app state access.
@@ -50,12 +47,12 @@ type PendingQueueRuntimeMaintenanceProvider interface {
 // PendingQueueService manages pending queue operations: staging images,
 // discarding items, and managing Feishu reactions.
 type PendingQueueService struct {
-	App PendingQueueApp
+	Deps PendingDependencies
 }
 
 // NewPendingQueueService creates a new PendingQueueService.
-func NewPendingQueueService(app PendingQueueApp) PendingQueueService {
-	return PendingQueueService{App: app}
+func NewPendingQueueService(deps PendingDependencies) PendingQueueService {
+	return PendingQueueService{Deps: deps}
 }
 
 // Reaction emoji constants.
@@ -68,7 +65,7 @@ const (
 // ShouldStageInboundImages returns true if the message should be staged as
 // pending files to be included in the next submission.  Any attachment-only
 // message without text (images, STL, PDF, etc.) is eligible.
-func (s PendingQueueService) ShouldStageInboundImages(msg *feishu.InboundMessage) bool {
+func (s PendingQueueService) ShouldStageInboundImages(msg *application.InboundMessage) bool {
 	if msg == nil || msg.ExpandedMergeForward || strings.TrimSpace(msg.Text) != "" || len(msg.Attachments) == 0 {
 		return false
 	}
@@ -77,17 +74,17 @@ func (s PendingQueueService) ShouldStageInboundImages(msg *feishu.InboundMessage
 
 // StageInboundImagesForSession stages images from an inbound message into
 // the session's staged images list.
-func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMessage, sessionKey string, resolveAttachments func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error)) error {
+func (s PendingQueueService) StageInboundImagesForSession(msg *application.InboundMessage, sessionKey string, resolveAttachments func(msg *application.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error)) error {
 	if msg == nil {
 		return nil
 	}
-	a := s.App
-	appState := a.PendingQueueAppState()
+	a := s.Deps
+	appState := a.State
 	sess := appState.Session(sessionKey)
 	if sess == nil {
 		sess = &conversation.Session{
 			Key:           sessionKey,
-			WorkspaceID:   a.PendingQueueDefaultWorkspaceID(),
+			WorkspaceID:   a.DefaultWorkspaceID(),
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
@@ -96,7 +93,7 @@ func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMes
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = a.PendingQueueDefaultWorkspaceID()
+		sess.WorkspaceID = a.DefaultWorkspaceID()
 	}
 	attachments, err := resolveAttachments(msg, sess.WorkspaceID, sessionKey)
 	if err != nil {
@@ -129,8 +126,8 @@ func (s PendingQueueService) DiscardPendingInputByMessageID(messageID string) bo
 	if messageID == "" {
 		return false
 	}
-	a := s.App
-	appState := a.PendingQueueAppState()
+	a := s.Deps
+	appState := a.State
 	for _, snapshot := range appState.Sessions() {
 		if snapshot == nil {
 			continue
@@ -155,11 +152,11 @@ func (s PendingQueueService) DiscardPendingInputByMessageID(messageID string) bo
 // DiscardStagedImageFromSessionSnapshot discards a staged image from a session
 // snapshot by source message ID.
 func (s PendingQueueService) DiscardStagedImageFromSessionSnapshot(snapshot *conversation.Session, messageID string) bool {
-	a := s.App
+	a := s.Deps
 	if snapshot == nil || strings.TrimSpace(snapshot.Key) == "" {
 		return false
 	}
-	appState := a.PendingQueueAppState()
+	appState := a.State
 	discarded := false
 	if _, err := appState.UpdateSession(snapshot.Key, func(current *conversation.Session) {
 		if current == nil {
@@ -180,11 +177,11 @@ func (s PendingQueueService) DiscardStagedImageFromSessionSnapshot(snapshot *con
 // DiscardQueuedSubmissionFromSessionSnapshot discards a queued submission
 // from a session snapshot.
 func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot *conversation.Session, submissionID string, sub *domainsubmission.Submission) bool {
-	a := s.App
+	a := s.Deps
 	if snapshot == nil || strings.TrimSpace(snapshot.Key) == "" || strings.TrimSpace(submissionID) == "" {
 		return false
 	}
-	appState := a.PendingQueueAppState()
+	appState := a.State
 	discarded := false
 	if _, err := appState.UpdateSession(snapshot.Key, func(current *conversation.Session) {
 		if current == nil {
@@ -212,15 +209,15 @@ func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot
 		return false
 	}
 	s.markMessagesDiscardedReactions(SourceMessageIDs(sub))
-	a.PendingQueueRuntimeMaintenance().CleanupSubmissionRuntimeState(sub)
+	a.Maintenance.CleanupSubmissionRuntimeState(sub)
 	return true
 }
 
 // DiscardSessionPendingInputs discards all pending inputs (staged images and
 // queued submissions) for a session.
 func (s PendingQueueService) DiscardSessionPendingInputs(sessionKey string) int {
-	a := s.App
-	appState := a.PendingQueueAppState()
+	a := s.Deps
+	appState := a.State
 	sess := appState.Session(sessionKey)
 	if sess == nil {
 		return 0
@@ -242,7 +239,7 @@ func (s PendingQueueService) DiscardSessionPendingInputs(sessionKey string) int 
 			continue
 		}
 		discarded++
-		a.PendingQueueRuntimeMaintenance().CleanupSubmissionRuntimeState(sub)
+		a.Maintenance.CleanupSubmissionRuntimeState(sub)
 	}
 	sess.Queue = nil
 	sess.StagedImages = nil
@@ -302,29 +299,29 @@ func (s PendingQueueService) ClearMessageProcessingReactions(messageIDs []string
 
 func (s PendingQueueService) markMessagesQueuedReactions(messageIDs []string) {
 	s.forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
-		return s.App.PendingQueueAddReaction(ctx, messageID, QueueReactionEmoji)
+		return s.Deps.AddReaction(ctx, messageID, QueueReactionEmoji)
 	})
 }
 
 func (s PendingQueueService) markMessagesTypingReactions(messageIDs []string) {
 	s.forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
-		return s.App.PendingQueueAddReaction(ctx, messageID, TypingReactionEmoji)
+		return s.Deps.AddReaction(ctx, messageID, TypingReactionEmoji)
 	})
 }
 
 func (s PendingQueueService) markMessagesDiscardedReactions(messageIDs []string) {
 	s.clearMessageProcessingReactions(messageIDs)
 	s.forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
-		return s.App.PendingQueueAddReaction(ctx, messageID, DiscardReactionEmoji)
+		return s.Deps.AddReaction(ctx, messageID, DiscardReactionEmoji)
 	})
 }
 
 func (s PendingQueueService) clearMessageProcessingReactions(messageIDs []string) {
 	s.forEachMessageID(messageIDs, func(ctx context.Context, messageID string) error {
-		if err := s.App.PendingQueueRemoveReaction(ctx, messageID, QueueReactionEmoji); err != nil {
+		if err := s.Deps.RemoveReaction(ctx, messageID, QueueReactionEmoji); err != nil {
 			return err
 		}
-		return s.App.PendingQueueRemoveReaction(ctx, messageID, TypingReactionEmoji)
+		return s.Deps.RemoveReaction(ctx, messageID, TypingReactionEmoji)
 	})
 }
 
@@ -334,7 +331,7 @@ func (s PendingQueueService) forEachMessageID(messageIDs []string, fn func(conte
 	}
 	ids := UniqueStrings(messageIDs)
 	for _, messageID := range ids {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(s.Deps.context(), 5*time.Second)
 		err := fn(ctx, messageID)
 		cancel()
 		if err != nil {
@@ -364,4 +361,11 @@ func DiscardStagedImageByMessageID(sess *conversation.Session, messageID string)
 	sess.StagedImages = next
 	conversation.RefreshPendingStatus(sess)
 	return true
+}
+
+func (d PendingDependencies) context() context.Context {
+	if d.Context != nil {
+		return d.Context()
+	}
+	return context.Background()
 }

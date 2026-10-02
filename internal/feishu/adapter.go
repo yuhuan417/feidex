@@ -3,6 +3,7 @@ package feishu
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/application"
 	"fmt"
 	"io"
 	"io/fs"
@@ -25,36 +26,6 @@ import (
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 )
-
-type InboundMessage struct {
-	SessionKey             string
-	MessageID              string
-	ChatID                 string
-	ChatType               string
-	UserID                 string
-	UserName               string
-	ChatName               string
-	Text                   string
-	RootMessageID          string
-	ParentMessageID        string
-	ThreadID               string
-	Attachments            []Attachment
-	MergeForwardMessageIDs []string
-	ExpandedMergeForward   bool
-	MentionedOpenIDs       []string
-	MentionedAny           bool
-	MentionedSelf          bool
-	// MentionAll marks "@所有人".
-	//
-	// Measured against a live tenant: the platform does NOT put it in
-	// mentions[] — that array arrives empty — and leaves the placeholder
-	// "@_all" in the plain text instead. So this cannot be derived from
-	// MentionedAny or MentionedOpenIDs, both of which stay empty/false; it has
-	// to be read off the text. Group routing treats it separately: every bot
-	// answers it.
-	MentionAll bool
-	CreatedAt  int64
-}
 
 // GroupMessagePolicyInput is the app-level context used to decide whether a
 // group message should be delivered to this local bot. It carries only
@@ -84,12 +55,6 @@ type MessageReaction struct {
 	ChatID    string
 	UserID    string
 	EmojiType string
-}
-
-type Attachment struct {
-	Kind            string
-	ResourceKey     string
-	SourceMessageID string
 }
 
 type CardAction struct {
@@ -2058,3 +2023,6 @@ func (a *Adapter) fetchBotProfile() botProfile {
 		Name:   firstNonEmptyString(info.Bot.AppName, info.Bot.Name, info.Bot.BotName),
 	}
 }
+
+type InboundMessage = application.InboundMessage
+type Attachment = application.Attachment

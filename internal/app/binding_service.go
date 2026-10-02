@@ -25,9 +25,7 @@ type bindingService struct {
 }
 
 func newBindingService(a *App) bindingService {
-	return serviceFor(a, "bindingService", func() bindingService {
-		return bindingService{app: a}
-	})
+	return bindingService{app: a}
 }
 
 func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage, args []string) error {

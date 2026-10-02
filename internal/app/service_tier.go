@@ -10,9 +10,7 @@ import (
 type serviceTierAppAdapter struct{ *App }
 
 func newServiceTierService(app *App) appservicetiercmd.Service {
-	return serviceFor(app, "serviceTierService", func() appservicetiercmd.Service {
-		return appservicetiercmd.NewService(serviceTierAppAdapter{App: app})
-	})
+	return appservicetiercmd.NewService(serviceTierAppAdapter{App: app})
 }
 
 func (a serviceTierAppAdapter) Feishu() appcore.FeishuClient {

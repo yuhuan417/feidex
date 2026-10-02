@@ -104,87 +104,85 @@ func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *dom
 // newBackendFailureService builds a backend.BackendFailureService with
 // all callbacks wired to *App dependencies.
 func newBackendFailureService(a *App) appbackend.BackendFailureService {
-	return serviceFor(a, "backendFailureService", func() appbackend.BackendFailureService {
-		return appbackend.NewBackendFailureService(appbackend.FailureDeps{
-			App: a,
-			State: appbackend.FailureStateDeps{
-				AllSessions: func() []*conversation.Session {
-					return a.State().Sessions()
-				},
-				GetSubmission: func(id string) *domainsubmission.Submission {
-					return a.State().Submission(id)
-				},
-				AllPendingRequests: func() []*state.PendingRequest {
-					return a.State().PendingRequests()
-				},
-				UpdatePending: func(id string, mutate func(*state.PendingRequest)) error {
-					return a.State().UpdatePending(id, mutate)
-				},
-				FinalizeSubmission: func(id, status string) error {
-					return a.State().FinalizeSubmission(id, status)
-				},
-				UpdateSession: func(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
-					return a.State().UpdateSession(key, mutate)
-				},
+	return appbackend.NewBackendFailureService(appbackend.FailureDeps{
+		App: a,
+		State: appbackend.FailureStateDeps{
+			AllSessions: func() []*conversation.Session {
+				return a.State().Sessions()
 			},
-			Sessions: appbackend.FailureSessionDeps{
-				SessionBelongsToFrontend: func(sessionKey string) bool {
-					return sessionBelongsToFrontend(a, sessionKey)
-				},
+			GetSubmission: func(id string) *domainsubmission.Submission {
+				return a.State().Submission(id)
 			},
-			Runtime: appbackend.FailureRuntimeDeps{
-				RecordTurnError: func(threadID, turnID, message string) {
-					newTurnStreamService(a).recordTurnError(threadID, turnID, message)
-				},
-				FlushTurnStream: func(ctx context.Context, threadID, turnID string) appturnstream.FlushResult {
-					return newTurnStreamService(a).flushTurnStream(ctx, threadID, turnID)
-				},
-				FailStandaloneCompactTurn: func(threadID, turnID, message string) bool {
-					return failStandaloneCompactTurn(a, threadID, turnID, message)
-				},
-				BackendRuntimeFailsStandaloneCompaction: func(backend string) bool {
-					if runtime := backendRuntimeForKind(backend); runtime != nil {
-						return runtime.failsStandaloneCompaction()
-					}
-					return false
-				},
-				BackendRuntimeHandleTransportFailure: func(backend, sessionKey, threadID string, err error) {
-					if runtime := backendRuntimeForKind(backend); runtime != nil {
-						runtime.handleTransportFailure(a, sessionKey, threadID, err)
-					}
-				},
+			AllPendingRequests: func() []*state.PendingRequest {
+				return a.State().PendingRequests()
 			},
-			Cards: appbackend.FailureCardDeps{
-				ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool {
-					return appautoretry.NewService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
-				},
-				ReplaceTurnEventCard: func(ctx context.Context, sub *domainsubmission.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
-					newOutboundCardService(a).replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
-				},
-				PrependAttentionMention: func(text, userID string) string {
-					return apputil.PrependAttentionMentionMarkdown(text, userID)
-				},
-				TurnStopAttentionUserID: func(sub *domainsubmission.Submission, turnID string) string {
-					return turnStopAttentionUserID(a, sub, turnID)
-				},
+			UpdatePending: func(id string, mutate func(*state.PendingRequest)) error {
+				return a.State().UpdatePending(id, mutate)
 			},
-			Async: appbackend.FailureAsyncDeps{
-				CleanupSubmissionRuntimeState: func(sub *domainsubmission.Submission) {
-					appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(sub)
-				},
-				ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
-					newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
-				},
-				StartNextSubmissionAsync: func(sessionKey, reason string) {
-					newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, reason)
-				},
-				NextQueuedSubmissionSessionKey: func(sessionKey string) string {
-					return newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey)
-				},
-				RunAsync: func(fn func()) {
-					runAsync(a, fn)
-				},
+			FinalizeSubmission: func(id, status string) error {
+				return a.State().FinalizeSubmission(id, status)
 			},
-		})
+			UpdateSession: func(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
+				return a.State().UpdateSession(key, mutate)
+			},
+		},
+		Sessions: appbackend.FailureSessionDeps{
+			SessionBelongsToFrontend: func(sessionKey string) bool {
+				return sessionBelongsToFrontend(a, sessionKey)
+			},
+		},
+		Runtime: appbackend.FailureRuntimeDeps{
+			RecordTurnError: func(threadID, turnID, message string) {
+				newTurnStreamService(a).recordTurnError(threadID, turnID, message)
+			},
+			FlushTurnStream: func(ctx context.Context, threadID, turnID string) appturnstream.FlushResult {
+				return newTurnStreamService(a).flushTurnStream(ctx, threadID, turnID)
+			},
+			FailStandaloneCompactTurn: func(threadID, turnID, message string) bool {
+				return failStandaloneCompactTurn(a, threadID, turnID, message)
+			},
+			BackendRuntimeFailsStandaloneCompaction: func(backend string) bool {
+				if runtime := backendRuntimeForKind(backend); runtime != nil {
+					return runtime.failsStandaloneCompaction()
+				}
+				return false
+			},
+			BackendRuntimeHandleTransportFailure: func(backend, sessionKey, threadID string, err error) {
+				if runtime := backendRuntimeForKind(backend); runtime != nil {
+					runtime.handleTransportFailure(a, sessionKey, threadID, err)
+				}
+			},
+		},
+		Cards: appbackend.FailureCardDeps{
+			ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool {
+				return appautoretry.NewService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
+			},
+			ReplaceTurnEventCard: func(ctx context.Context, sub *domainsubmission.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
+				newOutboundCardService(a).replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
+			},
+			PrependAttentionMention: func(text, userID string) string {
+				return apputil.PrependAttentionMentionMarkdown(text, userID)
+			},
+			TurnStopAttentionUserID: func(sub *domainsubmission.Submission, turnID string) string {
+				return turnStopAttentionUserID(a, sub, turnID)
+			},
+		},
+		Async: appbackend.FailureAsyncDeps{
+			CleanupSubmissionRuntimeState: func(sub *domainsubmission.Submission) {
+				appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(sub)
+			},
+			ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
+				newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
+			},
+			StartNextSubmissionAsync: func(sessionKey, reason string) {
+				newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, reason)
+			},
+			NextQueuedSubmissionSessionKey: func(sessionKey string) string {
+				return newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey)
+			},
+			RunAsync: func(fn func()) {
+				runAsync(a, fn)
+			},
+		},
 	})
 }

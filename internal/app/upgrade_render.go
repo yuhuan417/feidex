@@ -27,9 +27,7 @@ type upgradeRenderService struct {
 }
 
 func newUpgradeRenderService(app *App) upgradeRenderService {
-	return serviceFor(app, "upgradeRenderService", func() upgradeRenderService {
-		return upgradeRenderService{app: app}
-	})
+	return upgradeRenderService{app: app}
 }
 
 func (s upgradeRenderService) renderUpgradeStatusCard(spec upgraderender.Spec, sessionKey string, view backendUpgradeView, latestChecked bool) map[string]any {

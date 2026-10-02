@@ -15,7 +15,7 @@ import (
 
 	appbackend "feidex/internal/app/backend"
 
-	appsubmission "feidex/internal/app/submission"
+	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 

@@ -60,8 +60,8 @@
 - `internal/app/claudesession/history.go`
 - `internal/app/claudesupport/support.go`
 - `internal/app/claudesupport/history.go`
-- `internal/app/codexruntime/recovery.go`
-- `internal/app/codexruntime/upgrade.go`
+- `internal/runtime/codex/recovery.go`
+- `internal/runtime/codex/upgrade.go`
 - `internal/codexrpc/*`
 
 ## 5. Runtime Layer

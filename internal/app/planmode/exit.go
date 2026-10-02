@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	appsubmission "feidex/internal/app/submission"
+	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

@@ -1,4 +1,4 @@
-package submission
+package submissionforms
 
 import (
 	"encoding/json"

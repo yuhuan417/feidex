@@ -1,7 +1,8 @@
-package submission
+package json
 
 import (
 	"context"
+	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
@@ -12,7 +13,12 @@ import (
 
 func TestPendingQueueServiceStageInboundImagesForSession(t *testing.T) {
 	app := newPendingQueueTestApp(t)
-	svc := NewPendingQueueService(app)
+	svc := appsubmission.NewPendingQueueService(appsubmission.PendingDependencies{
+		State: app.PendingQueueAppState(), Maintenance: app.PendingQueueRuntimeMaintenance(),
+		DefaultWorkspaceID: app.PendingQueueDefaultWorkspaceID,
+		AddReaction:        app.PendingQueueAddReaction, RemoveReaction: app.PendingQueueRemoveReaction,
+		LogSessionState: app.PendingQueueLogSessionState,
+	})
 
 	msg := &feishu.InboundMessage{
 		MessageID:     "img-1",
@@ -48,14 +54,19 @@ func TestPendingQueueServiceStageInboundImagesForSession(t *testing.T) {
 	if sess == nil || len(sess.StagedImages) != 1 || sess.Status != "queued" {
 		t.Fatalf("session after stage = %+v", sess)
 	}
-	if len(app.added) == 0 || app.added[0] != "img-1:"+QueueReactionEmoji {
+	if len(app.added) == 0 || app.added[0] != "img-1:"+appsubmission.QueueReactionEmoji {
 		t.Fatalf("added reactions = %+v, want queue reaction", app.added)
 	}
 }
 
 func TestPendingQueueServiceReactionWrappersAndDiscardSession(t *testing.T) {
 	app := newPendingQueueTestApp(t)
-	svc := NewPendingQueueService(app)
+	svc := appsubmission.NewPendingQueueService(appsubmission.PendingDependencies{
+		State: app.PendingQueueAppState(), Maintenance: app.PendingQueueRuntimeMaintenance(),
+		DefaultWorkspaceID: app.PendingQueueDefaultWorkspaceID,
+		AddReaction:        app.PendingQueueAddReaction, RemoveReaction: app.PendingQueueRemoveReaction,
+		LogSessionState: app.PendingQueueLogSessionState,
+	})
 
 	if err := app.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
@@ -98,7 +109,12 @@ func TestPendingQueueServiceReactionWrappersAndDiscardSession(t *testing.T) {
 
 func TestPendingQueueServiceDiscardPendingInputByMessageID(t *testing.T) {
 	app := newPendingQueueTestApp(t)
-	svc := NewPendingQueueService(app)
+	svc := appsubmission.NewPendingQueueService(appsubmission.PendingDependencies{
+		State: app.PendingQueueAppState(), Maintenance: app.PendingQueueRuntimeMaintenance(),
+		DefaultWorkspaceID: app.PendingQueueDefaultWorkspaceID,
+		AddReaction:        app.PendingQueueAddReaction, RemoveReaction: app.PendingQueueRemoveReaction,
+		LogSessionState: app.PendingQueueLogSessionState,
+	})
 	sessionKey := "feishu:chat:chat"
 
 	if err := app.store.UpsertSession(&conversation.Session{
@@ -156,7 +172,12 @@ func TestPendingQueueServiceDiscardPendingInputByMessageID(t *testing.T) {
 
 func TestDiscardQueuedSubmissionFromSessionSnapshotPreservesCurrentSessionState(t *testing.T) {
 	app := newPendingQueueTestApp(t)
-	svc := NewPendingQueueService(app)
+	svc := appsubmission.NewPendingQueueService(appsubmission.PendingDependencies{
+		State: app.PendingQueueAppState(), Maintenance: app.PendingQueueRuntimeMaintenance(),
+		DefaultWorkspaceID: app.PendingQueueDefaultWorkspaceID,
+		AddReaction:        app.PendingQueueAddReaction, RemoveReaction: app.PendingQueueRemoveReaction,
+		LogSessionState: app.PendingQueueLogSessionState,
+	})
 
 	if err := app.store.UpsertSession(&conversation.Session{
 		Key:                "sess-1",
@@ -239,11 +260,11 @@ func newPendingQueueTestApp(t *testing.T) *pendingQueueTestApp {
 	return &pendingQueueTestApp{store: store}
 }
 
-func (a *pendingQueueTestApp) PendingQueueAppState() PendingQueueAppStateProvider {
+func (a *pendingQueueTestApp) PendingQueueAppState() appsubmission.PendingQueueAppStateProvider {
 	return pendingQueueTestState{store: a.store}
 }
 
-func (a *pendingQueueTestApp) PendingQueueRuntimeMaintenance() PendingQueueRuntimeMaintenanceProvider {
+func (a *pendingQueueTestApp) PendingQueueRuntimeMaintenance() appsubmission.PendingQueueRuntimeMaintenanceProvider {
 	return pendingQueueTestRuntimeMaintenance{store: a.store}
 }
 

@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	appcodexruntime "feidex/internal/app/codexruntime"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -338,9 +337,6 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		feishu:      &fakeFeishuClient{},
 		liveThreads: frontendruntime.NewLiveThreads(),
 	}
-	defer func() {
-		codexRecoveryState = appcodexruntime.NewRecoveryState()
-	}()
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := store.UpsertSession(&conversation.Session{

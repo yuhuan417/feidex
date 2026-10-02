@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	appcodexruntime "feidex/internal/app/codexruntime"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 )
@@ -143,8 +142,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 
 func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	codexRecoveryState.SetRecoveringForTest()
-	defer func() { codexRecoveryState = appcodexruntime.NewRecoveryState() }()
+	recoveryState(a).SetRecoveringForTest()
 
 	sessionKey := "sess-recovering"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -273,5 +271,24 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.Status != "idle" {
 		t.Fatalf("session after skipped frontend thread recovery = %+v", sess)
+	}
+}
+
+func TestCodexRecoveryIsFrontendScoped(t *testing.T) {
+	a, _, first := newTestApp(t)
+	b, _, second := newTestApp(t)
+	replaceCodexClient(a, first)
+	replaceCodexClient(b, second)
+	if !beginCodexTransportRecovery(a, first) {
+		t.Fatal("first frontend recovery not admitted")
+	}
+	if codexRuntimeRecovering(b) || currentCodexClient(b) != second {
+		t.Fatal("recovery crossed frontend boundary")
+	}
+	if currentCodexClient(a) != nil {
+		t.Fatal("recovering frontend exposed failed client")
+	}
+	if require, err := requireCodexClient(&App{}); err == nil || require != nil {
+		t.Fatal("uninitialized frontend borrowed another frontend client")
 	}
 }

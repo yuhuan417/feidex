@@ -446,4 +446,10 @@ Codex server request
 
 - Feishu 展示依赖图整体迁入 `internal/adapter/feishu`（approval/forms/cards/delivery/review/thread/turn item），不保留旧 app 展示包。菜单能力声明迁入 application，backend identity/inflight 迁入 domain，运行时值迁入 runtime；删除 menutypes 和 apputil 转发层。
 
-仍待迁移：conversation 用例编排、完整 submission/turn aggregate、统一 dispatcher、session actor、backend event adapter、Feishu presentation/effect runner，以及旧 serviceFor、宽 App interface 和跨 owner callback 的删除。以上条目完成前不能将整份提案标记为完成。
+- 全部 36 处 `serviceFor` 与 App 按名称索引的服务缓存已删除。
+- submission enqueue/dequeue、启动/失败/回滚、暂存附件和查找 turn 的完整用例迁入 `internal/application/submission`，删除宽 App/PendingQueueApp 接口、旧 app/submission 包与宿主转发适配器。生产队列不再经过 conversation facade 回调自身；Codex 初始化协议与 Claude prompt 编码由 backend adapter 执行。
+- workspace 配置值、AgentBinding/BotProfile 和 frontend/session key 解析迁入 domain；标准化 inbound message 由 application 定义，Feishu adapter 不再拥有业务输入类型。存储和 config 保留序列化兼容别名，持久化字段不变。
+
+- Codex runtime recovery/upgrade 已迁入 `internal/runtime/codex`，全局 recovery state 已删除；每个 frontend 单独拥有 client、恢复状态和自动 thread recovery exclusion。新增并验证 frontend 隔离回归测试。
+
+仍待迁移：conversation 用例编排、完整 submission/turn aggregate、统一 dispatcher、session actor、backend event adapter、Feishu presentation/effect runner，以及其余宽 App interface 和跨 owner callback 的删除。以上条目完成前不能将整份提案标记为完成。

@@ -13,71 +13,70 @@ import (
 )
 
 func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
-	return serviceFor(a, "workspaceConfigService", func() *appworkspacecmd.ConfigService {
-		st := a.State()
-		bcfg := newBackendConfigurationService(a)
-		return appworkspacecmd.NewConfigService(appworkspacecmd.ConfigDeps{
-			App:   a,
-			State: workspaceStateDeps(st),
-			SessionContext: appworkspacecmd.SessionContextDeps{
-				SessionHasInFlight:     conversation.HasInFlightSubmission,
-				SwitchSessionWorkspace: conversation.SwitchSessionWorkspace,
-				ClearSessionThreadCtx:  conversation.ClearThreadContext,
-				ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
+
+	st := a.State()
+	bcfg := newBackendConfigurationService(a)
+	return appworkspacecmd.NewConfigService(appworkspacecmd.ConfigDeps{
+		App:   a,
+		State: workspaceStateDeps(st),
+		SessionContext: appworkspacecmd.SessionContextDeps{
+			SessionHasInFlight:     conversation.HasInFlightSubmission,
+			SwitchSessionWorkspace: conversation.SwitchSessionWorkspace,
+			ClearSessionThreadCtx:  conversation.ClearThreadContext,
+			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
+		},
+		Threads: appworkspacecmd.ThreadDeps{
+			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
+				return newWorkspaceThreadService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
-			Threads: appworkspacecmd.ThreadDeps{
-				EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-					return newWorkspaceThreadService(a).EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
-				},
+		},
+		Backend: appworkspacecmd.BackendConfigDeps{
+			BackendWorkspaceSummaryLines:               bcfg.appendBackendWorkspaceSummaryLines,
+			BackendWorkspaceConfigButtons:              bcfg.backendWorkspaceConfigButtons,
+			BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,
+			BackendWorkspaceSwitchBindingFailureNotice: bcfg.backendWorkspaceSwitchBindingFailureNotice,
+			BackendWorkspaceSwitchInFlightNotice:       bcfg.backendWorkspaceSwitchInFlightNotice,
+			BackendWorkspaceCommandUsage:               bcfg.backendWorkspaceCommandUsage,
+			BackendWorkspacePermissionCommand:          bcfg.handleBackendWorkspacePermissionCommand,
+		},
+		Actions: appworkspacecmd.ActionDeps{
+			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
+				return indirectCompleteMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 			},
-			Backend: appworkspacecmd.BackendConfigDeps{
-				BackendWorkspaceSummaryLines:               bcfg.appendBackendWorkspaceSummaryLines,
-				BackendWorkspaceConfigButtons:              bcfg.backendWorkspaceConfigButtons,
-				BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,
-				BackendWorkspaceSwitchBindingFailureNotice: bcfg.backendWorkspaceSwitchBindingFailureNotice,
-				BackendWorkspaceSwitchInFlightNotice:       bcfg.backendWorkspaceSwitchInFlightNotice,
-				BackendWorkspaceCommandUsage:               bcfg.backendWorkspaceCommandUsage,
-				BackendWorkspacePermissionCommand:          bcfg.handleBackendWorkspacePermissionCommand,
+			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+				return indirectReplyCommandActionResponse(a, msg, resp)
 			},
-			Actions: appworkspacecmd.ActionDeps{
-				CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-					return indirectCompleteMenuCommand(a, action, sessionKey, rawCommand, parentAction)
-				},
-				ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-					return indirectReplyCommandActionResponse(a, msg, resp)
-				},
-				CommandActionFromMessage: commandActionFromMessage,
+			CommandActionFromMessage: commandActionFromMessage,
+		},
+		Formatting: appworkspacecmd.FormattingDeps{
+			FormatMenuBody: menuCardBody,
+		},
+		Render: appworkspacecmd.ConfigRenderDeps{
+			RenderMenuCard: func(sessionKey string) map[string]any {
+				return newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
 			},
-			Formatting: appworkspacecmd.FormattingDeps{
-				FormatMenuBody: menuCardBody,
+			RenderChooseMenuCard: func(sessionKey string) map[string]any {
+				return newWorkspaceRenderService(a).RenderWorkspaceChooseCard(sessionKey)
 			},
-			Render: appworkspacecmd.ConfigRenderDeps{
-				RenderMenuCard: func(sessionKey string) map[string]any {
-					return newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
-				},
-				RenderChooseMenuCard: func(sessionKey string) map[string]any {
-					return newWorkspaceRenderService(a).RenderWorkspaceChooseCard(sessionKey)
-				},
-				RenderSandboxMenuCard: func(sessionKey string) (map[string]any, error) {
-					return newWorkspaceRenderService(a).RenderWorkspaceSandboxMenuCard(sessionKey)
-				},
-				RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
-					return newWorkspaceRenderService(a).RenderWorkspacePolicyMenuCard(sessionKey)
-				},
-				RenderMultiAgentMenuCard: func(sessionKey string) (map[string]any, error) {
-					return newWorkspaceRenderService(a).RenderWorkspaceMultiAgentMenuCard(sessionKey)
-				},
-				RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
-					return newWorkspaceRenderService(a).RenderWorkspaceDeleteMenuCard(sessionKey)
-				},
-				RenderDeleteConfirmCard: func(sessionKey, workspaceID string) (map[string]any, error) {
-					return newWorkspaceRenderService(a).RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
-				},
-				RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-					return newWorkspaceRenderService(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
-				},
+			RenderSandboxMenuCard: func(sessionKey string) (map[string]any, error) {
+				return newWorkspaceRenderService(a).RenderWorkspaceSandboxMenuCard(sessionKey)
 			},
-		})
+			RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
+				return newWorkspaceRenderService(a).RenderWorkspacePolicyMenuCard(sessionKey)
+			},
+			RenderMultiAgentMenuCard: func(sessionKey string) (map[string]any, error) {
+				return newWorkspaceRenderService(a).RenderWorkspaceMultiAgentMenuCard(sessionKey)
+			},
+			RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
+				return newWorkspaceRenderService(a).RenderWorkspaceDeleteMenuCard(sessionKey)
+			},
+			RenderDeleteConfirmCard: func(sessionKey, workspaceID string) (map[string]any, error) {
+				return newWorkspaceRenderService(a).RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
+			},
+			RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
+				return newWorkspaceRenderService(a).RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+			},
+		},
 	})
 }
 

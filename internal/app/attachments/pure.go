@@ -3,9 +3,9 @@ package attachments
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"feidex/internal/adapter/backend/claude"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/pathdisplay"
-	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -71,25 +71,6 @@ func TextInput(text string) map[string]any {
 		"type":          "text",
 		"text":          text,
 		"text_elements": []any{},
-	}
-}
-
-func AttachmentPrompt(attachment domainsubmission.SubmissionAttachment) string {
-	path := strings.TrimSpace(attachment.LocalPath)
-	if path == "" {
-		return ""
-	}
-	switch attachment.Kind {
-	case "file":
-		return fmt.Sprintf("User attached file: %s", path)
-	case "image":
-		return fmt.Sprintf("User attached image: %s", path)
-	case "audio":
-		return fmt.Sprintf("User attached audio file (not transcribed): %s", path)
-	case "media":
-		return fmt.Sprintf("User attached video file: %s", path)
-	default:
-		return fmt.Sprintf("User attached %s: %s", strings.TrimSpace(attachment.Kind), path)
 	}
 }
 
@@ -329,3 +310,5 @@ func PathWithinWorkspace(path, workspaceCwd string) bool {
 	}
 	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
+
+var AttachmentPrompt = claude.AttachmentPrompt

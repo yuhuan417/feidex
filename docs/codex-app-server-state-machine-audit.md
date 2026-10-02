@@ -18,7 +18,7 @@
 - `internal/app/serverrequest/elicitation.go`
 - `internal/app/serverrequest/adapter.go`
 - `internal/app/tool_user_input_forms.go`
-- `internal/app/submission/pending_forms.go`
+- `internal/adapter/feishu/submissionforms/pending_forms.go`
 - `internal/adapter/feishu/pendingforms/elicitation_form.go`
 - `internal/adapter/feishu/approval/permission_summary.go`
 - `internal/app/compact.go`
@@ -155,7 +155,7 @@
   - 协议节点: `thread/start|thread/resume|thread/fork -> thread/started -> thread lifecycle notifications...`
   - 来源: OpenAI 官方页面 `Lifecycle overview`, `Thread methods`, `Notifications`
 - 我们当前实现:
-  - `internal/app/submission_queue.go` 发 `thread/start`。
+  - `internal/application/submission/queue.go` 通过 `internal/adapter/backend/codex/start_conversation.go` 发 `thread/start`。
   - `internal/app/thread_feature_actions.go` 发 `thread/resume`。
   - `internal/app/fork.go` 发 `thread/fork`。
   - 上述三条主链路都直接使用 RPC response 中返回的 thread 信息更新本地 session。
@@ -354,7 +354,7 @@
   - 来源: OpenAI 官方页面 `API overview`, `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
   - `internal/app/codex_event_router.go` 收到 request 后发送 UI。
-  - `internal/app/serverrequest/user_input.go`、`internal/app/tool_user_input_forms.go`、`internal/app/submission/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
+  - `internal/app/serverrequest/user_input.go`、`internal/app/tool_user_input_forms.go`、`internal/adapter/feishu/submissionforms/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
   - `internal/app/server_request_state.go` 统一把 `serverRequest/resolved` 当作唯一 `resolved` 边界，并负责恢复 submission。
 - 差异点:
   - 无。
@@ -589,7 +589,7 @@
   - 来源: `tmp/appserver-schema/ServerRequest.json`、`tmp/appserver-schema/codex_app_server_protocol.schemas.json`
 - 我们当前实现:
   - `internal/app/codex_event_router.go` 有 form/url 两种处理。
-  - `internal/app/serverrequest/elicitation.go` 与 `internal/app/submission/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
+  - `internal/app/serverrequest/elicitation.go` 与 `internal/adapter/feishu/submissionforms/pending_forms.go` 现在只在 reply 成功后把请求推进到 `replied`。
   - `internal/app/server_request_state.go` 统一等待 `serverRequest/resolved` 才最终 resolve 并恢复 submission。
   - 本次新增 MCP send tool 只复用独立的本地 MCP HTTP server，不改动 `mcpServer/elicitation/request` 的 pending / reply / resolved 契约。
 - 差异点:
@@ -689,3 +689,13 @@
 - submission 的状态枚举和 `MarkRunning`/`Finalize` 转换迁入 `internal/domain/submission`；未改变 SM-03、SM-04、SM-09～SM-11、SM-14、SM-22～SM-26 的协议终点，尤其没有把用户回复成功当作 resolved。
 - conversation queue 的 `Enqueue`/`Dequeue`/`RefreshPendingStatus` 迁入 domain；active turn 存在时仍禁止启动下一条 submission，未改变 turn started/completed 和 server-request resolve 的顺序。
 - turn lifecycle 编排迁入 `internal/application/turn` 后核对 SM-03、SM-04、SM-07～SM-11、SM-14、SM-22～SM-26：`turn/started`、`turn/completed`、review response turn、goal continuation、standalone compact 和 `serverRequest/resolved` 的 owner 与终态未改变。usage 仅做协议到 domain 的字段转换。
+
+
+## 架构迁移：frontend recovery 隔离
+
+Codex transport recovery/upgrade 归属 `internal/runtime/codex`。恢复状态由每个
+frontend 实例持有，移除进程全局 client/recovering/auto-thread-recovery 状态。
+一个 frontend 故障不能阻止另一个 frontend 入队，也不能回退到另一个 frontend
+的 client；尚未初始化的 frontend 仍返回 client unavailable。请求回复使用当前
+frontend 的有效 client，审批 reply/resolved、turn/start timeout 和 review turn
+权威边界保持原契约。`TestCodexRecoveryIsFrontendScoped` 覆盖隔离要求。

@@ -25,12 +25,10 @@ type turnStreamService struct {
 }
 
 func newTurnStreamService(app *App) turnStreamService {
-	return serviceFor(app, "turnStreamService", func() turnStreamService {
-		return turnStreamService{
-			app:     app,
-			service: appturnstream.NewService(app),
-		}
-	})
+	return turnStreamService{
+		app:     app,
+		service: appturnstream.NewService(app),
+	}
 }
 
 func newTurnStreamTracker() *turnStreamTracker {

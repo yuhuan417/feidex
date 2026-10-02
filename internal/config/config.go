@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"errors"
+	"feidex/internal/domain/workspace"
 	"fmt"
 	"log/slog"
 	"os"
@@ -87,16 +88,6 @@ type ClaudeConfig struct {
 
 type DaemonConfig struct {
 	ServiceName string `toml:"service_name"`
-}
-
-type Workspace struct {
-	ID                   string `toml:"id"`
-	Name                 string `toml:"name"`
-	Cwd                  string `toml:"cwd"`
-	ApprovalPolicy       string `toml:"approval_policy"`
-	SandboxMode          string `toml:"sandbox_mode"`
-	MultiAgentMode       string `toml:"multi_agent_mode"`
-	ClaudePermissionMode string `toml:"claude_permission_mode"`
 }
 
 const (
@@ -519,3 +510,6 @@ func NormalizeClaudeEffort(value string) (string, error) {
 		return "", fmt.Errorf("unsupported claude.effort %q", raw)
 	}
 }
+
+// Workspace is the configuration serialization of the domain workspace.
+type Workspace = workspace.Workspace

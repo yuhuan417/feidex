@@ -5,7 +5,5 @@ type outboundCardService struct {
 }
 
 func newOutboundCardService(app *App) outboundCardService {
-	return serviceFor(app, "outboundCardService", func() outboundCardService {
-		return outboundCardService{app: app}
-	})
+	return outboundCardService{app: app}
 }

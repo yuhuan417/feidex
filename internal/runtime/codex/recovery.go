@@ -1,6 +1,4 @@
-// Package codexruntime provides Codex-specific runtime recovery and upgrade
-// operations extracted from the app god package. Sub-packages cannot import
-// app/, so all host-app dependencies are injected as callback function fields.
+// Package codexruntime owns frontend-scoped Codex runtime recovery and upgrade.
 package codexruntime
 
 import (
@@ -12,12 +10,18 @@ import (
 	"sync"
 	"time"
 
-	appcore "feidex/internal/app/appcore"
+	"feidex/internal/codexrpc"
 )
 
-// CodexClient is the interface for the Codex RPC client, re-exported
-// from appcore for use by this package.
-type CodexClient = appcore.CodexClient
+// CodexClient is the protocol transport consumed by runtime supervision.
+type CodexClient interface {
+	SetHandlers(func(string, json.RawMessage), func(codexrpc.RequestEnvelope))
+	Start(context.Context, bool) error
+	Close() error
+	Call(context.Context, string, any, any) error
+	Reply(json.RawMessage, any) error
+	ReplyError(json.RawMessage, int, string) error
+}
 
 // RecoveryState holds synchronized state for Codex transport recovery.
 type RecoveryState struct {

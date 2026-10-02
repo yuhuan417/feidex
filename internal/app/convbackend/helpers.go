@@ -11,7 +11,7 @@ import (
 
 	codexadapter "feidex/internal/adapter/backend/codex"
 
-	appsubmission "feidex/internal/app/submission"
+	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

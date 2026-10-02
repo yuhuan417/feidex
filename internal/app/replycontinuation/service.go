@@ -4,7 +4,7 @@ package replycontinuation
 
 import (
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/submission"
+	"feidex/internal/application/submission"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
