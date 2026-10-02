@@ -1,29 +1,20 @@
 package app
 
 import (
+	frontendruntime "feidex/internal/runtime"
 	"strings"
-	"sync"
 
 	"feidex/internal/app/sessionctx"
 	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
-type liveThreadTracker struct {
-	mu      sync.Mutex
-	threads map[string]string
-}
-
-func newLiveThreadTracker() *liveThreadTracker {
-	return &liveThreadTracker{threads: map[string]string{}}
-}
-
-func getAppLiveThreadTracker(a *App) *liveThreadTracker {
+func getAppLiveThreadTracker(a *App) *frontendruntime.LiveThreads {
 	if a == nil {
 		return nil
 	}
 	if a.liveThreads == nil {
-		a.liveThreads = newLiveThreadTracker()
+		a.liveThreads = frontendruntime.NewLiveThreads()
 	}
 	return a.liveThreads
 }
@@ -33,12 +24,7 @@ func markSessionThreadLive(a *App, sessionKey, threadID string) {
 		return
 	}
 	tracker := getAppLiveThreadTracker(a)
-	tracker.mu.Lock()
-	if tracker.threads == nil {
-		tracker.threads = map[string]string{}
-	}
-	tracker.threads[strings.TrimSpace(sessionKey)] = strings.TrimSpace(threadID)
-	tracker.mu.Unlock()
+	tracker.Mark(sessionKey, threadID)
 	if sess := a.State().Session(sessionKey); sess != nil {
 		chatID := strings.TrimSpace(sess.ChatID)
 		if chatID == "" {
@@ -55,9 +41,7 @@ func sessionHasLiveThread(a *App, sessionKey, threadID string) bool {
 		return false
 	}
 	tracker := getAppLiveThreadTracker(a)
-	tracker.mu.Lock()
-	defer tracker.mu.Unlock()
-	return tracker.threads[strings.TrimSpace(sessionKey)] == strings.TrimSpace(threadID)
+	return tracker.Has(sessionKey, threadID)
 }
 
 func clearSessionLiveThread(a *App, sessionKey string) {
@@ -65,9 +49,7 @@ func clearSessionLiveThread(a *App, sessionKey string) {
 		return
 	}
 	tracker := getAppLiveThreadTracker(a)
-	tracker.mu.Lock()
-	defer tracker.mu.Unlock()
-	delete(tracker.threads, strings.TrimSpace(sessionKey))
+	tracker.Clear(sessionKey)
 }
 
 func sessionHasInFlightSubmission(sess *state.Session) bool {

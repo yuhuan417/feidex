@@ -1,7 +1,7 @@
 package app
 
 import (
-	appinbounddedup "feidex/internal/app/inbounddedup"
+	frontendruntime "feidex/internal/runtime"
 
 	"context"
 	"errors"
@@ -39,8 +39,8 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		feishu:      ff,
 		codex:       fc,
 		started:     time.Now(),
-		deduper:     appinbounddedup.NewDeduper(),
-		liveThreads: newLiveThreadTracker(),
+		deduper:     frontendruntime.NewInboundDeduper(),
+		liveThreads: frontendruntime.NewLiveThreads(),
 		trackers:    appTrackers{turnStreams: newTurnStreamTracker()},
 	}
 
@@ -119,7 +119,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 		feishu:      ff,
 		codex:       fc,
 		started:     time.Now(),
-		liveThreads: newLiveThreadTracker(),
+		liveThreads: frontendruntime.NewLiveThreads(),
 		trackers:    appTrackers{turnStreams: newTurnStreamTracker()},
 	}
 	bad.HandleFeishuMessage(&feishu.InboundMessage{

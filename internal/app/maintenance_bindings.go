@@ -3,6 +3,7 @@ package app
 import (
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/config"
+	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 )
 
@@ -33,7 +34,7 @@ func (a *App) MaintenanceResetLiveThreadState() {
 	if a == nil {
 		return
 	}
-	a.liveThreads = newLiveThreadTracker()
+	a.liveThreads = frontendruntime.NewLiveThreads()
 }
 
 func (a *App) MaintenanceWithFrontendRecoveryLock(fn func()) {

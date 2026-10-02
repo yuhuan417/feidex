@@ -2,7 +2,6 @@ package app
 
 import (
 	appfeishuwrap "feidex/internal/app/feishuwrap"
-	appinbounddedup "feidex/internal/app/inbounddedup"
 
 	"context"
 	"fmt"
@@ -45,7 +44,7 @@ type App struct {
 	feishu                 FeishuClient
 	started                time.Time
 	frontendRuntime        frontendruntime.FrontendRuntime
-	deduper                *appinbounddedup.Deduper
+	deduper                *frontendruntime.InboundDeduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex
 	asyncRunner            func(func())
@@ -59,7 +58,7 @@ type App struct {
 	backendSwitchTarget    string
 	mcp                    *feidexMCPService
 
-	liveThreads *liveThreadTracker
+	liveThreads *frontendruntime.LiveThreads
 
 	serverRequestSvc *serverrequest.Service
 	trackers         appTrackers
@@ -163,8 +162,8 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 		backend:             backend,
 		feishu:              FeishuClient,
 		started:             time.Now(),
-		deduper:             appinbounddedup.NewDeduper(),
-		liveThreads:         newLiveThreadTracker(),
+		deduper:             frontendruntime.NewInboundDeduper(),
+		liveThreads:         frontendruntime.NewLiveThreads(),
 		autoRetries:         appautoretry.NewTracker(),
 		trackers: appTrackers{
 			turnStreams:        newTurnStreamTracker(),
@@ -208,7 +207,7 @@ func (a *App) Start(ctx context.Context) error {
 		_ = stopMCPService(a, context.Background())
 		return err
 	}
-	startInboundDeduperLoop(a, ctx)
+	runAsync(a, func() { a.deduper.RunGC(ctx) })
 	recoverSharedRuntimeState(a)
 	recoverFrontendRuntimeState(a)
 	if err := startFrontend(a, ctx); err != nil {

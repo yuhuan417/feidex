@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	frontendruntime "feidex/internal/runtime"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -206,7 +207,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		backend:     backendCodex,
 		codex:       &fakeCodexClient{},
 		feishu:      &fakeFeishuClient{},
-		liveThreads: newLiveThreadTracker(),
+		liveThreads: frontendruntime.NewLiveThreads(),
 	}
 
 	sessionKey := "feishu:chat:chat-1"
@@ -334,7 +335,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		backend:     backendClaude,
 		claude:      &fakeClaudeCore{},
 		feishu:      &fakeFeishuClient{},
-		liveThreads: newLiveThreadTracker(),
+		liveThreads: frontendruntime.NewLiveThreads(),
 	}
 	defer func() {
 		codexRecoveryState = appcodexruntime.NewRecoveryState()

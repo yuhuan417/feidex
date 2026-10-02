@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	frontendruntime "feidex/internal/runtime"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -879,7 +880,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 			}()
 		},
 		waitAsync:   asyncWG.Wait,
-		liveThreads: newLiveThreadTracker(),
+		liveThreads: frontendruntime.NewLiveThreads(),
 		trackers: appTrackers{
 			turnStreams:  newTurnStreamTracker(),
 			turnBindings: turnbinding.NewTracker(store),

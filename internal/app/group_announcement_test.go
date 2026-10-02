@@ -2,6 +2,7 @@ package app
 
 import (
 	appfeishuwrap "feidex/internal/app/feishuwrap"
+	frontendruntime "feidex/internal/runtime"
 
 	"context"
 	"net/http"
@@ -26,7 +27,7 @@ func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeish
 		frontendID:  strings.TrimSpace(frontendID),
 		feishu:      appfeishuwrap.WrapFeishuClient(ff),
 		started:     time.Now(),
-		liveThreads: newLiveThreadTracker(),
+		liveThreads: frontendruntime.NewLiveThreads(),
 		trackers: appTrackers{
 			groupAnnouncements: newGroupAnnouncementTracker(),
 		},

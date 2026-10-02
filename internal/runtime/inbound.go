@@ -1,6 +1,4 @@
-// Package inbounddedup provides inbound message deduplication logic
-// extracted from the app package.
-package inbounddedup
+package runtime
 
 import (
 	"context"
@@ -16,7 +14,7 @@ const (
 	DedupMaxEntries = 4096
 )
 
-type Deduper struct {
+type InboundDeduper struct {
 	Mu           sync.Mutex
 	Inflight     map[string]time.Time
 	RecentlyDone map[string]time.Time
@@ -25,8 +23,8 @@ type Deduper struct {
 	MaxEntries   int
 }
 
-func NewDeduper() *Deduper {
-	return &Deduper{
+func NewInboundDeduper() *InboundDeduper {
+	return &InboundDeduper{
 		Inflight:     map[string]time.Time{},
 		RecentlyDone: map[string]time.Time{},
 		Retention:    DedupRetention,
@@ -35,7 +33,7 @@ func NewDeduper() *Deduper {
 	}
 }
 
-func (d *Deduper) Claim(messageID string) bool {
+func (d *InboundDeduper) Claim(messageID string) bool {
 	messageID = strings.TrimSpace(messageID)
 	if d == nil || messageID == "" {
 		return true
@@ -57,7 +55,7 @@ func (d *Deduper) Claim(messageID string) bool {
 	return true
 }
 
-func (d *Deduper) MarkDone(messageID string) {
+func (d *InboundDeduper) MarkDone(messageID string) {
 	messageID = strings.TrimSpace(messageID)
 	if d == nil || messageID == "" {
 		return
@@ -71,7 +69,7 @@ func (d *Deduper) MarkDone(messageID string) {
 	d.enforceCapLocked()
 }
 
-func (d *Deduper) Release(messageID string) {
+func (d *InboundDeduper) Release(messageID string) {
 	messageID = strings.TrimSpace(messageID)
 	if d == nil || messageID == "" {
 		return
@@ -81,25 +79,23 @@ func (d *Deduper) Release(messageID string) {
 	delete(d.Inflight, messageID)
 }
 
-func (d *Deduper) Start(ctx context.Context) {
+func (d *InboundDeduper) RunGC(ctx context.Context) {
 	if d == nil {
 		return
 	}
-	go func() {
-		ticker := time.NewTicker(DedupGCInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				d.GC()
-			}
+	ticker := time.NewTicker(DedupGCInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			d.GC()
 		}
-	}()
+	}
 }
 
-func (d *Deduper) GC() {
+func (d *InboundDeduper) GC() {
 	if d == nil {
 		return
 	}
@@ -109,7 +105,7 @@ func (d *Deduper) GC() {
 	d.pruneLocked(now)
 }
 
-func (d *Deduper) pruneLocked(now time.Time) {
+func (d *InboundDeduper) pruneLocked(now time.Time) {
 	for id, expiry := range d.Inflight {
 		if !expiry.After(now) {
 			delete(d.Inflight, id)
@@ -122,7 +118,7 @@ func (d *Deduper) pruneLocked(now time.Time) {
 	}
 }
 
-func (d *Deduper) enforceCapLocked() {
+func (d *InboundDeduper) enforceCapLocked() {
 	if d.MaxEntries <= 0 {
 		return
 	}

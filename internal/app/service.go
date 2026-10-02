@@ -63,7 +63,7 @@ func (s *Service) Start(ctx context.Context) error {
 		}
 	}
 	for _, app := range s.apps {
-		startInboundDeduperLoop(app, app.Context())
+		runAsync(app, func() { app.deduper.RunGC(app.Context()) })
 	}
 	if len(s.apps) > 0 {
 		recoverSharedRuntimeState(s.apps[0])
