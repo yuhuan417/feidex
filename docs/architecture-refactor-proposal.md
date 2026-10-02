@@ -478,5 +478,6 @@ Codex server request
 - backend capability carrier 的正式名称改为 `Dependencies`；旧 `App` 仅保留为源码兼容别名，后续 permission driver 将继续拆成按能力注入的 ports。
 - threadmenu/workspacecmd 的 permission 操作改为由 composition root 注入 `PermissionDriver`；服务内部不再调用 `DriverForApp` 动态回查宿主。
 - `appstate.Store` 已改为显式持有 state store、frontend、backend 和 legacy fallback scope，删除 `appcore.AppStateFacade`；旧 facade 不再作为生产状态入口存在。
+- `backend.ConfigurationService` 已由 composition root 注入当前 `Driver`；模型、workspace 和 status 展示不再在每次调用时通过宿主动态回查 driver。
 
 当前剩余：遗留 message/card command 编排，backend dependency carrier 与 permission driver 的宿主动态回查，Claude stream presentation 回调，完整 session event 串行 owner，effect pipeline 的同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
