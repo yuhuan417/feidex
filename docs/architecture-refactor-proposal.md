@@ -496,5 +496,6 @@ Codex server request
 - session actor key 计算已迁入 application，app entrypoint 不再拥有输入并发分片规则。
 - backend services 已删除 `backend.App` 兼容别名，统一使用显式 `backend.Dependencies`；后续继续拆除其中仍保留的宽 capability carrier。
 - permission driver 的 `PermissionApp` 兼容命名已删除，改为显式 `PermissionDependencies`，backend package 不再以 App 命名依赖 carrier。
+- card action 的统一 dispatch、session key normalization、backend switching gate 和 unknown action 处理已迁入 `internal/application/cardaction`；app 只注册具体业务 handlers。
 
 当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，effect pipeline 尚未覆盖全部同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。
