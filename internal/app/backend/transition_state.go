@@ -8,11 +8,11 @@ import (
 
 // RuntimeStateService manages backend switch transition state.
 type RuntimeStateService struct {
-	app App
+	app Dependencies
 }
 
 // NewRuntimeStateService creates a new RuntimeStateService.
-func NewRuntimeStateService(app App) RuntimeStateService {
+func NewRuntimeStateService(app Dependencies) RuntimeStateService {
 	return RuntimeStateService{app: app}
 }
 

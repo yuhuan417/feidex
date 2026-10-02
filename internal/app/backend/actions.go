@@ -44,14 +44,14 @@ type ActionExecutionDeps struct {
 }
 
 type ActionDeps struct {
-	App       App
+	App       Dependencies
 	Commands  ActionCommandDeps
 	Render    ActionRenderDeps
 	Execution ActionExecutionDeps
 }
 
 type ActionService struct {
-	App  App
+	App  Dependencies
 	deps ActionDeps
 }
 

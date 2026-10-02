@@ -8,8 +8,7 @@ import (
 	"feidex/internal/app/appcore"
 )
 
-// Dependencies is the capability set consumed by backend services. The alias
-// below exists only for source compatibility with older composition literals.
+// Dependencies is the capability set consumed by backend services.
 type Dependencies interface {
 	appcore.AppExtended
 
@@ -27,7 +26,3 @@ type Dependencies interface {
 	// Feishu client access
 	Feishu() appcore.FeishuClient
 }
-
-// App is a compatibility name for Dependencies; new code should use
-// Dependencies explicitly.
-type App = Dependencies

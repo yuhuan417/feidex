@@ -33,11 +33,11 @@ func SessionHasActiveWork(sess *conversation.Session) bool {
 
 // MaintenanceStateService provides maintenance tracker operations.
 type MaintenanceStateService struct {
-	App App
+	App Dependencies
 }
 
 // NewMaintenanceStateService creates a new service.
-func NewMaintenanceStateService(app App) MaintenanceStateService {
+func NewMaintenanceStateService(app Dependencies) MaintenanceStateService {
 	return MaintenanceStateService{App: app}
 }
 

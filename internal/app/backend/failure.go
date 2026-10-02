@@ -17,7 +17,7 @@ import (
 // BackendFailureService handles backend failure logic: iterating sessions,
 // failing submissions, and resolving pending requests.
 type BackendFailureService struct {
-	App  App
+	App  Dependencies
 	deps FailureDeps
 }
 
@@ -58,7 +58,7 @@ type FailureAsyncDeps struct {
 }
 
 type FailureDeps struct {
-	App      App
+	App      Dependencies
 	State    FailureStateDeps
 	Sessions FailureSessionDeps
 	Runtime  FailureRuntimeDeps

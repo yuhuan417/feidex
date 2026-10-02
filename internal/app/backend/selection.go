@@ -55,7 +55,7 @@ type SelectionCommandDeps struct {
 }
 
 type SelectionDeps struct {
-	App       App
+	App       Dependencies
 	Runtime   SelectionRuntimeDeps
 	Render    SelectionRenderDeps
 	Transport SelectionTransportDeps
@@ -65,7 +65,7 @@ type SelectionDeps struct {
 // SelectionService manages backend selection, switching, and configuration
 // display.
 type SelectionService struct {
-	App  App
+	App  Dependencies
 	deps SelectionDeps
 }
 

@@ -493,5 +493,7 @@ Codex server request
 - server request、local file preview 和 quiet working card 的 patch 路径已统一经过 effect runner；需要 Feishu 返回新消息 ID 的卡片发送仍保留专用 outbound port，避免丢失消息链接语义。
 - effect runner 已增加带 message ID 的 `RunSendMessage`/`RunSendCard` 结果端口，delivery、final、pending、message link、maintenance restart 和 quiet card 新卡片发送均通过 Feishu outbound adapter 执行。
 - application 新增 `Handlers`/`NewDispatcher`，输入族路由契约从 app composition 文件移入 application；backend action/selection service 也按 frontend runtime 缓存，减少重复组装。
+- session actor key 计算已迁入 application，app entrypoint 不再拥有输入并发分片规则。
+- backend services 已删除 `backend.App` 兼容别名，统一使用显式 `backend.Dependencies`；后续继续拆除其中仍保留的宽 capability carrier。
 
 当前剩余：遗留 message/card command 编排，部分 backend dependency carrier，effect pipeline 尚未覆盖全部同步端口，以及 composition root 的最终收敛。以上未完成前保持“实施中”。

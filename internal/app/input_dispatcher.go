@@ -58,7 +58,7 @@ func dispatchInput(a *App, input application.Input) (application.Result, error) 
 	if a == nil {
 		result, err = dispatcher.Dispatch(context.Background(), input)
 	} else {
-		a.sessionActorRuntime().Run(sessionActorKey(input), func() {
+		a.sessionActorRuntime().Run(application.SessionActorKey(input), func() {
 			result, err = dispatcher.Dispatch(a.Context(), input)
 		})
 	}
@@ -68,34 +68,6 @@ func dispatchInput(a *App, input application.Input) (application.Result, error) 
 	return result, newEffectRunner(a).Run(a.Context(), result.Effects)
 }
 
-func sessionActorKey(input application.Input) string {
-	const transportPrefix = "transport:"
-	switch event := input.(type) {
-	case application.MessageReceived:
-		if key := strings.TrimSpace(event.Message.SessionKey); key != "" {
-			return "session:" + key
-		}
-		return transportPrefix + string(event.Chat.Type) + ":" + strings.TrimSpace(event.Chat.ID)
-	case application.CardActionReceived:
-		if key, _ := event.Action.ActionValue["session_key"].(string); strings.TrimSpace(key) != "" {
-			return "session:" + strings.TrimSpace(key)
-		}
-		return transportPrefix + strings.TrimSpace(event.Action.ChatID)
-	case application.BackendEventReceived:
-		if key := strings.TrimSpace(string(event.SessionKey)); key != "" {
-			return "session:" + key
-		}
-		return transportPrefix + "backend"
-	case application.RetryTimerFired:
-		return "session:" + strings.TrimSpace(string(event.SessionKey))
-	case application.MessageRecalled:
-		return transportPrefix + strings.TrimSpace(event.ChatID)
-	case application.MessageReacted:
-		return transportPrefix + strings.TrimSpace(event.ChatID)
-	default:
-		return transportPrefix + "unknown"
-	}
-}
 func dispatchBackendEvent(a *App, event application.BackendEvent) {
 	if _, err := dispatchInput(a, application.BackendEventReceived{
 		Frontend:   identity.FrontendID(a.FrontendID()),

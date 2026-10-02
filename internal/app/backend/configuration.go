@@ -33,7 +33,7 @@ const (
 // ConfigurationService handles backend-specific configuration display and
 // model/workspace configuration card rendering.
 type ConfigurationService struct {
-	App  App
+	App  Dependencies
 	deps ConfigurationDeps
 }
 
@@ -62,7 +62,7 @@ type ConfigurationCodexDeps struct {
 }
 
 type ConfigurationDeps struct {
-	App        App
+	App        Dependencies
 	Driver     Driver
 	Formatting ConfigurationFormattingDeps
 	Commands   ConfigurationCommandDeps
@@ -234,7 +234,7 @@ func claudePermissionModeLabel(value string) string {
 	return "`" + value + "`"
 }
 
-func autoRetryEnabled(app App) bool {
+func autoRetryEnabled(app Dependencies) bool {
 	cfg := appcore.FeishuConfig(app)
 	return cfg != nil && cfg.AutoRetry
 }
