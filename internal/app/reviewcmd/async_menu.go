@@ -33,7 +33,7 @@ func reviewAsyncButtons(sessionKey, retryAction string) []feishu.Button {
 }
 
 func renderReviewPreparingCard(a Dependencies, sessionKey, body string) map[string]any {
-	return a.ReviewFeishu().SimpleStatusCard("代码审查", "blue", a.ReviewMenuCardBody("menu.review", strings.TrimSpace(body)), nil)
+	return a.ReviewRenderer().SimpleStatusCard("代码审查", "blue", a.ReviewMenuCardBody("menu.review", strings.TrimSpace(body)), nil)
 }
 
 func renderReviewFailureCard(a Dependencies, sessionKey, errText, retryAction string) map[string]any {
@@ -41,11 +41,11 @@ func renderReviewFailureCard(a Dependencies, sessionKey, errText, retryAction st
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text
 	}
-	return a.ReviewFeishu().SimpleStatusCard("代码审查", "orange", a.ReviewMenuCardBody("menu.review", body), reviewAsyncButtons(sessionKey, retryAction))
+	return a.ReviewRenderer().SimpleStatusCard("代码审查", "orange", a.ReviewMenuCardBody("menu.review", body), reviewAsyncButtons(sessionKey, retryAction))
 }
 
 func renderReviewResultCard(a Dependencies, sessionKey, text string) map[string]any {
-	return a.ReviewFeishu().SimpleStatusCard("代码审查", "green", a.ReviewMenuCardBody("menu.review", textutil.FirstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
+	return a.ReviewRenderer().SimpleStatusCard("代码审查", "green", a.ReviewMenuCardBody("menu.review", textutil.FirstNonEmpty(strings.TrimSpace(text), "已启动 review。")), reviewAsyncButtons(sessionKey, ""))
 }
 
 func CompleteMenuReviewUncommitted(a Dependencies, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

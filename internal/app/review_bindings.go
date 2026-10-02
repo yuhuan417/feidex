@@ -15,6 +15,16 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type reviewOutbound struct{ app *App }
+
+func (o reviewOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+}
+
+func (o reviewOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
+	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
+}
+
 // ---------------------------------------------------------------------------
 // Type and constant aliases — reviewcmd exported types
 // ---------------------------------------------------------------------------
@@ -41,7 +51,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		return appreviewcmd.Dependencies{}
 	}
 	return appreviewcmd.Dependencies{
-		ConfigProvider: a, FeishuClient: a.feishu, StateProvider: a.State(),
+		ConfigProvider: a, Outbound: reviewOutbound{app: a}, CardRenderer: reviewCardRenderer{app: a}, StateProvider: a.State(),
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
 		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return requireCodexGateway(a) },
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
@@ -60,6 +70,15 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 			return completeAsyncRenderedCardAction(a, x, s, t, p, r, f, w)
 		},
 	}
+}
+
+type reviewCardRenderer struct{ app *App }
+
+func (r reviewCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
+	if r.app == nil || r.app.feishu == nil {
+		return nil
+	}
+	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
 func newReviewFormService(app *App) appreviewcmd.ReviewFormService {

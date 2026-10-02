@@ -6,7 +6,6 @@ package reviewcmd
 import (
 	"context"
 	"encoding/json"
-	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
@@ -81,6 +80,16 @@ type CodexClient interface {
 	StartReview(context.Context, backendops.ReviewRequest) (backendops.ReviewResult, error)
 }
 
+// Outbound is the semantic messaging capability used by review commands.
+type Outbound interface {
+	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
+	ReplyText(context.Context, string, string, bool) error
+}
+
+type CardRenderer interface {
+	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
+}
+
 // Dependencies is the explicit review capability set assembled by the
 // composition root.
 type Dependencies struct {
@@ -90,7 +99,8 @@ type Dependencies struct {
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
-	FeishuClient                      feishutransport.Client
+	Outbound                          Outbound
+	CardRenderer                      CardRenderer
 	StateProvider                     StateProvider
 	WorkspaceProviderValue            WorkspaceProvider
 	GitProvider                       ReviewGitProvider
@@ -145,7 +155,8 @@ func (d Dependencies) Store() *state.Store {
 	}
 	return d.ConfigProvider.Store()
 }
-func (d Dependencies) ReviewFeishu() feishutransport.Client       { return d.FeishuClient }
+func (d Dependencies) ReviewOutbound() Outbound                   { return d.Outbound }
+func (d Dependencies) ReviewRenderer() CardRenderer               { return d.CardRenderer }
 func (d Dependencies) ReviewAppState() StateProvider              { return d.StateProvider }
 func (d Dependencies) ReviewWorkspaceProvider() WorkspaceProvider { return d.WorkspaceProviderValue }
 func (d Dependencies) ReviewGitProvider() ReviewGitProvider       { return d.GitProvider }
@@ -343,7 +354,7 @@ func startInlineReviewFromMessage(a Dependencies, msg *feishu.InboundMessage, ta
 	if err != nil {
 		return err
 	}
-	return a.ReviewFeishu().ReplyText(appcore.Context(a), msg.MessageID, confirmation, a.ReviewReplyInThreadEnabled(msg.ChatType))
+	return a.ReviewOutbound().ReplyText(appcore.Context(a), msg.MessageID, confirmation, a.ReviewReplyInThreadEnabled(msg.ChatType))
 }
 
 // StartInlineReview starts an inline review for the given target.
@@ -531,7 +542,7 @@ func (s ReviewFormService) RenderReviewMenuCard(sessionKey string) map[string]an
 			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
 		},
 	}
-	return s.app.ReviewFeishu().SimpleStatusCard("代码审查", "blue", s.app.ReviewMenuCardBody("menu.review", strings.Join(bodyLines, "\n")), buttons)
+	return s.app.ReviewRenderer().SimpleStatusCard("代码审查", "blue", s.app.ReviewMenuCardBody("menu.review", strings.Join(bodyLines, "\n")), buttons)
 }
 
 // BeginReviewForm starts a review form interaction for the given mode.
@@ -579,7 +590,7 @@ func (s ReviewFormService) BeginReviewForm(msg *feishu.InboundMessage, mode stri
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.ReviewFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReviewReplyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.ReviewOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReviewReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -850,7 +861,7 @@ func (s ReviewFormService) completeReviewFormSubmitSync(action *feishu.CardActio
 	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已启动 review"},
-		Card:  rawCard(s.app.ReviewFeishu().SimpleStatusCard("Review 已启动", "blue", confirmation, nil)),
+		Card:  rawCard(s.app.ReviewRenderer().SimpleStatusCard("Review 已启动", "blue", confirmation, nil)),
 	}, nil
 }
 
