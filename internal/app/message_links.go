@@ -46,7 +46,7 @@ func sendLocalTurnFollowupCard(ctx context.Context, a *App, parentMessageID stri
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	messageID, err := a.feishu.ReplyCard(ctx, parentMessageID, card, replyInThread)
+	messageID, err := replyCardWithIDEffect(ctx, a, parentMessageID, card, replyInThread)
 	if err != nil {
 		return "", err
 	}

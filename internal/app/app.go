@@ -61,6 +61,8 @@ type App struct {
 	threadMenu             *appthreadmenu.Service
 	backendConfigMu        sync.Mutex
 	backendConfig          *backendConfigurationService
+	backendSelection       *backendSelectionService
+	backendActions         *backend.ActionService
 	deduper                *frontendruntime.InboundDeduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex

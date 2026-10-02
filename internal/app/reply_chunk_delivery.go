@@ -65,24 +65,24 @@ func sendReplyChunk(a *App, ctx context.Context, sub *domainsubmission.Submissio
 	var err error
 	if strings.TrimSpace(reuseMessageID) != "" {
 		id = strings.TrimSpace(reuseMessageID)
-		err = a.feishu.PatchCard(ctx, id, card)
+		err = patchCardEffect(ctx, a, id, card)
 		if err == nil {
 			cardID = id
 		} else {
-			id, err = a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+			id, err = replyCardWithIDEffect(ctx, a, sub.TriggerMessageID, card, inThread)
 			if err == nil && strings.TrimSpace(id) != "" {
 				cardID = strings.TrimSpace(id)
 			}
 		}
 	} else {
-		id, err = a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+		id, err = replyCardWithIDEffect(ctx, a, sub.TriggerMessageID, card, inThread)
 		if err == nil && strings.TrimSpace(id) != "" {
 			cardID = strings.TrimSpace(id)
 		}
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := appendFooterText(strings.TrimSpace(spec.Body), spec.FooterLines)
-		id, err = replyTextChunked(ctx, a.feishu, sub.TriggerMessageID, fallback, inThread)
+		id, err = replyTextChunkedEffect(ctx, a, sub.TriggerMessageID, fallback, inThread)
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
 		return appdelivery.SentReplyChunk{}, false

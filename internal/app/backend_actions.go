@@ -10,6 +10,23 @@ import (
 )
 
 func newBackendActionService(app *App) appbackend.ActionService {
+	if app != nil {
+		app.backendConfigMu.Lock()
+		defer app.backendConfigMu.Unlock()
+		if app.backendActions != nil {
+			return *app.backendActions
+		}
+		service := buildBackendActionService(app)
+		app.backendActions = &service
+		return service
+	}
+	return buildBackendActionService(nil)
+}
+
+func buildBackendActionService(app *App) appbackend.ActionService {
+	if app == nil {
+		return appbackend.ActionService{}
+	}
 	return appbackend.NewActionService(appbackend.ActionDeps{
 		App: app,
 		Commands: appbackend.ActionCommandDeps{

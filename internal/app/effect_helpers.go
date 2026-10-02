@@ -48,6 +48,27 @@ func sendCardEffect(ctx context.Context, a *App, chatID string, card map[string]
 	}})
 }
 
+func replyCardWithIDEffect(ctx context.Context, a *App, parentMessageID string, card map[string]any, inThread bool) (string, error) {
+	if a == nil {
+		return "", nil
+	}
+	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, View: card, InThread: inThread})
+}
+
+func sendCardWithIDEffect(ctx context.Context, a *App, chatID string, card map[string]any) (string, error) {
+	if a == nil {
+		return "", nil
+	}
+	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: chatID}, View: card})
+}
+
+func replyTextWithIDEffect(ctx context.Context, a *App, parentMessageID, text string, inThread bool) (string, error) {
+	if a == nil {
+		return "", nil
+	}
+	return newEffectRunner(a).RunSendMessage(ctx, application.SendMessage{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, Text: text, InThread: inThread})
+}
+
 func patchCardEffect(ctx context.Context, a *App, messageID string, card map[string]any) error {
 	if a == nil {
 		return nil

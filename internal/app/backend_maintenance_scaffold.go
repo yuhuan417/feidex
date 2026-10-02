@@ -70,7 +70,10 @@ func startMaintenanceRestartFromMessage[S any](
 	finishFailed func(message string),
 ) error {
 	sessionKey := makeSessionKey(a, msg)
-	return appmaintenance.StartRestartFromMessage(msg, sessionKey, a.feishu.ReplyCard, replyInThreadEnabled(a, msg.ChatType), begin, run, renderOperationCard, finishFailed)
+	return appmaintenance.StartRestartFromMessage(msg, sessionKey,
+		func(ctx context.Context, parent string, card map[string]any, inThread bool) (string, error) {
+			return replyCardWithIDEffect(ctx, a, parent, card, inThread)
+		}, replyInThreadEnabled(a, msg.ChatType), begin, run, renderOperationCard, finishFailed)
 }
 
 func maintenanceSnapshotLifecycle[S any](

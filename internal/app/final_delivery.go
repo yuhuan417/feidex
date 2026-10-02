@@ -35,25 +35,25 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *domainsubmiss
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, body, nil, true)
 	appendReplyCardFooter(card, footerLines)
 	if strings.TrimSpace(reuseMessageID) != "" {
-		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+		if err := patchCardEffect(ctx, a, reuseMessageID, card); err == nil {
 			recordMessageLink(a, reuseMessageID, "final_message", sub, "")
 			return reuseMessageID
 		}
 	}
 	if triggerMessageID != "" {
-		id, err := a.feishu.ReplyCard(ctx, triggerMessageID, card, inThread)
+		id, err := replyCardWithIDEffect(ctx, a, triggerMessageID, card, inThread)
 		if err == nil && strings.TrimSpace(id) != "" {
 			recordMessageLink(a, id, "final_message", sub, "")
 			return id
 		}
-		id, err = a.feishu.ReplyTextWithID(ctx, triggerMessageID, fallbackText, inThread)
+		id, err = replyTextWithIDEffect(ctx, a, triggerMessageID, fallbackText, inThread)
 		if err == nil && strings.TrimSpace(id) != "" {
 			recordMessageLink(a, id, "final_message", sub, "")
 			return id
 		}
 	}
 	if chatID := strings.TrimSpace(sub.ChatID); chatID != "" {
-		if err := a.feishu.SendText(ctx, chatID, fallbackText); err == nil {
+		if err := sendTextEffect(ctx, a, chatID, fallbackText); err == nil {
 			return ""
 		}
 	}

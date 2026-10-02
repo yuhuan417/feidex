@@ -80,7 +80,7 @@ func sendFrontendCardNotification(a *App, target appfeishuwrap.NotifyTarget, not
 	}
 	ctx, cancel := context.WithTimeout(a.Context(), 5*time.Second)
 	defer cancel()
-	sentMessageID, err := a.feishu.SendCard(ctx, chatID, a.feishu.SimpleStatusCard(title, color, body, nil))
+	sentMessageID, err := sendCardWithIDEffect(ctx, a, chatID, a.feishu.SimpleStatusCard(title, color, body, nil))
 	if err != nil {
 		return err
 	}

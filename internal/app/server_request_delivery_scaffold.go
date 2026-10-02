@@ -101,17 +101,17 @@ func deliverPendingCardWithAnchor(a *App, anchor pendingCardAnchor, card map[str
 		reuseMessageID = newTurnStreamService(a).takeReasoningOnlyWorkingMessageID(delivery.turnID)
 	}
 	if reuseMessageID != "" {
-		if patchErr := a.feishu.PatchCard(ctx, reuseMessageID, card); patchErr == nil {
+		if patchErr := patchCardEffect(ctx, a, reuseMessageID, card); patchErr == nil {
 			msgID = reuseMessageID
 		}
 	}
 	if msgID == "" {
 		if triggerMessageID := strings.TrimSpace(anchor.triggerMessageID); triggerMessageID != "" {
-			msgID, err = a.feishu.ReplyCard(ctx, triggerMessageID, card, anchor.replyInThread)
+			msgID, err = replyCardWithIDEffect(ctx, a, triggerMessageID, card, anchor.replyInThread)
 		}
 	}
 	if err != nil || strings.TrimSpace(msgID) == "" {
-		msgID, err = a.feishu.SendCard(ctx, anchor.chatID, card)
+		msgID, err = sendCardWithIDEffect(ctx, a, anchor.chatID, card)
 		if err != nil {
 			return err
 		}

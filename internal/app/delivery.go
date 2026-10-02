@@ -49,6 +49,25 @@ func replyTextChunked(ctx context.Context, client feishuTextReplier, messageID, 
 	return firstID, nil
 }
 
+func replyTextChunkedEffect(ctx context.Context, a *App, messageID, text string, inThread bool) (string, error) {
+	chunks := outbound.SplitWithCodeFences(text, appdelivery.ReplyTextMaxBytes)
+	firstID := ""
+	for i, chunk := range chunks {
+		id, err := replyTextWithIDEffect(ctx, a, messageID, chunk, inThread)
+		if err != nil {
+			if firstID == "" {
+				return "", err
+			}
+			slog.Warn("feishu reply text fallback partially delivered", "message_id", messageID, "chunk", i+1, "chunks", len(chunks), "error", err)
+			return firstID, nil
+		}
+		if firstID == "" {
+			firstID = strings.TrimSpace(id)
+		}
+	}
+	return firstID, nil
+}
+
 // feishuTextReplier is the slice of the Feishu client the chunked fallback
 // needs, so the helper stays testable without a full client.
 type feishuTextReplier interface {
@@ -106,7 +125,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 
 	card := cardRendererForApp(a).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(a, sub, title), color, "", text, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
-		if err := a.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+		if err := patchCardEffect(ctx, a, reuseMessageID, card); err == nil {
 			_ = appState.SaveMessageLink(&state.MessageLink{
 				MessageID:    reuseMessageID,
 				SessionKey:   sub.SessionKey,
@@ -118,12 +137,12 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 		}
 	}
 	cardID := ""
-	id, err := a.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
+	id, err := replyCardWithIDEffect(ctx, a, sub.TriggerMessageID, card, inThread)
 	if err == nil {
 		cardID = strings.TrimSpace(id)
 	}
 	if err != nil {
-		id, err = replyTextChunked(ctx, a.feishu, sub.TriggerMessageID, text, inThread)
+		id, err = replyTextChunkedEffect(ctx, a, sub.TriggerMessageID, text, inThread)
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
 		return nil

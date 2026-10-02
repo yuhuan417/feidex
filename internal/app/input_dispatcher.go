@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"feidex/internal/adapter/backend/codex"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
-	"fmt"
 	"log/slog"
 	"strings"
 
@@ -22,8 +22,7 @@ func newInputDispatcher(a *App) application.Dispatcher {
 	router := newFeishuEventRouter(a)
 	cardActions := newCardActionService(a)
 	backendEvents := newBackendEventService(a)
-	return application.Dispatcher{
-		Frontend: identity.FrontendID(a.FrontendID()),
+	return application.NewDispatcher(identity.FrontendID(a.FrontendID()), application.Handlers{
 		Message: func(_ context.Context, event application.MessageReceived) (application.Result, error) {
 			router.handleMessage(&event.Message)
 			return application.Result{}, nil
@@ -47,7 +46,7 @@ func newInputDispatcher(a *App) application.Dispatcher {
 		Backend: func(ctx context.Context, event application.BackendEventReceived) (application.Result, error) {
 			return backendEvents.Handle(ctx, event.Event)
 		},
-	}
+	})
 }
 func dispatchInput(a *App, input application.Input) (application.Result, error) {
 	dispatcher := newInputDispatcher(a)
@@ -145,33 +144,7 @@ func newEffectRunner(a *App) frontendruntime.EffectRunner {
 	if a != nil && a.effectRunner != nil {
 		return *a.effectRunner
 	}
-	return frontendruntime.EffectRunner{
-		Send: func(ctx context.Context, e application.SendMessage) error {
-			if e.ReplyMessageID != "" {
-				return a.feishu.ReplyText(ctx, e.ReplyMessageID, e.Text, e.InThread)
-			}
-			return a.feishu.SendText(ctx, e.Chat.ID, e.Text)
-		},
-		SendCard: func(ctx context.Context, e application.SendCard) error {
-			card, ok := e.View.(map[string]any)
-			if !ok {
-				return fmt.Errorf("invalid card view %T", e.View)
-			}
-			if e.ReplyMessageID != "" {
-				_, err := a.feishu.ReplyCard(ctx, e.ReplyMessageID, card, e.InThread)
-				return err
-			}
-			_, err := a.feishu.SendCard(ctx, e.Chat.ID, card)
-			return err
-		},
-		Patch: func(ctx context.Context, e application.PatchCard) error {
-			card, ok := e.View.(map[string]any)
-			if !ok {
-				return fmt.Errorf("invalid card view %T", e.View)
-			}
-			return a.feishu.PatchCard(ctx, e.MessageID, card)
-		},
-	}
+	return feishuoutbound.NewEffectRunner(a.feishu)
 }
 func dispatchCardAction(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	if action == nil {

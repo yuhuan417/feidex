@@ -207,7 +207,7 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 			return resolveSubmissionWorkspaceID(a, msg, sess, bindOnlyCurrentRoot)
 		},
 		ReplyText: func(ctx context.Context, messageID, text string, inThread bool) error {
-			return a.feishu.ReplyText(ctx, messageID, text, inThread)
+			return replyTextByAnchorEffect(ctx, a, messageID, text, inThread)
 		},
 		SendQueuedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
 			sendSubmissionQueuedNotice(a, ctx, sub)

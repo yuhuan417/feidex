@@ -22,6 +22,23 @@ type backendSelectionService struct {
 }
 
 func newBackendSelectionService(app *App) backendSelectionService {
+	if app != nil {
+		app.backendConfigMu.Lock()
+		defer app.backendConfigMu.Unlock()
+		if app.backendSelection != nil {
+			return *app.backendSelection
+		}
+		service := buildBackendSelectionService(app)
+		app.backendSelection = &service
+		return service
+	}
+	return buildBackendSelectionService(nil)
+}
+
+func buildBackendSelectionService(app *App) backendSelectionService {
+	if app == nil {
+		return backendSelectionService{}
+	}
 
 	s := backendSelectionService{app: app}
 	s.inner = backend.NewSelectionService(backend.SelectionDeps{
