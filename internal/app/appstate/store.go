@@ -67,6 +67,14 @@ func (s *Store) Backend() string { return s.scopeBackend() }
 // LegacyFallbackEnabled reports whether unscoped legacy records are visible.
 func (s *Store) LegacyFallbackEnabled() bool { return s.scopeLegacyFallback() }
 
+// SetBackend updates the backend scope after a runtime backend switch.
+func (s *Store) SetBackend(backend string) {
+	if s == nil {
+		return
+	}
+	s.backend = appcore.NormalizeRuntimeBackend(backend)
+}
+
 func (s *Store) scopeFrontendID() string {
 	if s == nil {
 		return ""

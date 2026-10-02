@@ -6,6 +6,7 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
+	"feidex/internal/app/appstate"
 	"feidex/internal/app/attachments"
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/domain/conversation"
@@ -52,6 +53,8 @@ type App struct {
 	feishu                 FeishuClient
 	started                time.Time
 	frontendRuntime        frontendruntime.FrontendRuntime
+	stateMu                sync.Mutex
+	stateView              *appstate.Store
 	deduper                *frontendruntime.InboundDeduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex
@@ -146,6 +149,7 @@ func newFrontendApp(cfg *config.Config, cfgPath string, store *state.Store, fron
 			groupAnnouncements: newGroupAnnouncementTracker(),
 		},
 	}
+	app.stateView = appstate.New(app)
 	dispatcher := newInputDispatcher(app)
 	app.dispatcher = &dispatcher
 	effectRunner := newEffectRunner(app)

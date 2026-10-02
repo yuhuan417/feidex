@@ -63,7 +63,12 @@ func (a *App) State() *appstate.Store {
 	if a == nil {
 		return nil
 	}
-	return appstate.New(a)
+	a.stateMu.Lock()
+	defer a.stateMu.Unlock()
+	if a.stateView == nil {
+		a.stateView = appstate.New(a)
+	}
+	return a.stateView
 }
 
 // BotProfileWorkspaceID returns the p2p BotProfile workspace, if configured.
@@ -163,6 +168,9 @@ func (a *App) SetBackend(backend string) {
 	a.configMutex().Lock()
 	defer a.configMutex().Unlock()
 	a.backend = appcore.NormalizeRuntimeBackend(backend)
+	if a.stateView != nil {
+		a.stateView.SetBackend(a.backend)
+	}
 }
 
 // BackendStateMu returns the backend state mutex.

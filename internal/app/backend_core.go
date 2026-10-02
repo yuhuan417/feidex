@@ -43,6 +43,9 @@ func setRuntimeBackend(a *App, backend string) {
 	a.configMutex().Lock()
 	defer a.configMutex().Unlock()
 	a.backend = normalizeRuntimeBackend(backend)
+	if a.stateView != nil {
+		a.stateView.SetBackend(a.backend)
+	}
 }
 
 func configuredSessionInflightMode(a *App) sessionInflightMode {
