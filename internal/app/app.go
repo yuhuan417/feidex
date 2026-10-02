@@ -420,8 +420,13 @@ func replyError(a *App, msg *feishu.InboundMessage, err error) error {
 
 func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
 	card := renderCommandMenuCard(a, makeSessionKey(a, msg))
-	_, err := a.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(a, msg.ChatType))
-	return err
+	return newEffectRunner(a).Run(context.Background(), []application.Effect{application.SendCard{
+		Frontend:       identity.FrontendID(a.FrontendID()),
+		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
+		ReplyMessageID: msg.MessageID,
+		View:           card,
+		InThread:       replyInThreadEnabled(a, msg.ChatType),
+	}})
 }
 
 func renderCommandMenuCard(a *App, sessionKey string) map[string]any {

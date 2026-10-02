@@ -152,6 +152,18 @@ func newEffectRunner(a *App) frontendruntime.EffectRunner {
 			}
 			return a.feishu.SendText(ctx, e.Chat.ID, e.Text)
 		},
+		SendCard: func(ctx context.Context, e application.SendCard) error {
+			card, ok := e.View.(map[string]any)
+			if !ok {
+				return fmt.Errorf("invalid card view %T", e.View)
+			}
+			if e.ReplyMessageID != "" {
+				_, err := a.feishu.ReplyCard(ctx, e.ReplyMessageID, card, e.InThread)
+				return err
+			}
+			_, err := a.feishu.SendCard(ctx, e.Chat.ID, card)
+			return err
+		},
 		Patch: func(ctx context.Context, e application.PatchCard) error {
 			card, ok := e.View.(map[string]any)
 			if !ok {

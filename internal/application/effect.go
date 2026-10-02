@@ -32,6 +32,18 @@ type SendMessage struct {
 
 func (SendMessage) effect() {}
 
+// SendCard is a semantic outbound card. The Feishu adapter decides whether
+// this becomes a reply or a new message from the target fields.
+type SendCard struct {
+	Frontend       identity.FrontendID
+	Chat           identity.ChatRef
+	ReplyMessageID string
+	View           any
+	InThread       bool
+}
+
+func (SendCard) effect() {}
+
 // PatchCard is a semantic card update. The view is intentionally opaque to
 // the transport layer until the presentation package is migrated.
 type PatchCard struct {

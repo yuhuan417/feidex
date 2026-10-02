@@ -10,11 +10,12 @@ import (
 // completed its state transition. It stops on the first failed effect, so an
 // unsuccessful save cannot accidentally start a backend turn.
 type EffectRunner struct {
-	Save    func(context.Context, application.SaveState) error
-	Send    func(context.Context, application.SendMessage) error
-	Patch   func(context.Context, application.PatchCard) error
-	Start   func(context.Context, application.StartTurn) error
-	Resolve func(context.Context, application.ResolveBackendRequest) error
+	Save     func(context.Context, application.SaveState) error
+	Send     func(context.Context, application.SendMessage) error
+	SendCard func(context.Context, application.SendCard) error
+	Patch    func(context.Context, application.PatchCard) error
+	Start    func(context.Context, application.StartTurn) error
+	Resolve  func(context.Context, application.ResolveBackendRequest) error
 }
 
 func (r EffectRunner) Run(ctx context.Context, effects []application.Effect) error {
@@ -37,6 +38,11 @@ func (r EffectRunner) Run(ctx context.Context, effects []application.Effect) err
 				return fmt.Errorf("send effect unavailable")
 			}
 			err = r.Send(ctx, e)
+		case application.SendCard:
+			if r.SendCard == nil {
+				return fmt.Errorf("send card effect unavailable")
+			}
+			err = r.SendCard(ctx, e)
 		case application.PatchCard:
 			if r.Patch == nil {
 				return fmt.Errorf("patch effect unavailable")
