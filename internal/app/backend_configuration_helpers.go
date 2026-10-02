@@ -18,6 +18,22 @@ type backendConfigurationService struct {
 }
 
 func newBackendConfigurationService(app *App) backendConfigurationService {
+	if app == nil {
+		return buildBackendConfigurationService(nil)
+	}
+	app.backendConfigMu.Lock()
+	defer app.backendConfigMu.Unlock()
+	if app.backendConfig == nil {
+		service := buildBackendConfigurationService(app)
+		app.backendConfig = &service
+	}
+	return *app.backendConfig
+}
+
+func buildBackendConfigurationService(app *App) backendConfigurationService {
+	if app == nil {
+		return backendConfigurationService{}
+	}
 	driver := app.BackendDriver()
 
 	inner := appbackend.NewConfigurationService(appbackend.ConfigurationDeps{

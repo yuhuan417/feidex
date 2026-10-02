@@ -59,6 +59,8 @@ type App struct {
 	stateView              *appstate.Store
 	threadMenuMu           sync.Mutex
 	threadMenu             *appthreadmenu.Service
+	backendConfigMu        sync.Mutex
+	backendConfig          *backendConfigurationService
 	deduper                *frontendruntime.InboundDeduper
 	backendSwitchMu        sync.Mutex
 	backendStateMu         sync.Mutex

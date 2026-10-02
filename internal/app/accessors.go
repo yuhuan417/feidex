@@ -187,6 +187,15 @@ func (a *App) invalidateThreadMenuService() {
 	a.threadMenuMu.Unlock()
 }
 
+func (a *App) invalidateBackendConfigurationService() {
+	if a == nil {
+		return
+	}
+	a.backendConfigMu.Lock()
+	a.backendConfig = nil
+	a.backendConfigMu.Unlock()
+}
+
 // ConfigMu returns the config read-write mutex.
 func (a *App) ConfigMu() *sync.RWMutex {
 	if a == nil {
@@ -213,6 +222,7 @@ func (a *App) SetBackend(backend string) {
 	a.backend = appcore.NormalizeRuntimeBackend(backend)
 	a.backendDriver = appbackend.DriverForKind(a.backend)
 	a.invalidateThreadMenuService()
+	a.invalidateBackendConfigurationService()
 	if a.stateView != nil {
 		a.stateView.SetBackend(a.backend)
 	}
