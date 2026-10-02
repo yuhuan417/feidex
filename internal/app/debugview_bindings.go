@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	configadapter "feidex/internal/adapter/config"
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
 	appthreadmenu "feidex/internal/app/threadmenu"
@@ -12,12 +13,42 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type debugOutbound struct{ app *App }
+
+func (o debugOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+}
+func (o debugOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
+	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
+}
+func (o debugOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
+	return patchCardEffect(ctx, o.app, messageID, card)
+}
+
+type debugArtifactSharer struct{ app *App }
+
+func (o debugArtifactSharer) ShareLocalFile(ctx context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {
+	if o.app == nil || o.app.feishu == nil {
+		return feishu.SharedFileResult{}, context.Canceled
+	}
+	return o.app.feishu.ShareLocalFile(ctx, req)
+}
+
+type debugCardRenderer struct{ app *App }
+
+func (o debugCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
+	if o.app == nil || o.app.feishu == nil {
+		return nil
+	}
+	return o.app.feishu.SimpleStatusCard(title, color, body, buttons)
+}
+
 func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 	if app == nil {
 		return appdebugviewcmd.Dependencies{}
 	}
 	return appdebugviewcmd.Dependencies{
-		ConfigProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), FeishuClient: app.feishu, StateProvider: app.State(),
+		ConfigProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: debugOutbound{app: app}, ArtifactSharer: debugArtifactSharer{app: app}, CardRenderer: debugCardRenderer{app: app}, StateProvider: app.State(),
 		RuntimeStateProvider: debugRuntimeStateAdapter{app: app}, ConversationBackendProvider: debugConversationBackendAdapter{app: app},
 		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{app: app}, WorkspaceRenderProvider: debugWorkspaceRenderAdapter{app: app},
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(app, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(app, v) },

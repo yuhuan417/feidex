@@ -42,13 +42,17 @@ import (
 // Narrow interfaces — what the services need from the host application
 // ---------------------------------------------------------------------------
 
-// FeishuClient is the narrow interface for the Feishu bot client methods
-// used by these services.
-type FeishuClient interface {
+type Outbound interface {
 	ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error)
 	ReplyText(ctx context.Context, messageID string, text string, inThread bool) error
 	PatchCard(ctx context.Context, messageID string, card map[string]any) error
+}
+
+type ArtifactSharer interface {
 	ShareLocalFile(ctx context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error)
+}
+
+type CardRenderer interface {
 	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
 }
 
@@ -110,7 +114,9 @@ type Dependencies struct {
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
-	FeishuClient                      FeishuClient
+	Outbound                          Outbound
+	ArtifactSharer                    ArtifactSharer
+	CardRenderer                      CardRenderer
 	StateProvider                     StateProvider
 	RuntimeStateProvider              RuntimeStateProvider
 	RuntimeConfigRepository           runtimeconfig.Repository
@@ -165,7 +171,9 @@ func (d Dependencies) Store() *state.Store {
 	}
 	return d.ConfigProvider.Store()
 }
-func (d Dependencies) DebugFeishu() FeishuClient                    { return d.FeishuClient }
+func (d Dependencies) DebugOutbound() Outbound                      { return d.Outbound }
+func (d Dependencies) DebugArtifacts() ArtifactSharer               { return d.ArtifactSharer }
+func (d Dependencies) DebugRenderer() CardRenderer                  { return d.CardRenderer }
 func (d Dependencies) DebugAppState() StateProvider                 { return d.StateProvider }
 func (d Dependencies) DebugRuntimeState() RuntimeStateProvider      { return d.RuntimeStateProvider }
 func (d Dependencies) DebugRuntimeConfig() runtimeconfig.Repository { return d.RuntimeConfigRepository }
@@ -399,7 +407,7 @@ func (s DebugService) CommandDebug(msg *feishu.InboundMessage, args []string) er
 	}
 	if !NewDebugService(s.app).DebugAccessAllowed(msg.UserID) {
 		card := NewDebugService(s.app).RenderDebugAccessDeniedCard(s.app.DebugMakeSessionKey(msg), msg.UserID)
-		_, err := s.app.DebugFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+		_, err := s.app.DebugOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	enabled, err := DesiredDebugEnabled(args)
@@ -407,7 +415,7 @@ func (s DebugService) CommandDebug(msg *feishu.InboundMessage, args []string) er
 		return err
 	}
 	level := NewDebugService(s.app).SetRuntimeDebug(enabled)
-	return s.app.DebugFeishu().ReplyText(appcore.Context(s.app), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	return s.app.DebugOutbound().ReplyText(appcore.Context(s.app), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", s.app.DebugReplyInThreadEnabled(msg.ChatType))
 }
 
 // CompleteMenuDebug handles the debug menu card action.
@@ -425,11 +433,11 @@ func (s DebugService) CommandDebugLogs(msg *feishu.InboundMessage, args []string
 	}
 	if !NewDebugService(s.app).DebugAccessAllowed(msg.UserID) {
 		card := NewDebugService(s.app).RenderDebugAccessDeniedCard(s.app.DebugMakeSessionKey(msg), msg.UserID)
-		_, err := s.app.DebugFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+		_, err := s.app.DebugOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	card := NewDebugService(s.app).RenderDebugLogsCard(s.app.DebugMakeSessionKey(msg))
-	_, err := s.app.DebugFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.DebugOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -466,7 +474,7 @@ func (s DebugService) RenderDebugAccessDeniedCard(sessionKey, userID string) map
 			"debug_allow_from = [\"" + FirstNonEmpty(strings.TrimSpace(userID), "ou_xxx") + "\"]",
 		}, "\n")),
 	)
-	return s.app.DebugFeishu().SimpleStatusCard("Debug 权限不足", "orange", strings.Join(bodyLines, "\n"), []feishu.Button{
+	return s.app.DebugRenderer().SimpleStatusCard("Debug 权限不足", "orange", strings.Join(bodyLines, "\n"), []feishu.Button{
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	})
 }
@@ -597,7 +605,7 @@ func (s UsageService) CommandUsage(msg *feishu.InboundMessage, args []string) er
 		return fmt.Errorf("usage: /usage")
 	}
 	card := NewUsageService(s.app).RenderUsageCard(s.app.DebugMakeSessionKey(msg))
-	_, err := s.app.DebugFeishu().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.DebugOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -608,7 +616,7 @@ func (s UsageService) RenderUsageCard(sessionKey string) map[string]any {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		body = s.app.DebugConversationBackend().RenderUsageBody(sess)
 	}
-	return s.app.DebugFeishu().SimpleStatusCard("Token Usage", "blue", s.app.DebugMenuCardBody("menu.usage", body), []feishu.Button{
+	return s.app.DebugRenderer().SimpleStatusCard("Token Usage", "blue", s.app.DebugMenuCardBody("menu.usage", body), []feishu.Button{
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": sessionKey}},
 	})
 }
@@ -667,7 +675,7 @@ func CommandDownload(a Dependencies, msg *feishu.InboundMessage, args []string) 
 	if err != nil {
 		return err
 	}
-	msgID, err := a.DebugFeishu().ReplyCard(appcore.Context(a), msg.MessageID, card, a.DebugReplyInThreadEnabled(msg.ChatType))
+	msgID, err := a.DebugOutbound().ReplyCard(appcore.Context(a), msg.MessageID, card, a.DebugReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -755,7 +763,7 @@ func FinishDownloadFileShare(a Dependencies, requestID, messageID string, payloa
 		"message_id", messageID,
 		"path", selectedPath,
 	)
-	result, err := a.DebugFeishu().ShareLocalFile(ctx, req)
+	result, err := a.DebugArtifacts().ShareLocalFile(ctx, req)
 	if err != nil {
 		slog.Warn("download share failed",
 			"request_id", requestID,
@@ -777,10 +785,10 @@ func FinishDownloadFileShare(a Dependencies, requestID, messageID string, payloa
 				"message_id", messageID,
 				"error", renderErr,
 			)
-			_ = a.DebugFeishu().PatchCard(appcore.Context(a), messageID, RenderDownloadFailedCard(a, selectedPath, workspaceCWD, err.Error()))
+			_ = a.DebugOutbound().PatchCard(appcore.Context(a), messageID, RenderDownloadFailedCard(a, selectedPath, workspaceCWD, err.Error()))
 			return
 		}
-		_ = a.DebugFeishu().PatchCard(appcore.Context(a), messageID, card)
+		_ = a.DebugOutbound().PatchCard(appcore.Context(a), messageID, card)
 		return
 	}
 	slog.Debug("download share completed",
@@ -796,7 +804,7 @@ func FinishDownloadFileShare(a Dependencies, requestID, messageID string, payloa
 	if strings.TrimSpace(messageID) == "" {
 		return
 	}
-	_ = a.DebugFeishu().PatchCard(appcore.Context(a), messageID, RenderDownloadReadyCard(a, selectedPath, workspaceCWD, result))
+	_ = a.DebugOutbound().PatchCard(appcore.Context(a), messageID, RenderDownloadReadyCard(a, selectedPath, workspaceCWD, result))
 }
 
 // RenderDownloadPreparingCard renders the download preparing card.
@@ -810,7 +818,7 @@ func RenderDownloadPreparingCard(a Dependencies, selectedPath, workspaceCWD stri
 		"",
 		"请稍候，这张卡片会自动刷新。",
 	}
-	return a.DebugFeishu().SimpleStatusCard("文件下载", "blue", strings.Join(lines, "\n"), nil)
+	return a.DebugRenderer().SimpleStatusCard("文件下载", "blue", strings.Join(lines, "\n"), nil)
 }
 
 // RenderDownloadReadyCard renders the download ready card.
@@ -828,7 +836,7 @@ func RenderDownloadReadyCard(a Dependencies, selectedPath, workspaceCWD string, 
 	if url := strings.TrimSpace(result.URL); url != "" {
 		lines = append(lines, "", "[点击下载]("+url+")", url)
 	}
-	return a.DebugFeishu().SimpleStatusCard("文件下载", "green", strings.Join(lines, "\n"), nil)
+	return a.DebugRenderer().SimpleStatusCard("文件下载", "green", strings.Join(lines, "\n"), nil)
 }
 
 // RenderDownloadFailedCard renders the download failed card.
@@ -843,7 +851,7 @@ func RenderDownloadFailedCard(a Dependencies, selectedPath, workspaceCWD, errTex
 	if strings.TrimSpace(errText) != "" {
 		lines = append(lines, "", "错误: "+strings.TrimSpace(errText))
 	}
-	return a.DebugFeishu().SimpleStatusCard("文件下载", "orange", strings.Join(lines, "\n"), nil)
+	return a.DebugRenderer().SimpleStatusCard("文件下载", "orange", strings.Join(lines, "\n"), nil)
 }
 
 func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
