@@ -250,9 +250,10 @@ func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string
 		}
 	}
 	if s.App.ConfigProvider != nil && s.App.Store() != nil {
-		stateFacade := appcore.NewAppState(s.App)
+		frontendID := strings.TrimSpace(s.App.FrontendID())
+		legacyFallback := appcore.AllowLegacyFrontendFallback(s.App)
 		for _, binding := range s.App.Store().AllAgentBindings() {
-			if binding == nil || !stateFacade.MatchesFrontend(binding.FrontendID) {
+			if binding == nil || (strings.TrimSpace(binding.FrontendID) != frontendID && !(strings.TrimSpace(binding.FrontendID) == "" && legacyFallback)) {
 				continue
 			}
 			if strings.TrimSpace(binding.WorkspaceID) == workspaceID {
