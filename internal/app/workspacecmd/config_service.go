@@ -3,9 +3,10 @@ package workspacecmd
 import (
 	"context"
 	"errors"
+	configadapter "feidex/internal/adapter/config"
+	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"feidex/internal/app/appcore"
@@ -225,17 +226,19 @@ func (s *ConfigService) ShowWorkspaceDeleteMenu(msg *feishu.InboundMessage) erro
 
 // ValidateWorkspaceDeletion validates that a workspace can be deleted.
 func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string) error {
-	s.App.ConfigMu().RLock()
-	cfg := config.Clone(s.App.Config())
-	s.App.ConfigMu().RUnlock()
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
 		return fmt.Errorf("请指定 workspace_id")
 	}
-	if config.FindWorkspace(cfg, workspaceID) == nil {
+	repository := configadapter.NewWorkspaceRepository(s.App)
+	workspace, err := repository.Get(workspaceID)
+	if err != nil {
+		return err
+	}
+	if workspace == nil {
 		return fmt.Errorf("workspace %q 不存在", workspaceID)
 	}
-	if len(cfg.Workspaces) <= 1 {
+	if len(repository.List()) <= 1 {
 		return fmt.Errorf("至少保留一个 workspace")
 	}
 	currentID := selectedWorkspaceIDForSession(s.App, s.GetSession(sessionKey))
@@ -270,36 +273,11 @@ func (s *ConfigService) DeleteWorkspace(sessionKey, workspaceID string) error {
 	if err := s.ValidateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
 		return err
 	}
-	s.App.ConfigMu().Lock()
 	workspaceID = strings.TrimSpace(workspaceID)
-	fallbackID := ""
-	nextWorkspaces := make([]config.Workspace, 0, len(s.App.Config().Workspaces)-1)
-	for _, ws := range s.App.Config().Workspaces {
-		if ws.ID == workspaceID {
-			continue
-		}
-		if fallbackID == "" {
-			fallbackID = ws.ID
-		}
-		nextWorkspaces = append(nextWorkspaces, ws)
-	}
-	if fallbackID == "" {
-		s.App.ConfigMu().Unlock()
-		return fmt.Errorf("至少保留一个 workspace")
-	}
-	prevWorkspaces := append([]config.Workspace(nil), s.App.Config().Workspaces...)
-	s.App.Config().Workspaces = nextWorkspaces
-	if err := s.App.Config().Normalize(filepath.Dir(s.App.ConfigPath())); err != nil {
-		s.App.Config().Workspaces = prevWorkspaces
-		s.App.ConfigMu().Unlock()
+	fallbackID, err := (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.App)}).Delete(workspaceID)
+	if err != nil {
 		return err
 	}
-	if err := config.Save(s.App.ConfigPath(), s.App.Config()); err != nil {
-		s.App.Config().Workspaces = prevWorkspaces
-		s.App.ConfigMu().Unlock()
-		return err
-	}
-	s.App.ConfigMu().Unlock()
 
 	for _, sess := range s.Sessions() {
 		if sess == nil {

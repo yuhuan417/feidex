@@ -3,6 +3,8 @@ package workspacecmd
 import (
 	"context"
 	"errors"
+	configadapter "feidex/internal/adapter/config"
+	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
@@ -200,30 +202,16 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
 		return fmt.Errorf("%s", reason)
 	}
-	s.App.ConfigMu().Lock()
-	if config.FindWorkspace(s.App.Config(), id) != nil {
-		s.App.ConfigMu().Unlock()
-		return fmt.Errorf("workspace %q 已存在", id)
-	}
-	s.App.Config().Workspaces = append(s.App.Config().Workspaces, config.Workspace{
+	ws, err := (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.App)}).Create(config.Workspace{
 		ID:             id,
 		Name:           name,
 		Cwd:            cwd,
 		ApprovalPolicy: "never",
 		SandboxMode:    "danger-full-access",
 	})
-	if err := s.App.Config().Normalize(filepath.Dir(s.App.ConfigPath())); err != nil {
-		s.App.Config().Workspaces = s.App.Config().Workspaces[:len(s.App.Config().Workspaces)-1]
-		s.App.ConfigMu().Unlock()
+	if err != nil {
 		return err
 	}
-	if err := config.Save(s.App.ConfigPath(), s.App.Config()); err != nil {
-		s.App.Config().Workspaces = s.App.Config().Workspaces[:len(s.App.Config().Workspaces)-1]
-		s.App.ConfigMu().Unlock()
-		return err
-	}
-	ws := config.FindWorkspace(s.App.Config(), id)
-	s.App.ConfigMu().Unlock()
 	if err := appcore.SetWorkspaceSelection(s.App, chatType, chatID, userID, id); err != nil {
 		return err
 	}
@@ -238,20 +226,7 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 
 // UpdateWorkspaceDefaults updates a workspace configuration field and saves.
 func (s *ManagementService) UpdateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {
-	s.App.ConfigMu().Lock()
-	defer s.App.ConfigMu().Unlock()
-	ws := config.FindWorkspace(s.App.Config(), workspaceID)
-	if ws == nil {
-		return nil, fmt.Errorf("workspace %q not found", workspaceID)
-	}
-	mutate(ws)
-	if err := s.App.Config().Normalize(filepath.Dir(s.App.ConfigPath())); err != nil {
-		return nil, err
-	}
-	if err := config.Save(s.App.ConfigPath(), s.App.Config()); err != nil {
-		return nil, err
-	}
-	return config.FindWorkspace(s.App.Config(), workspaceID), nil
+	return (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.App)}).Update(workspaceID, mutate)
 }
 
 // CloneWorkspaceAndSwitch clones a repository and switches to the new workspace.
@@ -888,7 +863,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 // CompleteWorkspaceSandboxSet handles sandbox mode setting.
 func (s *ManagementService) CompleteWorkspaceSandboxSet(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
 	return s.App.PermissionDriver().CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode, appbackend.WorkspacePermissionUpdateDeps{
-		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
+		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
 	})
@@ -897,7 +872,7 @@ func (s *ManagementService) CompleteWorkspaceSandboxSet(action *feishu.CardActio
 // CompleteWorkspacePolicySet handles approval policy setting.
 func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
 	return s.App.PermissionDriver().CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy, appbackend.WorkspacePermissionUpdateDeps{
-		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
+		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
 	})
@@ -906,7 +881,7 @@ func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction
 // CompleteWorkspaceMultiAgentSet handles multi-agent mode setting.
 func (s *ManagementService) CompleteWorkspaceMultiAgentSet(action *feishu.CardAction, sessionKey, workspaceID, mode string) (*callback.CardActionTriggerResponse, error) {
 	return s.App.PermissionDriver().CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode, appbackend.WorkspacePermissionUpdateDeps{
-		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
+		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
 		RenderMultiAgentMenu:    s.renderMultiAgentMenuCard,
@@ -917,7 +892,7 @@ func (s *ManagementService) CompleteWorkspacePermissionModeSet(action *feishu.Ca
 	return s.App.PermissionDriver().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
 		App:                     s.App,
 		Session:                 s.GetSession,
-		UpdateWorkspaceDefaults: s.updateWorkspaceDefaults,
+		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		ApplyRuntime:            func(sessionKey, mode string) error { return nil },
 		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
 			return s.App.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
@@ -1655,23 +1630,6 @@ func (s *ManagementService) patchWorkspaceCloneProgressCard(messageID, requestID
 			"error", err,
 		)
 	}
-}
-
-func (s *ManagementService) updateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {
-	s.App.ConfigMu().Lock()
-	defer s.App.ConfigMu().Unlock()
-	ws := config.FindWorkspace(s.App.Config(), workspaceID)
-	if ws == nil {
-		return nil, fmt.Errorf("workspace %q not found", workspaceID)
-	}
-	mutate(ws)
-	if err := s.App.Config().Normalize(filepath.Dir(s.App.ConfigPath())); err != nil {
-		return nil, err
-	}
-	if err := config.Save(s.App.ConfigPath(), s.App.Config()); err != nil {
-		return nil, err
-	}
-	return config.FindWorkspace(s.App.Config(), workspaceID), nil
 }
 
 func gitRepoRoot(cwd string) (string, error) {
