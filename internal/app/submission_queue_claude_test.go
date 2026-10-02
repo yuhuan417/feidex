@@ -2,10 +2,9 @@ package app
 
 import (
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
-
-	"feidex/internal/state"
 )
 
 func TestStartNextClaudeSubmissionFailsGracefullyWhenRuntimeUnavailable(t *testing.T) {
@@ -24,7 +23,7 @@ func TestStartNextClaudeSubmissionFailsGracefullyWhenRuntimeUnavailable(t *testi
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-claude-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

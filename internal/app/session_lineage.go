@@ -2,11 +2,11 @@ package app
 
 import (
 	"feidex/internal/domain/conversation"
-	frontendruntime "feidex/internal/runtime"
-	"strings"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"feidex/internal/config"
-	"feidex/internal/state"
+	frontendruntime "feidex/internal/runtime"
+	"strings"
 )
 
 func getAppLiveThreadTracker(a *App) *frontendruntime.LiveThreads {
@@ -101,6 +101,6 @@ func effectiveClaudePermissionMode(sess *conversation.Session, ws *config.Worksp
 	return normalizeClaudePermissionModeValue(cfg.PermissionMode)
 }
 
-func sessionCanResumeThreadForSubmission(sess *conversation.Session, sub *state.Submission) bool {
+func sessionCanResumeThreadForSubmission(sess *conversation.Session, sub *domainsubmission.Submission) bool {
 	return (sub != nil && conversation.CanResumeThreadForWorkspace(sess, sub.WorkspaceID))
 }

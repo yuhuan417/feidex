@@ -7,6 +7,7 @@
 package turnbinding
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"sync"
 	"time"
@@ -70,7 +71,7 @@ func (t *Tracker) Store() *state.Store {
 }
 
 // submission looks up a submission by ID from the store.
-func (t *Tracker) submission(id string) *state.Submission {
+func (t *Tracker) submission(id string) *domainsubmission.Submission {
 	if t == nil || t.store == nil {
 		return nil
 	}
@@ -106,7 +107,7 @@ func (t *Tracker) NotePendingTurnBinding(threadID, sessionKey, submissionID stri
 
 // PendingSubmissionForThread returns the session key and submission for the
 // first non-finalized pending binding for the given thread.
-func (t *Tracker) PendingSubmissionForThread(threadID string) (string, *state.Submission) {
+func (t *Tracker) PendingSubmissionForThread(threadID string) (string, *domainsubmission.Submission) {
 	if t == nil {
 		return "", nil
 	}
@@ -219,7 +220,7 @@ func (t *Tracker) RebindTurnThreadID(turnID, threadID string) {
 }
 
 // BoundSubmissionForTurn returns the session key and submission for a turn.
-func (t *Tracker) BoundSubmissionForTurn(turnID string) (string, *state.Submission) {
+func (t *Tracker) BoundSubmissionForTurn(turnID string) (string, *domainsubmission.Submission) {
 	if t == nil {
 		return "", nil
 	}

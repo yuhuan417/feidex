@@ -3,10 +3,10 @@ package submission
 import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/state"
 	"testing"
 	"time"
-
-	"feidex/internal/state"
 )
 
 func TestUniqueStrings(t *testing.T) {
@@ -129,19 +129,19 @@ func TestHasSourceMessage(t *testing.T) {
 		}
 	})
 	t.Run("matches trigger message", func(t *testing.T) {
-		sub := &state.Submission{TriggerMessageID: "msg-1"}
+		sub := &domainsubmission.Submission{TriggerMessageID: "msg-1"}
 		if !HasSourceMessage(sub, "msg-1") {
 			t.Fatal("expected true for trigger message match")
 		}
 	})
 	t.Run("matches source message", func(t *testing.T) {
-		sub := &state.Submission{SourceMessageIDs: []string{"msg-2", "msg-3"}}
+		sub := &domainsubmission.Submission{SourceMessageIDs: []string{"msg-2", "msg-3"}}
 		if !HasSourceMessage(sub, "msg-2") {
 			t.Fatal("expected true for source message match")
 		}
 	})
 	t.Run("no match", func(t *testing.T) {
-		sub := &state.Submission{TriggerMessageID: "msg-1"}
+		sub := &domainsubmission.Submission{TriggerMessageID: "msg-1"}
 		if HasSourceMessage(sub, "msg-99") {
 			t.Fatal("expected false for no match")
 		}
@@ -155,7 +155,7 @@ func TestSourceMessageIDs(t *testing.T) {
 		}
 	})
 	t.Run("includes trigger", func(t *testing.T) {
-		sub := &state.Submission{
+		sub := &domainsubmission.Submission{
 			SourceMessageIDs: []string{"msg-1"},
 			TriggerMessageID: "msg-2",
 		}
@@ -165,7 +165,7 @@ func TestSourceMessageIDs(t *testing.T) {
 		}
 	})
 	t.Run("deduplicates trigger", func(t *testing.T) {
-		sub := &state.Submission{
+		sub := &domainsubmission.Submission{
 			SourceMessageIDs: []string{"msg-1"},
 			TriggerMessageID: "msg-1",
 		}
@@ -211,26 +211,26 @@ func TestPendingConfirmationText(t *testing.T) {
 
 func TestRefreshPendingStatus(t *testing.T) {
 	t.Run("nil session", func(t *testing.T) {
-		RefreshPendingStatus(nil) // should not panic
+		conversation.RefreshPendingStatus(nil) // should not panic
 	})
 	t.Run("queued when queue has items", func(t *testing.T) {
 		sess := &conversation.Session{Queue: []string{"sub-1"}}
-		RefreshPendingStatus(sess)
-		if sess.Status != state.SessionStatusQueued.String() {
+		conversation.RefreshPendingStatus(sess)
+		if sess.Status != conversation.SessionStatusQueued.String() {
 			t.Fatalf("expected queued, got %q", sess.Status)
 		}
 	})
 	t.Run("queued when staged images", func(t *testing.T) {
 		sess := &conversation.Session{StagedImages: []conversation.SessionStagedImage{{SourceMessageID: "img-1"}}}
-		RefreshPendingStatus(sess)
-		if sess.Status != state.SessionStatusQueued.String() {
+		conversation.RefreshPendingStatus(sess)
+		if sess.Status != conversation.SessionStatusQueued.String() {
 			t.Fatalf("expected queued, got %q", sess.Status)
 		}
 	})
 	t.Run("idle when empty", func(t *testing.T) {
-		sess := &conversation.Session{Status: state.SessionStatusQueued.String()}
-		RefreshPendingStatus(sess)
-		if sess.Status != state.SessionStatusIdle.String() {
+		sess := &conversation.Session{Status: conversation.SessionStatusQueued.String()}
+		conversation.RefreshPendingStatus(sess)
+		if sess.Status != conversation.SessionStatusIdle.String() {
 			t.Fatalf("expected idle, got %q", sess.Status)
 		}
 	})
@@ -240,7 +240,7 @@ func TestRefreshPendingStatus(t *testing.T) {
 			Status:             "turn_in_progress",
 			Queue:              []string{"sub-1"},
 		}
-		RefreshPendingStatus(sess)
+		conversation.RefreshPendingStatus(sess)
 		if sess.Status != "turn_in_progress" {
 			t.Fatalf("expected status unchanged, got %q", sess.Status)
 		}
@@ -421,8 +421,8 @@ func TestShouldStartNextSubmissionAsync(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ShouldStartNextSubmissionAsync(tt.sess); got != tt.want {
-				t.Fatalf("ShouldStartNextSubmissionAsync() = %v, want %v", got, tt.want)
+			if got := conversation.ShouldStartNextSubmission(tt.sess); got != tt.want {
+				t.Fatalf("conversation.ShouldStartNextSubmission() = %v, want %v", got, tt.want)
 			}
 		})
 	}

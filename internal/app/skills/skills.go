@@ -1,16 +1,16 @@
 package skills
 
 import (
+	"feidex/internal/app/appcore"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"sort"
 	"strings"
 	"unicode"
 
-	"feidex/internal/app/appcore"
 	appcards "feidex/internal/app/cards"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 // PrefixMode represents the result of parsing a skill prefix.
@@ -32,9 +32,9 @@ type ParsedPrefix struct {
 // SubmissionSkillResolution describes how a submission's skill was resolved.
 type SubmissionSkillResolution struct {
 	InputText          string
-	Skills             []state.SubmissionSkill
+	Skills             []domainsubmission.SubmissionSkill
 	ConsumePending     bool
-	PendingReplacement *state.SubmissionSkill
+	PendingReplacement *domainsubmission.SubmissionSkill
 }
 
 // SortForDisplay sorts skills for display: enabled first, then by scope, then by name.
@@ -85,18 +85,18 @@ func FindByPath(skills []codexrpc.SkillMetadata, selectedValue string) (codexrpc
 }
 
 // FindEnabledByName finds an enabled skill by name.
-func FindEnabledByName(skills []codexrpc.SkillMetadata, name string) (state.SubmissionSkill, bool) {
+func FindEnabledByName(skills []codexrpc.SkillMetadata, name string) (domainsubmission.SubmissionSkill, bool) {
 	name = strings.TrimSpace(name)
 	for _, skill := range skills {
 		if !skill.Enabled || strings.TrimSpace(skill.Name) != name {
 			continue
 		}
-		return state.SubmissionSkill{
+		return domainsubmission.SubmissionSkill{
 			Name: strings.TrimSpace(skill.Name),
 			Path: strings.TrimSpace(skill.Path),
 		}, true
 	}
-	return state.SubmissionSkill{}, false
+	return domainsubmission.SubmissionSkill{}, false
 }
 
 // PendingConfirmationText returns the confirmation text when a skill is selected.
@@ -160,7 +160,7 @@ func ValidPrefixName(name string) bool {
 type BuildCardParams struct {
 	Entry       codexrpc.SkillsListEntry
 	HasPending  bool
-	Pending     state.SubmissionSkill
+	Pending     domainsubmission.SubmissionSkill
 	SessionKey  string
 	FormatBody  func(string) string
 	ReloadLabel string

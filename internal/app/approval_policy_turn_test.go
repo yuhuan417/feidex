@@ -2,11 +2,10 @@ package app
 
 import (
 	"context"
-	"feidex/internal/domain/conversation"
-	"testing"
-
 	"feidex/internal/codexrpc"
-	"feidex/internal/state"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"testing"
 )
 
 func TestStartNextSubmissionUsesWorkspaceApprovalPolicyForTurnStart(t *testing.T) {
@@ -15,7 +14,7 @@ func TestStartNextSubmissionUsesWorkspaceApprovalPolicyForTurnStart(t *testing.T
 	a.cfg.Workspaces[0].SandboxMode = "read-only"
 
 	sessionKey := "sess-workspace-policy"
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-workspace-policy",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -114,7 +113,7 @@ func TestStartNextSubmissionUsesThreadApprovalOverrideForTurnStart(t *testing.T)
 	a.cfg.Workspaces[0].SandboxMode = "workspace-write"
 
 	sessionKey := "sess-thread-policy"
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-thread-policy",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

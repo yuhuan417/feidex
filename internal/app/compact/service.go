@@ -14,7 +14,6 @@ import (
 	"feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 // SessionStatusCompacting is the session status indicating a compaction is in progress.
@@ -85,8 +84,8 @@ func SessionHasActiveWork(sess *conversation.Session) bool {
 	if conversation.HasActiveOperations(sess) {
 		return true
 	}
-	switch state.NormalizeSessionStatus(sess.Status) {
-	case state.SessionStatusCompacting, state.SessionStatusTurnStarting:
+	switch conversation.NormalizeSessionStatus(sess.Status) {
+	case conversation.SessionStatusCompacting, conversation.SessionStatusTurnStarting:
 		return true
 	default:
 		return false
@@ -208,7 +207,7 @@ func (s Service) StartThreadCompaction(sessionKey string) (*conversation.Session
 		return nil, fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
 	previousStatus := strings.TrimSpace(sess.Status)
-	sess.Status = state.SessionStatusCompacting.String()
+	sess.Status = conversation.SessionStatusCompacting.String()
 	if err := store.SaveSession(sess); err != nil {
 		return nil, err
 	}
@@ -256,7 +255,7 @@ func (s Service) BindStandaloneCompactTurn(threadID, turnID string) bool {
 		if currentTurn := conversation.ForegroundOperation(sess); currentTurn != nil && strings.TrimSpace(currentTurn.TurnID) != "" && strings.TrimSpace(currentTurn.TurnID) != turnID {
 			continue
 		}
-		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting {
+		if conversation.NormalizeSessionStatus(sess.Status) != conversation.SessionStatusCompacting {
 			continue
 		}
 		conversation.UpsertActiveOperation(sess, conversation.SessionActiveOperation{
@@ -264,7 +263,7 @@ func (s Service) BindStandaloneCompactTurn(threadID, turnID string) bool {
 			ThreadID: threadID,
 			TurnID:   turnID,
 		})
-		sess.Status = state.SessionStatusCompacting.String()
+		sess.Status = conversation.SessionStatusCompacting.String()
 		return store.SaveSession(sess) == nil
 	}
 	return false
@@ -302,7 +301,7 @@ func (s Service) CompleteStandaloneCompactTurn(threadID, turnID string) bool {
 		if turnID != "" && conversation.FindActiveOperationByTurn(sess, turnID) == nil && conversation.HasActiveOperations(sess) {
 			continue
 		}
-		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting && conversation.FindActiveOperationByThread(sess, threadID) == nil {
+		if conversation.NormalizeSessionStatus(sess.Status) != conversation.SessionStatusCompacting && conversation.FindActiveOperationByThread(sess, threadID) == nil {
 			continue
 		}
 		resolvedTurnID := strings.TrimSpace(turnID)
@@ -313,9 +312,9 @@ func (s Service) CompleteStandaloneCompactTurn(threadID, turnID string) bool {
 		}
 		conversation.RemoveActiveOperation(sess, "", resolvedTurnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-			sess.Status = state.SessionStatusQueued.String()
+			sess.Status = conversation.SessionStatusQueued.String()
 		} else {
-			sess.Status = state.SessionStatusIdle.String()
+			sess.Status = conversation.SessionStatusIdle.String()
 		}
 		if err := store.SaveSession(sess); err != nil {
 			return false
@@ -369,9 +368,9 @@ func (s Service) FinishStandaloneCompactTurn(threadID, turnID, status string) bo
 		}
 		conversation.RemoveActiveOperation(sess, "", turnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-			sess.Status = state.SessionStatusQueued.String()
+			sess.Status = conversation.SessionStatusQueued.String()
 		} else {
-			sess.Status = state.SessionStatusIdle.String()
+			sess.Status = conversation.SessionStatusIdle.String()
 		}
 		if err := store.SaveSession(sess); err != nil {
 			return false
@@ -408,7 +407,7 @@ func (s Service) FailStandaloneCompactTurn(threadID, turnID, message string) boo
 		if turnID != "" && conversation.FindActiveOperationByTurn(sess, turnID) == nil && conversation.HasActiveOperations(sess) {
 			continue
 		}
-		if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting && conversation.FindActiveOperationByThread(sess, threadID) == nil {
+		if conversation.NormalizeSessionStatus(sess.Status) != conversation.SessionStatusCompacting && conversation.FindActiveOperationByThread(sess, threadID) == nil {
 			continue
 		}
 		resolvedTurnID := strings.TrimSpace(turnID)
@@ -419,9 +418,9 @@ func (s Service) FailStandaloneCompactTurn(threadID, turnID, message string) boo
 		}
 		conversation.RemoveActiveOperation(sess, "", resolvedTurnID)
 		if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-			sess.Status = state.SessionStatusQueued.String()
+			sess.Status = conversation.SessionStatusQueued.String()
 		} else {
-			sess.Status = state.SessionStatusIdle.String()
+			sess.Status = conversation.SessionStatusIdle.String()
 		}
 		if err := store.SaveSession(sess); err != nil {
 			return false
@@ -452,12 +451,12 @@ func RestoreSession(store SessionStore, sessionKey, threadID, previousStatus str
 	if conversation.HasActiveOperations(sess) {
 		return
 	}
-	if state.NormalizeSessionStatus(sess.Status) != state.SessionStatusCompacting {
+	if conversation.NormalizeSessionStatus(sess.Status) != conversation.SessionStatusCompacting {
 		return
 	}
 	sess.Status = strings.TrimSpace(previousStatus)
 	if sess.Status == "" {
-		sess.Status = state.SessionStatusIdle.String()
+		sess.Status = conversation.SessionStatusIdle.String()
 	}
 	_ = store.SaveSession(sess)
 }

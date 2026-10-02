@@ -11,7 +11,6 @@ import (
 	appcore "feidex/internal/app/appcore"
 	"feidex/internal/app/apputil"
 	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 func (s RuntimeMaintenanceService) RecoverRuntimeState() {
@@ -41,7 +40,7 @@ func (s RuntimeMaintenanceService) RecoverSharedRuntimeState() {
 				"workspace_id", sess.WorkspaceID,
 			)
 		}
-		if !s.app.MaintenanceSessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && state.NormalizeSessionStatus(sess.Status) == state.SessionStatusIdle {
+		if !s.app.MaintenanceSessionHasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && conversation.NormalizeSessionStatus(sess.Status) == conversation.SessionStatusIdle {
 			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 				s.app.MaintenanceClearSessionThreadContext(sess)
 			}
@@ -59,7 +58,7 @@ func (s RuntimeMaintenanceService) RecoverSharedRuntimeState() {
 		s.app.MaintenanceResetSessionActiveOperations(sess)
 		sess.Queue = nil
 		sess.StagedImages = nil
-		sess.Status = state.SessionStatusIdle.String()
+		sess.Status = conversation.SessionStatusIdle.String()
 		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
 			s.app.MaintenanceClearSessionThreadContext(sess)
 		}
@@ -109,7 +108,7 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 		if strings.TrimSpace(sess.ActiveThreadID) == "" {
 			continue
 		}
-		if state.NormalizeSessionStatus(apputil.FirstNonEmpty(sess.Status, state.SessionStatusIdle.String())) != state.SessionStatusIdle {
+		if conversation.NormalizeSessionStatus(apputil.FirstNonEmpty(sess.Status, conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
 			continue
 		}
 		if s.app.MaintenanceSessionHasInFlightSubmission(sess) {
@@ -129,7 +128,7 @@ func (s RuntimeMaintenanceService) recoverSessionThreadsOnStartup() {
 				"workspace_id", workspaceID,
 			)
 			s.app.MaintenanceClearSessionThreadContext(sess)
-			sess.Status = state.SessionStatusIdle.String()
+			sess.Status = conversation.SessionStatusIdle.String()
 			_ = appState.SaveSession(sess)
 			s.app.MaintenanceClearSessionLiveThread(sessionKey)
 			continue

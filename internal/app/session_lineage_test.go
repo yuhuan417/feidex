@@ -1,13 +1,12 @@
 package app
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
+
 	appservicetiercmd "feidex/internal/app/servicetiercmd"
-	"feidex/internal/domain/conversation"
-
-	"testing"
-
 	"feidex/internal/config"
-	"feidex/internal/state"
+	"feidex/internal/domain/conversation"
+	"testing"
 )
 
 func TestSwitchSessionWorkspaceClearsIdleThreadContext(t *testing.T) {
@@ -67,14 +66,14 @@ func TestSessionCanResumeThreadForSubmissionRequiresMatchingWorkspace(t *testing
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: "ws-a",
 	}
-	if !sessionCanResumeThreadForSubmission(sess, &state.Submission{WorkspaceID: "ws-a"}) {
+	if !sessionCanResumeThreadForSubmission(sess, &domainsubmission.Submission{WorkspaceID: "ws-a"}) {
 		t.Fatal("expected matching workspace to allow thread resume")
 	}
-	if sessionCanResumeThreadForSubmission(sess, &state.Submission{WorkspaceID: "ws-b"}) {
+	if sessionCanResumeThreadForSubmission(sess, &domainsubmission.Submission{WorkspaceID: "ws-b"}) {
 		t.Fatal("expected mismatched workspace to block thread resume")
 	}
 	sess.ActiveThreadWorkspaceID = ""
-	if sessionCanResumeThreadForSubmission(sess, &state.Submission{WorkspaceID: "ws-a"}) {
+	if sessionCanResumeThreadForSubmission(sess, &domainsubmission.Submission{WorkspaceID: "ws-a"}) {
 		t.Fatal("expected missing thread workspace lineage to block resume")
 	}
 }

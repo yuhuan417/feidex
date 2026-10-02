@@ -3,11 +3,11 @@ package submission
 import (
 	"context"
 	"feidex/internal/domain/conversation"
-	"testing"
-	"time"
-
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"testing"
+	"time"
 )
 
 func TestPendingQueueServiceStageInboundImagesForSession(t *testing.T) {
@@ -38,8 +38,8 @@ func TestPendingQueueServiceStageInboundImagesForSession(t *testing.T) {
 		t.Fatal("ShouldStageInboundImages() should accept file-only message")
 	}
 
-	if err := svc.StageInboundImagesForSession(msg, "sess-1", func(_ *feishu.InboundMessage, _, _ string) ([]state.SubmissionAttachment, error) {
-		return []state.SubmissionAttachment{{Kind: "image", Name: "image.png", LocalPath: "/tmp/image.png"}}, nil
+	if err := svc.StageInboundImagesForSession(msg, "sess-1", func(_ *feishu.InboundMessage, _, _ string) ([]domainsubmission.SubmissionAttachment, error) {
+		return []domainsubmission.SubmissionAttachment{{Kind: "image", Name: "image.png", LocalPath: "/tmp/image.png"}}, nil
 	}); err != nil {
 		t.Fatalf("StageInboundImagesForSession() error = %v", err)
 	}
@@ -68,7 +68,7 @@ func TestPendingQueueServiceReactionWrappersAndDiscardSession(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := app.store.CreateSubmission(&state.Submission{
+	if _, err := app.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       "sess-1",
 		WorkspaceID:      "default",
@@ -120,7 +120,7 @@ func TestPendingQueueServiceDiscardPendingInputByMessageID(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := app.store.CreateSubmission(&state.Submission{
+	if _, err := app.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      "default",
@@ -178,7 +178,7 @@ func TestDiscardQueuedSubmissionFromSessionSnapshotPreservesCurrentSessionState(
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := app.store.CreateSubmission(&state.Submission{
+	if _, err := app.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-queued",
 		SessionKey:       "sess-1",
 		WorkspaceID:      "default",
@@ -275,7 +275,7 @@ func (s pendingQueueTestState) Sessions() []*conversation.Session {
 	return s.store.AllSessions()
 }
 
-func (s pendingQueueTestState) Submission(id string) *state.Submission {
+func (s pendingQueueTestState) Submission(id string) *domainsubmission.Submission {
 	return s.store.GetSubmission(id)
 }
 
@@ -287,7 +287,7 @@ func (s pendingQueueTestState) UpdateSession(key string, mutate func(*conversati
 	return s.store.UpdateSession(key, mutate)
 }
 
-func (s pendingQueueTestState) UpdateSubmission(id string, mutate func(*state.Submission)) error {
+func (s pendingQueueTestState) UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error {
 	return s.store.UpdateSubmission(id, mutate)
 }
 
@@ -295,7 +295,7 @@ type pendingQueueTestRuntimeMaintenance struct {
 	store *state.Store
 }
 
-func (m pendingQueueTestRuntimeMaintenance) CleanupSubmissionRuntimeState(sub *state.Submission) {
+func (m pendingQueueTestRuntimeMaintenance) CleanupSubmissionRuntimeState(sub *domainsubmission.Submission) {
 	if sub == nil {
 		return
 	}

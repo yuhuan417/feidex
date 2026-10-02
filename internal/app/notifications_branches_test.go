@@ -3,15 +3,14 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"feidex/internal/codexrpc"
-	"feidex/internal/config"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestHandleNotificationAdditionalBranches(t *testing.T) {
@@ -68,7 +67,7 @@ func TestFinishTurnStatuses(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	sub.Status = "running"
-	if err := a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+	if err := a.store.UpdateSubmission(sub.ID, func(s *domainsubmission.Submission) {
 		s.Status = "running"
 	}); err != nil {
 		t.Fatalf("UpdateSubmission() error = %v", err)

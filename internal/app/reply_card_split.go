@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"encoding/json"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 
 	appdelivery "feidex/internal/app/delivery"
-	"feidex/internal/state"
 )
 
-func fitReplyCardChunks(a *App, ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
+func fitReplyCardChunks(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
 	if len(chunks) == 0 {
 		return nil
 	}
@@ -20,7 +20,7 @@ func fitReplyCardChunks(a *App, ctx context.Context, sub *state.Submission, titl
 	return fitted
 }
 
-func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
+func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
 	if replyCardChunkFits(a, ctx, sub, title, color, chunk, enablePreview) {
 		return []appdelivery.ReplyCardChunk{chunk}
 	}
@@ -99,7 +99,7 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *state.Submissio
 	return result
 }
 
-func replyCardChunkFits(a *App, ctx context.Context, sub *state.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
+func replyCardChunkFits(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
 	appendReplyCardFooter(card, chunk.FooterLines)
 	payload, err := json.Marshal(card)

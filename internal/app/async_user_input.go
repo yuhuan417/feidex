@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -15,7 +16,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func sendAsyncUserInputCard(a *App, sub *state.Submission, payload pendingforms.ToolUserInputPayload, reuseMessageID string) string {
+func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload, reuseMessageID string) string {
 	payload.ThreadID, payload.TurnID = sub.ThreadID, sub.TurnID
 	requestID := pendingforms.AsyncUserInputPendingKind + ":" + sub.TurnID + ":" + payload.ItemID
 	if pending := a.State().Pending(requestID); pending != nil {

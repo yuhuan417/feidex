@@ -1,22 +1,23 @@
 package app
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
+
 	appfeishuwrap "feidex/internal/app/feishuwrap"
-	appmaintenance "feidex/internal/app/maintenance"
-	"feidex/internal/domain/conversation"
 
 	"context"
 	"errors"
+	"feidex/internal/app/attachments"
+	appmaintenance "feidex/internal/app/maintenance"
+	"feidex/internal/domain/conversation"
+	"feidex/internal/feishu"
+	"feidex/internal/state"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
-
-	"feidex/internal/app/attachments"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
@@ -29,7 +30,7 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 		t.Fatalf("expirePendingRequestsOnStartup() = %+v", req)
 	}
 
-	subID, err := a.store.CreateSubmission(&state.Submission{ID: "sub-1", SessionKey: "sess-1", WorkspaceID: "default", TurnID: "turn-1"})
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{ID: "sub-1", SessionKey: "sess-1", WorkspaceID: "default", TurnID: "turn-1"})
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
@@ -39,7 +40,7 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 	if err := a.store.UpsertMessageLink(&state.MessageLink{MessageID: "msg-1", SubmissionID: subID, TurnID: "turn-1"}); err != nil {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
-	appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&state.Submission{ID: subID, TurnID: "turn-1"})
+	appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&domainsubmission.Submission{ID: subID, TurnID: "turn-1"})
 	if a.store.GetSubmission(subID) != nil || a.store.PendingByID("req-turn") != nil || a.store.GetMessageLink("msg-1") != nil {
 		t.Fatal("cleanupSubmissionRuntimeState() should remove runtime artifacts")
 	}

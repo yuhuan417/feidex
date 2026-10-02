@@ -1,13 +1,12 @@
 package appstate
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
-
-	"feidex/internal/state"
 )
 
 // CreateSubmission stores a new submission.
-func (s *Store) CreateSubmission(sub *state.Submission) (string, error) {
+func (s *Store) CreateSubmission(sub *domainsubmission.Submission) (string, error) {
 	if s == nil || s.Store == nil {
 		return "", nil
 	}
@@ -23,7 +22,7 @@ func (s *Store) DeleteSubmission(id string) {
 }
 
 // Submission returns a submission by id.
-func (s *Store) Submission(id string) *state.Submission {
+func (s *Store) Submission(id string) *domainsubmission.Submission {
 	if s == nil || s.Store == nil {
 		return nil
 	}
@@ -31,7 +30,7 @@ func (s *Store) Submission(id string) *state.Submission {
 }
 
 // UpdateSubmission mutates an existing submission.
-func (s *Store) UpdateSubmission(id string, mutate func(*state.Submission)) error {
+func (s *Store) UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error {
 	if s == nil || s.Store == nil {
 		return nil
 	}
@@ -40,27 +39,22 @@ func (s *Store) UpdateSubmission(id string, mutate func(*state.Submission)) erro
 
 // SetSubmissionStatus updates a submission status.
 func (s *Store) SetSubmissionStatus(id, status string) error {
-	return s.UpdateSubmission(id, func(sub *state.Submission) {
-		sub.Status = state.NormalizeSubmissionStatus(status).String()
+	return s.UpdateSubmission(id, func(sub *domainsubmission.Submission) {
+		sub.SetStatus(status)
 	})
 }
 
 // MarkSubmissionRunning records the thread/turn for a running submission.
 func (s *Store) MarkSubmissionRunning(id, threadID, turnID string) error {
-	return s.UpdateSubmission(id, func(sub *state.Submission) {
-		sub.ThreadID = strings.TrimSpace(threadID)
-		if strings.TrimSpace(turnID) != "" {
-			sub.TurnID = strings.TrimSpace(turnID)
-		}
-		sub.Status = state.SubmissionStatusRunning.String()
+	return s.UpdateSubmission(id, func(sub *domainsubmission.Submission) {
+		sub.MarkRunning(threadID, turnID)
 	})
 }
 
 // FinalizeSubmission marks a submission terminal.
 func (s *Store) FinalizeSubmission(id, status string) error {
-	return s.UpdateSubmission(id, func(sub *state.Submission) {
-		sub.Status = state.NormalizeSubmissionStatus(status).String()
-		sub.Finalized = true
+	return s.UpdateSubmission(id, func(sub *domainsubmission.Submission) {
+		sub.Finalize(status)
 	})
 }
 

@@ -3,16 +3,16 @@
 package replycontinuation
 
 import (
-	"feidex/internal/domain/conversation"
-	"fmt"
-	"sort"
-	"strings"
-
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/submission"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"fmt"
+	"sort"
+	"strings"
 )
 
 // App is the narrow interface that the reply continuation service uses to
@@ -29,11 +29,11 @@ type App interface {
 type TrySteerFunc func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error)
 
 // StartSubmissionFunc starts a Claude submission for a given session.
-type StartSubmissionFunc func(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+type StartSubmissionFunc func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error
 
 // ResolveInboundAttachmentsFunc downloads and resolves attachments from an
 // inbound message.
-type ResolveInboundAttachmentsFunc func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error)
+type ResolveInboundAttachmentsFunc func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error)
 
 // Service manages reply continuation, message link tracking, and
 // inbound-reply steering logic.
@@ -66,7 +66,7 @@ type Service struct {
 	SaveMessageLink func(link *state.MessageLink) error
 
 	// CreateSubmission creates a new submission in the store.
-	CreateSubmission func(sub *state.Submission) (string, error)
+	CreateSubmission func(sub *domainsubmission.Submission) (string, error)
 
 	// HasInFlightSubmission returns true if the session has an in-flight submission.
 	HasInFlightSubmission func(sess *conversation.Session) bool
@@ -190,7 +190,7 @@ func (s *Service) ClearPendingStagedImages(targetSessionKey, bucketSessionKey st
 		}
 		sess.StagedImages = nil
 		if !s.HasInFlightSubmission(sess) && len(sess.Queue) == 0 {
-			sess.Status = state.SessionStatusIdle.String()
+			sess.Status = conversation.SessionStatusIdle.String()
 		}
 		if err := s.SaveSession(sess); err != nil {
 			return err
@@ -221,7 +221,7 @@ func (s *Service) TrySteerInboundReply(msg *feishu.InboundMessage, link *state.M
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        state.SessionStatusIdle.String(),
+			Status:        conversation.SessionStatusIdle.String(),
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -270,13 +270,13 @@ func (s *Service) ContinueClaudeSessionWithText(sessionKey, text string) error {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
 	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.App.DefaultWorkspaceID())
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:  strings.TrimSpace(sessionKey),
 		WorkspaceID: workspaceID,
 		UserID:      strings.TrimSpace(sess.OwnerUserID),
 		ChatID:      strings.TrimSpace(sess.ChatID),
 		InputText:   text,
-		Status:      state.SubmissionStatusQueued.String(),
+		Status:      domainsubmission.SubmissionStatusQueued.String(),
 	}
 	if rootMessageID := strings.TrimSpace(sess.RootMessageID); rootMessageID != "" {
 		sub.SourceRootMessageIDs = []string{rootMessageID}
@@ -291,7 +291,7 @@ func (s *Service) ContinueClaudeSessionWithText(sessionKey, text string) error {
 
 // StagedImageAttachments converts staged images to submission attachments,
 // delegating to the submission package.
-func StagedImageAttachments(images []conversation.SessionStagedImage) []state.SubmissionAttachment {
+func StagedImageAttachments(images []conversation.SessionStagedImage) []domainsubmission.SubmissionAttachment {
 	return submission.StagedImageAttachments(images)
 }
 
@@ -310,7 +310,7 @@ func StagedImageRootMessageIDs(images []conversation.SessionStagedImage) []strin
 
 // BuildClaudeContinuationSubmissionFromMessage builds a submission for
 // continuing a Claude session from an inbound reply message.
-func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.InboundMessage, sessionKey string, sess *conversation.Session, bindOnlyCurrentRoot bool) (*state.Submission, error) {
+func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.InboundMessage, sessionKey string, sess *conversation.Session, bindOnlyCurrentRoot bool) (*domainsubmission.Submission, error) {
 	if s == nil || s.App == nil || msg == nil || sess == nil {
 		return nil, nil
 	}
@@ -327,7 +327,7 @@ func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.Inbou
 	if !bindOnlyCurrentRoot {
 		sourceRootMessageIDs = appcore.UniqueStrings(append(sourceRootMessageIDs, StagedImageRootMessageIDs(stagedImages)...))
 	}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          workspaceID,
 		UserID:               msg.UserID,
@@ -337,7 +337,7 @@ func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.Inbou
 		SourceRootMessageIDs: sourceRootMessageIDs,
 		InputText:            msg.Text,
 		Attachments:          append(StagedImageAttachments(stagedImages), inboundAttachments...),
-		Status:               state.SubmissionStatusQueued.String(),
+		Status:               domainsubmission.SubmissionStatusQueued.String(),
 	}
 	if strings.TrimSpace(sub.InputText) == "" && len(sub.Attachments) == 0 {
 		return nil, nil
@@ -357,7 +357,7 @@ func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *feishu.Inbou
 
 // StartClaudeContinuationSubmission starts a Claude submission for a
 // continuation, looking up the workspace configuration.
-func (s *Service) StartClaudeContinuationSubmission(sessionKey string, sub *state.Submission, notifyFailure bool) error {
+func (s *Service) StartClaudeContinuationSubmission(sessionKey string, sub *domainsubmission.Submission, notifyFailure bool) error {
 	if s == nil || s.App == nil || sub == nil {
 		return nil
 	}
@@ -377,13 +377,13 @@ func (s *Service) StartClaudeContinuationSubmission(sessionKey string, sub *stat
 
 // SourceMessageIDsForSubmission returns the unique source message IDs for a
 // submission, delegating to the submission package.
-func SourceMessageIDsForSubmission(sub *state.Submission) []string {
+func SourceMessageIDsForSubmission(sub *domainsubmission.Submission) []string {
 	return submission.SourceMessageIDs(sub)
 }
 
 // RecordSubmissionSourceLinks records message links for all source messages
 // of a submission and root-turn bindings for all source root messages.
-func (s *Service) RecordSubmissionSourceLinks(sub *state.Submission) {
+func (s *Service) RecordSubmissionSourceLinks(sub *domainsubmission.Submission) {
 	if s == nil || s.App == nil || s.App.Store() == nil || sub == nil {
 		return
 	}

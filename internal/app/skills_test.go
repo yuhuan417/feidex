@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
+	"feidex/internal/codexrpc"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
+	"feidex/internal/state"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"feidex/internal/codexrpc"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func testSkillsListEntry(cwd string, skills ...codexrpc.SkillMetadata) codexrpc.SkillsListEntry {
@@ -174,7 +174,7 @@ func TestEnqueueSubmissionUsesPendingSkillWithoutListingSkills(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-pending", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "summarize this"}
 	sessionKey := makeSessionKey(a, msg)
-	newSkillsService(a).SetSessionPendingSkill(sessionKey, state.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
+	newSkillsService(a).SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
 
 	var seenInputs []map[string]any
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -215,7 +215,7 @@ func TestEnqueueSubmissionExplicitSkillPrefixOverridesPending(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-explicit", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "$openai-docs summarize this"}
 	sessionKey := makeSessionKey(a, msg)
-	newSkillsService(a).SetSessionPendingSkill(sessionKey, state.SubmissionSkill{Name: "old-skill", Path: "/skills/old"})
+	newSkillsService(a).SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "old-skill", Path: "/skills/old"})
 
 	var skillsListCalls int
 	var seenInputs []map[string]any
@@ -274,7 +274,7 @@ func TestEnqueueSubmissionInvalidSkillPrefixFallsBackToTextAndConsumesPending(t 
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-invalid", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "$bad/name keep raw"}
 	sessionKey := makeSessionKey(a, msg)
-	newSkillsService(a).SetSessionPendingSkill(sessionKey, state.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
+	newSkillsService(a).SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
 
 	var seenInputs []map[string]any
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -407,7 +407,7 @@ func TestEnqueueSubmissionSkillOnlyWithAttachmentStartsTurn(t *testing.T) {
 func TestTrySteerInboundReplyIgnoresSkillSemantics(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-steer-skill"
-	newSkillsService(a).SetSessionPendingSkill(sessionKey, state.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
+	newSkillsService(a).SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
 
 	skillsListCalls := 0
 	var seenInputs []map[string]any

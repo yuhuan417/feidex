@@ -6,11 +6,10 @@ package finalcardpatch
 import (
 	"context"
 	"feidex/internal/app/appcore"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"sync"
 	"time"
-
-	"feidex/internal/state"
 )
 
 // ---------------------------------------------------------------------------
@@ -40,7 +39,7 @@ type App interface {
 // SubmissionFinderProvider narrows app state access to the submission lookup
 // used by the service.
 type SubmissionFinderProvider interface {
-	Submission(id string) *state.Submission
+	Submission(id string) *domainsubmission.Submission
 }
 
 // FeishuPatcher narrows the Feishu client to the PatchCard method.
@@ -51,7 +50,7 @@ type FeishuPatcher interface {
 // CardRendererFunc renders a reply markdown card with header options and appends
 // footer lines. It combines card rendering and footer appending so that
 // internal card-building logic stays in the host app.
-type CardRendererFunc func(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, footerLines []string) map[string]any
+type CardRendererFunc func(ctx context.Context, sub *domainsubmission.Submission, title, color string, showHeader bool, body string, footerLines []string) map[string]any
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -79,7 +78,7 @@ func NewTracker() *Tracker {
 
 // PatchState tracks the patch state for a single card.
 type PatchState struct {
-	Submission     *state.Submission
+	Submission     *domainsubmission.Submission
 	Title          string
 	Color          string
 	ShowHeader     bool
@@ -93,7 +92,7 @@ type PatchState struct {
 
 // PatchSnapshot is an immutable snapshot of a PatchState for rendering.
 type PatchSnapshot struct {
-	Submission  *state.Submission
+	Submission  *domainsubmission.Submission
 	Title       string
 	Color       string
 	ShowHeader  bool
@@ -147,7 +146,7 @@ func (svc Service) tracker() *Tracker {
 
 // RegisterFinalCardPatchState registers a new card patch state for the given
 // message ID.
-func (svc Service) RegisterFinalCardPatchState(messageID string, sub *state.Submission, title, color string, showHeader bool, body string, footerLines []string) {
+func (svc Service) RegisterFinalCardPatchState(messageID string, sub *domainsubmission.Submission, title, color string, showHeader bool, body string, footerLines []string) {
 	if svc.app == nil || sub == nil {
 		return
 	}

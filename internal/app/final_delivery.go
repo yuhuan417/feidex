@@ -3,23 +3,24 @@ package app
 import (
 	"context"
 	"feidex/internal/app/apputil"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appdelivery "feidex/internal/app/delivery"
 	"feidex/internal/app/quietmode"
 	"strings"
 
 	appcards "feidex/internal/app/cards"
-	"feidex/internal/state"
 )
 
-func sendFinalMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool) []string {
+func sendFinalMessages(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, inThread bool) []string {
 	return sendFinalMessagesWithFooter(a, ctx, sub, text, nil, inThread)
 }
 
-func sendEmptyFinalCard(a *App, ctx context.Context, sub *state.Submission, footerLines []string) string {
+func sendEmptyFinalCard(a *App, ctx context.Context, sub *domainsubmission.Submission, footerLines []string) string {
 	return sendEmptyFinalCardWithReuse(a, ctx, sub, footerLines, "")
 }
 
-func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string {
+func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
 	if a == nil || a.feishu == nil || sub == nil {
 		return ""
 	}
@@ -59,7 +60,7 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *state.Submiss
 	return ""
 }
 
-func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool) []string {
+func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool) []string {
 	results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, text, footerLines, inThread, nil)
 	if len(results) == 0 {
 		return nil
@@ -71,7 +72,7 @@ func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *state.Submiss
 	return ids
 }
 
-func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
+func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}

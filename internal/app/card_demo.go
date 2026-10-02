@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
 
 	appcarddemo "feidex/internal/app/carddemo"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 type OutboundCardDemoOptions struct {
@@ -42,7 +42,7 @@ func BuildOutboundCardDemo(cfg *config.Config, opts OutboundCardDemoOptions) (ma
 		cfg:    cfg,
 		feishu: feishu.New(cfg.Feishu),
 	}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		WorkspaceID: workspaceID,
 		ChatID:      strings.TrimSpace(opts.ChatID),
 		UserID:      strings.TrimSpace(opts.UserID),

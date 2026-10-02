@@ -4,15 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"feidex/internal/domain/conversation"
-	"strings"
-	"testing"
-
 	"feidex/internal/app/pendingforms"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"strings"
+	"testing"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -20,7 +20,7 @@ import (
 // Matches the Codex 0.153.4 item emitted by request_user_input_async.
 const asyncQuestionNotification = `{"threadId":"thread-1","turnId":"turn-1","item":{"id":"ask-1","type":"agentMessage","phase":"final_answer","delivery":"async","text":"Which behavior do you see?","questions":[{"title":"Which behavior do you see?","options":["Old bot responds","No bot responds","Several bots respond"]}]}}`
 
-func seedAsyncUserInput(t *testing.T, a *App) (*state.Submission, *state.PendingRequest) {
+func seedAsyncUserInput(t *testing.T, a *App) (*domainsubmission.Submission, *state.PendingRequest) {
 	t.Helper()
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey, sub := seedActiveSubmissionForInboundMessage(t, a, msg, "thread-1", "turn-1")

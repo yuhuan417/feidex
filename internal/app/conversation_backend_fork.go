@@ -10,7 +10,6 @@ import (
 	"feidex/internal/app/apputil"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 func forkClaudeActiveConversation(a *App, sessionKey string, sess *conversation.Session, ws *config.Workspace) (string, error) {
@@ -86,7 +85,7 @@ func persistForkedConversation(a *App, sessionKey string, sess *conversation.Ses
 		clearSessionLiveThread(a, sessionKey)
 	}
 	conversation.ResetActiveOperations(sess)
-	sess.Status = state.SessionStatusIdle.String()
+	sess.Status = conversation.SessionStatusIdle.String()
 	sess.Queue = nil
 	sess.StagedImages = nil
 	return a.State().SaveSession(sess)

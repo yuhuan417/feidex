@@ -5,14 +5,17 @@ package claudesupport
 
 import (
 	"encoding/json"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
 	"time"
 
 	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/cardactions"
+
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/pendingforms"
+
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -26,7 +29,7 @@ func mustJSON(v any) string {
 }
 
 // DeliverPendingCardFunc delivers a card and creates a pending request record.
-type DeliverPendingCardFunc func(sub *state.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error
+type DeliverPendingCardFunc func(sub *domainsubmission.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error
 
 // DeliverDetachedPendingCardFunc delivers a card for a request whose producing
 // turn is already gone (background agents outlive their parent submission).
@@ -34,7 +37,7 @@ type DeliverPendingCardFunc func(sub *state.Submission, card map[string]any, req
 type DeliverDetachedPendingCardFunc func(card map[string]any, target appclauderuntime.InteractionTarget, reqKey, reqIDStored, backend, kind, payloadJSON, linkKind string) error
 
 // RenderApprovalCardFunc renders an approval card.
-type RenderApprovalCardFunc func(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any
+type RenderApprovalCardFunc func(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any
 
 // SimpleStatusCardFunc creates a simple status card.
 type SimpleStatusCardFunc func(title, color, body string, buttons []feishu.Button) map[string]any
@@ -296,7 +299,7 @@ func BuildApprovalContent(kind, body string, requestPayload map[string]any, sess
 
 // SendApprovalCardWithPayload sends a Claude approval card with an optional
 // request payload.
-func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, requestID, sessionKey, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
+func (s *Service) SendApprovalCardWithPayload(sub *domainsubmission.Submission, kind, requestID, sessionKey, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
 	if sub == nil {
 		return fmt.Errorf("claude approval delivery unavailable")
 	}
@@ -319,7 +322,7 @@ func (s *Service) SendApprovalCardWithPayload(sub *state.Submission, kind, reque
 		strings.TrimSpace(itemID),
 		strings.TrimSpace(sub.UserID),
 		payload.MarshalJSONText(),
-		state.SubmissionStatusWaitingApproval.String(),
+		domainsubmission.SubmissionStatusWaitingApproval.String(),
 		"approval_card",
 		0,
 	)
@@ -433,7 +436,7 @@ func (s *Service) SendDetachedPlanModeCard(requestID string, target appclauderun
 }
 
 // SendUserInputCard sends a Claude user input question card.
-func (s *Service) SendUserInputCard(sub *state.Submission, requestID, sessionKey string, payload pendingforms.ToolUserInputPayload) error {
+func (s *Service) SendUserInputCard(sub *domainsubmission.Submission, requestID, sessionKey string, payload pendingforms.ToolUserInputPayload) error {
 	if sub == nil || len(payload.Questions) == 0 {
 		return fmt.Errorf("claude question delivery unavailable")
 	}
@@ -467,14 +470,14 @@ func (s *Service) SendUserInputCard(sub *state.Submission, requestID, sessionKey
 		payload.ItemID,
 		strings.TrimSpace(sub.UserID),
 		mustJSON(payload),
-		state.SubmissionStatusWaitingUserInput.String(),
+		domainsubmission.SubmissionStatusWaitingUserInput.String(),
 		"user_input_card",
 		0,
 	)
 }
 
 // SendUserInputFormCard sends a Claude user input form card.
-func (s *Service) SendUserInputFormCard(sub *state.Submission, requestID, sessionKey string, payload pendingforms.ToolUserInputPayload) error {
+func (s *Service) SendUserInputFormCard(sub *domainsubmission.Submission, requestID, sessionKey string, payload pendingforms.ToolUserInputPayload) error {
 	if sub == nil {
 		return fmt.Errorf("claude question delivery unavailable")
 	}
@@ -494,14 +497,14 @@ func (s *Service) SendUserInputFormCard(sub *state.Submission, requestID, sessio
 		payload.ItemID,
 		strings.TrimSpace(sub.UserID),
 		mustJSON(payload),
-		state.SubmissionStatusWaitingUserInput.String(),
+		domainsubmission.SubmissionStatusWaitingUserInput.String(),
 		"user_input_card",
 		0,
 	)
 }
 
 // SendPlanModeCard sends a Claude plan mode confirmation card.
-func (s *Service) SendPlanModeCard(sub *state.Submission, requestID, sessionKey, threadID, turnID, body string) error {
+func (s *Service) SendPlanModeCard(sub *domainsubmission.Submission, requestID, sessionKey, threadID, turnID, body string) error {
 	if sub == nil {
 		return fmt.Errorf("claude plan confirmation unavailable")
 	}
@@ -528,7 +531,7 @@ func (s *Service) SendPlanModeCard(sub *state.Submission, requestID, sessionKey,
 		requestKey,
 		strings.TrimSpace(sub.UserID),
 		mustJSON(map[string]any{"body": strings.TrimSpace(body)}),
-		state.SubmissionStatusWaitingUserInput.String(),
+		domainsubmission.SubmissionStatusWaitingUserInput.String(),
 		"claude_plan_card",
 		0,
 	)

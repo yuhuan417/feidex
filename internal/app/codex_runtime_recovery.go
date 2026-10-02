@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
@@ -42,7 +43,7 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 		},
 		SessionShouldStartNextSubmissionAsync: func(sessionKey string) bool {
 			sess := a.State().Session(sessionKey)
-			return sessionShouldStartNextSubmissionAsync(sess)
+			return conversation.ShouldStartNextSubmission(sess)
 		},
 		StartNextSubmissionAsync: func(sessionKey, reason string) {
 			newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, reason)

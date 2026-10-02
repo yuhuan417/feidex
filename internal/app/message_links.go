@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/state"
 	"fmt"
 	"strings"
-
-	"feidex/internal/state"
 )
 
-func recordMessageLink(a *App, messageID, kind string, sub *state.Submission, requestID string) {
+func recordMessageLink(a *App, messageID, kind string, sub *domainsubmission.Submission, requestID string) {
 	if sub == nil {
 		return
 	}
@@ -32,7 +32,7 @@ func recordMessageLinkForAnchor(a *App, messageID, kind string, anchor pendingCa
 	_ = a.State().SaveMessageLink(link)
 }
 
-func sendLocalTurnFollowupCard(ctx context.Context, a *App, parentMessageID string, card map[string]any, replyInThread bool, sub *state.Submission, kind string) (string, error) {
+func sendLocalTurnFollowupCard(ctx context.Context, a *App, parentMessageID string, card map[string]any, replyInThread bool, sub *domainsubmission.Submission, kind string) (string, error) {
 	if a == nil || a.feishu == nil {
 		return "", fmt.Errorf("follow-up unavailable")
 	}

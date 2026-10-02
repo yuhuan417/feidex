@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+
 	frontendruntime "feidex/internal/runtime"
 	"path/filepath"
 	"strings"
@@ -893,7 +895,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	return a, ff, fc
 }
 
-func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *state.Submission {
+func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *domainsubmission.Submission {
 	t.Helper()
 
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -909,7 +911,7 @@ func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID str
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

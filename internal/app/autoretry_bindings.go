@@ -1,12 +1,14 @@
 package app
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
+
 	appautoretry "feidex/internal/app/autoretry"
+
 	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -31,7 +33,7 @@ type conversationBackendAdapter struct {
 	backend appconvbackend.ConversationBackendFacade
 }
 
-func (a conversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (a conversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return a.backend.StartQueuedSubmission(sessionKey, sess, sub, ws, notifyFailure)
 }
 

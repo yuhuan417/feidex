@@ -123,7 +123,7 @@ func newTestWorkspaceApp(t *testing.T, backend string) (*testWorkspaceApp, *conv
 		OwnerUserID: "user-1",
 		ChatID:      "chat-1",
 		ChatType:    "p2p",
-		Status:      state.SessionStatusIdle.String(),
+		Status:      conversation.SessionStatusIdle.String(),
 	}
 	return app, session, &cfg.Workspaces[0]
 }

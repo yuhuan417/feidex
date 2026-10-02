@@ -2,18 +2,18 @@ package goalcmd
 
 import (
 	"context"
+	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"feidex/internal/app/appcore"
 	appcards "feidex/internal/app/cards"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -33,7 +33,7 @@ type StateProvider interface {
 	Session(key string) *conversation.Session
 	Sessions() []*conversation.Session
 	SaveSession(sess *conversation.Session) error
-	CreateSubmission(sub *state.Submission) (string, error)
+	CreateSubmission(sub *domainsubmission.Submission) (string, error)
 	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
 	DeleteSubmission(id string)
 }
@@ -53,9 +53,9 @@ type App interface {
 	SessionBelongsToFrontend(sessionKey string) bool
 	BindTurnSubmission(threadID, turnID, sessionKey, submissionID string)
 	MarkTurnStartedAt(turnID string, startedAt time.Time)
-	RecordSubmissionSourceLinks(sub *state.Submission)
+	RecordSubmissionSourceLinks(sub *domainsubmission.Submission)
 	RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string)
-	NoteTurnStarted(sessionKey string, sub *state.Submission)
+	NoteTurnStarted(sessionKey string, sub *domainsubmission.Submission)
 	MarkSessionThreadLive(sessionKey, threadID string)
 }
 
@@ -975,7 +975,7 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 	}
 	triggerMessageID := anchor.MessageID
 	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.app.DefaultWorkspaceID())
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          workspaceID,
 		ThreadID:             threadID,
@@ -987,7 +987,7 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 		SourceRootMessageIDs: goalUniqueNonEmpty([]string{triggerMessageID}),
 		InputText:            ContinuationInputText,
 		Kind:                 SubmissionKind,
-		Status:               state.SubmissionStatusRunning.String(),
+		Status:               domainsubmission.SubmissionStatusRunning.String(),
 	}
 	id, err := s.app.State().CreateSubmission(sub)
 	if err != nil || strings.TrimSpace(id) == "" {
@@ -1004,7 +1004,7 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 			ThreadID:     threadID,
 			TurnID:       turnID,
 		})
-		current.Status = state.SessionStatusTurnInProgress.String()
+		current.Status = conversation.SessionStatusTurnInProgress.String()
 		conversation.SetThreadContext(current, workspaceID, threadID, current.ActiveThreadName, current.ActiveThreadPreview)
 	})
 	if err != nil || updatedSess == nil {

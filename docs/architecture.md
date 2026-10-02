@@ -91,6 +91,8 @@ config.example.toml         配置样例
 
 - 现有 `internal/app` 已拆成多个子包，但仍存在 callback、宽 `App` interface 和 root glue。新的拆分以 [长期架构重构提案](architecture-refactor-proposal.md) 为准，优先把状态和用例迁移到 `internal/domain`、`internal/application`。
 - conversation/session 类型、workspace 恢复校验、backend lineage 和活动操作转换已迁入 domain；删除 sessionctx、appcore session facade 和根活动操作转发文件。持久化字段和协议转换边界保持原有语义。
+- submission 类型、状态枚举和 running/finalize 转换已迁入 `internal/domain/submission`；`internal/state` 保留 repository 实现，状态语义由 domain transition 持有。
+- session queue 的 FIFO、去重和 active-operation 边界由 `internal/domain/conversation` 维护；repository 只保存队列快照。
 - frontend 生命周期与 shutdown drain 已迁入 `internal/runtime`；submission startup 由纯领域转换和 runtime 串行协调器共同负责。
 - 模型快照统一使用 `internal/domain/modelconfig.Snapshot`；Codex resume 字段解释位于 `internal/adapter/backend/codex`，已应用/待生效状态由 `internal/application/modelconfig` 计算。
 - interaction reply/resolved 转换由 `internal/application/interaction` 协调，JSON store 适配器只映射 DTO；Codex 的 serverRequest/resolved 仍是权威终点。

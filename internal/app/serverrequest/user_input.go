@@ -2,13 +2,14 @@ package serverrequest
 
 import (
 	"encoding/json"
-	codexadapter "feidex/internal/adapter/backend/codex"
-	"log/slog"
-	"strings"
+	domainsubmission "feidex/internal/domain/submission"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/app/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"log/slog"
+	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -166,7 +167,7 @@ func (s *Service) SendUserInputFormCard(requestID json.RawMessage, payload ToolU
 		ItemID:          payload.ItemID,
 		OwnerUserID:     sub.UserID,
 		PayloadJSON:     mustJSON(payload),
-		WaitingStatus:   state.SubmissionStatusWaitingUserInput.String(),
+		WaitingStatus:   domainsubmission.SubmissionStatusWaitingUserInput.String(),
 		LinkKind:        "user_input_card",
 	})
 	if err == nil {

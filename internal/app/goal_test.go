@@ -3,14 +3,13 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
 	"reflect"
 	"strings"
 	"testing"
-
-	"feidex/internal/codexrpc"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func seedGoalTestSession(t *testing.T, a *App, msg *feishu.InboundMessage, threadID string) string {
@@ -25,7 +24,7 @@ func seedGoalTestSession(t *testing.T, a *App, msg *feishu.InboundMessage, threa
 		ChatID:                  msg.ChatID,
 		ChatType:                msg.ChatType,
 		RootMessageID:           msg.MessageID,
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -468,14 +467,14 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 	if foundSessionKey != sessionKey || sub == nil {
 		t.Fatalf("goal continuation binding = %q / %+v, want %q", foundSessionKey, sub, sessionKey)
 	}
-	if sub.Kind != goalSubmissionKind || sub.InputText != goalContinuationInputText || sub.TriggerMessageID != "goal-turn-root-1" || sub.Status != state.SubmissionStatusRunning.String() {
+	if sub.Kind != goalSubmissionKind || sub.InputText != goalContinuationInputText || sub.TriggerMessageID != "goal-turn-root-1" || sub.Status != domainsubmission.SubmissionStatusRunning.String() {
 		t.Fatalf("goal continuation submission = %+v", sub)
 	}
 	if len(sub.SourceRootMessageIDs) != 1 || sub.SourceRootMessageIDs[0] != "goal-turn-root-1" {
 		t.Fatalf("goal continuation source roots = %#v, want outbound root only", sub.SourceRootMessageIDs)
 	}
 	sess := a.store.GetSession(sessionKey)
-	if sess == nil || sess.ActiveTurnID != "turn-goal" || sess.ActiveSubmissionID != sub.ID || sess.Status != state.SessionStatusTurnInProgress.String() {
+	if sess == nil || sess.ActiveTurnID != "turn-goal" || sess.ActiveSubmissionID != sub.ID || sess.Status != conversation.SessionStatusTurnInProgress.String() {
 		t.Fatalf("session after goal continuation = %+v", sess)
 	}
 	if len(ff.sendCards) != 1 || len(ff.sendCardChatIDs) != 1 || ff.sendCardChatIDs[0] != "chat-1" {
@@ -491,14 +490,14 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 		t.Fatalf("goal continuation buttons = %#v, want none", buttons)
 	}
 
-	if err := a.store.UpdateSubmission(sub.ID, func(current *state.Submission) {
-		current.Status = state.SubmissionStatusCompleted.String()
+	if err := a.store.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) {
+		current.Status = domainsubmission.SubmissionStatusCompleted.String()
 	}); err != nil {
 		t.Fatalf("UpdateSubmission(first goal continuation) error = %v", err)
 	}
 	if _, err := a.store.UpdateSession(sessionKey, func(current *conversation.Session) {
 		conversation.ResetActiveOperations(current)
-		current.Status = state.SessionStatusIdle.String()
+		current.Status = conversation.SessionStatusIdle.String()
 	}); err != nil {
 		t.Fatalf("UpdateSession(first goal continuation complete) error = %v", err)
 	}

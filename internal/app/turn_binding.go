@@ -1,11 +1,10 @@
 package app
 
 import (
-	"time"
-
 	"feidex/internal/app/turnbinding"
 	"feidex/internal/codexrpc"
-	"feidex/internal/state"
+	domainsubmission "feidex/internal/domain/submission"
+	"time"
 )
 
 func (s runtimeStateService) turnBindingTracker() *turnbinding.Tracker {
@@ -25,7 +24,7 @@ func (s runtimeStateService) notePendingTurnBinding(threadID, sessionKey, submis
 	}
 }
 
-func (s runtimeStateService) pendingSubmissionForThread(threadID string) (string, *state.Submission) {
+func (s runtimeStateService) pendingSubmissionForThread(threadID string) (string, *domainsubmission.Submission) {
 	tracker := s.turnBindingTracker()
 	if tracker == nil {
 		return "", nil
@@ -54,7 +53,7 @@ func (s runtimeStateService) rebindTurnThreadID(turnID, threadID string) {
 	}
 }
 
-func (s runtimeStateService) boundSubmissionForTurn(turnID string) (string, *state.Submission) {
+func (s runtimeStateService) boundSubmissionForTurn(turnID string) (string, *domainsubmission.Submission) {
 	tracker := s.turnBindingTracker()
 	if tracker == nil {
 		return "", nil
@@ -62,7 +61,7 @@ func (s runtimeStateService) boundSubmissionForTurn(turnID string) (string, *sta
 	return tracker.BoundSubmissionForTurn(turnID)
 }
 
-func (s runtimeStateService) BoundSubmissionForTurn(turnID string) (string, *state.Submission) {
+func (s runtimeStateService) BoundSubmissionForTurn(turnID string) (string, *domainsubmission.Submission) {
 	return s.boundSubmissionForTurn(turnID)
 }
 
@@ -134,7 +133,7 @@ func (s runtimeStateService) BindTurnSubmission(threadID, turnID, sessionKey, su
 func (s runtimeStateService) MarkTurnStartedAt(turnID string, startedAt time.Time) {
 	s.markTurnStartedAt(turnID, startedAt)
 }
-func (s runtimeStateService) PendingSubmissionForThread(threadID string) (string, *state.Submission) {
+func (s runtimeStateService) PendingSubmissionForThread(threadID string) (string, *domainsubmission.Submission) {
 	return s.pendingSubmissionForThread(threadID)
 }
 func (s runtimeStateService) TurnFinalFooterLines(turnID string, completedAt time.Time) []string {

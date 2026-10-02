@@ -3,21 +3,26 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"time"
 
 	appapproval "feidex/internal/app/approval"
+
 	appclauderuntime "feidex/internal/app/clauderuntime"
+
 	appdelivery "feidex/internal/app/delivery"
+
 	apppendingforms "feidex/internal/app/pendingforms"
 	"feidex/internal/app/quietmode"
+
 	appturn "feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+
 	domainmodelconfig "feidex/internal/domain/modelconfig"
-	"feidex/internal/state"
 )
 
 // claudeRuntime wraps *clauderuntime.Service with *App-specific callbacks.
@@ -64,7 +69,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 				boundary := newTurnStreamService(app).prepareTurnStreamQuietBoundary(turnID)
 				return boundary.ReuseMessageID
 			},
-			PrepareTurnStreamQuietUpdate: func(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp {
+			PrepareTurnStreamQuietUpdate: func(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp {
 				return newTurnStreamService(app).prepareTurnStreamQuietUpdatePayload(sessionKey, sub, threadID, itemID, item, workspaceCwd)
 			},
 			MarkTurnStreamFinal: func(turnID string) {
@@ -86,7 +91,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			},
 		},
 		Delivery: appclauderuntime.DeliveryDeps{
-			ExecuteQuietWorkingCardOp: func(ctx context.Context, sub *state.Submission, op appturn.QuietWorkingCardOp) {
+			ExecuteQuietWorkingCardOp: func(ctx context.Context, sub *domainsubmission.Submission, op appturn.QuietWorkingCardOp) {
 				executeQuietWorkingCardOp(app, ctx, sub, op)
 			},
 			UpdateOutputSegment: func(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
@@ -95,10 +100,10 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			FinalizeOutputSegment: func(ctx context.Context, threadID, turnID, body string) bool {
 				return finalizeClaudeOutputSegment(app, ctx, threadID, turnID, body)
 			},
-			SendFinalMessages: func(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
+			SendFinalMessages: func(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
 				return sendFinalMessagesWithFooterAndReuse(app, ctx, sub, text, footerLines, inThread, reuseMessageIDs)
 			},
-			ReplyInThread: func(sub *state.Submission) bool {
+			ReplyInThread: func(sub *domainsubmission.Submission) bool {
 				return replyInThreadForSubmission(app, sub)
 			},
 			SendBackgroundTaskNotification: func(ctx context.Context, target appclauderuntime.BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
@@ -106,16 +111,16 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			},
 		},
 		Interactive: appclauderuntime.InteractiveDeps{
-			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
+			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
 				return sendClaudeApprovalCard(app, requestID, sessionKey, sub, presentation)
 			},
-			SendClaudeUserInputCard: func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error {
+			SendClaudeUserInputCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
 				return sendClaudeUserInputCard(app, requestID, sessionKey, sub, payload)
 			},
-			SendClaudeUserInputFormCard: func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error {
+			SendClaudeUserInputFormCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
 				return sendClaudeUserInputFormCard(app, requestID, sessionKey, sub, payload)
 			},
-			SendClaudePlanModeCard: func(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error {
+			SendClaudePlanModeCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error {
 				return sendClaudePlanModeCard(app, requestID, sessionKey, sub, threadID, turnID, body)
 			},
 			SendDetachedApprovalCard: func(requestID string, target appclauderuntime.InteractionTarget, presentation appapproval.Presentation) error {
@@ -135,7 +140,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			},
 		},
 		Lookup: appclauderuntime.LookupDeps{
-			FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
+			FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
 				return newSubmissionQueueServiceFromApp(app).FindSubmissionByTurn(threadID, turnID)
 			},
 			GetSession: func(sessionKey string) *conversation.Session {

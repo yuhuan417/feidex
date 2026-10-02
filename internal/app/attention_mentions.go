@@ -1,21 +1,20 @@
 package app
 
 import (
-	"feidex/internal/domain/conversation"
-	"strings"
-
 	"feidex/internal/app/apputil"
-	"feidex/internal/state"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"strings"
 )
 
-func turnStopAttentionUserID(a *App, sub *state.Submission, turnID string) string {
+func turnStopAttentionUserID(a *App, sub *domainsubmission.Submission, turnID string) string {
 	if !shouldMentionOnTurnStop(a, sub, turnID) {
 		return ""
 	}
 	return strings.TrimSpace(sub.UserID)
 }
 
-func shouldMentionOnTurnStop(a *App, sub *state.Submission, turnID string) bool {
+func shouldMentionOnTurnStop(a *App, sub *domainsubmission.Submission, turnID string) bool {
 	if a == nil || sub == nil || strings.TrimSpace(sub.UserID) == "" {
 		return false
 	}

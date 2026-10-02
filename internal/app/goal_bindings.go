@@ -2,14 +2,13 @@ package app
 
 import (
 	"context"
+	"feidex/internal/app/goalcmd"
+	"feidex/internal/codexrpc"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
 	"log/slog"
 	"strings"
 	"time"
-
-	"feidex/internal/app/goalcmd"
-	"feidex/internal/codexrpc"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -186,7 +185,7 @@ func (a goalAppAdapter) MarkTurnStartedAt(turnID string, startedAt time.Time) {
 	newRuntimeStateService(a.app).MarkTurnStartedAt(turnID, startedAt)
 }
 
-func (a goalAppAdapter) RecordSubmissionSourceLinks(sub *state.Submission) {
+func (a goalAppAdapter) RecordSubmissionSourceLinks(sub *domainsubmission.Submission) {
 	newReplyContinuationService(a.app).RecordSubmissionSourceLinks(sub)
 }
 
@@ -194,7 +193,7 @@ func (a goalAppAdapter) RecordRootTurnBinding(rootMessageID, sessionKey, threadI
 	newReplyContinuationService(a.app).RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID)
 }
 
-func (a goalAppAdapter) NoteTurnStarted(sessionKey string, sub *state.Submission) {
+func (a goalAppAdapter) NoteTurnStarted(sessionKey string, sub *domainsubmission.Submission) {
 	newTurnStreamService(a.app).NoteTurnStarted(sessionKey, sub)
 }
 

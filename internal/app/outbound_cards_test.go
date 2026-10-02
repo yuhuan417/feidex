@@ -3,20 +3,20 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
 
 	appcompact "feidex/internal/app/compact"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{WorkspaceID: "default"}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	reply := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.TODO(), sub, "Reply", "green", true, "", nil, false)
 	if got := cardHeaderTitle(t, reply); got != "Reply" {
@@ -88,7 +88,7 @@ func TestPrepareReplyCardMarkdownKeepsPreviewLinksWithLineNumbers(t *testing.T) 
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{WorkspaceID: "default"}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	body := prepareReplyCardMarkdown(a, nil, sub, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)", true)
 	if !strings.Contains(body, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)") {
@@ -103,7 +103,7 @@ func TestPrepareReplyCardMarkdownLinkifiesInlineCodeURLsImmediatelyForPreview(t 
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{WorkspaceID: "default"}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	body := prepareReplyCardMarkdown(a, nil, sub, "卡片链接：`https://github.com/yuhuan417/feidex`", true)
 	if !strings.Contains(body, "[https://github.com/yuhuan417/feidex](https://github.com/yuhuan417/feidex)") {
@@ -118,7 +118,7 @@ func TestPrepareSubmissionCardMarkdownLinkifiesInlineCodeURLsForContentCards(t *
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{WorkspaceID: "default"}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	body := prepareSubmissionCardMarkdown(a, sub, "授权链接：`https://accounts.feishu.cn/oauth/v1/device/verify?x=1`")
 	if !strings.Contains(body, "[https://accounts.feishu.cn/oauth/v1/device/verify?x=1](https://accounts.feishu.cn/oauth/v1/device/verify?x=1)") {
@@ -133,7 +133,7 @@ func TestRenderContentCardsLinkifyInlineCodeURLs(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{WorkspaceID: "default"}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	replyCard := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, "反馈中", "blue", true, "打开：`https://example.test/reply`", nil, false)
 	if body := cardMarkdownContent(t, replyCard); !strings.Contains(body, "[https://example.test/reply](https://example.test/reply)") {

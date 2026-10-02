@@ -1,18 +1,18 @@
 package app
 
 import (
-	appfeishuwrap "feidex/internal/app/feishuwrap"
-	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
+	"feidex/internal/app/appcore"
+	"feidex/internal/app/appstate"
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+	"feidex/internal/domain/conversation"
+	"feidex/internal/feishu"
+	"feidex/internal/state"
 	"strings"
 	"testing"
 	"time"
-
-	"feidex/internal/app/appcore"
-	"feidex/internal/app/appstate"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -28,14 +28,14 @@ func TestAppStateStoreBranches(t *testing.T) {
 	if err := nilFacade.SaveSession(&conversation.Session{}); err != nil {
 		t.Fatalf("nil SaveSession() error = %v", err)
 	}
-	if id, err := nilFacade.CreateSubmission(&state.Submission{}); id != "" || err != nil {
+	if id, err := nilFacade.CreateSubmission(&domainsubmission.Submission{}); id != "" || err != nil {
 		t.Fatalf("nil CreateSubmission() = %q, %v", id, err)
 	}
 	nilFacade.DeleteSubmission("sub")
 	if got := nilFacade.Submission("sub"); got != nil {
 		t.Fatalf("nil Submission() = %+v, want nil", got)
 	}
-	if err := nilFacade.UpdateSubmission("sub", func(*state.Submission) {}); err != nil {
+	if err := nilFacade.UpdateSubmission("sub", func(*domainsubmission.Submission) {}); err != nil {
 		t.Fatalf("nil UpdateSubmission() error = %v", err)
 	}
 	if err := nilFacade.QueueSubmission("sess", "sub"); err != nil {
@@ -83,7 +83,7 @@ func TestAppStateStoreBranches(t *testing.T) {
 		t.Fatalf("Sessions() = %+v", got)
 	}
 
-	subID, err := facade.CreateSubmission(&state.Submission{SessionKey: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID})
+	subID, err := facade.CreateSubmission(&domainsubmission.Submission{SessionKey: "sess-1", WorkspaceID: a.cfg.Workspaces[0].ID})
 	if err != nil || subID == "" {
 		t.Fatalf("CreateSubmission() = %q, %v", subID, err)
 	}
@@ -385,7 +385,7 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

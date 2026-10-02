@@ -3,15 +3,14 @@ package app
 import (
 	"context"
 	"errors"
-	"feidex/internal/domain/conversation"
-	"strings"
-	"testing"
-	"time"
-
 	"feidex/internal/app/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
-	"feidex/internal/state"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"strings"
+	"testing"
+	"time"
 )
 
 func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
@@ -71,7 +70,7 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 		t.Fatalf("sendSubmissionQueuedNotice() body = %q", body)
 	}
 
-	if err := a.store.UpdateSubmission(sub.ID, func(current *state.Submission) {
+	if err := a.store.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) {
 		current.WaitedInQueue = true
 		current.StartNoticeSent = false
 	}); err != nil {

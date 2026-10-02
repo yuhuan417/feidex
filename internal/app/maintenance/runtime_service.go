@@ -6,15 +6,17 @@ package maintenance
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"feidex/internal/app/appcore"
 	appattachments "feidex/internal/app/attachments"
+
 	appfeishuwrap "feidex/internal/app/feishuwrap"
 	"feidex/internal/app/lifecycle"
 	"feidex/internal/config"
@@ -256,7 +258,7 @@ func (s RuntimeMaintenanceService) CleanupAttachmentDir(root string) {
 
 // CleanupSubmissionRuntimeState removes message links, pending requests, turn
 // bindings, and turn item states associated with the given submission.
-func (s RuntimeMaintenanceService) CleanupSubmissionRuntimeState(sub *state.Submission) {
+func (s RuntimeMaintenanceService) CleanupSubmissionRuntimeState(sub *domainsubmission.Submission) {
 	if sub == nil {
 		return
 	}

@@ -1,17 +1,20 @@
 package app
 
 import (
-	appautoretry "feidex/internal/app/autoretry"
-	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
 	"encoding/json"
+	"feidex/internal/app/apputil"
+	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
 
-	"feidex/internal/app/apputil"
 	appbackend "feidex/internal/app/backend"
+
 	appmaintenance "feidex/internal/app/maintenance"
+
 	appturnstream "feidex/internal/app/turnstream"
 	"feidex/internal/codexrpc"
 	"feidex/internal/state"
@@ -91,7 +94,7 @@ func failBackendActiveWork(a *App, backend, scopeSessionKey, scopeThreadID, mess
 	newBackendFailureService(a).FailBackendActiveWork(backend, scopeSessionKey, scopeThreadID, message)
 }
 
-func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *state.Submission, threadID, turnID, message string) {
+func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, message string) {
 	if a == nil || a.store == nil || sub == nil {
 		return
 	}
@@ -108,7 +111,7 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 				AllSessions: func() []*conversation.Session {
 					return a.State().Sessions()
 				},
-				GetSubmission: func(id string) *state.Submission {
+				GetSubmission: func(id string) *domainsubmission.Submission {
 					return a.State().Submission(id)
 				},
 				AllPendingRequests: func() []*state.PendingRequest {
@@ -152,24 +155,24 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 				},
 			},
 			Cards: appbackend.FailureCardDeps{
-				ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
+				ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool {
 					return appautoretry.NewService(a).ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
 				},
-				ReplaceTurnEventCard: func(ctx context.Context, sub *state.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
+				ReplaceTurnEventCard: func(ctx context.Context, sub *domainsubmission.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
 					newOutboundCardService(a).replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
 				},
 				PrependAttentionMention: func(text, userID string) string {
 					return apputil.PrependAttentionMentionMarkdown(text, userID)
 				},
-				TurnStopAttentionUserID: func(sub *state.Submission, turnID string) string {
+				TurnStopAttentionUserID: func(sub *domainsubmission.Submission, turnID string) string {
 					return turnStopAttentionUserID(a, sub, turnID)
 				},
 			},
 			Async: appbackend.FailureAsyncDeps{
-				CleanupSubmissionRuntimeState: func(sub *state.Submission) {
+				CleanupSubmissionRuntimeState: func(sub *domainsubmission.Submission) {
 					appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(sub)
 				},
-				ClearSubmissionProcessingReactions: func(sub *state.Submission) {
+				ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
 					newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 				},
 				StartNextSubmissionAsync: func(sessionKey, reason string) {

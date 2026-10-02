@@ -3,15 +3,16 @@ package clauderuntime
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	appapproval "feidex/internal/app/approval"
+
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
-	"feidex/internal/state"
 )
 
 func TestWithClaudeModelEnv(t *testing.T) {
@@ -118,11 +119,11 @@ func TestHandleBackgroundTaskEventCapturesTargetAndNotifiesOnce(t *testing.T) {
 			},
 		},
 		Lookup: LookupDeps{
-			FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
+			FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
 				if threadID != "thread-1" || turnID != "turn-1" {
 					return "", nil
 				}
-				return "session-1", &state.Submission{
+				return "session-1", &domainsubmission.Submission{
 					SessionKey:       "session-1",
 					WorkspaceID:      "workspace-1",
 					ChatID:           "chat-1",
@@ -189,8 +190,8 @@ func TestHandleBackgroundTaskEventCanNotifyAfterParentSubmissionIsGone(t *testin
 			},
 		},
 		Lookup: LookupDeps{
-			FindSubmissionByTurn: func(string, string) (string, *state.Submission) {
-				return "session-1", &state.Submission{
+			FindSubmissionByTurn: func(string, string) (string, *domainsubmission.Submission) {
+				return "session-1", &domainsubmission.Submission{
 					WorkspaceID:      "workspace-1",
 					ChatID:           "chat-1",
 					TriggerMessageID: "message-1",
@@ -211,7 +212,7 @@ func TestHandleBackgroundTaskEventCanNotifyAfterParentSubmissionIsGone(t *testin
 	})
 	// The parent submission is no longer needed after task_started captured its
 	// delivery target.
-	svc.deps.Lookup.FindSubmissionByTurn = func(string, string) (string, *state.Submission) { return "", nil }
+	svc.deps.Lookup.FindSubmissionByTurn = func(string, string) (string, *domainsubmission.Submission) { return "", nil }
 	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{
 		Subtype: "task_notification",
 		TaskID:  "task-1",
@@ -303,8 +304,8 @@ func TestBackgroundTaskNotificationStillDeliversAfterTurnDuration(t *testing.T) 
 			},
 		},
 		Lookup: LookupDeps{
-			FindSubmissionByTurn: func(string, string) (string, *state.Submission) {
-				return "session-1", &state.Submission{WorkspaceID: "workspace-1", ChatID: "chat-1", TriggerMessageID: "message-1"}
+			FindSubmissionByTurn: func(string, string) (string, *domainsubmission.Submission) {
+				return "session-1", &domainsubmission.Submission{WorkspaceID: "workspace-1", ChatID: "chat-1", TriggerMessageID: "message-1"}
 			},
 		},
 	})
@@ -366,7 +367,7 @@ func TestHandlePermissionDeliversDetachedCardAfterTurnCleanup(t *testing.T) {
 			},
 		},
 		Lookup: LookupDeps{
-			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			FindSubmissionByTurn: func(string, string) (string, *domainsubmission.Submission) { return "", nil },
 			GetSession: func(string) *conversation.Session {
 				return &conversation.Session{
 					Key:            "session-1",
@@ -431,7 +432,7 @@ func TestHandlePermissionDeliversDetachedCardAfterTurnCleanup(t *testing.T) {
 func TestHandlePermissionDeniesWithoutAnyDeliveryTarget(t *testing.T) {
 	svc := NewService(Deps{
 		Lookup: LookupDeps{
-			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			FindSubmissionByTurn: func(string, string) (string, *domainsubmission.Submission) { return "", nil },
 		},
 	})
 	runtimeState := &SessionState{SessionKey: "session-1", SessionID: "thread-1"}
@@ -525,7 +526,7 @@ func TestHandlePermissionWithdrawnRequestExpiresCard(t *testing.T) {
 			},
 		},
 		Lookup: LookupDeps{
-			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			FindSubmissionByTurn: func(string, string) (string, *domainsubmission.Submission) { return "", nil },
 			GetSession:           func(string) *conversation.Session { return &conversation.Session{Key: "session-1", ChatID: "chat-1"} },
 		},
 	})
@@ -613,7 +614,7 @@ func TestHandlePermissionAttributesSubagentRequestToItsTask(t *testing.T) {
 		},
 		Lookup: LookupDeps{
 			// The spawning turn is gone: the task target must still be used.
-			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			FindSubmissionByTurn: func(string, string) (string, *domainsubmission.Submission) { return "", nil },
 			GetSession:           func(string) *conversation.Session { return &conversation.Session{Key: "session-1", ChatID: "chat-new"} },
 		},
 	})
@@ -668,13 +669,13 @@ func TestHandlePermissionAttributesSubagentRequestToItsTask(t *testing.T) {
 func TestHandlePermissionBindsForegroundSubagentToSpawningTurn(t *testing.T) {
 	var (
 		mu           sync.Mutex
-		gotSub       *state.Submission
+		gotSub       *domainsubmission.Submission
 		gotSession   string
 		detachedUsed bool
 	)
 	svc := NewService(Deps{
 		Interactive: InteractiveDeps{
-			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
+			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
 				mu.Lock()
 				gotSession, gotSub = sessionKey, sub
 				mu.Unlock()
@@ -688,9 +689,9 @@ func TestHandlePermissionBindsForegroundSubagentToSpawningTurn(t *testing.T) {
 			},
 		},
 		Lookup: LookupDeps{
-			FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
+			FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
 				if threadID == "thread-old" && turnID == "turn-old" {
-					return "session-1", &state.Submission{
+					return "session-1", &domainsubmission.Submission{
 						ID: "sub-old", SessionKey: "session-1", WorkspaceID: "ws-old",
 						ChatID: "chat-old", TriggerMessageID: "trigger-old", UserID: "user-old",
 						ThreadID: "thread-old", TurnID: "turn-old",
@@ -763,7 +764,7 @@ func TestBackgroundTaskRegisteredWithoutTurnKeepsSessionAnchors(t *testing.T) {
 		},
 		Lookup: LookupDeps{
 			// The resumed task has no submission of its own.
-			FindSubmissionByTurn: func(string, string) (string, *state.Submission) { return "", nil },
+			FindSubmissionByTurn: func(string, string) (string, *domainsubmission.Submission) { return "", nil },
 			GetSession: func(string) *conversation.Session {
 				return &conversation.Session{
 					Key:            "session-1",

@@ -3,13 +3,14 @@ package app
 import (
 	"context"
 	"feidex/internal/app/attachments"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appdelivery "feidex/internal/app/delivery"
 	"feidex/internal/app/quietmode"
-	"log/slog"
-	"strings"
-
 	"feidex/internal/config"
 	"feidex/internal/state"
+	"log/slog"
+	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/channel/outbound"
 )
@@ -54,15 +55,15 @@ type feishuTextReplier interface {
 	ReplyTextWithID(context.Context, string, string, bool) (string, error)
 }
 
-func sendTurnEventMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
+func sendTurnEventMessages(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, inThread bool, kind string) []string {
 	return sendReplyMessages(a, ctx, sub, text, inThread, kind)
 }
 
-func sendReplyMessages(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool, kind string) []string {
+func sendReplyMessages(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, inThread bool, kind string) []string {
 	return sendReplyMessagesWithReuse(a, ctx, sub, text, inThread, kind, "")
 }
 
-func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submission, text string, inThread bool, kind, reuseMessageID string) []string {
+func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, inThread bool, kind, reuseMessageID string) []string {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
@@ -142,7 +143,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *state.Submissi
 	return []string{id}
 }
 
-func sendReplyCardChunksWithReuse(a *App, ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread bool, enablePreview bool, reuseMessageID string) []appdelivery.SentReplyChunk {
+func sendReplyCardChunksWithReuse(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread bool, enablePreview bool, reuseMessageID string) []appdelivery.SentReplyChunk {
 	reuseMessageIDs := []string(nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		reuseMessageIDs = []string{strings.TrimSpace(reuseMessageID)}
@@ -150,7 +151,7 @@ func sendReplyCardChunksWithReuse(a *App, ctx context.Context, sub *state.Submis
 	return sendReplyCardChunksWithReuseIDs(a, ctx, sub, title, color, chunks, inThread, enablePreview, reuseMessageIDs)
 }
 
-func sendReplyCardChunksWithReuseIDs(a *App, ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread bool, enablePreview bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
+func sendReplyCardChunksWithReuseIDs(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread bool, enablePreview bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}

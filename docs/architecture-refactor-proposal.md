@@ -439,6 +439,8 @@ Codex server request
 - submission startup 的纯领域状态和 runtime 并发协调，删除根 App 启动 guard。
 - interaction pending/replied/resolved 转换和阻塞恢复规则；JSON DTO adapter 保留 frontend scope。
 - conversation/session 类型、backend lineage、workspace 切换/恢复校验与活动操作转换；删除 sessionctx、appcore session facade 和根活动操作转发文件。
+- submission aggregate、状态枚举与 queued/running/waiting/terminal 转换已迁入 `internal/domain/submission`；JSON store 只负责持久化和 DTO 拷贝，应用层通过 typed transition 更新状态。
+- conversation queue 的去重、FIFO 出队、活动 turn 阻塞和 pending/idle 状态刷新已迁入 `internal/domain/conversation`；队列存取仍由 JSON store 执行，业务规则不再由 storage 方法决定。
 - Codex lifecycle notification 解码和 request ID 规范化；app router 暂时只负责把 semantic event 交给现有 turn owner。
 
 仍待迁移：conversation 用例编排、完整 submission/turn aggregate、统一 dispatcher、session actor、backend event adapter、Feishu presentation/effect runner，以及旧 serviceFor、宽 App interface 和跨 owner callback 的删除。以上条目完成前不能将整份提案标记为完成。

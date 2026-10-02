@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
 
 	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestCommandPlanOnSavesThreadCollaborationMode(t *testing.T) {
@@ -28,7 +28,7 @@ func TestCommandPlanOnSavesThreadCollaborationMode(t *testing.T) {
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -86,7 +86,7 @@ func TestCommandPlanOnRejectsWhenExperimentalAPIDisabled(t *testing.T) {
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -115,7 +115,7 @@ func TestCommandPlanOnUsesConfiguredPlanModelAndEffort(t *testing.T) {
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -167,7 +167,7 @@ func TestCommandPlanOnLeavesReasoningEffortEmptyWithoutPresetOrOverride(t *testi
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -216,7 +216,7 @@ func TestCommandPlanWithoutArgsTogglesPlanMode(t *testing.T) {
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -298,7 +298,7 @@ func TestCommandPlanOffStoresDefaultModeWhenActiveModeMissing(t *testing.T) {
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -348,7 +348,7 @@ func TestCommandPlanOffStoresConfiguredDefaultModelAndEffort(t *testing.T) {
 			Model:           "gpt-5.5",
 			ReasoningEffort: "xhigh",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -401,7 +401,7 @@ func TestCommandPlanOffDoesNotReuseConfiguredPlanModelAsDefault(t *testing.T) {
 			Model:           "gpt-5.5",
 			ReasoningEffort: "xhigh",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -456,7 +456,7 @@ func TestStartSubmissionTurnIncludesThreadCollaborationMode(t *testing.T) {
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -472,7 +472,7 @@ func TestStartSubmissionTurnIncludesThreadCollaborationMode(t *testing.T) {
 		return nil
 	}
 
-	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
+	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
 	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
@@ -507,7 +507,7 @@ func TestStartSubmissionTurnIncludesDefaultCollaborationModeAfterPlanDisabled(t 
 			Mode:  "default",
 			Model: "gpt-5.4",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -523,7 +523,7 @@ func TestStartSubmissionTurnIncludesDefaultCollaborationModeAfterPlanDisabled(t 
 		return nil
 	}
 
-	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
+	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
 	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
@@ -559,7 +559,7 @@ func TestStartSubmissionTurnFillsConfiguredEffortForStoredDefaultCollaborationMo
 			Mode:  "default",
 			Model: "gpt-5.4",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -575,7 +575,7 @@ func TestStartSubmissionTurnFillsConfiguredEffortForStoredDefaultCollaborationMo
 		return nil
 	}
 
-	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
+	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
 	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
@@ -603,7 +603,7 @@ func TestStartSubmissionTurnOmitsCollaborationModeByDefault(t *testing.T) {
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
 		ActiveThreadID:          "thread-1",
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -619,7 +619,7 @@ func TestStartSubmissionTurnOmitsCollaborationModeByDefault(t *testing.T) {
 		return nil
 	}
 
-	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{
+	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
 	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
@@ -644,7 +644,7 @@ func TestResumeSelectedThreadClearsThreadCollaborationMode(t *testing.T) {
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -690,7 +690,7 @@ func TestForkActiveConversationClearsThreadCollaborationMode(t *testing.T) {
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}

@@ -2,11 +2,12 @@ package app
 
 import (
 	"context"
+	"feidex/internal/app/planmode"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"
 
-	"feidex/internal/app/planmode"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -42,7 +43,7 @@ func (a *App) ContentCardTitleForSession(sessionKey, workspaceID, title string) 
 	return contentCardTitleForSession(a, sessionKey, workspaceID, title)
 }
 
-func contentCardTitleForSubmission(a *App, sub *state.Submission, title string) string {
+func contentCardTitleForSubmission(a *App, sub *domainsubmission.Submission, title string) string {
 	return planmode.ContentCardTitleForSubmission(newPlanModeAppAdapter(a), sub, title)
 }
 
@@ -70,7 +71,7 @@ func invalidateCodexPlanModeExitArtifactsForSession(a *App, sessionKey, reason s
 	planmode.InvalidateCodexPlanModeExitArtifactsForSession(newPlanModeAppAdapter(a), sessionKey, reason)
 }
 
-func processCodexPlanModeExitOnTurnCompleted(a *App, sessionKey string, sub *state.Submission, threadID, turnID, status string, flush turnStreamFlushResult) bool {
+func processCodexPlanModeExitOnTurnCompleted(a *App, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush turnStreamFlushResult) bool {
 	return planmode.ProcessCodexPlanModeExitOnTurnCompleted(newPlanModeAppAdapter(a), sessionKey, sub, threadID, turnID, status, planmode.TurnStreamFlushResult{
 		ShouldUsePlanExitPrompt: flush.ShouldUsePlanExitPrompt,
 		PlanMarkdown:            flush.PlanMarkdown,
@@ -186,11 +187,11 @@ func (a planModeAppAdapter) RunAsync(fn func()) {
 	runAsync(a.App, fn)
 }
 
-func (a planModeAppAdapter) ReplyInThreadForSubmission(sub *state.Submission) bool {
+func (a planModeAppAdapter) ReplyInThreadForSubmission(sub *domainsubmission.Submission) bool {
 	return replyInThreadForSubmission(a.App, sub)
 }
 
-func (a planModeAppAdapter) SendLocalTurnFollowupCard(ctx context.Context, parentMessageID string, card map[string]any, replyInThread bool, sub *state.Submission, kind string) (string, error) {
+func (a planModeAppAdapter) SendLocalTurnFollowupCard(ctx context.Context, parentMessageID string, card map[string]any, replyInThread bool, sub *domainsubmission.Submission, kind string) (string, error) {
 	return sendLocalTurnFollowupCard(ctx, a.App, parentMessageID, card, replyInThread, sub, kind)
 }
 

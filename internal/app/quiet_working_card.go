@@ -2,14 +2,13 @@ package app
 
 import (
 	"context"
+	"feidex/internal/app/turn"
+	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"
-
-	"feidex/internal/app/turn"
-	"feidex/internal/state"
 )
 
-func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *state.Submission, op turn.QuietWorkingCardOp) {
+func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *domainsubmission.Submission, op turn.QuietWorkingCardOp) {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return
 	}

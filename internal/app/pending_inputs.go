@@ -2,8 +2,8 @@ package app
 
 import (
 	"feidex/internal/app/submission"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 const (
@@ -34,7 +34,7 @@ func (s pendingQueueService) shouldStageInboundImages(msg *feishu.InboundMessage
 }
 
 func (s pendingQueueService) stageInboundImagesForSession(msg *feishu.InboundMessage, sessionKey string) error {
-	return s.inner.StageInboundImagesForSession(msg, sessionKey, func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
+	return s.inner.StageInboundImagesForSession(msg, sessionKey, func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 		return resolveInboundAttachments(s.app, msg, workspaceID, sessionKey)
 	})
 }
@@ -52,20 +52,20 @@ func (s pendingQueueService) discardSessionPendingInputs(sessionKey string) int 
 	return s.inner.DiscardSessionPendingInputs(sessionKey)
 }
 
-func (s pendingQueueService) markSubmissionQueuedReactions(sub *state.Submission) {
+func (s pendingQueueService) markSubmissionQueuedReactions(sub *domainsubmission.Submission) {
 	s.inner.MarkSubmissionQueuedReactions(sub)
 }
 
-func (s pendingQueueService) markSubmissionRunningReactions(sub *state.Submission) {
+func (s pendingQueueService) markSubmissionRunningReactions(sub *domainsubmission.Submission) {
 	s.inner.MarkSubmissionRunningReactions(sub)
 }
 
 // Exported wrapper for sub-package interface satisfaction.
-func (s pendingQueueService) ClearSubmissionProcessingReactions(sub *state.Submission) {
+func (s pendingQueueService) ClearSubmissionProcessingReactions(sub *domainsubmission.Submission) {
 	s.clearSubmissionProcessingReactions(sub)
 }
 
-func (s pendingQueueService) clearSubmissionProcessingReactions(sub *state.Submission) {
+func (s pendingQueueService) clearSubmissionProcessingReactions(sub *domainsubmission.Submission) {
 	s.inner.ClearSubmissionProcessingReactions(sub)
 }
 

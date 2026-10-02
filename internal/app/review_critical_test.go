@@ -2,13 +2,14 @@ package app
 
 import (
 	"context"
-	appreview "feidex/internal/app/review"
-	appreviewcmd "feidex/internal/app/reviewcmd"
-	"testing"
+	domainsubmission "feidex/internal/domain/submission"
 
+	appreview "feidex/internal/app/review"
+
+	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
+	"testing"
 )
 
 func TestReviewTargetResolutionAndSubmissionPayloads(t *testing.T) {
@@ -82,7 +83,7 @@ func TestStartSubmissionReviewUsesStoredTargetPayload(t *testing.T) {
 		return nil
 	}
 
-	turnID, err := appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a), context.Background(), "thread-1", &state.Submission{
+	turnID, err := appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a), context.Background(), "thread-1", &domainsubmission.Submission{
 		Kind:              submissionKindReview,
 		ReviewTargetType:  appreview.TargetCommit,
 		ReviewCommitSHA:   "abcdef1234567890",

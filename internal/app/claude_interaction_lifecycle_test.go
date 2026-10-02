@@ -1,11 +1,14 @@
 package app
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
 
 	appapproval "feidex/internal/app/approval"
+
 	appclauderuntime "feidex/internal/app/clauderuntime"
+
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -33,7 +36,7 @@ func newClaudeInteractionPending(t *testing.T, a *App, id, kind, status string) 
 // answerable: the CLI is still waiting for the control response.
 func TestClaudeInteractionPendingSurvivesTurnCleanup(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID: "sub-1", SessionKey: "feishu:chat:chat-1", WorkspaceID: "default",
 		ThreadID: "claude-thread-1", TurnID: "claude-turn-1",
 	})
@@ -54,7 +57,7 @@ func TestClaudeInteractionPendingSurvivesTurnCleanup(t *testing.T) {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
 
-	appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&state.Submission{
+	appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&domainsubmission.Submission{
 		ID: subID, SessionKey: "feishu:chat:chat-1", ThreadID: "claude-thread-1", TurnID: "claude-turn-1",
 	})
 
@@ -84,7 +87,7 @@ func TestClaudeApprovalCardAnswerableAfterTurnCleanup(t *testing.T) {
 	a.claude = claude
 	newClaudeInteractionPending(t, a, "claude-approval-2", "command", state.PendingRequestStatusPending.String())
 
-	appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&state.Submission{
+	appmaintenance.NewRuntimeMaintenanceService(a).CleanupSubmissionRuntimeState(&domainsubmission.Submission{
 		ID: "sub-2", SessionKey: "feishu:chat:chat-1", ThreadID: "claude-thread-1", TurnID: "claude-turn-1",
 	})
 

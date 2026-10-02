@@ -2,14 +2,15 @@ package planmode
 
 import (
 	"encoding/json"
+	"feidex/internal/app/appcore"
+	"feidex/internal/app/lifecycle"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
-	"feidex/internal/app/appcore"
-	"feidex/internal/app/lifecycle"
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -169,7 +170,7 @@ func SessionHasPlanExitBlockers(a App, sess *conversation.Session) bool {
 	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 		return true
 	}
-	if state.NormalizeSessionStatus(appcore.FirstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String())) != state.SessionStatusIdle {
+	if conversation.NormalizeSessionStatus(appcore.FirstNonEmpty(strings.TrimSpace(sess.Status), conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
 		return true
 	}
 	return false
@@ -194,14 +195,14 @@ func InvalidateCodexPlanModeExitArtifactsForSession(a App, sessionKey, reason st
 	}
 }
 
-func ProcessCodexPlanModeExitOnTurnCompleted(a App, sessionKey string, sub *state.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool {
+func ProcessCodexPlanModeExitOnTurnCompleted(a App, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool {
 	if a == nil || sub == nil {
 		return false
 	}
 	if appcore.ConfiguredBackend(a) != BackendCodex {
 		return false
 	}
-	if strings.TrimSpace(status) != state.SubmissionStatusCompleted.String() {
+	if strings.TrimSpace(status) != domainsubmission.SubmissionStatusCompleted.String() {
 		return false
 	}
 	if !flush.ShouldUsePlanExitPrompt {
@@ -246,7 +247,7 @@ func ProcessCodexPlanModeExitOnTurnCompleted(a App, sessionKey string, sub *stat
 	return true
 }
 
-func sendCodexPlanModeExitPrompt(a App, sub *state.Submission, planMarkdown, reuseMessageID string) error {
+func sendCodexPlanModeExitPrompt(a App, sub *domainsubmission.Submission, planMarkdown, reuseMessageID string) error {
 	if a == nil || a.Feishu() == nil || sub == nil {
 		return fmt.Errorf("plan mode exit prompt unavailable")
 	}
@@ -342,7 +343,7 @@ func CompleteCodexPlanModeExit(a App, action *feishu.CardAction, actionName stri
 	}, nil
 }
 
-func sendCodexPlanModeExitFollowupCard(a App, pending *state.PendingRequest, action *feishu.CardAction, card map[string]any, sub *state.Submission) error {
+func sendCodexPlanModeExitFollowupCard(a App, pending *state.PendingRequest, action *feishu.CardAction, card map[string]any, sub *domainsubmission.Submission) error {
 	if a == nil || a.Feishu() == nil || pending == nil || card == nil {
 		return fmt.Errorf("plan mode exit follow-up unavailable")
 	}
@@ -363,7 +364,7 @@ func sendCodexPlanModeExitFollowupCard(a App, pending *state.PendingRequest, act
 	return err
 }
 
-func runCodexPlanModeExitAction(a App, actionName string, pending *state.PendingRequest, action *feishu.CardAction) (*callback.CardActionTriggerResponse, *state.Submission, error) {
+func runCodexPlanModeExitAction(a App, actionName string, pending *state.PendingRequest, action *feishu.CardAction) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
 	if a == nil || pending == nil || action == nil {
 		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
@@ -390,7 +391,7 @@ func runCodexPlanModeExitAction(a App, actionName string, pending *state.Pending
 	}
 }
 
-func codexPlanModeExitImplementCurrent(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *state.Submission, error) {
+func codexPlanModeExitImplementCurrent(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
 	if a == nil || pending == nil {
 		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
@@ -443,7 +444,7 @@ func codexPlanModeExitImplementCurrent(a App, pending *state.PendingRequest) (*c
 	}, startedSub, nil
 }
 
-func codexPlanModeExitImplementFresh(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *state.Submission, error) {
+func codexPlanModeExitImplementFresh(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
 	if a == nil || pending == nil {
 		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
@@ -509,7 +510,7 @@ func codexPlanModeExitImplementFresh(a App, pending *state.PendingRequest) (*cal
 	}, startedSub, nil
 }
 
-func codexPlanModeExitStay(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *state.Submission, error) {
+func codexPlanModeExitStay(a App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, *domainsubmission.Submission, error) {
 	if a == nil || pending == nil {
 		return nil, nil, fmt.Errorf("plan confirmation unavailable")
 	}
@@ -527,7 +528,7 @@ func codexPlanModeExitStay(a App, pending *state.PendingRequest) (*callback.Card
 	}, nil, nil
 }
 
-func createCodexPlanModeExitSubmission(a App, pending *state.PendingRequest, inputText string) (*state.Submission, error) {
+func createCodexPlanModeExitSubmission(a App, pending *state.PendingRequest, inputText string) (*domainsubmission.Submission, error) {
 	if a == nil || pending == nil {
 		return nil, fmt.Errorf("plan confirmation unavailable")
 	}
@@ -535,7 +536,7 @@ func createCodexPlanModeExitSubmission(a App, pending *state.PendingRequest, inp
 	if sess == nil {
 		return nil, fmt.Errorf("session not found")
 	}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           strings.TrimSpace(pending.SessionKey),
 		WorkspaceID:          appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), appcore.DefaultWorkspaceID(a)),
 		ThreadID:             strings.TrimSpace(sess.ActiveThreadID),
@@ -545,7 +546,7 @@ func createCodexPlanModeExitSubmission(a App, pending *state.PendingRequest, inp
 		SourceMessageIDs:     appsubmission.UniqueStrings([]string{strings.TrimSpace(appcore.FirstNonEmpty(pending.FeishuMsgID, sess.RootMessageID))}),
 		SourceRootMessageIDs: appsubmission.UniqueStrings([]string{strings.TrimSpace(appcore.FirstNonEmpty(sess.RootMessageID, pending.FeishuMsgID))}),
 		InputText:            strings.TrimSpace(inputText),
-		Status:               state.SubmissionStatusQueued.String(),
+		Status:               domainsubmission.SubmissionStatusQueued.String(),
 	}
 	id, err := a.State().CreateSubmission(sub)
 	if err != nil {

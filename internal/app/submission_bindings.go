@@ -1,15 +1,19 @@
 package app
 
 import (
-	appautoretry "feidex/internal/app/autoretry"
-	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
+	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/domain/conversation"
 	"strings"
 
 	appconvbackend "feidex/internal/app/convbackend"
+
 	appmaintenance "feidex/internal/app/maintenance"
+
 	appreviewcmd "feidex/internal/app/reviewcmd"
+
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -33,7 +37,7 @@ type sqConversationBackendAdapter struct {
 	facade appconvbackend.ConversationBackendFacade
 }
 
-func (a sqConversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (a sqConversationBackendAdapter) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 	if a.facade == nil {
 		return nil
 	}
@@ -102,7 +106,7 @@ func (a submissionAppAdapter) SubmissionQueueWorkspace(id string) *config.Worksp
 func (a submissionAppAdapter) SubmissionQueueReplyInThreadEnabled(chatType string) bool {
 	return replyInThreadEnabled(a.app, chatType)
 }
-func (a submissionAppAdapter) SubmissionQueueReplyInThreadForSubmission(sub *state.Submission) bool {
+func (a submissionAppAdapter) SubmissionQueueReplyInThreadForSubmission(sub *domainsubmission.Submission) bool {
 	return replyInThreadForSubmission(a.app, sub)
 }
 func (a submissionAppAdapter) SubmissionQueueConfiguredInflightMode() appsubmission.QueueInflightMode {
@@ -139,10 +143,10 @@ func intToInflightMode(m appsubmission.QueueInflightMode) sessionInflightMode {
 func (a submissionAppAdapter) SubmissionQueueReplyText(ctx context.Context, messageID, text string, inThread bool) error {
 	return a.app.feishu.ReplyText(ctx, messageID, text, inThread)
 }
-func (a submissionAppAdapter) SubmissionQueueSendQueuedNotice(ctx context.Context, sub *state.Submission) {
+func (a submissionAppAdapter) SubmissionQueueSendQueuedNotice(ctx context.Context, sub *domainsubmission.Submission) {
 	sendSubmissionQueuedNotice(a.app, ctx, sub)
 }
-func (a submissionAppAdapter) SubmissionQueueSendStartFailureNotice(ctx context.Context, sub *state.Submission, err error, willContinue bool) {
+func (a submissionAppAdapter) SubmissionQueueSendStartFailureNotice(ctx context.Context, sub *domainsubmission.Submission, err error, willContinue bool) {
 	// Delegates to the coordinator method.
 	newSubmissionCoordinator(a.app).notifySubmissionStartFailure(ctx, sub, err, willContinue)
 }
@@ -158,22 +162,22 @@ func (a submissionAppAdapter) SubmissionQueueFinishStart(sessionKey string) bool
 func (a submissionAppAdapter) SubmissionQueueLogSessionState(event, sessionKey string, sess *conversation.Session) {
 	logSessionState(event, sessionKey, sess)
 }
-func (a submissionAppAdapter) SubmissionQueueMarkSubmissionQueuedReactions(sub *state.Submission) {
+func (a submissionAppAdapter) SubmissionQueueMarkSubmissionQueuedReactions(sub *domainsubmission.Submission) {
 	newPendingQueueService(a.app).markSubmissionQueuedReactions(sub)
 }
-func (a submissionAppAdapter) SubmissionQueueMarkSubmissionRunningReactions(sub *state.Submission) {
+func (a submissionAppAdapter) SubmissionQueueMarkSubmissionRunningReactions(sub *domainsubmission.Submission) {
 	newPendingQueueService(a.app).markSubmissionRunningReactions(sub)
 }
-func (a submissionAppAdapter) SubmissionQueueClearSubmissionProcessingReactions(sub *state.Submission) {
+func (a submissionAppAdapter) SubmissionQueueClearSubmissionProcessingReactions(sub *domainsubmission.Submission) {
 	newPendingQueueService(a.app).clearSubmissionProcessingReactions(sub)
 }
-func (a submissionAppAdapter) SubmissionQueueIsReviewSubmission(sub *state.Submission) bool {
+func (a submissionAppAdapter) SubmissionQueueIsReviewSubmission(sub *domainsubmission.Submission) bool {
 	return appreviewcmd.IsReviewSubmission(sub)
 }
-func (a submissionAppAdapter) SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
+func (a submissionAppAdapter) SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *domainsubmission.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
 	return startSubmissionTurn(a.app, ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode)
 }
-func (a submissionAppAdapter) SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error) {
+func (a submissionAppAdapter) SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error) {
 	return appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a.app), ctx, threadID, sub)
 }
 func (a submissionAppAdapter) SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *conversation.Session, model string) codexrpc.ThreadStartParams {
@@ -212,7 +216,7 @@ func (a submissionAppAdapter) SubmissionQueueDeletePendingRequests(match func(*s
 func (a submissionAppAdapter) SubmissionQueueDeleteMessageLinks(match func(*state.MessageLink) bool) {
 	a.app.State().DeleteMessageLinks(match)
 }
-func (a submissionAppAdapter) SubmissionQueueUpdateSubmission(id string, mutate func(*state.Submission)) error {
+func (a submissionAppAdapter) SubmissionQueueUpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error {
 	return a.app.State().UpdateSubmission(id, mutate)
 }
 func (a submissionAppAdapter) SubmissionQueueSessions() []*conversation.Session {
@@ -241,7 +245,7 @@ func (a claudeClientAdapter) StartSteerTurn(ctx context.Context, sessionKey, thr
 
 type sqSkillResolverAdapter struct{ app *App }
 
-func (a sqSkillResolverAdapter) ResolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []state.SubmissionAttachment) appsubmission.QueueSkillResolution {
+func (a sqSkillResolverAdapter) ResolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []domainsubmission.SubmissionAttachment) appsubmission.QueueSkillResolution {
 	resolution := newSkillsService(a.app).ResolveSubmissionSkill(sessionKey, workspaceID, inputText, attachments)
 	return appsubmission.QueueSkillResolution{
 		InputText:          resolution.InputText,
@@ -250,7 +254,7 @@ func (a sqSkillResolverAdapter) ResolveSubmissionSkill(sessionKey, workspaceID, 
 		PendingReplacement: resolution.PendingReplacement,
 	}
 }
-func (a sqSkillResolverAdapter) SetSessionPendingSkill(sessionKey string, skill state.SubmissionSkill) {
+func (a sqSkillResolverAdapter) SetSessionPendingSkill(sessionKey string, skill domainsubmission.SubmissionSkill) {
 	newSkillsService(a.app).SetSessionPendingSkill(sessionKey, skill)
 }
 func (a sqSkillResolverAdapter) ClearSessionPendingSkill(sessionKey string) {
@@ -259,7 +263,7 @@ func (a sqSkillResolverAdapter) ClearSessionPendingSkill(sessionKey string) {
 
 type sqAttachmentResolverFullAdapter struct{ app *App }
 
-func (a sqAttachmentResolverFullAdapter) ResolveInboundAttachments(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
+func (a sqAttachmentResolverFullAdapter) ResolveInboundAttachments(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 	return resolveInboundAttachments(a.app, msg, workspaceID, sessionKey)
 }
 

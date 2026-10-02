@@ -2,16 +2,18 @@ package planmode
 
 import (
 	"context"
+	"feidex/internal/app/appcore"
+	"feidex/internal/app/modelconfig"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
-	"feidex/internal/app/appcore"
-	"feidex/internal/app/modelconfig"
 	appruntime "feidex/internal/app/runtime"
+
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -37,9 +39,9 @@ type StateProvider interface {
 	SavePending(req *state.PendingRequest) error
 	UpdatePending(id string, mutate func(*state.PendingRequest)) error
 	NextLocalID(prefix string) (string, error)
-	CreateSubmission(sub *state.Submission) (string, error)
+	CreateSubmission(sub *domainsubmission.Submission) (string, error)
 	QueueSubmission(sessionKey, submissionID string) error
-	Submission(id string) *state.Submission
+	Submission(id string) *domainsubmission.Submission
 }
 
 type App interface {
@@ -57,8 +59,8 @@ type App interface {
 	SessionHasActiveWork(sess *conversation.Session) bool
 	ActionStringValue(action *feishu.CardAction, key string) string
 	RunAsync(fn func())
-	ReplyInThreadForSubmission(sub *state.Submission) bool
-	SendLocalTurnFollowupCard(ctx context.Context, parentMessageID string, card map[string]any, replyInThread bool, sub *state.Submission, kind string) (string, error)
+	ReplyInThreadForSubmission(sub *domainsubmission.Submission) bool
+	SendLocalTurnFollowupCard(ctx context.Context, parentMessageID string, card map[string]any, replyInThread bool, sub *domainsubmission.Submission, kind string) (string, error)
 	StartNextSubmission(sessionKey string) error
 	StartWorkspaceThread(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error)
 }
@@ -335,7 +337,7 @@ func PlanModeTitleForSession(a App, sessionKey, title string) string {
 	return prependTitlePrefix(title, "[plan]")
 }
 
-func ContentCardTitleForSubmission(a App, sub *state.Submission, title string) string {
+func ContentCardTitleForSubmission(a App, sub *domainsubmission.Submission, title string) string {
 	if sub == nil {
 		return strings.TrimSpace(title)
 	}

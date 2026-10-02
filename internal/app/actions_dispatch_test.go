@@ -1,15 +1,17 @@
 package app
 
 import (
-	appservicetiercmd "feidex/internal/app/servicetiercmd"
-	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
 	"encoding/json"
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 	"os"
 	"testing"
 
 	appupgradecmd "feidex/internal/app/upgradecmd"
+
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -77,7 +79,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-2) error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       "sess-1",
 		WorkspaceID:      "default",

@@ -3,9 +3,12 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 
 	appcore "feidex/internal/app/appcore"
+
 	appreview "feidex/internal/app/review"
+
 	appreviewcmd "feidex/internal/app/reviewcmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -101,11 +104,11 @@ func (a reviewAppAdapter) ReviewStartNextSubmission(sessionKey string) error {
 	return startNextSubmission(a.App, sessionKey)
 }
 
-func (a reviewAppAdapter) ReviewSendSubmissionQueuedNotice(ctx context.Context, sub *state.Submission) {
+func (a reviewAppAdapter) ReviewSendSubmissionQueuedNotice(ctx context.Context, sub *domainsubmission.Submission) {
 	sendSubmissionQueuedNotice(a.App, ctx, sub)
 }
 
-func (a reviewAppAdapter) ReviewMarkSubmissionQueuedReactions(sub *state.Submission) {
+func (a reviewAppAdapter) ReviewMarkSubmissionQueuedReactions(sub *domainsubmission.Submission) {
 	newPendingQueueService(a.App).markSubmissionQueuedReactions(sub)
 }
 

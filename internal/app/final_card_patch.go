@@ -1,8 +1,9 @@
 package app
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
+
 	appfinalcardpatch "feidex/internal/app/finalcardpatch"
-	"feidex/internal/state"
 )
 
 // Type aliases preserve the original names within the app package.
@@ -25,7 +26,7 @@ func newFinalCardPatchService(app *App) finalCardPatchService {
 	})
 }
 
-func (s finalCardPatchService) registerFinalCardPatchState(messageID string, sub *state.Submission, title, color string, showHeader bool, body string, footerLines []string) {
+func (s finalCardPatchService) registerFinalCardPatchState(messageID string, sub *domainsubmission.Submission, title, color string, showHeader bool, body string, footerLines []string) {
 	s.svc.RegisterFinalCardPatchState(messageID, sub, title, color, showHeader, body, footerLines)
 }
 

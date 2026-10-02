@@ -1,12 +1,15 @@
 package app
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
+
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
+
 	appfeishuwrap "feidex/internal/app/feishuwrap"
-	appservicetiercmd "feidex/internal/app/servicetiercmd"
-	"feidex/internal/domain/conversation"
 
 	"context"
+	appservicetiercmd "feidex/internal/app/servicetiercmd"
+	"feidex/internal/domain/conversation"
 	"io"
 	"log/slog"
 	"strings"
@@ -71,7 +74,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("upsert session: %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-queued",
 		SessionKey:       "feishu:chat:chat",
 		WorkspaceID:      "default",
@@ -173,7 +176,7 @@ func TestHandleCommandWorkspaceUseClearsIdleThreadLineage(t *testing.T) {
 			Model:           "gpt-5.4",
 			ReasoningEffort: "high",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("upsert session: %v", err)
 	}

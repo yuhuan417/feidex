@@ -1,12 +1,11 @@
 package attachments
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"feidex/internal/state"
 )
 
 func TestAttachmentHelpers(t *testing.T) {
@@ -28,12 +27,12 @@ func TestAttachmentHelpers(t *testing.T) {
 		t.Fatalf("ShortHash() length = %d, want 24", len(ShortHash("value")))
 	}
 
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		InputText: "hello",
-		Skills: []state.SubmissionSkill{
+		Skills: []domainsubmission.SubmissionSkill{
 			{Name: "openai-docs", Path: "/skills/openai-docs"},
 		},
-		Attachments: []state.SubmissionAttachment{
+		Attachments: []domainsubmission.SubmissionAttachment{
 			{Kind: "image", LocalPath: "/tmp/image.png"},
 			{Kind: "file", LocalPath: "/tmp/doc.txt"},
 			{Kind: "audio", LocalPath: "/tmp/audio.wav"},
@@ -46,19 +45,19 @@ func TestAttachmentHelpers(t *testing.T) {
 	if inputs[0]["name"] != "openai-docs" || inputs[0]["path"] != "/skills/openai-docs" {
 		t.Fatalf("BuildTurnInputs() skill item = %+v, want name/path", inputs[0])
 	}
-	if got := AttachmentPrompt(state.SubmissionAttachment{Kind: "audio", LocalPath: "/tmp/a.wav"}); !strings.Contains(got, "audio file") {
+	if got := AttachmentPrompt(domainsubmission.SubmissionAttachment{Kind: "audio", LocalPath: "/tmp/a.wav"}); !strings.Contains(got, "audio file") {
 		t.Fatalf("AttachmentPrompt(audio) = %q, want audio text", got)
 	}
-	if got := AttachmentPrompt(state.SubmissionAttachment{}); got != "" {
+	if got := AttachmentPrompt(domainsubmission.SubmissionAttachment{}); got != "" {
 		t.Fatalf("AttachmentPrompt(empty) = %q, want empty", got)
 	}
 
-	preview := SubmissionInputPreview(&state.Submission{
+	preview := SubmissionInputPreview(&domainsubmission.Submission{
 		InputText: "Question",
-		Skills: []state.SubmissionSkill{
+		Skills: []domainsubmission.SubmissionSkill{
 			{Name: "openai-docs", Path: "/skills/openai-docs"},
 		},
-		Attachments: []state.SubmissionAttachment{
+		Attachments: []domainsubmission.SubmissionAttachment{
 			{Kind: "image", Name: "pic.png"},
 			{Kind: "file", LocalPath: "/tmp/report.pdf"},
 		},
@@ -66,7 +65,7 @@ func TestAttachmentHelpers(t *testing.T) {
 	if !strings.Contains(preview, "[skill] openai-docs") || !strings.Contains(preview, "Question") || !strings.Contains(preview, "[图片] pic.png") || !strings.Contains(preview, "[文件] report.pdf") {
 		t.Fatalf("SubmissionInputPreview() = %q, want skill, text and attachment previews", preview)
 	}
-	if got := SubmissionInputPreview(&state.Submission{}); got != "-" {
+	if got := SubmissionInputPreview(&domainsubmission.Submission{}); got != "-" {
 		t.Fatalf("SubmissionInputPreview(empty) = %q, want -", got)
 	}
 

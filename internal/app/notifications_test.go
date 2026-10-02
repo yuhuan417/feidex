@@ -3,18 +3,20 @@ package app
 import (
 	"encoding/json"
 	"feidex/internal/app/pendingforms"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appturnlifecycle "feidex/internal/app/turnlifecycle"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
 	"path/filepath"
 
 	appapproval "feidex/internal/app/approval"
+
 	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/app/turnitem"
+	"feidex/internal/state"
 	"strings"
 	"testing"
-
-	"feidex/internal/state"
 )
 
 func TestNormalizeCardMarkdownOnlyTrimsWhitespace(t *testing.T) {
@@ -102,7 +104,7 @@ func TestTurnStartedNotificationRebindsPendingSubmission(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("upsert session: %v", err)
 	}
-	_, err = a.store.CreateSubmission(&state.Submission{
+	_, err = a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:          "sub-1",
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
@@ -145,7 +147,7 @@ func TestFindSubmissionByTurnFallsBackToActiveSubmissionOnThread(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("upsert session: %v", err)
 	}
-	_, err = a.store.CreateSubmission(&state.Submission{
+	_, err = a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:          "sub-1",
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",

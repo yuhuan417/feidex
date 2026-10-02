@@ -2,14 +2,13 @@ package submission
 
 import (
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
-
-	"feidex/internal/state"
 )
 
 // FindSubmissionByTurn finds the submission associated with a given turn or
 // thread. Returns the session key and submission, or ("", nil) if not found.
-func (s SubmissionQueueService) FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
+func (s SubmissionQueueService) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	runtimeState := a.SubmissionQueueRuntimeState()
@@ -53,7 +52,7 @@ func (s SubmissionQueueService) FindSubmissionByTurn(threadID, turnID string) (s
 
 // UpdateSubmissionByTurn finds the submission for the given turn/thread and
 // applies the mutation. No-op if the submission is not found.
-func (s SubmissionQueueService) UpdateSubmissionByTurn(threadID, turnID string, mutate func(*state.Submission)) {
+func (s SubmissionQueueService) UpdateSubmissionByTurn(threadID, turnID string, mutate func(*domainsubmission.Submission)) {
 	appState := s.App.SubmissionQueueAppState()
 	_, sub := s.FindSubmissionByTurn(threadID, turnID)
 	if sub == nil {

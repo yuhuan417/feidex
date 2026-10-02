@@ -197,7 +197,7 @@ func SetWorkspaceSelection(a AppConfig, chatType, chatID, userID, workspaceID st
 			ChatID:      strings.TrimSpace(chatID),
 			ChatType:    strings.TrimSpace(chatType),
 			OwnerUserID: selectionOwner,
-			Status:      state.SessionStatusIdle.String(),
+			Status:      conversation.SessionStatusIdle.String(),
 		}
 	}
 	sess.ChatID = strings.TrimSpace(chatID)
@@ -256,5 +256,5 @@ func firstNonEmptySessionStatus(current string) string {
 	if strings.TrimSpace(current) != "" {
 		return strings.TrimSpace(current)
 	}
-	return state.SessionStatusIdle.String()
+	return conversation.SessionStatusIdle.String()
 }

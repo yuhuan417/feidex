@@ -8,6 +8,8 @@ import (
 	"errors"
 	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"fmt"
 	"log/slog"
@@ -17,9 +19,13 @@ import (
 
 	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/apputil"
+
 	appdelivery "feidex/internal/app/delivery"
+
 	apppendingforms "feidex/internal/app/pendingforms"
+
 	appruntime "feidex/internal/app/runtime"
+
 	appturn "feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/claudecli"
@@ -156,7 +162,7 @@ type InteractionTarget struct {
 	UserID           string
 	ThreadID         string
 	TurnID           string
-	Submission       *state.Submission
+	Submission       *domainsubmission.Submission
 }
 
 // Detached reports whether the request outlived the submission that produced it.
@@ -178,7 +184,7 @@ type TurnStreamDeps struct {
 	RecordTurnError                func(threadID, turnID, message string)
 	CompleteTurnItem               func(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem)
 	PrepareTurnStreamQuietBoundary func(turnID string) (reuseMessageID string)
-	PrepareTurnStreamQuietUpdate   func(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp
+	PrepareTurnStreamQuietUpdate   func(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp
 	MarkTurnStreamFinal            func(turnID string)
 }
 
@@ -190,19 +196,19 @@ type UsageDeps struct {
 }
 
 type DeliveryDeps struct {
-	ExecuteQuietWorkingCardOp      func(ctx context.Context, sub *state.Submission, op appturn.QuietWorkingCardOp)
+	ExecuteQuietWorkingCardOp      func(ctx context.Context, sub *domainsubmission.Submission, op appturn.QuietWorkingCardOp)
 	UpdateOutputSegment            func(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool)
 	FinalizeOutputSegment          func(ctx context.Context, threadID, turnID, body string) bool
-	SendFinalMessages              func(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk
-	ReplyInThread                  func(sub *state.Submission) bool
+	SendFinalMessages              func(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk
+	ReplyInThread                  func(sub *domainsubmission.Submission) bool
 	SendBackgroundTaskNotification func(context.Context, BackgroundTaskTarget, claudecli.BackgroundTaskEvent)
 }
 
 type InteractiveDeps struct {
-	SendClaudeApprovalCard      func(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error
-	SendClaudeUserInputCard     func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
-	SendClaudeUserInputFormCard func(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error
-	SendClaudePlanModeCard      func(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error
+	SendClaudeApprovalCard      func(requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error
+	SendClaudeUserInputCard     func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error
+	SendClaudeUserInputFormCard func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error
+	SendClaudePlanModeCard      func(requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error
 	// Detached variants deliver cards for requests whose producing turn is
 	// already gone (background agents outlive their parent submission).
 	SendDetachedApprovalCard      func(requestID string, target InteractionTarget, presentation appapproval.Presentation) error
@@ -216,7 +222,7 @@ type InteractiveDeps struct {
 }
 
 type LookupDeps struct {
-	FindSubmissionByTurn func(threadID, turnID string) (string, *state.Submission)
+	FindSubmissionByTurn func(threadID, turnID string) (string, *domainsubmission.Submission)
 	GetSession           func(sessionKey string) *conversation.Session
 	SessionHasActiveOps  func(sess *conversation.Session) bool
 	NextLocalID          func(prefix string) (string, error)
@@ -322,11 +328,11 @@ func (s *Service) PrepareTurnStreamQuietBoundary(turnID string) string {
 	return s.deps.TurnStream.PrepareTurnStreamQuietBoundary(turnID)
 }
 
-func (s *Service) PrepareTurnStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp {
+func (s *Service) PrepareTurnStreamQuietUpdate(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item map[string]any, workspaceCwd string) appturn.QuietWorkingCardOp {
 	return s.PrepareTurnStreamQuietUpdatePayload(sessionKey, sub, threadID, itemID, turnitem.NewProtocolItemWithID(itemID, item), workspaceCwd)
 }
 
-func (s *Service) PrepareTurnStreamQuietUpdatePayload(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp {
+func (s *Service) PrepareTurnStreamQuietUpdatePayload(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) appturn.QuietWorkingCardOp {
 	if s == nil || s.deps.TurnStream.PrepareTurnStreamQuietUpdate == nil {
 		return appturn.QuietWorkingCardOp{}
 	}
@@ -364,7 +370,7 @@ func (s *Service) TurnFinalFooterLines(turnID string, completedAt time.Time) []s
 	return s.deps.Usage.TurnFinalFooterLines(turnID, completedAt)
 }
 
-func (s *Service) ExecuteQuietWorkingCardOp(ctx context.Context, sub *state.Submission, op appturn.QuietWorkingCardOp) {
+func (s *Service) ExecuteQuietWorkingCardOp(ctx context.Context, sub *domainsubmission.Submission, op appturn.QuietWorkingCardOp) {
 	if s != nil && s.deps.Delivery.ExecuteQuietWorkingCardOp != nil {
 		s.deps.Delivery.ExecuteQuietWorkingCardOp(ctx, sub, op)
 	}
@@ -384,14 +390,14 @@ func (s *Service) FinalizeOutputSegment(ctx context.Context, threadID, turnID, b
 	return s.deps.Delivery.FinalizeOutputSegment(ctx, threadID, turnID, body)
 }
 
-func (s *Service) SendFinalMessages(ctx context.Context, sub *state.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
+func (s *Service) SendFinalMessages(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
 	if s == nil || s.deps.Delivery.SendFinalMessages == nil {
 		return nil
 	}
 	return s.deps.Delivery.SendFinalMessages(ctx, sub, text, footerLines, inThread, reuseMessageIDs)
 }
 
-func (s *Service) ReplyInThread(sub *state.Submission) bool {
+func (s *Service) ReplyInThread(sub *domainsubmission.Submission) bool {
 	if s == nil || s.deps.Delivery.ReplyInThread == nil {
 		return false
 	}
@@ -404,35 +410,35 @@ func (s *Service) SendBackgroundTaskNotification(ctx context.Context, target Bac
 	}
 }
 
-func (s *Service) SendClaudeApprovalCard(requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
+func (s *Service) SendClaudeApprovalCard(requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
 	if s == nil || s.deps.Interactive.SendClaudeApprovalCard == nil {
 		return fmt.Errorf("approval card delivery unavailable")
 	}
 	return s.deps.Interactive.SendClaudeApprovalCard(requestID, sessionKey, sub, presentation)
 }
 
-func (s *Service) SendClaudeUserInputCard(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error {
+func (s *Service) SendClaudeUserInputCard(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
 	if s == nil || s.deps.Interactive.SendClaudeUserInputCard == nil {
 		return fmt.Errorf("question card delivery unavailable")
 	}
 	return s.deps.Interactive.SendClaudeUserInputCard(requestID, sessionKey, sub, payload)
 }
 
-func (s *Service) SendClaudeUserInputFormCard(requestID, sessionKey string, sub *state.Submission, payload apppendingforms.ToolUserInputPayload) error {
+func (s *Service) SendClaudeUserInputFormCard(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
 	if s == nil || s.deps.Interactive.SendClaudeUserInputFormCard == nil {
 		return fmt.Errorf("question card delivery unavailable")
 	}
 	return s.deps.Interactive.SendClaudeUserInputFormCard(requestID, sessionKey, sub, payload)
 }
 
-func (s *Service) SendClaudePlanModeCard(requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error {
+func (s *Service) SendClaudePlanModeCard(requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error {
 	if s == nil || s.deps.Interactive.SendClaudePlanModeCard == nil {
 		return fmt.Errorf("plan card delivery unavailable")
 	}
 	return s.deps.Interactive.SendClaudePlanModeCard(requestID, sessionKey, sub, threadID, turnID, body)
 }
 
-func (s *Service) FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
+func (s *Service) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
 	if s == nil || s.deps.Lookup.FindSubmissionByTurn == nil {
 		return "", nil
 	}
@@ -1899,7 +1905,7 @@ func (s *Service) currentTurnID(state *SessionState) (threadID, turnID string) {
 // gone (background agents, or a turn that completed while the user was
 // deciding) the session's durable Feishu anchors are used instead, so the
 // request is still shown to the user rather than denied.
-func (s *Service) interactionTarget(state *SessionState, sessionKey string, sub *state.Submission, threadID, turnID string) InteractionTarget {
+func (s *Service) interactionTarget(state *SessionState, sessionKey string, sub *domainsubmission.Submission, threadID, turnID string) InteractionTarget {
 	target := InteractionTarget{
 		SessionKey: strings.TrimSpace(sessionKey),
 		ThreadID:   strings.TrimSpace(threadID),
@@ -2287,7 +2293,7 @@ func (s *Service) approvalPresentation(workspaceID string, req *claudecli.Permis
 // Quiet working card helpers
 // ---------------------------------------------------------------------------
 
-func (s *Service) prepareQuietWorkingBoundary(threadID, turnID string) (*state.Submission, string) {
+func (s *Service) prepareQuietWorkingBoundary(threadID, turnID string) (*domainsubmission.Submission, string) {
 	if s == nil || strings.TrimSpace(turnID) == "" {
 		return nil, ""
 	}

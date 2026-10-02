@@ -1,14 +1,14 @@
 package app
 
 import (
-	"feidex/internal/domain/conversation"
-	"sync"
-
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/replycontinuation"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"sync"
 )
 
 // replyContinuationAppAdapter satisfies replycontinuation.App by delegating
@@ -64,7 +64,7 @@ func newReplyContinuationService(a *App) replyContinuationService {
 			}
 			return st.SaveMessageLink(link)
 		}
-		svc.CreateSubmission = func(sub *state.Submission) (string, error) {
+		svc.CreateSubmission = func(sub *domainsubmission.Submission) (string, error) {
 			st := a.State()
 			if st == nil {
 				return "", nil
@@ -77,13 +77,13 @@ func newReplyContinuationService(a *App) replyContinuationService {
 		svc.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 			return conversationBackend(a).TryReplyContinuation(msg, link, sessionKey, sess)
 		}
-		svc.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+		svc.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 			return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 		}
-		svc.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+		svc.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 			return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
 		}
-		svc.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
+		svc.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 			return resolveInboundAttachments(a, msg, workspaceID, sessionKey)
 		}
 
@@ -123,7 +123,7 @@ func (s replyContinuationService) continueClaudeSessionWithText(sessionKey, text
 	return s.inner.ContinueClaudeSessionWithText(sessionKey, text)
 }
 
-func (s replyContinuationService) recordSubmissionSourceLinks(sub *state.Submission) {
+func (s replyContinuationService) recordSubmissionSourceLinks(sub *domainsubmission.Submission) {
 	s.inner.RecordSubmissionSourceLinks(sub)
 }
 
@@ -132,7 +132,7 @@ func (s replyContinuationService) recordRootTurnBinding(rootMessageID, sessionKe
 }
 
 // Exported wrappers for sub-package interface satisfaction.
-func (s replyContinuationService) RecordSubmissionSourceLinks(sub *state.Submission) {
+func (s replyContinuationService) RecordSubmissionSourceLinks(sub *domainsubmission.Submission) {
 	s.recordSubmissionSourceLinks(sub)
 }
 func (s replyContinuationService) RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string) {

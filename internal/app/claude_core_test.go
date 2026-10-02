@@ -3,8 +3,13 @@ package app
 import (
 	"context"
 	"errors"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appclauderuntime "feidex/internal/app/clauderuntime"
+
 	appreviewcmd "feidex/internal/app/reviewcmd"
+
+	"feidex/internal/app/pendingforms"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/domain/conversation"
 	"os"
@@ -14,7 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"feidex/internal/app/pendingforms"
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
@@ -347,7 +351,7 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
 		UserID:           "user",
@@ -426,7 +430,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-running",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -516,7 +520,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
 		UserID:           "user",
@@ -602,7 +606,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -667,7 +671,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,
 		UserID:               "user",
@@ -733,7 +737,7 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 	a.cfg.Feishu.Backend = backendClaude
 
 	sessionKey := "feishu:chat:chat-1"
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,
 		UserID:               "user",
@@ -803,7 +807,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:                   "sub-running",
 		SessionKey:           sessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,
@@ -819,7 +823,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 	}); err != nil {
 		t.Fatalf("CreateSubmission(sub-running) error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,
 		UserID:               "user",
@@ -1389,7 +1393,7 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:                   "sub-running",
 		SessionKey:           targetSessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,
@@ -1484,7 +1488,7 @@ func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:                   "sub-1",
 		SessionKey:           sessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,
@@ -1610,7 +1614,7 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	}
 
 	// Create original submission
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -1626,7 +1630,7 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	}
 
 	// Create steer submission
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               steerSubID,
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -1726,7 +1730,7 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 	}
 
 	// Create submissions
-	for _, sub := range []*state.Submission{
+	for _, sub := range []*domainsubmission.Submission{
 		{ID: "sub-1", SessionKey: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ThreadID: "claude-thread-1", TurnID: "claude-turn-1", UserID: "user-1", ChatID: "chat-1", TriggerMessageID: "msg-1", InputText: "original", Status: "running"},
 		{ID: "sub-steer", SessionKey: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ThreadID: "claude-thread-1", TurnID: "claude-turn-steer", UserID: "user-1", ChatID: "chat-1", TriggerMessageID: "msg-steer", InputText: "steer", Status: "running"},
 	} {
@@ -1801,7 +1805,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:                   "sub-running",
 		SessionKey:           sessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,
@@ -1877,7 +1881,7 @@ func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:                   "sub-running",
 		SessionKey:           sessionKey,
 		WorkspaceID:          a.cfg.Workspaces[0].ID,

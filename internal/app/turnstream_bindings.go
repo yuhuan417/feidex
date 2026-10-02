@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
-
 	"feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appturnstream "feidex/internal/app/turnstream"
-	"feidex/internal/state"
 )
 
 // ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@ import (
 
 type turnStreamSubmissionFinderAdapter struct{ app *App }
 
-func (a turnStreamSubmissionFinderAdapter) FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
+func (a turnStreamSubmissionFinderAdapter) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
 	return newSubmissionQueueServiceFromApp(a.app).FindSubmissionByTurn(threadID, turnID)
 }
 
@@ -27,10 +27,10 @@ func (a turnStreamTurnLifecycleAdapter) BindPendingSubmissionTurn(threadID, turn
 
 type turnStreamOutboundCardAdapter struct{ app *App }
 
-func (a turnStreamOutboundCardAdapter) SendPlanCardWithReuse(ctx context.Context, sub *state.Submission, planText, reuseMessageID string) string {
+func (a turnStreamOutboundCardAdapter) SendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string {
 	return newOutboundCardService(a.app).sendPlanCardWithReuse(ctx, sub, planText, reuseMessageID)
 }
-func (a turnStreamOutboundCardAdapter) SendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
+func (a turnStreamOutboundCardAdapter) SendTurnItemCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
 	return newOutboundCardService(a.app).sendTurnItemCardWithReuse(ctx, sub, payload, reuseMessageID)
 }
 func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, turnID string, item turnitem.ProtocolItem) bool {
@@ -39,7 +39,7 @@ func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, t
 
 type turnStreamQuietCardExecutorAdapter struct{ app *App }
 
-func (a turnStreamQuietCardExecutorAdapter) ExecuteQuietWorkingCardOp(ctx context.Context, sub *state.Submission, op turn.QuietWorkingCardOp) {
+func (a turnStreamQuietCardExecutorAdapter) ExecuteQuietWorkingCardOp(ctx context.Context, sub *domainsubmission.Submission, op turn.QuietWorkingCardOp) {
 	executeQuietWorkingCardOp(a.app, ctx, sub, op)
 }
 
@@ -84,7 +84,7 @@ func (a *App) TurnStreamQuietCardExecutor() appturnstream.QuietCardExecutorProvi
 }
 
 // SendSubmissionStartedNotice sends the "turn started" notice for a submission.
-func (a *App) SendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
+func (a *App) SendSubmissionStartedNotice(ctx context.Context, sub *domainsubmission.Submission) {
 	sendSubmissionStartedNotice(a, ctx, sub)
 }
 

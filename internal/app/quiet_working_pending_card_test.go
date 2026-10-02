@@ -2,17 +2,16 @@ package app
 
 import (
 	"context"
+	"feidex/internal/config"
+	domainsubmission "feidex/internal/domain/submission"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 // deliverTestPendingUserInputCard delivers a card that waits for user input,
 // mirroring the shared chokepoint both backends use for question/approval cards.
-func deliverTestPendingUserInputCard(t *testing.T, a *App, sub *state.Submission) {
+func deliverTestPendingUserInputCard(t *testing.T, a *App, sub *domainsubmission.Submission) {
 	t.Helper()
 	if err := deliverPendingCard(a, sub, a.feishu.SimpleStatusCard("需要补充输入", "orange", "你希望用哪种方案？", nil), pendingCardDelivery{
 		requestKey:    "req-1",
@@ -24,7 +23,7 @@ func deliverTestPendingUserInputCard(t *testing.T, a *App, sub *state.Submission
 		itemID:        "item-1",
 		ownerUserID:   sub.UserID,
 		payloadJSON:   "{}",
-		waitingStatus: state.SubmissionStatusWaitingUserInput.String(),
+		waitingStatus: domainsubmission.SubmissionStatusWaitingUserInput.String(),
 		linkKind:      "user_input_card",
 	}); err != nil {
 		t.Fatalf("deliverPendingCard() error = %v", err)

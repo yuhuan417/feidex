@@ -1,15 +1,15 @@
 package app
 
 import (
-	appbackend "feidex/internal/app/backend"
-	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
+	appbackend "feidex/internal/app/backend"
+	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
 
 	appconvbackend "feidex/internal/app/convbackend"
-	"feidex/internal/state"
 )
 
 type claudeRuntimeFacade struct{}
@@ -80,8 +80,8 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 			continue
 		}
 		if sub := a.State().Submission(subID); sub != nil && !sub.Finalized {
-			if err := a.State().UpdateSubmission(subID, func(value *state.Submission) {
-				value.Status = state.SubmissionStatusInterrupted.String()
+			if err := a.State().UpdateSubmission(subID, func(value *domainsubmission.Submission) {
+				value.Status = domainsubmission.SubmissionStatusInterrupted.String()
 				value.Finalized = true
 			}); err != nil {
 				slog.Error("clear active submission after interrupt failed", "submission_id", subID, "error", err)
@@ -93,7 +93,7 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 			return
 		}
 		conversation.ResetActiveOperations(current)
-		current.Status = state.SessionStatusIdle.String()
+		current.Status = conversation.SessionStatusIdle.String()
 	})
 	if err != nil {
 		slog.Error("clear active operations after interrupt failed", "session_key", sessionKey, "error", err)

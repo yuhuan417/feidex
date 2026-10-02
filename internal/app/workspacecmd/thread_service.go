@@ -113,7 +113,7 @@ func (s *ThreadService) EnsureClaudeWorkspaceThreadBinding(sessionKey string, se
 		if err == nil {
 			s.SetSessionThreadCtx(sess, ws.ID, threadID, appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
 			s.SessionResetActiveOps(sess)
-			sess.Status = state.SessionStatusIdle.String()
+			sess.Status = conversation.SessionStatusIdle.String()
 			if saveErr := s.SaveSession(sess); saveErr != nil {
 				return nil, saveErr
 			}
@@ -208,7 +208,7 @@ func (s *ThreadService) ResumeCodexWorkspaceThread(sessionKey string, sess *conv
 	)
 	sess.AppliedModelConfig = codexadapter.ResumedThreadConfig(params.Model, params.Config)
 	s.SessionResetActiveOps(sess)
-	sess.Status = state.SessionStatusIdle.String()
+	sess.Status = conversation.SessionStatusIdle.String()
 	if err := s.SaveSession(sess); err != nil {
 		return nil, err
 	}
@@ -243,7 +243,7 @@ func (s *ThreadService) StartClaudeWorkspaceThread(sessionKey string, sess *conv
 	s.ClearSessionThreadCtx(sess)
 	s.SetSessionThreadCtx(sess, ws.ID, threadID, "Claude", appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), ws.Name))
 	s.SessionResetActiveOps(sess)
-	sess.Status = state.SessionStatusIdle.String()
+	sess.Status = conversation.SessionStatusIdle.String()
 	if err := s.SaveSession(sess); err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (s *ThreadService) StartCodexWorkspaceThread(sessionKey string, sess *conve
 	s.ClearSessionThreadCtx(sess)
 	s.SetSessionThreadCtx(sess, ws.ID, threadID, result.Thread.Name, result.Thread.Preview)
 	s.SessionResetActiveOps(sess)
-	sess.Status = state.SessionStatusIdle.String()
+	sess.Status = conversation.SessionStatusIdle.String()
 	if err := s.SaveSession(sess); err != nil {
 		return nil, err
 	}

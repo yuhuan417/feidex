@@ -1,11 +1,10 @@
 package app
 
 import (
-	"feidex/internal/domain/conversation"
-	"strings"
-
 	"feidex/internal/app/apputil"
-	"feidex/internal/state"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"strings"
 )
 
 func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
@@ -25,7 +24,7 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 	if turnID != "" {
 		if _, sub := newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn("", turnID); sub != nil {
 			workspaceID = strings.TrimSpace(sub.WorkspaceID)
-			_ = appState.UpdateSubmission(sub.ID, func(value *state.Submission) {
+			_ = appState.UpdateSubmission(sub.ID, func(value *domainsubmission.Submission) {
 				value.ThreadID = threadID
 				if strings.TrimSpace(value.TurnID) == "" {
 					value.TurnID = turnID
@@ -60,7 +59,7 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 		if strings.TrimSpace(op.SubmissionID) == "" {
 			continue
 		}
-		_ = appState.UpdateSubmission(op.SubmissionID, func(value *state.Submission) {
+		_ = appState.UpdateSubmission(op.SubmissionID, func(value *domainsubmission.Submission) {
 			value.ThreadID = threadID
 			if strings.TrimSpace(value.TurnID) == "" && strings.TrimSpace(op.TurnID) != "" {
 				value.TurnID = strings.TrimSpace(op.TurnID)

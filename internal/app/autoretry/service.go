@@ -4,18 +4,21 @@ package autoretry
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
 	appcore "feidex/internal/app/appcore"
+
 	apputil "feidex/internal/app/apputil"
+
 	appbackend "feidex/internal/app/backend"
+
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -63,8 +66,8 @@ type App interface {
 // AppStateProvider narrows app state access to the methods used by the service.
 type AppStateProvider interface {
 	Session(key string) *conversation.Session
-	CreateSubmission(sub *state.Submission) (string, error)
-	Submission(id string) *state.Submission
+	CreateSubmission(sub *domainsubmission.Submission) (string, error)
+	Submission(id string) *domainsubmission.Submission
 }
 
 // BackendRuntimeProvider narrows backend runtime access to the methods used by
@@ -77,7 +80,7 @@ type BackendRuntimeProvider interface {
 // ConversationBackendProvider narrows conversation backend access to the
 // methods used by the service.
 type ConversationBackendProvider interface {
-	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +248,7 @@ func (s Service) CurrentAutoRetryState(sessionKey string) (RetryState, bool) {
 // ObserveAutoRetryTerminal inspects a terminal turn status. On failure it
 // schedules an auto-retry; on other terminals it cleans up retry state.
 // Returns true if a retry is pending after the observation.
-func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
+func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool {
 	if s.app == nil {
 		return false
 	}
@@ -255,7 +258,7 @@ func (s Service) ObserveAutoRetryTerminal(sessionKey, threadID, status string, u
 	if sessionKey == "" || threadID == "" {
 		return false
 	}
-	if state.NormalizeSubmissionStatus(status) != state.SubmissionStatusFailed {
+	if domainsubmission.NormalizeSubmissionStatus(status) != domainsubmission.SubmissionStatusFailed {
 		s.FinishAutoRetryOnTerminal(sessionKey, threadID, status)
 		return false
 	}
@@ -305,7 +308,7 @@ func (s Service) FinishAutoRetryOnTerminal(sessionKey, threadID, status string) 
 
 // ScheduleAutoRetryAfterFailure attempts to schedule an auto-retry after a
 // failed turn. Returns true if a retry is now pending.
-func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, updatedSess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool {
+func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, updatedSess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool {
 	if s.app == nil {
 		return false
 	}
@@ -320,8 +323,8 @@ func (s Service) ScheduleAutoRetryAfterFailure(sessionKey, threadID string, upda
 	if updatedSess == nil || strings.TrimSpace(updatedSess.ActiveThreadID) != threadID || strings.TrimSpace(updatedSess.ActiveThreadID) == "" {
 		return false
 	}
-	sessionStatus := state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(updatedSess.Status), state.SessionStatusIdle.String()))
-	if s.app.SessionHasActiveWork(updatedSess) || (sessionStatus != state.SessionStatusIdle && sessionStatus != state.SessionStatusQueued) {
+	sessionStatus := conversation.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(updatedSess.Status), conversation.SessionStatusIdle.String()))
+	if s.app.SessionHasActiveWork(updatedSess) || (sessionStatus != conversation.SessionStatusIdle && sessionStatus != conversation.SessionStatusQueued) {
 		return false
 	}
 
@@ -418,8 +421,8 @@ func (s Service) RunAutoRetryTimer(sessionKey string, expectedSeq uint64) {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "检测到当前线程已有新任务，自动重试结束。")
 		return
 	}
-	sessionStatus := state.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), state.SessionStatusIdle.String()))
-	if sessionStatus != state.SessionStatusIdle && sessionStatus != state.SessionStatusQueued {
+	sessionStatus := conversation.NormalizeSessionStatus(apputil.FirstNonEmpty(strings.TrimSpace(sess.Status), conversation.SessionStatusIdle.String()))
+	if sessionStatus != conversation.SessionStatusIdle && sessionStatus != conversation.SessionStatusQueued {
 		s.FinishAutoRetryWithMessage(sessionKey, "stopped", "当前会话已不再处于空闲态。")
 		return
 	}
@@ -474,7 +477,7 @@ func (s Service) BumpAutoRetryBackoffAndReschedule(sessionKey, notice string) {
 
 // StartAutoRetrySubmission creates and starts a "继续" submission for the
 // auto-retry cycle.
-func (s Service) StartAutoRetrySubmission(sessionKey string, sess *conversation.Session, snapshot RetryState) (*state.Submission, error) {
+func (s Service) StartAutoRetrySubmission(sessionKey string, sess *conversation.Session, snapshot RetryState) (*domainsubmission.Submission, error) {
 	if s.app == nil || sess == nil {
 		return nil, fmt.Errorf("session missing")
 	}
@@ -494,7 +497,7 @@ func (s Service) StartAutoRetrySubmission(sessionKey string, sess *conversation.
 	if len(sourceRootMessageIDs) == 0 && strings.TrimSpace(sess.RootMessageID) != "" {
 		sourceRootMessageIDs = []string{strings.TrimSpace(sess.RootMessageID)}
 	}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           strings.TrimSpace(sessionKey),
 		BindingID:            strings.TrimSpace(sess.BindingID),
 		WorkspaceID:          workspaceID,
@@ -503,7 +506,7 @@ func (s Service) StartAutoRetrySubmission(sessionKey string, sess *conversation.
 		TriggerMessageID:     triggerMessageID,
 		SourceRootMessageIDs: uniqueStrings(sourceRootMessageIDs),
 		InputText:            "继续",
-		Status:               state.SubmissionStatusQueued.String(),
+		Status:               domainsubmission.SubmissionStatusQueued.String(),
 	}
 	id, err := s.app.AppState().CreateSubmission(sub)
 	if err != nil {
@@ -521,7 +524,7 @@ func (s Service) StartAutoRetrySubmission(sessionKey string, sess *conversation.
 
 // MarkAutoRetryAttemptStarted records that an auto-retry attempt has been
 // dispatched and delivers an updated status card.
-func (s Service) MarkAutoRetryAttemptStarted(sessionKey string, sub *state.Submission) {
+func (s Service) MarkAutoRetryAttemptStarted(sessionKey string, sub *domainsubmission.Submission) {
 	if s.app == nil {
 		return
 	}

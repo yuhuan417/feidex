@@ -2,12 +2,12 @@ package app
 
 import (
 	"context"
-	"strings"
-
 	"feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
+	domainsubmission "feidex/internal/domain/submission"
+	"strings"
+
 	appturnstream "feidex/internal/app/turnstream"
-	"feidex/internal/state"
 )
 
 // Type aliases — exported types from the turnstream sub-package.
@@ -51,7 +51,7 @@ func (s turnStreamService) turnStreamTracker() *turnStreamTracker {
 // noteTurnStarted records that a turn has started, sending the submission
 // started notice. This method is kept local because it calls
 // maybeSendSubmissionStartedNotice which depends on *App.
-func (s turnStreamService) noteTurnStarted(sessionKey string, sub *state.Submission) {
+func (s turnStreamService) noteTurnStarted(sessionKey string, sub *domainsubmission.Submission) {
 	if sub == nil || strings.TrimSpace(sub.TurnID) == "" {
 		return
 	}
@@ -65,13 +65,13 @@ func (s turnStreamService) noteTurnStarted(sessionKey string, sub *state.Submiss
 // maybeSendSubmissionStartedNotice sends the "turn started" notice if it
 // hasn't been sent yet. This method is kept local because it depends on
 // sendSubmissionStartedNotice which takes *App.
-func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context, sub *state.Submission) {
+func (s turnStreamService) maybeSendSubmissionStartedNotice(ctx context.Context, sub *domainsubmission.Submission) {
 	if s.app == nil || sub == nil || strings.TrimSpace(sub.ID) == "" {
 		return
 	}
 	appState := s.app.State()
 	shouldSend := false
-	if err := appState.UpdateSubmission(sub.ID, func(current *state.Submission) {
+	if err := appState.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) {
 		if current == nil || !current.WaitedInQueue || current.StartNoticeSent {
 			return
 		}
@@ -142,12 +142,12 @@ func (s turnStreamService) prepareTurnStreamQuietBoundary(turnID string) turn.Qu
 	return s.service.PrepareStreamQuietBoundary(turnID)
 }
 
-func (s turnStreamService) prepareTurnStreamQuietUpdatePayload(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
+func (s turnStreamService) prepareTurnStreamQuietUpdatePayload(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
 	return s.service.PrepareStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
 }
 
 // Exported wrapper for sub-package interface satisfaction.
-func (s turnStreamService) NoteTurnStarted(sessionKey string, sub *state.Submission) {
+func (s turnStreamService) NoteTurnStarted(sessionKey string, sub *domainsubmission.Submission) {
 	s.noteTurnStarted(sessionKey, sub)
 }
 

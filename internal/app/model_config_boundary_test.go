@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ import (
 	"feidex/internal/state"
 )
 
-func modelBoundaryQueuedSubmission(t *testing.T, a *App, key, thread, text string) *state.Submission {
+func modelBoundaryQueuedSubmission(t *testing.T, a *App, key, thread, text string) *domainsubmission.Submission {
 	t.Helper()
 	if a.store.GetSession(key) == nil {
 		if err := a.store.UpsertSession(&conversation.Session{Key: key, WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -27,7 +28,7 @@ func modelBoundaryQueuedSubmission(t *testing.T, a *App, key, thread, text strin
 			t.Fatal(err)
 		}
 	}
-	id, err := a.store.CreateSubmission(&state.Submission{SessionKey: key, WorkspaceID: a.cfg.Workspaces[0].ID,
+	id, err := a.store.CreateSubmission(&domainsubmission.Submission{SessionKey: key, WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID: "chat", TriggerMessageID: "msg-" + text, InputText: text, Status: "queued"})
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +135,7 @@ func TestModelConfigClaudeRestartedTurnFailureRetainsQueueAndLineage(t *testing.
 	if sess.ActiveThreadID != "original-thread" || len(sess.Queue) != 2 || sess.Queue[0] != first.ID || sess.Queue[1] != second.ID || sess.ModelConfigError == "" {
 		t.Fatalf("lost queue/context: %+v", sess)
 	}
-	if got := a.store.GetSubmission(first.ID); got.Finalized || got.Status != state.SubmissionStatusQueued.String() {
+	if got := a.store.GetSubmission(first.ID); got.Finalized || got.Status != domainsubmission.SubmissionStatusQueued.String() {
 		t.Fatalf("failed submission was consumed: %+v", got)
 	}
 	if len(fake.ensureCalls) != 1 || len(fake.startTurnCalls) != 1 {

@@ -2,11 +2,10 @@ package app
 
 import (
 	"encoding/json"
-	"feidex/internal/domain/conversation"
-	"strings"
-
 	"feidex/internal/codexrpc"
-	"feidex/internal/state"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"strings"
 )
 
 func handleNotification(a *App, method string, params json.RawMessage) {
@@ -68,12 +67,12 @@ func finishSteerSubmission(a *App, submissionID, status string) {
 		return
 	}
 	switch status {
-	case state.SubmissionStatusCompleted.String():
-		_ = st.FinalizeSubmission(submissionID, state.SubmissionStatusCompleted.String())
-	case state.SubmissionStatusInterrupted.String():
-		_ = st.FinalizeSubmission(submissionID, state.SubmissionStatusInterrupted.String())
+	case domainsubmission.SubmissionStatusCompleted.String():
+		_ = st.FinalizeSubmission(submissionID, domainsubmission.SubmissionStatusCompleted.String())
+	case domainsubmission.SubmissionStatusInterrupted.String():
+		_ = st.FinalizeSubmission(submissionID, domainsubmission.SubmissionStatusInterrupted.String())
 	default:
-		_ = st.FinalizeSubmission(submissionID, state.SubmissionStatusFailed.String())
+		_ = st.FinalizeSubmission(submissionID, domainsubmission.SubmissionStatusFailed.String())
 	}
 	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
 	// Remove the steer submission's ActiveOperation from the session.
@@ -86,7 +85,7 @@ func finishSteerSubmission(a *App, submissionID, status string) {
 			}
 			conversation.RemoveActiveOperation(sess, submissionID, turnID)
 			if !conversation.HasActiveOperations(sess) {
-				sess.Status = state.SessionStatusIdle.String()
+				sess.Status = conversation.SessionStatusIdle.String()
 			}
 		})
 	}

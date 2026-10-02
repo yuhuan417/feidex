@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"sync"
 	"testing"
 	"time"
@@ -11,7 +12,6 @@ import (
 	appcodexruntime "feidex/internal/app/codexruntime"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 func waitForTestCondition(t *testing.T, label string, fn func() bool) {
@@ -38,7 +38,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 		t.Fatalf("UpdateSession(active) error = %v", err)
 	}
 
-	queuedID, err := a.store.CreateSubmission(&state.Submission{
+	queuedID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-queued",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -154,7 +154,7 @@ func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

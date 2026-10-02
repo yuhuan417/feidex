@@ -1,14 +1,13 @@
 package app
 
 import (
-	"strings"
-
 	"feidex/internal/app/apputil"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
+	"strings"
 )
 
-func renderApprovalCard(a *App, _ string, sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+func renderApprovalCard(a *App, _ string, sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
 	attentionUserID := ""
 	if sub != nil {
 		attentionUserID = sub.UserID

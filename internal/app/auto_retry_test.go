@@ -1,20 +1,20 @@
 package app
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
+
 	appautoretry "feidex/internal/app/autoretry"
-	appthreadmenu "feidex/internal/app/threadmenu"
-	"feidex/internal/domain/conversation"
 
 	"context"
 	"errors"
+	appthreadmenu "feidex/internal/app/threadmenu"
+	"feidex/internal/codexrpc"
+	"feidex/internal/domain/conversation"
+	"feidex/internal/feishu"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
-
-	"feidex/internal/codexrpc"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 type fakeDelayedTask struct {
@@ -77,7 +77,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	threadID := "thread-retry-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadID,
@@ -174,19 +174,19 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 		OwnerUserID:             "user-1",
 		ChatID:                  "chat-1",
 		ChatType:                "p2p",
-		Status:                  state.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 	markSessionThreadLive(a, sessionKey, threadID)
-	queuedID, err := a.store.CreateSubmission(&state.Submission{
+	queuedID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:       sessionKey,
 		WorkspaceID:      defaultWorkspaceID(a),
 		ChatID:           "chat-1",
 		TriggerMessageID: "later-1",
 		InputText:        "later input",
-		Status:           state.SubmissionStatusQueued.String(),
+		Status:           domainsubmission.SubmissionStatusQueued.String(),
 	})
 	if err != nil {
 		t.Fatalf("CreateSubmission(later) error = %v", err)
@@ -195,19 +195,19 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 		t.Fatalf("QueueSubmission(later) error = %v", err)
 	}
 	updatedSess, err := a.State().UpdateSession(sessionKey, func(sess *conversation.Session) {
-		sess.Status = state.SessionStatusQueued.String()
+		sess.Status = conversation.SessionStatusQueued.String()
 	})
 	if err != nil {
 		t.Fatalf("UpdateSession() error = %v", err)
 	}
-	failedSub := &state.Submission{
+	failedSub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadID,
 		ChatID:               "chat-1",
 		TriggerMessageID:     "trigger-1",
 		SourceRootMessageIDs: []string{"trigger-1"},
-		Status:               state.SubmissionStatusFailed.String(),
+		Status:               domainsubmission.SubmissionStatusFailed.String(),
 	}
 
 	if !appautoretry.NewService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, failedSub, "", "") {
@@ -299,13 +299,13 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	}
 	markSessionThreadLive(a, sessionKey, threadA)
 
-	queuedB, err := a.store.CreateSubmission(&state.Submission{
+	queuedB, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:       sessionKey,
 		WorkspaceID:      defaultWorkspaceID(a),
 		ChatID:           "chat-1",
 		TriggerMessageID: "later-b",
 		InputText:        "root b input",
-		Status:           state.SubmissionStatusQueued.String(),
+		Status:           domainsubmission.SubmissionStatusQueued.String(),
 	})
 	if err != nil {
 		t.Fatalf("CreateSubmission(root-b) error = %v", err)
@@ -313,14 +313,14 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	if err := a.State().QueueSubmission(sessionKey, queuedB); err != nil {
 		t.Fatalf("QueueSubmission(root-b) error = %v", err)
 	}
-	failedSub := &state.Submission{
+	failedSub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadA,
 		ChatID:               "chat-1",
 		TriggerMessageID:     "trigger-a",
 		SourceRootMessageIDs: []string{"root-a"},
-		Status:               state.SubmissionStatusFailed.String(),
+		Status:               domainsubmission.SubmissionStatusFailed.String(),
 	}
 	updatedA := a.State().Session(sessionKey)
 
@@ -418,7 +418,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	threadID := "thread-stop-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadID,
@@ -469,7 +469,7 @@ func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testi
 	threadID := "thread-stop-retry"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadID,
@@ -533,7 +533,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	threadID := "claude-session-1"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          defaultWorkspaceID(a),
 		ThreadID:             threadID,

@@ -3,9 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	domainsubmission "feidex/internal/domain/submission"
 
 	appapproval "feidex/internal/app/approval"
+
 	appbackend "feidex/internal/app/backend"
+
 	apppendingforms "feidex/internal/app/pendingforms"
 	"feidex/internal/app/quietmode"
 	"feidex/internal/app/turnitem"
@@ -70,7 +73,7 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	router.RecordTurnError = func(threadID, turnID, message string) {
 		newTurnStreamService(a).recordTurnError(threadID, turnID, message)
 	}
-	router.UpdateSubmissionByTurn = func(threadID, turnID string, mutate func(*state.Submission)) {
+	router.UpdateSubmissionByTurn = func(threadID, turnID string, mutate func(*domainsubmission.Submission)) {
 		newSubmissionQueueServiceFromApp(a).UpdateSubmissionByTurn(threadID, turnID, mutate)
 	}
 	router.ResolveServerPendingRequest = func(requestID string) *state.PendingRequest {
@@ -100,10 +103,10 @@ func (r *codexEventRouter) buildInner() *appbackend.CodexEventRouter {
 	router.ReplyCodexError = func(requestID json.RawMessage, code int, message string) {
 		replyCodexError(a, requestID, code, message)
 	}
-	router.FindSubmissionByTurn = func(threadID, turnID string) (string, *state.Submission) {
+	router.FindSubmissionByTurn = func(threadID, turnID string) (string, *domainsubmission.Submission) {
 		return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
 	}
-	router.FindWorkspaceCwdForSubmission = func(sub *state.Submission) string {
+	router.FindWorkspaceCwdForSubmission = func(sub *domainsubmission.Submission) string {
 		if sub == nil {
 			return ""
 		}

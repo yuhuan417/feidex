@@ -2,9 +2,9 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
 
 	appfinalcardpatch "feidex/internal/app/finalcardpatch"
-	"feidex/internal/state"
 )
 
 // ---------------------------------------------------------------------------
@@ -13,7 +13,7 @@ import (
 
 type finalCardPatchSubmissionFinderAdapter struct{ app *App }
 
-func (a finalCardPatchSubmissionFinderAdapter) Submission(id string) *state.Submission {
+func (a finalCardPatchSubmissionFinderAdapter) Submission(id string) *domainsubmission.Submission {
 	return a.app.State().Submission(id)
 }
 
@@ -54,7 +54,7 @@ func (a *App) FinalCardPatchSubmissionFinder() appfinalcardpatch.SubmissionFinde
 // FinalCardPatchCardRenderer returns the card renderer callback for the
 // final-card-patch service.
 func (a *App) FinalCardPatchCardRenderer() appfinalcardpatch.CardRendererFunc {
-	return func(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, footerLines []string) map[string]any {
+	return func(ctx context.Context, sub *domainsubmission.Submission, title, color string, showHeader bool, body string, footerLines []string) map[string]any {
 		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, body, nil, true)
 		appendReplyCardFooter(card, footerLines)
 		return card

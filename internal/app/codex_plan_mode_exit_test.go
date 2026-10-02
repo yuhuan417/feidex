@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"feidex/internal/domain/conversation"
-	"strings"
-	"testing"
-
 	"feidex/internal/codexrpc"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"strings"
+	"testing"
 )
 
 func TestCodexPlanModeExitPromptAfterPlanItemCompletion(t *testing.T) {
@@ -317,7 +317,7 @@ func TestClearCodexPlanModeForSessionStoresDefaultCollaborationMode(t *testing.T
 			Model:           "gpt-5.4",
 			ReasoningEffort: "medium",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("SaveSession() error = %v", err)
 	}
@@ -367,7 +367,7 @@ func TestClearCodexPlanModeForSessionRestoresConfiguredDefaultEffort(t *testing.
 			Model:           "gpt-5.5",
 			ReasoningEffort: "xhigh",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("SaveSession() error = %v", err)
 	}
@@ -388,7 +388,7 @@ func TestClearCodexPlanModeForSessionRestoresConfiguredDefaultEffort(t *testing.
 	}
 }
 
-func seedPlanExitActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *state.Submission {
+func seedPlanExitActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *domainsubmission.Submission {
 	t.Helper()
 	sub := seedActiveSubmission(t, a, sessionKey, threadID, turnID)
 	if _, err := a.State().UpdateSession(sessionKey, func(sess *conversation.Session) {

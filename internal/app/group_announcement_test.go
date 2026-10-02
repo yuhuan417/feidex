@@ -67,7 +67,7 @@ func seedGroupAnnouncementSession(t *testing.T, a *App, chatID, threadID string)
 		ActiveThreadID: threadID,
 		ChatType:       "group",
 		ChatID:         chatID,
-		Status:         state.SessionStatusIdle.String(),
+		Status:         conversation.SessionStatusIdle.String(),
 		UpdatedAt:      time.Now().Unix(),
 	}); err != nil {
 		t.Fatalf("SaveSession() error = %v", err)
@@ -421,7 +421,7 @@ func TestKnownGroupAnnouncementChatIDsDoNotTreatUnknownCanonicalSessionAsGroup(t
 		ChatID:         "chat-p2p",
 		ChatType:       "p2p",
 		ActiveThreadID: "thread-p2p",
-		Status:         state.SessionStatusIdle.String(),
+		Status:         conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("SaveSession(p2p) error = %v", err)
 	}
@@ -429,7 +429,7 @@ func TestKnownGroupAnnouncementChatIDsDoNotTreatUnknownCanonicalSessionAsGroup(t
 		Key:            "feishu:frontend:bot-a:chat:chat-unknown",
 		ChatID:         "chat-unknown",
 		ActiveThreadID: "thread-unknown",
-		Status:         state.SessionStatusIdle.String(),
+		Status:         conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("SaveSession(unknown) error = %v", err)
 	}

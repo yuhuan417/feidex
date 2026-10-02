@@ -3,12 +3,15 @@ package backend
 import (
 	"context"
 	"encoding/json"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"log/slog"
 	"strings"
 
 	codexadapter "feidex/internal/adapter/backend/codex"
+
 	appapproval "feidex/internal/app/approval"
+
 	apppendingforms "feidex/internal/app/pendingforms"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/application"
@@ -62,7 +65,7 @@ type CodexEventRouter struct {
 	RecordTurnError func(threadID, turnID, message string)
 
 	// UpdateSubmissionByTurn updates a submission identified by thread/turn.
-	UpdateSubmissionByTurn func(threadID, turnID string, mutate func(*state.Submission))
+	UpdateSubmissionByTurn func(threadID, turnID string, mutate func(*domainsubmission.Submission))
 
 	// ResolveServerPendingRequest resolves a pending server request by ID.
 	ResolveServerPendingRequest func(requestID string) *state.PendingRequest
@@ -96,11 +99,11 @@ type CodexEventRouter struct {
 	// ---- workspace / submission lookup ----
 
 	// FindSubmissionByTurn returns a submission by thread/turn ID.
-	FindSubmissionByTurn func(threadID, turnID string) (string, *state.Submission)
+	FindSubmissionByTurn func(threadID, turnID string) (string, *domainsubmission.Submission)
 
 	// FindWorkspaceCwdForSubmission returns the workspace Cwd for a
 	// submission's workspace ID.
-	FindWorkspaceCwdForSubmission func(sub *state.Submission) string
+	FindWorkspaceCwdForSubmission func(sub *domainsubmission.Submission) string
 }
 
 // NewCodexEventRouter creates a new router.
@@ -291,7 +294,7 @@ func (r *CodexEventRouter) handleLifecycleEvent(event application.BackendEvent) 
 			r.RecordTurnError(event.ThreadID, event.TurnID, event.Message)
 		}
 		if r.UpdateSubmissionByTurn != nil {
-			r.UpdateSubmissionByTurn(event.ThreadID, event.TurnID, func(sub *state.Submission) { sub.Status = state.SubmissionStatusFailed.String() })
+			r.UpdateSubmissionByTurn(event.ThreadID, event.TurnID, func(sub *domainsubmission.Submission) { sub.Status = domainsubmission.SubmissionStatusFailed.String() })
 		}
 	case application.EventRequestResolved:
 		var pending *state.PendingRequest

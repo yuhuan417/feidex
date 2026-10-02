@@ -2,14 +2,14 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appthreadmenu "feidex/internal/app/threadmenu"
+	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/feishu"
 	"strings"
 	"testing"
-
-	"feidex/internal/codexrpc"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestEnqueueSubmissionReconcilesCompletedCodexTurnFromThreadRead(t *testing.T) {
@@ -96,7 +96,7 @@ func TestCommandInterruptClearsQueueAfterReconcilingCompletedCodexTurn(t *testin
 	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
 	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].SentFinal = true
 
-	queuedID, err := a.store.CreateSubmission(&state.Submission{
+	queuedID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-queued",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

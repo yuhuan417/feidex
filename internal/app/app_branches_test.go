@@ -2,22 +2,22 @@ package app
 
 import (
 	"feidex/internal/domain/conversation"
-	frontendruntime "feidex/internal/runtime"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
 	"errors"
+	"feidex/internal/app/pendingforms"
+	"feidex/internal/codexrpc"
+	"feidex/internal/config"
+	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
+	"feidex/internal/state"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"feidex/internal/app/pendingforms"
-	"feidex/internal/codexrpc"
-	"feidex/internal/config"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
@@ -175,7 +175,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(missing) error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{ID: "sub-missing", SessionKey: sessionKey, WorkspaceID: "missing", Status: "queued"}); err != nil {
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{ID: "sub-missing", SessionKey: sessionKey, WorkspaceID: "missing", Status: "queued"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-missing) error = %v", err)
 	}
 	if err := startNextSubmission(a, sessionKey); err == nil {
@@ -195,7 +195,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(resume) error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{ID: "sub-1", SessionKey: sessionKey, WorkspaceID: "default", InputText: "hello", TriggerMessageID: "m-1", Status: "queued"}); err != nil {
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{ID: "sub-1", SessionKey: sessionKey, WorkspaceID: "default", InputText: "hello", TriggerMessageID: "m-1", Status: "queued"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-1) error = %v", err)
 	}
 	var calls []string
@@ -235,7 +235,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(timeout) error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{ID: "sub-2", SessionKey: sessionKey, WorkspaceID: "default", InputText: "hello", TriggerMessageID: "m-2", Status: "queued"}); err != nil {
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{ID: "sub-2", SessionKey: sessionKey, WorkspaceID: "default", InputText: "hello", TriggerMessageID: "m-2", Status: "queued"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-2) error = %v", err)
 	}
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
@@ -271,7 +271,7 @@ func TestStartNextSubmissionFailureClearsBrokenActiveStateAndAdvancesQueue(t *te
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      "default",
@@ -281,7 +281,7 @@ func TestStartNextSubmissionFailureClearsBrokenActiveStateAndAdvancesQueue(t *te
 	}); err != nil {
 		t.Fatalf("CreateSubmission(sub-1) error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-2",
 		SessionKey:       sessionKey,
 		WorkspaceID:      "default",
@@ -419,7 +419,7 @@ func TestStartNextSubmissionClearsCodexThreadLineageAfterRuntimeFailure(t *testi
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -476,7 +476,7 @@ func TestStartNextSubmissionSkipsMissingQueuedSubmissionAndStartsNext(t *testing
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-2",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/state"
 	"fmt"
 	"strings"
 	"time"
-
-	"feidex/internal/state"
 )
 
 type pendingCardDelivery struct {
@@ -42,7 +42,7 @@ type pendingCardAnchor struct {
 	replyInThread    bool
 }
 
-func anchorForSubmission(a *App, sub *state.Submission) pendingCardAnchor {
+func anchorForSubmission(a *App, sub *domainsubmission.Submission) pendingCardAnchor {
 	if sub == nil {
 		return pendingCardAnchor{}
 	}
@@ -58,7 +58,7 @@ func anchorForSubmission(a *App, sub *state.Submission) pendingCardAnchor {
 	}
 }
 
-func deliverPendingCard(a *App, sub *state.Submission, card map[string]any, delivery pendingCardDelivery) error {
+func deliverPendingCard(a *App, sub *domainsubmission.Submission, card map[string]any, delivery pendingCardDelivery) error {
 	if sub == nil {
 		return fmt.Errorf("pending card delivery unavailable")
 	}

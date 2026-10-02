@@ -2,14 +2,13 @@ package app
 
 import (
 	"context"
-	"path/filepath"
-	"testing"
-
 	"feidex/internal/app/quietmode"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
+	"path/filepath"
+	"testing"
 )
 
 func TestShouldDeliverTurnKindInQuiet(t *testing.T) {
@@ -156,7 +155,7 @@ func TestCommandQuietSupportsConfigCardAndExplicitModes(t *testing.T) {
 
 func TestSendTurnItemCardQuietModes(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       "sess-1",
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

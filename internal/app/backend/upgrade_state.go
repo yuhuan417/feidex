@@ -8,7 +8,6 @@ import (
 	"feidex/internal/app/appcore"
 	applifecycle "feidex/internal/app/lifecycle"
 	"feidex/internal/domain/interaction"
-	"feidex/internal/state"
 )
 
 // Now is a testable clock.
@@ -24,8 +23,8 @@ func SessionHasActiveWork(sess *conversation.Session) bool {
 	if conversation.HasActiveOperations(sess) {
 		return true
 	}
-	switch state.NormalizeSessionStatus(sess.Status) {
-	case sessionStatusCompacting, state.SessionStatusTurnStarting:
+	switch conversation.NormalizeSessionStatus(sess.Status) {
+	case sessionStatusCompacting, conversation.SessionStatusTurnStarting:
 		return true
 	default:
 		return false

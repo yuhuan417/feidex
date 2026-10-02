@@ -3,12 +3,11 @@ package submission
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
 	"log/slog"
 	"strings"
 	"time"
-
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 // ---------------------------------------------------------------------------
@@ -33,15 +32,15 @@ type PendingQueueApp interface {
 type PendingQueueAppStateProvider interface {
 	Session(key string) *conversation.Session
 	Sessions() []*conversation.Session
-	Submission(id string) *state.Submission
+	Submission(id string) *domainsubmission.Submission
 	SaveSession(sess *conversation.Session) error
 	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
-	UpdateSubmission(id string, mutate func(*state.Submission)) error
+	UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error
 }
 
 // PendingQueueRuntimeMaintenanceProvider narrows runtime maintenance.
 type PendingQueueRuntimeMaintenanceProvider interface {
-	CleanupSubmissionRuntimeState(sub *state.Submission)
+	CleanupSubmissionRuntimeState(sub *domainsubmission.Submission)
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +77,7 @@ func (s PendingQueueService) ShouldStageInboundImages(msg *feishu.InboundMessage
 
 // StageInboundImagesForSession stages images from an inbound message into
 // the session's staged images list.
-func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMessage, sessionKey string, resolveAttachments func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error)) error {
+func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMessage, sessionKey string, resolveAttachments func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error)) error {
 	if msg == nil {
 		return nil
 	}
@@ -93,7 +92,7 @@ func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMes
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        state.SessionStatusIdle.String(),
+			Status:        conversation.SessionStatusIdle.String(),
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
@@ -114,7 +113,7 @@ func (s PendingQueueService) StageInboundImagesForSession(msg *feishu.InboundMes
 		})
 	}
 	if conversation.HasInFlightSubmission(sess) || len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-		sess.Status = state.SessionStatusQueued.String()
+		sess.Status = conversation.SessionStatusQueued.String()
 	}
 	if err := appState.SaveSession(sess); err != nil {
 		return err
@@ -180,7 +179,7 @@ func (s PendingQueueService) DiscardStagedImageFromSessionSnapshot(snapshot *con
 
 // DiscardQueuedSubmissionFromSessionSnapshot discards a queued submission
 // from a session snapshot.
-func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot *conversation.Session, submissionID string, sub *state.Submission) bool {
+func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot *conversation.Session, submissionID string, sub *domainsubmission.Submission) bool {
 	a := s.App
 	if snapshot == nil || strings.TrimSpace(snapshot.Key) == "" || strings.TrimSpace(submissionID) == "" {
 		return false
@@ -196,7 +195,7 @@ func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot
 			return
 		}
 		current.Queue = nextQueue
-		RefreshPendingStatus(current)
+		conversation.RefreshPendingStatus(current)
 		discarded = true
 	}); err != nil {
 		slog.Error("discard queued submission session update failed", "session_key", snapshot.Key, "submission_id", submissionID, "error", err)
@@ -205,8 +204,8 @@ func (s PendingQueueService) DiscardQueuedSubmissionFromSessionSnapshot(snapshot
 	if !discarded {
 		return false
 	}
-	if err := appState.UpdateSubmission(submissionID, func(value *state.Submission) {
-		value.Status = state.SubmissionStatusDiscarded.String()
+	if err := appState.UpdateSubmission(submissionID, func(value *domainsubmission.Submission) {
+		value.Status = domainsubmission.SubmissionStatusDiscarded.String()
 		value.Finalized = true
 	}); err != nil {
 		slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
@@ -235,8 +234,8 @@ func (s PendingQueueService) DiscardSessionPendingInputs(sessionKey string) int 
 	for _, submissionID := range queueIDs {
 		sub := appState.Submission(submissionID)
 		s.markMessagesDiscardedReactions(SourceMessageIDs(sub))
-		if err := appState.UpdateSubmission(submissionID, func(value *state.Submission) {
-			value.Status = state.SubmissionStatusDiscarded.String()
+		if err := appState.UpdateSubmission(submissionID, func(value *domainsubmission.Submission) {
+			value.Status = domainsubmission.SubmissionStatusDiscarded.String()
 			value.Finalized = true
 		}); err != nil {
 			slog.Error("discard queued submission update failed", "submission_id", submissionID, "error", err)
@@ -248,7 +247,7 @@ func (s PendingQueueService) DiscardSessionPendingInputs(sessionKey string) int 
 	sess.Queue = nil
 	sess.StagedImages = nil
 	if !conversation.HasInFlightSubmission(sess) {
-		sess.Status = state.SessionStatusIdle.String()
+		sess.Status = conversation.SessionStatusIdle.String()
 	}
 	if err := appState.SaveSession(sess); err != nil {
 		slog.Error("discard session pending inputs failed", "session_key", sessionKey, "error", err)
@@ -258,13 +257,13 @@ func (s PendingQueueService) DiscardSessionPendingInputs(sessionKey string) int 
 
 // MarkSubmissionQueuedReactions marks all source messages of a submission
 // with the queue reaction emoji.
-func (s PendingQueueService) MarkSubmissionQueuedReactions(sub *state.Submission) {
+func (s PendingQueueService) MarkSubmissionQueuedReactions(sub *domainsubmission.Submission) {
 	s.markMessagesQueuedReactions(SourceMessageIDs(sub))
 }
 
 // MarkSubmissionRunningReactions clears queue reactions and marks source
 // messages with the typing reaction emoji.
-func (s PendingQueueService) MarkSubmissionRunningReactions(sub *state.Submission) {
+func (s PendingQueueService) MarkSubmissionRunningReactions(sub *domainsubmission.Submission) {
 	ids := SourceMessageIDs(sub)
 	s.clearMessageProcessingReactions(ids)
 	s.markMessagesTypingReactions(ids)
@@ -272,7 +271,7 @@ func (s PendingQueueService) MarkSubmissionRunningReactions(sub *state.Submissio
 
 // ClearSubmissionProcessingReactions clears all processing reactions for a
 // submission's source messages.
-func (s PendingQueueService) ClearSubmissionProcessingReactions(sub *state.Submission) {
+func (s PendingQueueService) ClearSubmissionProcessingReactions(sub *domainsubmission.Submission) {
 	s.clearMessageProcessingReactions(SourceMessageIDs(sub))
 }
 
@@ -363,6 +362,6 @@ func DiscardStagedImageByMessageID(sess *conversation.Session, messageID string)
 		return false
 	}
 	sess.StagedImages = next
-	RefreshPendingStatus(sess)
+	conversation.RefreshPendingStatus(sess)
 	return true
 }

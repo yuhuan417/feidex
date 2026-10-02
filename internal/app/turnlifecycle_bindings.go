@@ -1,14 +1,15 @@
 package app
 
 import (
+	domainsubmission "feidex/internal/domain/submission"
+
+	"context"
 	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/domain/conversation"
 
-	"context"
-
 	appmaintenance "feidex/internal/app/maintenance"
+
 	appturnlifecycle "feidex/internal/app/turnlifecycle"
-	"feidex/internal/state"
 )
 
 // ---------------------------------------------------------------------------
@@ -59,15 +60,15 @@ func (a *App) MarkSessionThreadLive(sessionKey, threadID string) {
 	markSessionThreadLive(a, sessionKey, threadID)
 }
 
-func (a *App) TurnStopAttentionUserID(sub *state.Submission, turnID string) string {
+func (a *App) TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID string) string {
 	return turnStopAttentionUserID(a, sub, turnID)
 }
 
-func (a *App) SendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string {
+func (a *App) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
 	return sendEmptyFinalCardWithReuse(a, ctx, sub, footerLines, reuseMessageID)
 }
 
-func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, reuseMessageID string) []string {
+func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, reuseMessageID string) []string {
 	reuseIDs := []string(nil)
 	if reuseMessageID != "" {
 		reuseIDs = []string{reuseMessageID}
@@ -96,11 +97,11 @@ func (a *App) FinishStandaloneCompactTurn(threadID, turnID, status string) bool 
 	return finishStandaloneCompactTurn(a, threadID, turnID, status)
 }
 
-func (a *App) FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
+func (a *App) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
 	return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
 }
 
-func (a *App) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush appturnlifecycle.TurnStreamFlushResult) bool {
+func (a *App) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush appturnlifecycle.TurnStreamFlushResult) bool {
 	return processCodexPlanModeExitOnTurnCompleted(a, sessionKey, sub, threadID, turnID, status, flush)
 }
 

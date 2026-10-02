@@ -2,13 +2,13 @@ package clauderuntime
 
 import (
 	"context"
+	"feidex/internal/app/apputil"
+	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
-	"feidex/internal/app/apputil"
-	"feidex/internal/config"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
-	"feidex/internal/state"
 )
 
 type modelSettingsClient interface {
@@ -68,8 +68,8 @@ func (s *Service) noteModelSettingsApplied(current *SessionState, desired domain
 func (s *Service) modelChangeBlockedReason(current *SessionState) string {
 	if s.deps.Lookup.GetSession != nil && s.deps.Lookup.SessionHasActiveOps != nil {
 		if sess := s.deps.Lookup.GetSession(current.SessionKey); sess != nil {
-			status := state.NormalizeSessionStatus(sess.Status)
-			if s.deps.Lookup.SessionHasActiveOps(sess) || status == state.SessionStatusCompacting || status == state.SessionStatusTurnStarting {
+			status := conversation.NormalizeSessionStatus(sess.Status)
+			if s.deps.Lookup.SessionHasActiveOps(sess) || status == conversation.SessionStatusCompacting || status == conversation.SessionStatusTurnStarting {
 				return "当前会话仍有运行中的任务；配置待下一轮生效"
 			}
 		}

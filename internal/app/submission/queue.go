@@ -7,15 +7,16 @@ package submission
 import (
 	"context"
 	"errors"
+	"feidex/internal/app/appcore"
+	"feidex/internal/codexrpc"
+	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
-	"feidex/internal/app/appcore"
-	"feidex/internal/codexrpc"
-	"feidex/internal/config"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -46,27 +47,27 @@ type App interface {
 	SubmissionQueueDefaultWorkspaceID() string
 	SubmissionQueueWorkspace(id string) *config.Workspace
 	SubmissionQueueReplyInThreadEnabled(chatType string) bool
-	SubmissionQueueReplyInThreadForSubmission(sub *state.Submission) bool
+	SubmissionQueueReplyInThreadForSubmission(sub *domainsubmission.Submission) bool
 	SubmissionQueueConfiguredInflightMode() QueueInflightMode
 	SubmissionQueueInflightAllowsAdditional(mode QueueInflightMode) bool
 	SubmissionQueueResolveWorkspaceID(msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string
 	SubmissionQueueReplyText(ctx context.Context, messageID, text string, inThread bool) error
-	SubmissionQueueSendQueuedNotice(ctx context.Context, sub *state.Submission)
-	SubmissionQueueSendStartFailureNotice(ctx context.Context, sub *state.Submission, err error, willContinue bool)
+	SubmissionQueueSendQueuedNotice(ctx context.Context, sub *domainsubmission.Submission)
+	SubmissionQueueSendStartFailureNotice(ctx context.Context, sub *domainsubmission.Submission, err error, willContinue bool)
 	SubmissionQueueRunAsync(fn func())
 	SubmissionQueueTryBeginStart(sessionKey string) bool
 	SubmissionQueueFinishStart(sessionKey string) bool
 	SubmissionQueueLogSessionState(event, sessionKey string, sess *conversation.Session)
 
 	// Reactions (delegated to PendingQueueService through app).
-	SubmissionQueueMarkSubmissionQueuedReactions(sub *state.Submission)
-	SubmissionQueueMarkSubmissionRunningReactions(sub *state.Submission)
-	SubmissionQueueClearSubmissionProcessingReactions(sub *state.Submission)
+	SubmissionQueueMarkSubmissionQueuedReactions(sub *domainsubmission.Submission)
+	SubmissionQueueMarkSubmissionRunningReactions(sub *domainsubmission.Submission)
+	SubmissionQueueClearSubmissionProcessingReactions(sub *domainsubmission.Submission)
 
 	// Backend-specific start hooks.
-	SubmissionQueueIsReviewSubmission(sub *state.Submission) bool
-	SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error)
-	SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *state.Submission) (string, error)
+	SubmissionQueueIsReviewSubmission(sub *domainsubmission.Submission) bool
+	SubmissionQueueStartSubmissionTurn(ctx context.Context, sessionKey, threadID string, sub *domainsubmission.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error)
+	SubmissionQueueStartSubmissionReview(ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error)
 	SubmissionQueueBuildThreadStartParams(ws *config.Workspace, sess *conversation.Session, model string) codexrpc.ThreadStartParams
 	SubmissionQueueRequireCodexClient() (appcore.CodexClient, error)
 	SubmissionQueueClaudeClient() QueueClaudeClient
@@ -87,7 +88,7 @@ type agentBindingByIDResolver interface {
 // Optional for narrow queue hosts; the production adapter captures all model
 // fields together, after dequeue and before any backend I/O.
 type modelConfigResolver interface {
-	SubmissionQueueResolveModelConfig(*conversation.Session, *state.Submission) domainmodelconfig.Snapshot
+	SubmissionQueueResolveModelConfig(*conversation.Session, *domainsubmission.Submission) domainmodelconfig.Snapshot
 }
 
 type codexConfigResolver interface {
@@ -106,9 +107,9 @@ type botProfileResolver interface {
 // QueueAppStateProvider narrows app state access.
 type QueueAppStateProvider interface {
 	Session(key string) *conversation.Session
-	Submission(id string) *state.Submission
+	Submission(id string) *domainsubmission.Submission
 	SaveSession(sess *conversation.Session) error
-	CreateSubmission(sub *state.Submission) (string, error)
+	CreateSubmission(sub *domainsubmission.Submission) (string, error)
 	QueueSubmission(sessionKey, id string) error
 	DequeueSubmission(sessionKey string) (string, error)
 	MarkSubmissionRunning(id, threadID, turnID string) error
@@ -117,28 +118,28 @@ type QueueAppStateProvider interface {
 	NextLocalID(prefix string) (string, error)
 	DeletePendingRequests(match func(*state.PendingRequest) bool)
 	DeleteMessageLinks(match func(*state.MessageLink) bool)
-	UpdateSubmission(id string, mutate func(*state.Submission)) error
+	UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error
 	Sessions() []*conversation.Session
 }
 
 // QueueSkillResolver narrows skill resolution.
 type QueueSkillResolver interface {
-	ResolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []state.SubmissionAttachment) QueueSkillResolution
-	SetSessionPendingSkill(sessionKey string, skill state.SubmissionSkill)
+	ResolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []domainsubmission.SubmissionAttachment) QueueSkillResolution
+	SetSessionPendingSkill(sessionKey string, skill domainsubmission.SubmissionSkill)
 	ClearSessionPendingSkill(sessionKey string)
 }
 
 // QueueSkillResolution describes how a submission's skill was resolved.
 type QueueSkillResolution struct {
 	InputText          string
-	Skills             []state.SubmissionSkill
+	Skills             []domainsubmission.SubmissionSkill
 	ConsumePending     bool
-	PendingReplacement *state.SubmissionSkill
+	PendingReplacement *domainsubmission.SubmissionSkill
 }
 
 // QueueAttachmentResolver narrows inbound attachment resolution.
 type QueueAttachmentResolver interface {
-	ResolveInboundAttachments(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error)
+	ResolveInboundAttachments(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error)
 }
 
 // QueueLiveThreadProvider narrows live thread tracking.
@@ -163,35 +164,35 @@ type QueueRuntimeStateProvider interface {
 	MarkTurnStartedAt(turnID string, startedAt time.Time)
 	ClearTurnBinding(turnID string)
 	ClearTurnItemStates(turnID string)
-	BoundSubmissionForTurn(turnID string) (string, *state.Submission)
+	BoundSubmissionForTurn(turnID string) (string, *domainsubmission.Submission)
 }
 
 // QueueRuntimeMaintenanceProvider narrows runtime maintenance.
 type QueueRuntimeMaintenanceProvider interface {
-	CleanupSubmissionRuntimeState(sub *state.Submission)
+	CleanupSubmissionRuntimeState(sub *domainsubmission.Submission)
 }
 
 // QueueReplyContinuationProvider narrows reply continuation.
 type QueueReplyContinuationProvider interface {
-	RecordSubmissionSourceLinks(sub *state.Submission)
+	RecordSubmissionSourceLinks(sub *domainsubmission.Submission)
 	RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string)
 }
 
 // QueueTurnStreamProvider narrows turn stream.
 type QueueTurnStreamProvider interface {
-	NoteTurnStarted(sessionKey string, sub *state.Submission)
+	NoteTurnStarted(sessionKey string, sub *domainsubmission.Submission)
 	DeleteTurnStream(turnID string)
 }
 
 // QueueAutoRetryProvider narrows auto retry.
 type QueueAutoRetryProvider interface {
-	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool
+	ObserveAutoRetryTerminal(sessionKey, threadID, status string, sess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool
 	HasBlockingAutoRetry(sessionKey string) bool
 }
 
 // QueueConversationBackendProvider narrows conversation backend.
 type QueueConversationBackendProvider interface {
-	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error
 }
 
 // QueueBackendRuntimeProvider narrows backend runtime.
@@ -252,7 +253,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: firstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID)),
-			Status:        state.SessionStatusIdle.String(),
+			Status:        conversation.SessionStatusIdle.String(),
 		}
 	}
 	sess := appState.Session(sessionKey)
@@ -321,7 +322,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 	shouldAttemptStart := !autoRetryBlocked && !serialBindingBlocked && (!hasInFlight || allowsAdditional)
 	willWaitInQueue := queueLenBefore > 0 || autoRetryBlocked || serialBindingBlocked || (hasInFlight && !allowsAdditional)
 	if willWaitInQueue {
-		sess.Status = state.SessionStatusQueued.String()
+		sess.Status = conversation.SessionStatusQueued.String()
 	}
 	slog.Debug("submission enqueue begin",
 		"session_key", sessionKey,
@@ -342,7 +343,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		return err
 	}
 	a.SubmissionQueueLogSessionState("submission enqueue session persisted", sessionKey, appState.Session(sessionKey))
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		BindingID:            strings.TrimSpace(sess.BindingID),
 		WorkspaceID:          workspaceID,
@@ -354,7 +355,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *feishu.InboundMessage, se
 		InputText:            skillResolution.InputText,
 		Skills:               skillResolution.Skills,
 		Attachments:          attachments,
-		Status:               state.SubmissionStatusQueued.String(),
+		Status:               domainsubmission.SubmissionStatusQueued.String(),
 		WaitedInQueue:        willWaitInQueue,
 	}
 	id, err := appState.CreateSubmission(sub)
@@ -432,7 +433,7 @@ func resolveAgentBindingByID(a App, id string) *state.AgentBinding {
 	return resolver.SubmissionQueueAgentBindingByID(id)
 }
 
-func submissionBinding(a App, sess *conversation.Session, sub *state.Submission) *state.AgentBinding {
+func submissionBinding(a App, sess *conversation.Session, sub *domainsubmission.Submission) *state.AgentBinding {
 	if sub != nil {
 		if binding := resolveAgentBindingByID(a, sub.BindingID); binding != nil {
 			return binding
@@ -444,7 +445,7 @@ func submissionBinding(a App, sess *conversation.Session, sub *state.Submission)
 	return nil
 }
 
-func effectiveCodexModel(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveCodexModel(a App, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace) string {
 	binding := submissionBinding(a, sess, sub)
 	return firstNonEmpty(
 		sessionModelOverride(sess),
@@ -454,7 +455,7 @@ func effectiveCodexModel(a App, sess *conversation.Session, sub *state.Submissio
 	)
 }
 
-func effectiveCodexReasoningEffort(a App, sess *conversation.Session, sub *state.Submission) string {
+func effectiveCodexReasoningEffort(a App, sess *conversation.Session, sub *domainsubmission.Submission) string {
 	binding := submissionBinding(a, sess, sub)
 	return firstNonEmpty(
 		bindingReasoningEffortOverride(binding),
@@ -463,7 +464,7 @@ func effectiveCodexReasoningEffort(a App, sess *conversation.Session, sub *state
 	)
 }
 
-func effectiveClaudeModel(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveClaudeModel(a App, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace) string {
 	binding := submissionBinding(a, sess, sub)
 	return firstNonEmpty(
 		sessionModelOverride(sess),
@@ -473,7 +474,7 @@ func effectiveClaudeModel(a App, sess *conversation.Session, sub *state.Submissi
 	)
 }
 
-func effectiveBindingApprovalPolicy(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveBindingApprovalPolicy(a App, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
 		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
 	}
@@ -490,7 +491,7 @@ func effectiveBindingApprovalPolicy(a App, sess *conversation.Session, sub *stat
 	return conversation.EffectiveApprovalPolicy(sess, workspaceValue)
 }
 
-func effectiveBindingSandboxMode(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveBindingSandboxMode(a App, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
 		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
 	}
@@ -507,7 +508,7 @@ func effectiveBindingSandboxMode(a App, sess *conversation.Session, sub *state.S
 	return conversation.EffectiveSandboxMode(sess, workspaceValue)
 }
 
-func effectiveBindingServiceTier(a App, sess *conversation.Session, sub *state.Submission) string {
+func effectiveBindingServiceTier(a App, sess *conversation.Session, sub *domainsubmission.Submission) string {
 	if value := conversation.EffectiveServiceTier(sess); strings.TrimSpace(value) != "" {
 		return strings.TrimSpace(value)
 	}
@@ -519,7 +520,7 @@ func effectiveBindingServiceTier(a App, sess *conversation.Session, sub *state.S
 	return strings.TrimSpace(botProfileServiceTier(a))
 }
 
-func effectiveBindingMultiAgentMode(a App, sess *conversation.Session, sub *state.Submission, ws *config.Workspace) string {
+func effectiveBindingMultiAgentMode(a App, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadMultiAgentMode) != "" {
 		return strings.TrimSpace(sess.ActiveThreadMultiAgentMode)
 	}
@@ -704,7 +705,7 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 					if current == nil {
 						return
 					}
-					RefreshPendingStatus(current)
+					conversation.RefreshPendingStatus(current)
 				})
 				if updateErr != nil {
 					return updateErr
@@ -726,7 +727,7 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 				if current == nil {
 					return
 				}
-				RefreshPendingStatus(current)
+				conversation.RefreshPendingStatus(current)
 			})
 			if updateErr != nil {
 				return updateErr
@@ -761,30 +762,8 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 	}
 }
 
-// ShouldStartNextSubmissionAsync returns true when a session has queued
-// submissions and no in-flight work, meaning it is safe to start the next
-// submission asynchronously.
-func ShouldStartNextSubmissionAsync(sess *conversation.Session) bool {
-	if sess == nil {
-		return false
-	}
-	return !conversation.HasInFlightSubmission(sess) && len(sess.Queue) > 0
-}
-
-// RefreshPendingStatus refreshes the session status based on queue state.
-func RefreshPendingStatus(sess *conversation.Session) {
-	if sess == nil || conversation.HasInFlightSubmission(sess) {
-		return
-	}
-	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-		sess.Status = state.SessionStatusQueued.String()
-		return
-	}
-	sess.Status = state.SessionStatusIdle.String()
-}
-
 // HandleSubmissionStartFailure handles a submission start failure.
-func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadID string, sub *state.Submission, err error, notifyFailure bool) {
+func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadID string, sub *domainsubmission.Submission, err error, notifyFailure bool) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	dropThreadLineage := false
@@ -808,7 +787,7 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 	}
 	a.SubmissionQueueClearSubmissionProcessingReactions(sub)
 	if sub != nil {
-		_ = appState.FinalizeSubmission(sub.ID, state.SubmissionStatusFailed.String())
+		_ = appState.FinalizeSubmission(sub.ID, domainsubmission.SubmissionStatusFailed.String())
 	}
 	shouldStartNext := false
 	clearedThreadLineage := false
@@ -826,9 +805,9 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 		}
 		if !conversation.HasActiveOperations(sess) {
 			if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
-				sess.Status = state.SessionStatusQueued.String()
+				sess.Status = conversation.SessionStatusQueued.String()
 			} else {
-				sess.Status = state.SessionStatusIdle.String()
+				sess.Status = conversation.SessionStatusIdle.String()
 			}
 		}
 	}); saveErr != nil {
@@ -864,7 +843,7 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 }
 
 // NotifySubmissionStartFailure sends a failure notification.
-func (s SubmissionQueueService) NotifySubmissionStartFailure(ctx context.Context, sub *state.Submission, err error, willContinue bool) {
+func (s SubmissionQueueService) NotifySubmissionStartFailure(ctx context.Context, sub *domainsubmission.Submission, err error, willContinue bool) {
 	a := s.App
 	if sub == nil || err == nil {
 		return
@@ -923,7 +902,7 @@ func (s SubmissionQueueService) NextQueuedSessionKey(sessionKey string) string {
 	if groupExecutionKey := serialGroupExecutionKey(sess); groupExecutionKey != "" {
 		return nextQueuedSerialSessionKey(appState, groupExecutionKey)
 	}
-	if ShouldStartNextSubmissionAsync(sess) {
+	if conversation.ShouldStartNextSubmission(sess) {
 		return strings.TrimSpace(sess.Key)
 	}
 	return ""
@@ -983,7 +962,7 @@ func nextQueuedSerialSessionKey(appState QueueAppStateProvider, groupExecutionKe
 		return ""
 	}
 	var bestSessionKey string
-	var bestSub *state.Submission
+	var bestSub *domainsubmission.Submission
 	for _, sess := range appState.Sessions() {
 		if sess == nil || serialGroupExecutionKey(sess) != groupExecutionKey {
 			continue
@@ -1035,7 +1014,7 @@ func sessionGroupKeyParts(sessionKey string) (frontendID, chatID string, ok bool
 	return strings.TrimSpace(frontendID), strings.TrimSpace(chatID), true
 }
 
-func queuedHeadSubmission(appState QueueAppStateProvider, sess *conversation.Session) *state.Submission {
+func queuedHeadSubmission(appState QueueAppStateProvider, sess *conversation.Session) *domainsubmission.Submission {
 	if sess == nil || len(sess.Queue) == 0 {
 		return nil
 	}
@@ -1046,10 +1025,10 @@ func queuedHeadSubmission(appState QueueAppStateProvider, sess *conversation.Ses
 	if sub := appState.Submission(id); sub != nil {
 		return sub
 	}
-	return &state.Submission{ID: id, SessionKey: strings.TrimSpace(sess.Key)}
+	return &domainsubmission.Submission{ID: id, SessionKey: strings.TrimSpace(sess.Key)}
 }
 
-func submissionBefore(a, b *state.Submission) bool {
+func submissionBefore(a, b *domainsubmission.Submission) bool {
 	if b == nil {
 		return a != nil
 	}
@@ -1066,7 +1045,7 @@ func submissionBefore(a, b *state.Submission) bool {
 
 // StartNextCodexSubmissionWithFailureNotice handles Codex-specific submission
 // startup: thread creation, turn start, and state binding.
-func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
@@ -1086,7 +1065,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 	}
 	if resolver, ok := a.(modelConfigResolver); ok {
 		sub.ModelConfig = resolver.SubmissionQueueResolveModelConfig(sess, sub)
-		if err := appState.UpdateSubmission(sub.ID, func(current *state.Submission) { current.ModelConfig = sub.ModelConfig }); err != nil {
+		if err := appState.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) { current.ModelConfig = sub.ModelConfig }); err != nil {
 			return err
 		}
 	}
@@ -1166,9 +1145,9 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		SubmissionID: sub.ID,
 		ThreadID:     threadID,
 	})
-	sess.Status = state.SessionStatusTurnStarting.String()
+	sess.Status = conversation.SessionStatusTurnStarting.String()
 	sub.ThreadID = threadID
-	sub.Status = state.SubmissionStatusRunning.String()
+	sub.Status = domainsubmission.SubmissionStatusRunning.String()
 	a.SubmissionQueueRuntimeState().NotePendingTurnBinding(threadID, sessionKey, sub.ID)
 	if err := appState.SaveSession(sess); err != nil {
 		a.SubmissionQueueRuntimeState().ClearPendingTurnBindingForSubmission(threadID, sub.ID)
@@ -1235,13 +1214,13 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
-	sess.Status = state.SessionStatusTurnInProgress.String()
+	sess.Status = conversation.SessionStatusTurnInProgress.String()
 	a.SubmissionQueueRuntimeState().BindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	a.SubmissionQueueRuntimeState().MarkTurnStartedAt(turnID, time.Now())
 	a.SubmissionQueueRuntimeState().ClearPendingTurnBindingForSubmission(threadID, sub.ID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
-	sub.Status = state.SubmissionStatusRunning.String()
+	sub.Status = domainsubmission.SubmissionStatusRunning.String()
 	if err := appState.SaveSession(sess); err != nil {
 		return err
 	}
@@ -1271,7 +1250,7 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func recordLegacySessionRootTurnBinding(reply QueueReplyContinuationProvider, sess *conversation.Session, sub *state.Submission, sessionKey, threadID, turnID string) {
+func recordLegacySessionRootTurnBinding(reply QueueReplyContinuationProvider, sess *conversation.Session, sub *domainsubmission.Submission, sessionKey, threadID, turnID string) {
 	if reply == nil || sess == nil || appcore.SubmissionHasSourceRootMessages(sub) {
 		return
 	}

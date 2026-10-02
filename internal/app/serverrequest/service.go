@@ -3,7 +3,7 @@ package serverrequest
 import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
-
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -19,7 +19,7 @@ type Service struct {
 	UpdatePending    func(id string, mutate func(*state.PendingRequest)) error
 	SavePending      func(req *state.PendingRequest) error
 	SetSubStatus     func(id, status string) error
-	Submission       func(id string) *state.Submission
+	Submission       func(id string) *domainsubmission.Submission
 	Session          func(key string) *conversation.Session
 	SessionKeysEqual func(a, b string) bool
 
@@ -34,9 +34,9 @@ type Service struct {
 	// Root service delegation
 	FinalizePendingReply         func(pending *state.PendingRequest) *state.PendingRequest
 	HasOpenPendingRequestForTurn func(threadID, turnID, excludeID string) bool
-	FindSubmissionByTurn         func(threadID, turnID string) (string, *state.Submission)
-	DeliverPendingCard           func(sub *state.Submission, card map[string]any, delivery PendingCardDelivery) error
-	RenderApprovalCard           func(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any
+	FindSubmissionByTurn         func(threadID, turnID string) (string, *domainsubmission.Submission)
+	DeliverPendingCard           func(sub *domainsubmission.Submission, card map[string]any, delivery PendingCardDelivery) error
+	RenderApprovalCard           func(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any
 	PrepareMentionText           func(text, userID string) string
 	ReplyCodexError              func(requestID json.RawMessage, code int, message string)
 	RawCard                      func(card map[string]any) *callback.Card

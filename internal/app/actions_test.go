@@ -203,7 +203,7 @@ func TestCompleteWorkspaceUseClearsIdleThreadLineageAndPlanMode(t *testing.T) {
 			Model:           "gpt-5.4",
 			ReasoningEffort: "high",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("upsert session: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestCompleteWorkspaceUseKeepsNewWorkspaceWhenBindingFails(t *testing.T) {
 			Mode:  "plan",
 			Model: "gpt-5.4",
 		},
-		Status: state.SessionStatusIdle.String(),
+		Status: conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("upsert session: %v", err)
 	}

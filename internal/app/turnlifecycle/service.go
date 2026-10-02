@@ -4,16 +4,16 @@ package turnlifecycle
 
 import (
 	"context"
+	"feidex/internal/app/appcore"
+	"feidex/internal/app/apputil"
+	"feidex/internal/app/submission"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"
 	"time"
 
-	"feidex/internal/app/appcore"
-	"feidex/internal/app/apputil"
-	"feidex/internal/app/submission"
 	appturnstream "feidex/internal/app/turnstream"
-	"feidex/internal/state"
 )
 
 // prependAttentionMentionMarkdown is a local alias for the apputil helper.
@@ -43,20 +43,20 @@ type App interface {
 	// Direct app methods.
 	MarkSessionThreadLive(sessionKey, threadID string)
 	RunAsync(fn func())
-	TurnStopAttentionUserID(sub *state.Submission, turnID string) string
-	SendEmptyFinalCardWithReuse(ctx context.Context, sub *state.Submission, footerLines []string, reuseMessageID string) string
-	SendFinalMessagesWithReuse(ctx context.Context, sub *state.Submission, text string, footerLines []string, reuseMessageID string) []string
+	TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID string) string
+	SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string
+	SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, reuseMessageID string) []string
 	SessionHasActiveWork(sess *conversation.Session) bool
 	NextQueuedSubmissionSessionKey(sessionKey string) string
 	BindStandaloneCompactTurn(threadID, turnID string) bool
 	BindGoalContinuationTurn(threadID, turnID string) bool
 	FinishStandaloneCompactTurn(threadID, turnID, status string) bool
-	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
-	ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *state.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool
+	FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission)
+	ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush TurnStreamFlushResult) bool
 	LogSessionState(event, sessionKey string, sess *conversation.Session)
 }
 
-func recordLegacySessionRootTurnBinding(reply ReplyContinuationProvider, sess *conversation.Session, sub *state.Submission, sessionKey, threadID, turnID string) {
+func recordLegacySessionRootTurnBinding(reply ReplyContinuationProvider, sess *conversation.Session, sub *domainsubmission.Submission, sessionKey, threadID, turnID string) {
 	if reply == nil || sess == nil || appcore.SubmissionHasSourceRootMessages(sub) {
 		return
 	}
@@ -71,7 +71,7 @@ func recordLegacySessionRootTurnBinding(reply ReplyContinuationProvider, sess *c
 type AppStateProvider interface {
 	Session(key string) *conversation.Session
 	Sessions() []*conversation.Session
-	Submission(id string) *state.Submission
+	Submission(id string) *domainsubmission.Submission
 	SaveSession(sess *conversation.Session) error
 	MarkSubmissionRunning(id, threadID, turnID string) error
 	FinalizeSubmission(id, status string) error
@@ -81,7 +81,7 @@ type AppStateProvider interface {
 // RuntimeStateProvider narrows runtime state access to the methods used by
 // the service for turn binding.
 type RuntimeStateProvider interface {
-	PendingSubmissionForThread(threadID string) (string, *state.Submission)
+	PendingSubmissionForThread(threadID string) (string, *domainsubmission.Submission)
 	BindTurnSubmission(threadID, turnID, sessionKey, submissionID string)
 	MarkTurnStartedAt(turnID string, startedAt time.Time)
 	ClearPendingTurnBindingForSubmission(threadID, submissionID string)
@@ -91,7 +91,7 @@ type RuntimeStateProvider interface {
 // ReplyContinuationProvider narrows reply continuation access to the methods
 // used by the service.
 type ReplyContinuationProvider interface {
-	RecordSubmissionSourceLinks(sub *state.Submission)
+	RecordSubmissionSourceLinks(sub *domainsubmission.Submission)
 	RecordRootTurnBinding(rootMessageID, sessionKey, threadID, turnID string)
 }
 
@@ -101,20 +101,20 @@ type TurnStreamFlushResult = appturnstream.FlushResult
 // TurnStreamProvider narrows turn stream access to the methods used by the
 // service.
 type TurnStreamProvider interface {
-	NoteTurnStarted(sessionKey string, sub *state.Submission)
+	NoteTurnStarted(sessionKey string, sub *domainsubmission.Submission)
 	FlushTurnStream(ctx context.Context, threadID, turnID string) TurnStreamFlushResult
 }
 
 // PendingQueueProvider narrows pending queue access to the methods used by
 // the service.
 type PendingQueueProvider interface {
-	ClearSubmissionProcessingReactions(sub *state.Submission)
+	ClearSubmissionProcessingReactions(sub *domainsubmission.Submission)
 }
 
 // OutboundCardProvider narrows outbound card access to the methods used by
 // the service.
 type OutboundCardProvider interface {
-	ReplaceTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string
+	ReplaceTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string
 }
 
 // SubmissionDispatchProvider narrows submission dispatch access to the
@@ -126,13 +126,13 @@ type SubmissionDispatchProvider interface {
 // AutoRetryProvider narrows auto-retry access to the methods used by the
 // service.
 type AutoRetryProvider interface {
-	ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *conversation.Session, sub *state.Submission, reuseMessageID, lastError string) bool
+	ObserveAutoRetryTerminal(sessionKey, threadID, status string, updatedSess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool
 }
 
 // RuntimeMaintenanceProvider narrows runtime maintenance access to the
 // methods used by the service.
 type RuntimeMaintenanceProvider interface {
-	CleanupSubmissionRuntimeState(sub *state.Submission)
+	CleanupSubmissionRuntimeState(sub *domainsubmission.Submission)
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ func (w Service) runtimeMaintenance() RuntimeMaintenanceProvider {
 // Helpers
 // ---------------------------------------------------------------------------
 
-func isReviewSubmission(sub *state.Submission) bool {
+func isReviewSubmission(sub *domainsubmission.Submission) bool {
 	return sub != nil && strings.TrimSpace(sub.Kind) == "review"
 }
 
@@ -187,8 +187,8 @@ func sessionHasActiveWork(sess *conversation.Session) bool {
 	if sessionHasActiveOperations(sess) {
 		return true
 	}
-	switch state.NormalizeSessionStatus(sess.Status) {
-	case state.SessionStatusTurnStarting:
+	switch conversation.NormalizeSessionStatus(sess.Status) {
+	case conversation.SessionStatusTurnStarting:
 		return true
 	default:
 		return false
@@ -235,7 +235,7 @@ func (w Service) BindPendingSubmissionTurn(threadID, turnID string, allowReview 
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
-	sess.Status = state.SessionStatusTurnInProgress.String()
+	sess.Status = conversation.SessionStatusTurnInProgress.String()
 	conversation.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		return false
@@ -243,7 +243,7 @@ func (w Service) BindPendingSubmissionTurn(threadID, turnID string, allowReview 
 	_ = st.MarkSubmissionRunning(sub.ID, threadID, turnID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
-	sub.Status = state.SubmissionStatusRunning.String()
+	sub.Status = domainsubmission.SubmissionStatusRunning.String()
 	w.replyContinuation().RecordSubmissionSourceLinks(sub)
 	recordLegacySessionRootTurnBinding(w.replyContinuation(), sess, sub, sessionKey, threadID, turnID)
 	w.turnStream().NoteTurnStarted(sessionKey, sub)
@@ -320,7 +320,7 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
-	sess.Status = state.SessionStatusTurnInProgress.String()
+	sess.Status = conversation.SessionStatusTurnInProgress.String()
 	conversation.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		slog.Error("turn started notification session bind failed",
@@ -335,7 +335,7 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 	_ = st.MarkSubmissionRunning(sub.ID, threadID, turnID)
 	sub.ThreadID = threadID
 	sub.TurnID = turnID
-	sub.Status = state.SubmissionStatusRunning.String()
+	sub.Status = domainsubmission.SubmissionStatusRunning.String()
 	w.runtimeState().BindTurnSubmission(threadID, turnID, sessionKey, sub.ID)
 	w.runtimeState().MarkTurnStartedAt(turnID, time.Now())
 	w.runtimeState().ClearPendingTurnBindingForSubmission(threadID, sub.ID)
@@ -355,7 +355,7 @@ func (w Service) OnTurnStartedNotification(threadID, turnID string) {
 // BindPendingSubmissionForTurnCompletion attempts to bind a pending
 // submission to a turn that is completing (no prior turn-start notification).
 // Returns the session key and submission if binding succeeded.
-func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *state.Submission) {
+func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string) (string, *domainsubmission.Submission) {
 	st := w.stateProvider()
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
@@ -392,7 +392,7 @@ func (w Service) BindPendingSubmissionForTurnCompletion(threadID, turnID string)
 		ThreadID:     threadID,
 		TurnID:       turnID,
 	})
-	sess.Status = state.SessionStatusTurnInProgress.String()
+	sess.Status = conversation.SessionStatusTurnInProgress.String()
 	conversation.SetThreadContext(sess, sub.WorkspaceID, threadID, sess.ActiveThreadName, sess.ActiveThreadPreview)
 	if err := st.SaveSession(sess); err != nil {
 		slog.Error("turn completed fallback session bind failed",
@@ -502,17 +502,17 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 		conversation.RemoveActiveOperation(sess, sub.ID, turnID)
 		switch {
 		case sessionHasActiveOperations(sess):
-			sess.Status = state.SessionStatusTurnStarting.String()
+			sess.Status = conversation.SessionStatusTurnStarting.String()
 			for _, op := range sess.ActiveOperations {
 				if strings.TrimSpace(op.TurnID) != "" {
-					sess.Status = state.SessionStatusTurnInProgress.String()
+					sess.Status = conversation.SessionStatusTurnInProgress.String()
 					break
 				}
 			}
 		case len(sess.Queue) > 0 || len(sess.StagedImages) > 0:
-			sess.Status = state.SessionStatusQueued.String()
+			sess.Status = conversation.SessionStatusQueued.String()
 		default:
-			sess.Status = state.SessionStatusIdle.String()
+			sess.Status = conversation.SessionStatusIdle.String()
 		}
 	})
 	suppressTerminalCard := false
@@ -571,7 +571,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 				return
 			}
 			conversation.RemoveActiveOperation(s, steerSub.ID, opTurnID)
-			submission.RefreshPendingStatus(s)
+			conversation.RefreshPendingStatus(s)
 		}); err != nil {
 			slog.Error("finishTurn steer cleanup session update failed",
 				"session_key", sessionKey,
@@ -586,7 +586,7 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 		updatedSess = refreshedSess
 	}
 	planExitPromptSent := w.app.ProcessCodexPlanModeExitOnTurnCompleted(sessionKey, sub, threadID, turnID, status, flush)
-	if sub != nil && state.NormalizeSubmissionStatus(sub.Status) == state.SubmissionStatusCompleted && !flush.SawFinal && !planExitPromptSent {
+	if sub != nil && domainsubmission.NormalizeSubmissionStatus(sub.Status) == domainsubmission.SubmissionStatusCompleted && !flush.SawFinal && !planExitPromptSent {
 		if flush.ShouldUsePlanExitPrompt && strings.TrimSpace(flush.PlanMarkdown) != "" {
 			w.outboundCard().ReplaceTurnEventCardWithReuse(
 				appcore.Context(w.app),

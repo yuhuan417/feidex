@@ -3,12 +3,14 @@ package convbackend
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	codexadapter "feidex/internal/adapter/backend/codex"
+
 	appsubmission "feidex/internal/app/submission"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -91,7 +93,7 @@ func ResumeClaudeSelectedThread(deps ClaudeResumeDeps, sessionKey string, sess *
 	if deps.ResetActiveOps != nil {
 		deps.ResetActiveOps(sess)
 	}
-	sess.Status = state.SessionStatusIdle.String()
+	sess.Status = conversation.SessionStatusIdle.String()
 	if deps.SaveSession != nil {
 		if err := deps.SaveSession(sess); err != nil {
 			return nil, err
@@ -181,7 +183,7 @@ func ResumeCodexSelectedThread(deps CodexResumeDeps, sessionKey string, sess *co
 	if deps.ResetActiveOps != nil {
 		deps.ResetActiveOps(sess)
 	}
-	sess.Status = state.SessionStatusIdle.String()
+	sess.Status = conversation.SessionStatusIdle.String()
 	if deps.SaveSession != nil {
 		if err := deps.SaveSession(sess); err != nil {
 			return nil, err
@@ -256,11 +258,11 @@ func ContinueCodexActiveTurn(deps CodexContinueDeps, sessionKey, text string) er
 type CodexReplyContinuationDeps struct {
 	Context                    func() context.Context
 	RequireClient              func() (CodexRPCClient, error)
-	ResolveInboundAttachments  func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error)
+	ResolveInboundAttachments  func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error)
 	PendingInputSessionKey     func(msg *feishu.InboundMessage) string
 	CollectPendingStagedImages func(sessionKey, bucketSessionKey string) []conversation.SessionStagedImage
 	ClearPendingStagedImages   func(sessionKey, bucketSessionKey string) error
-	BuildTurnInputs            func(sub *state.Submission) []map[string]any
+	BuildTurnInputs            func(sub *domainsubmission.Submission) []map[string]any
 	SaveSession                SessionSaveFunc
 	DefaultWorkspaceID         func() string
 }
@@ -282,14 +284,14 @@ func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.Inbo
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        state.SessionStatusIdle.String(),
+			Status:        conversation.SessionStatusIdle.String(),
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = valueOrEmpty(deps.DefaultWorkspaceID)
 	}
 	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), valueOrEmpty(deps.DefaultWorkspaceID))
-	var inboundAttachments []state.SubmissionAttachment
+	var inboundAttachments []domainsubmission.SubmissionAttachment
 	var err error
 	if deps.ResolveInboundAttachments != nil {
 		inboundAttachments, err = deps.ResolveInboundAttachments(msg, workspaceID, sessionKey)
@@ -305,7 +307,7 @@ func TryCodexReplyContinuation(deps CodexReplyContinuationDeps, msg *feishu.Inbo
 	if deps.CollectPendingStagedImages != nil {
 		stagedImages = deps.CollectPendingStagedImages(sessionKey, bucketSessionKey)
 	}
-	inputSub := &state.Submission{
+	inputSub := &domainsubmission.Submission{
 		InputText:            msg.Text,
 		Attachments:          append(appsubmission.StagedImageAttachments(stagedImages), inboundAttachments...),
 		WorkspaceID:          workspaceID,
@@ -420,7 +422,7 @@ func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, 
 				firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Preview), sess.ActiveThreadPreview),
 			)
 		}
-		sess.Status = state.SessionStatusIdle.String()
+		sess.Status = conversation.SessionStatusIdle.String()
 		if deps.SaveSession != nil {
 			if upsertErr := deps.SaveSession(sess); upsertErr != nil {
 				slog.Error("startup thread resume persistence failed",
@@ -507,7 +509,7 @@ func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, 
 		if deps.ClearThreadContext != nil {
 			deps.ClearThreadContext(sess)
 		}
-		sess.Status = state.SessionStatusIdle.String()
+		sess.Status = conversation.SessionStatusIdle.String()
 		if deps.SaveSession != nil {
 			_ = deps.SaveSession(sess)
 		}
@@ -519,7 +521,7 @@ func RecoverCodexStartupConversation(deps CodexStartupRecoveryDeps, sessionKey, 
 	if deps.SetThreadContext != nil {
 		deps.SetThreadContext(sess, workspaceID, threadResp.Thread.ID, threadResp.Thread.Name, threadResp.Thread.Preview)
 	}
-	sess.Status = state.SessionStatusIdle.String()
+	sess.Status = conversation.SessionStatusIdle.String()
 	if deps.SaveSession != nil {
 		if upsertErr := deps.SaveSession(sess); upsertErr != nil {
 			slog.Error("startup fresh thread persistence failed",

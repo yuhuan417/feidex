@@ -3,10 +3,10 @@ package backend
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"testing"
 
 	appturnstream "feidex/internal/app/turnstream"
-	"feidex/internal/state"
 )
 
 func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelectorBlocks(t *testing.T) {
@@ -15,7 +15,7 @@ func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelecto
 		ActiveThreadID:     "thread-1",
 		ActiveSubmissionID: "sub-1",
 		ActiveTurnID:       "turn-1",
-		Status:             state.SessionStatusTurnInProgress.String(),
+		Status:             conversation.SessionStatusTurnInProgress.String(),
 		Queue:              []string{"queued-1"},
 		ActiveOperations: []conversation.SessionActiveOperation{{
 			SubmissionID: "sub-1",
@@ -23,18 +23,18 @@ func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelecto
 			TurnID:       "turn-1",
 		}},
 	}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		ID:         "sub-1",
 		SessionKey: "sess-1",
 		ThreadID:   "thread-1",
 		TurnID:     "turn-1",
-		Status:     state.SubmissionStatusRunning.String(),
+		Status:     domainsubmission.SubmissionStatusRunning.String(),
 	}
 	var selectorCalls int
 	var startCalls int
 	svc := NewBackendFailureService(FailureDeps{
 		State: FailureStateDeps{
-			GetSubmission: func(id string) *state.Submission {
+			GetSubmission: func(id string) *domainsubmission.Submission {
 				if id != sub.ID {
 					return nil
 				}
@@ -67,7 +67,7 @@ func TestFailSubmissionWithoutTerminalCompletionDoesNotFallbackWhenQueuedSelecto
 			},
 		},
 		Cards: FailureCardDeps{
-			ObserveAutoRetryTerminal: func(string, string, string, *conversation.Session, *state.Submission, string, string) bool {
+			ObserveAutoRetryTerminal: func(string, string, string, *conversation.Session, *domainsubmission.Submission, string, string) bool {
 				return true
 			},
 		},

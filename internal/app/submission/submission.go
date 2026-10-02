@@ -4,11 +4,10 @@
 package submission
 
 import (
-	"feidex/internal/domain/conversation"
-	"strings"
-
 	"feidex/internal/app/apputil"
-	"feidex/internal/state"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"strings"
 )
 
 // UniqueStrings returns unique non-empty strings after trimming whitespace,
@@ -51,16 +50,16 @@ func RemoveString(values []string, target string) []string {
 
 // StagedImageAttachments converts staged images to submission attachments,
 // skipping any images without a local path.
-func StagedImageAttachments(images []conversation.SessionStagedImage) []state.SubmissionAttachment {
+func StagedImageAttachments(images []conversation.SessionStagedImage) []domainsubmission.SubmissionAttachment {
 	if len(images) == 0 {
 		return nil
 	}
-	attachments := make([]state.SubmissionAttachment, 0, len(images))
+	attachments := make([]domainsubmission.SubmissionAttachment, 0, len(images))
 	for _, image := range images {
 		if strings.TrimSpace(image.LocalPath) == "" {
 			continue
 		}
-		attachments = append(attachments, state.SubmissionAttachment{
+		attachments = append(attachments, domainsubmission.SubmissionAttachment{
 			Kind:      "image",
 			Name:      image.Name,
 			LocalPath: image.LocalPath,
@@ -101,7 +100,7 @@ func StagedImageRootMessageIDs(images []conversation.SessionStagedImage) []strin
 
 // HasSourceMessage checks if a submission has the given message ID among its
 // source or trigger message IDs.
-func HasSourceMessage(sub *state.Submission, messageID string) bool {
+func HasSourceMessage(sub *domainsubmission.Submission, messageID string) bool {
 	if sub == nil {
 		return false
 	}
@@ -115,7 +114,7 @@ func HasSourceMessage(sub *state.Submission, messageID string) bool {
 
 // SourceMessageIDs returns all unique source message IDs for a submission,
 // including the trigger message ID.
-func SourceMessageIDs(sub *state.Submission) []string {
+func SourceMessageIDs(sub *domainsubmission.Submission) []string {
 	if sub == nil {
 		return nil
 	}
@@ -130,16 +129,16 @@ func SourceMessageIDs(sub *state.Submission) []string {
 // completes. Returns "" for successful completions.
 func CompletionTerminalText(status, lastError string) string {
 	lastError = strings.TrimSpace(lastError)
-	if state.NormalizeSubmissionStatus(status) == state.SubmissionStatusCompleted {
+	if domainsubmission.NormalizeSubmissionStatus(status) == domainsubmission.SubmissionStatusCompleted {
 		return ""
 	}
 
 	fallback := lastError
 	if fallback == "" {
 		switch status {
-		case state.SubmissionStatusInterrupted.String():
+		case domainsubmission.SubmissionStatusInterrupted.String():
 			fallback = "任务已中断。"
-		case state.SubmissionStatusFailed.String():
+		case domainsubmission.SubmissionStatusFailed.String():
 			fallback = "任务失败。"
 		default:
 			fallback = "任务已结束。"
@@ -147,7 +146,7 @@ func CompletionTerminalText(status, lastError string) string {
 	}
 
 	switch status {
-	case state.SubmissionStatusInterrupted.String():
+	case domainsubmission.SubmissionStatusInterrupted.String():
 		return "任务已中断。"
 	default:
 		return fallback

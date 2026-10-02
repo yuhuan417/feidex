@@ -7,12 +7,15 @@ import (
 	"context"
 	"encoding/json"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
 	"time"
 
 	appcore "feidex/internal/app/appcore"
+
 	apputil "feidex/internal/app/apputil"
+
 	appreview "feidex/internal/app/review"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -44,7 +47,7 @@ const (
 type AppStateProvider interface {
 	Session(key string) *conversation.Session
 	SaveSession(sess *conversation.Session) error
-	CreateSubmission(sub *state.Submission) (string, error)
+	CreateSubmission(sub *domainsubmission.Submission) (string, error)
 	QueueSubmission(sessionKey, submissionID string) error
 	Pending(id string) *state.PendingRequest
 	SavePending(req *state.PendingRequest) error
@@ -110,10 +113,10 @@ type App interface {
 	// given session.
 	ReviewStartNextSubmission(sessionKey string) error
 	// ReviewSendSubmissionQueuedNotice sends a queued notice for the submission.
-	ReviewSendSubmissionQueuedNotice(ctx context.Context, sub *state.Submission)
+	ReviewSendSubmissionQueuedNotice(ctx context.Context, sub *domainsubmission.Submission)
 	// ReviewMarkSubmissionQueuedReactions marks the submission with queued
 	// reactions.
-	ReviewMarkSubmissionQueuedReactions(sub *state.Submission)
+	ReviewMarkSubmissionQueuedReactions(sub *domainsubmission.Submission)
 	// ReviewCompleteAsyncCommandAction runs a slash-command-style action
 	// asynchronously and patches the card.
 	ReviewCompleteAsyncCommandAction(
@@ -170,7 +173,7 @@ func NewReviewFormService(app App) ReviewFormService {
 // ---------------------------------------------------------------------------
 
 // IsReviewSubmission returns true if the submission is a review submission.
-func IsReviewSubmission(sub *state.Submission) bool {
+func IsReviewSubmission(sub *domainsubmission.Submission) bool {
 	return sub != nil && strings.TrimSpace(sub.Kind) == SubmissionKindReview
 }
 
@@ -185,7 +188,7 @@ func ReviewPendingPayloadFromPending(pending *state.PendingRequest) ReviewPendin
 }
 
 // ReviewTargetFromSubmission extracts a TargetSpec from a submission.
-func ReviewTargetFromSubmission(sub *state.Submission) appreview.TargetSpec {
+func ReviewTargetFromSubmission(sub *domainsubmission.Submission) appreview.TargetSpec {
 	if sub == nil {
 		return appreview.TargetSpec{}
 	}
@@ -344,7 +347,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
 			RootMessageID: msg.RootMessageID,
-			Status:        state.SessionStatusIdle.String(),
+			Status:        conversation.SessionStatusIdle.String(),
 		}
 		if err := stateProvider.SaveSession(sess); err != nil {
 			return err
@@ -355,12 +358,12 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 	shouldAttemptStart := !hasInFlight
 	willWaitInQueue := queueLenBefore > 0 || hasInFlight
 	if willWaitInQueue {
-		sess.Status = state.SessionStatusQueued.String()
+		sess.Status = conversation.SessionStatusQueued.String()
 		if err := stateProvider.SaveSession(sess); err != nil {
 			return err
 		}
 	}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          ws.ID,
 		ThreadID:             strings.TrimSpace(threadID),
@@ -376,7 +379,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 		ReviewCommitSHA:      strings.TrimSpace(target.CommitSHA),
 		ReviewCommitTitle:    strings.TrimSpace(target.CommitTitle),
 		ReviewInstructions:   strings.TrimSpace(target.Instructions),
-		Status:               state.SubmissionStatusQueued.String(),
+		Status:               domainsubmission.SubmissionStatusQueued.String(),
 		WaitedInQueue:        willWaitInQueue,
 	}
 	id, err := stateProvider.CreateSubmission(sub)
@@ -405,7 +408,7 @@ func EnqueueReviewSubmission(a App, msg *feishu.InboundMessage, sessionKey strin
 // ---------------------------------------------------------------------------
 
 // StartSubmissionReview starts a review for a queued submission.
-func StartSubmissionReview(a App, ctx context.Context, threadID string, sub *state.Submission) (string, error) {
+func StartSubmissionReview(a App, ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}

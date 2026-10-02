@@ -2,18 +2,18 @@ package app
 
 import (
 	"context"
+	"feidex/internal/app/attachments"
+	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"
 	"time"
 
-	"feidex/internal/app/attachments"
 	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
-func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *state.Submission, text string) string {
+func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *domainsubmission.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	if a == nil || a.feishu == nil || sub == nil || text == "" {
 		return text
@@ -42,7 +42,7 @@ func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *state.Submissio
 	return rewritten
 }
 
-func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *state.Submission, text string, enablePreview bool) string {
+func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, enablePreview bool) string {
 	text = strings.TrimSpace(text)
 	if enablePreview {
 		text = applinkutil.LinkifyInlineCodeURLs(text)
@@ -56,7 +56,7 @@ func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *state.Submission
 	return cardRendererForApp(a).prepareCardMarkdown(sub, text)
 }
 
-func scheduleLocalFileLinkPatch(a *App, sub *state.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
+func scheduleLocalFileLinkPatch(a *App, sub *domainsubmission.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
 	messageID = strings.TrimSpace(messageID)
 	body = strings.TrimSpace(body)
 	if a == nil || a.feishu == nil || sub == nil || messageID == "" || body == "" {

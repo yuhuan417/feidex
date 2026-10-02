@@ -2,17 +2,16 @@ package app
 
 import (
 	"context"
+	"feidex/internal/app/attachments"
+	"feidex/internal/config"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
 	"fmt"
 	"strings"
 	"time"
-
-	"feidex/internal/app/attachments"
-	"feidex/internal/config"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
-func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
+func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 	if msg == nil || len(msg.Attachments) == 0 {
 		return nil, nil
 	}
@@ -28,7 +27,7 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 	ctx, cancel := context.WithTimeout(a.Context(), 30*time.Second)
 	defer cancel()
 
-	att := make([]state.SubmissionAttachment, 0, len(msg.Attachments))
+	att := make([]domainsubmission.SubmissionAttachment, 0, len(msg.Attachments))
 	for _, attachment := range msg.Attachments {
 		sourceMessageID := strings.TrimSpace(attachment.SourceMessageID)
 		if sourceMessageID == "" {
@@ -38,7 +37,7 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 		if err != nil {
 			return nil, err
 		}
-		att = append(att, state.SubmissionAttachment{
+		att = append(att, domainsubmission.SubmissionAttachment{
 			Kind:      attachment.Kind,
 			Name:      name,
 			LocalPath: path,

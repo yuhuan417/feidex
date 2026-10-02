@@ -2,12 +2,11 @@ package app
 
 import (
 	"context"
-	"strings"
-	"testing"
-
 	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
-	"feidex/internal/state"
+	domainsubmission "feidex/internal/domain/submission"
+	"strings"
+	"testing"
 )
 
 func cardBodyElements(t *testing.T, card map[string]any) []map[string]any {
@@ -27,7 +26,7 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
 		TurnID:      "turn-1",
@@ -68,7 +67,7 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
 		TurnID:      "turn-1",
@@ -101,7 +100,7 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
 		TurnID:      "turn-1",
@@ -138,7 +137,7 @@ func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := &App{cfg: cfg}
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
 		TurnID:      "turn-1",

@@ -3,9 +3,12 @@ package app
 import (
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/modelconfig"
+	domainsubmission "feidex/internal/domain/submission"
+
 	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/state"
 )
@@ -69,7 +72,7 @@ func modelConfigSnapshot(a *App, sess *conversation.Session, backend string) dom
 	return domainmodelconfig.Resolve(backend, sources)
 }
 
-func (a submissionAppAdapter) SubmissionQueueResolveModelConfig(sess *conversation.Session, sub *state.Submission) domainmodelconfig.Snapshot {
+func (a submissionAppAdapter) SubmissionQueueResolveModelConfig(sess *conversation.Session, sub *domainsubmission.Submission) domainmodelconfig.Snapshot {
 	if sess != nil && sub != nil && sub.BindingID != "" {
 		cp := *sess
 		cp.BindingID = sub.BindingID

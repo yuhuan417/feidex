@@ -2,13 +2,14 @@ package serverrequest
 
 import (
 	"encoding/json"
-	codexadapter "feidex/internal/adapter/backend/codex"
-	"log/slog"
-	"strings"
+	domainsubmission "feidex/internal/domain/submission"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/app/pendingforms"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"log/slog"
+	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -32,7 +33,7 @@ func (s *Service) SendElicitationFormCard(requestID json.RawMessage, payload Eli
 		TurnID:          payload.TurnID,
 		OwnerUserID:     sub.UserID,
 		PayloadJSON:     mustJSON(payload),
-		WaitingStatus:   state.SubmissionStatusWaitingUserInput.String(),
+		WaitingStatus:   domainsubmission.SubmissionStatusWaitingUserInput.String(),
 		LinkKind:        "elicitation_form_card",
 	})
 	if err == nil {
@@ -107,7 +108,7 @@ func (s *Service) SendElicitationURLCard(requestID json.RawMessage, payload Elic
 		TurnID:          payload.TurnID,
 		OwnerUserID:     sub.UserID,
 		PayloadJSON:     mustJSON(payload),
-		WaitingStatus:   state.SubmissionStatusWaitingUserInput.String(),
+		WaitingStatus:   domainsubmission.SubmissionStatusWaitingUserInput.String(),
 		LinkKind:        "elicitation_url_card",
 	})
 	if err == nil {

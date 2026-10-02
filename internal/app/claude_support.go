@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
 	"time"
 
 	appapproval "feidex/internal/app/approval"
 	"feidex/internal/app/apputil"
+
 	appclauderuntime "feidex/internal/app/clauderuntime"
 	"feidex/internal/app/claudesupport"
 	"feidex/internal/app/pendingforms"
@@ -20,7 +22,7 @@ import (
 func newClaudeSupportService(a *App) *claudesupport.Service {
 	return serviceFor(a, "claudeSupportService", func() *claudesupport.Service {
 		return &claudesupport.Service{
-			DeliverPendingCard: func(sub *state.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
+			DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
 				return deliverPendingCard(a, sub, card, pendingCardDelivery{
 					requestKey:      reqKey,
 					requestIDStored: reqIDStored,
@@ -52,7 +54,7 @@ func newClaudeSupportService(a *App) *claudesupport.Service {
 					linkKind:        linkKind,
 				})
 			},
-			RenderApprovalCard: func(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+			RenderApprovalCard: func(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
 				return renderApprovalCard(a, "", sub, title, color, body, buttons)
 			},
 			SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
@@ -88,11 +90,11 @@ func claudePlanCancelledBody(pending *state.PendingRequest) string {
 	return claudesupport.ClaudePlanCancelledBody(pending)
 }
 
-func sendClaudeApprovalCardWithPayload(a *App, kind, requestID, sessionKey string, sub *state.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
+func sendClaudeApprovalCardWithPayload(a *App, kind, requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
 	return newClaudeSupportService(a).SendApprovalCardWithPayload(sub, kind, requestID, sessionKey, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
 }
 
-func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *state.Submission, presentation appapproval.Presentation) error {
+func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
 	return sendClaudeApprovalCardWithPayload(
 		a,
 		presentation.Kind.String(),
@@ -108,15 +110,15 @@ func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *state.Sub
 	)
 }
 
-func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *state.Submission, payload pendingforms.ToolUserInputPayload) error {
+func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload) error {
 	return newClaudeSupportService(a).SendUserInputCard(sub, requestID, sessionKey, payload)
 }
 
-func sendClaudeUserInputFormCard(a *App, requestID, sessionKey string, sub *state.Submission, payload pendingforms.ToolUserInputPayload) error {
+func sendClaudeUserInputFormCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload) error {
 	return newClaudeSupportService(a).SendUserInputFormCard(sub, requestID, sessionKey, payload)
 }
 
-func sendClaudePlanModeCard(a *App, requestID, sessionKey string, sub *state.Submission, threadID, turnID, body string) error {
+func sendClaudePlanModeCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error {
 	return newClaudeSupportService(a).SendPlanModeCard(sub, requestID, sessionKey, threadID, turnID, body)
 }
 

@@ -5,16 +5,17 @@ package turnstream
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"sync"
 
 	appcore "feidex/internal/app/appcore"
+
 	apputil "feidex/internal/app/apputil"
 	"feidex/internal/app/quietmode"
 	"feidex/internal/app/turn"
 	"feidex/internal/app/turnitem"
 	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 // ---------------------------------------------------------------------------
@@ -50,7 +51,7 @@ type App interface {
 
 	// SendSubmissionStartedNotice sends the "turn started" notice for a
 	// submission, respecting the start-notice-sent guard.
-	SendSubmissionStartedNotice(ctx context.Context, sub *state.Submission)
+	SendSubmissionStartedNotice(ctx context.Context, sub *domainsubmission.Submission)
 
 	// TurnStreamTracker returns the turn stream tracker, lazily initializing it.
 	TurnStreamTracker() *Tracker
@@ -62,14 +63,14 @@ type App interface {
 
 // StateProvider narrows app state access to the methods used by the service.
 type StateProvider interface {
-	Submission(id string) *state.Submission
-	UpdateSubmission(id string, mutate func(*state.Submission)) error
+	Submission(id string) *domainsubmission.Submission
+	UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error
 }
 
 // SubmissionFinderProvider narrows the submission-by-turn lookup to the
 // methods used by the service.
 type SubmissionFinderProvider interface {
-	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
+	FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission)
 }
 
 // TurnLifecycleProvider narrows turn lifecycle access to the methods used by
@@ -88,15 +89,15 @@ type RuntimeStateProvider interface {
 // OutboundCardProvider narrows outbound card access to the methods used by
 // the service.
 type OutboundCardProvider interface {
-	SendPlanCardWithReuse(ctx context.Context, sub *state.Submission, planText, reuseMessageID string) string
-	SendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnitem.CardPayload, reuseMessageID string) string
+	SendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string
+	SendTurnItemCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, reuseMessageID string) string
 	CompleteStandaloneCompactItem(threadID, turnID string, item turnitem.ProtocolItem) bool
 }
 
 // QuietCardExecutorProvider provides the executeQuietWorkingCardOp callback
 // used by the service to send/patch quiet working cards.
 type QuietCardExecutorProvider interface {
-	ExecuteQuietWorkingCardOp(ctx context.Context, sub *state.Submission, op turn.QuietWorkingCardOp)
+	ExecuteQuietWorkingCardOp(ctx context.Context, sub *domainsubmission.Submission, op turn.QuietWorkingCardOp)
 }
 
 // ---------------------------------------------------------------------------
@@ -210,7 +211,7 @@ func (svc Service) Tracker() *Tracker {
 }
 
 // NoteTurnStarted records that a turn has started for the given submission.
-func (svc Service) NoteTurnStarted(ctx context.Context, sessionKey string, sub *state.Submission) {
+func (svc Service) NoteTurnStarted(ctx context.Context, sessionKey string, sub *domainsubmission.Submission) {
 	if sub == nil || strings.TrimSpace(sub.TurnID) == "" {
 		return
 	}
@@ -486,7 +487,7 @@ func (svc Service) StreamSawFinal(turnID string) bool {
 
 // EnsureStreamLocked ensures a stream entry exists for the given submission,
 // updating it if it already exists. The caller must hold the tracker mutex.
-func (svc Service) EnsureStreamLocked(tracker *Tracker, sessionKey string, sub *state.Submission) *Stream {
+func (svc Service) EnsureStreamLocked(tracker *Tracker, sessionKey string, sub *domainsubmission.Submission) *Stream {
 	if tracker == nil {
 		return nil
 	}
@@ -618,7 +619,7 @@ func (svc Service) PrepareStreamQuietBoundary(turnID string) turn.QuietWorkingBo
 
 // PrepareStreamQuietUpdate prepares a quiet working card update for the given
 // turn stream.
-func (svc Service) PrepareStreamQuietUpdate(sessionKey string, sub *state.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
+func (svc Service) PrepareStreamQuietUpdate(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
 	tracker := svc.Tracker()
 	if tracker == nil || sub == nil {
 		return turn.QuietWorkingCardOp{}
@@ -715,7 +716,7 @@ func (svc Service) feishuConfig() *config.FeishuConfig {
 
 // ensureStreamLocked ensures a stream exists for the submission. Alias for
 // EnsureStreamLocked for internal use.
-func (svc Service) ensureStreamLocked(tracker *Tracker, sessionKey string, sub *state.Submission) *Stream {
+func (svc Service) ensureStreamLocked(tracker *Tracker, sessionKey string, sub *domainsubmission.Submission) *Stream {
 	return svc.EnsureStreamLocked(tracker, sessionKey, sub)
 }
 

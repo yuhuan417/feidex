@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"sync"
 	"testing"
@@ -231,7 +232,7 @@ func TestApprovalRequestPayloadPrefersNestedRequestAndFallsBackCleanly(t *testin
 
 // --- merged from critical_paths_more_test.go ---
 
-func seedActiveSubmissionForInboundMessage(t *testing.T, a *App, msg *feishu.InboundMessage, threadID, turnID string) (string, *state.Submission) {
+func seedActiveSubmissionForInboundMessage(t *testing.T, a *App, msg *feishu.InboundMessage, threadID, turnID string) (string, *domainsubmission.Submission) {
 	t.Helper()
 
 	sessionKey := makeSessionKey(a, msg)
@@ -248,7 +249,7 @@ func seedActiveSubmissionForInboundMessage(t *testing.T, a *App, msg *feishu.Inb
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-1",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

@@ -2,38 +2,38 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appdelivery "feidex/internal/app/delivery"
 	"feidex/internal/app/quietmode"
 	"feidex/internal/app/turnitem"
 	"strings"
 	"time"
-
-	"feidex/internal/state"
 )
 
-func replyInThreadForSubmission(_ *App, _ *state.Submission) bool {
+func replyInThreadForSubmission(_ *App, _ *domainsubmission.Submission) bool {
 	return false
 }
 
-func sendSubmissionQueuedNotice(a *App, ctx context.Context, sub *state.Submission) {
+func sendSubmissionQueuedNotice(a *App, ctx context.Context, sub *domainsubmission.Submission) {
 	if sub == nil {
 		return
 	}
 	sendTurnEventMessages(a, ctx, sub, "已加入队列，等待当前任务结束后开始处理。", replyInThreadForSubmission(a, sub), "turn_queued")
 }
 
-func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *state.Submission) {
+func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *domainsubmission.Submission) {
 	if sub == nil {
 		return
 	}
 	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", replyInThreadForSubmission(a, sub), "turn_started")
 }
 
-func (s outboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *state.Submission, planText, reuseMessageID string) string {
+func (s outboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string {
 	return newOutboundCardService(s.app).sendTurnEventCardWithReuse(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", "", reuseMessageID)
 }
 
-func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub *state.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
+func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
 	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -120,11 +120,11 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 }
 
 // Exported wrapper for sub-package interface satisfaction.
-func (s outboundCardService) ReplaceTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
+func (s outboundCardService) ReplaceTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	return s.replaceTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, reuseMessageID)
 }
 
-func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
+func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -142,7 +142,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 	return newOutboundCardService(s.app).sendTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, "")
 }
 
-func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub *state.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
+func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -169,7 +169,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	return id
 }
 
-func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *state.Submission, payload turnitem.CardPayload, enablePreview bool) map[string]any {
+func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, enablePreview bool) map[string]any {
 	if turnitem.IsReplyTurnItem(payload.ItemType) {
 		return cardRendererForApp(s.app).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(s.app, sub, turnitem.ReplyTurnItemCardTitle(payload)), payload.Color, payload.IsFinalAnswer, turnitem.ReplyTurnItemCardBody(payload), nil, enablePreview)
 	}

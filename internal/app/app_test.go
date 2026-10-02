@@ -4,18 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appapprovalview "feidex/internal/app/approvalview"
 	"feidex/internal/app/apputil"
 	"feidex/internal/app/attachments"
+
 	appcompact "feidex/internal/app/compact"
+
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
+
 	appfeishuwrap "feidex/internal/app/feishuwrap"
+
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/app/pendingforms"
+
 	appthreadmenu "feidex/internal/app/threadmenu"
+
 	appthreadview "feidex/internal/app/threadview"
 	"feidex/internal/app/turnitem"
+
 	appupgradecmd "feidex/internal/app/upgradecmd"
+
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -770,7 +780,7 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-p2p",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -1692,7 +1702,7 @@ func TestCompleteApprovalActionPreservesNumericRequestID(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:          "sub-1",
 		SessionKey:  sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -1743,7 +1753,7 @@ func TestCompleteApprovalActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:          "sub-1",
 		SessionKey:  sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -2280,7 +2290,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sessionKey := "sess-1"
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-queued",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -2341,7 +2351,7 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(nil submission) to fail")
 	}
-	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &state.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
+	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(empty input) to fail")
 	}
 
@@ -2394,7 +2404,7 @@ func TestStartSubmissionTurnIncludesFastServiceTier(t *testing.T) {
 		}
 		return nil
 	}
-	sub := &state.Submission{ID: "sub-1", InputText: "hello"}
+	sub := &domainsubmission.Submission{ID: "sub-1", InputText: "hello"}
 	if _, err := startSubmissionTurn(a, context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", "", ""); err != nil {
 		t.Fatalf("startSubmissionTurn() error = %v", err)
 	}
@@ -2430,7 +2440,7 @@ func TestNotificationHelpers(t *testing.T) {
 		t.Fatalf("submission after error notification = %+v", updated)
 	}
 
-	newSubmissionQueueServiceFromApp(a).UpdateSubmissionByTurn("thread-1", "turn-1", func(s *state.Submission) { s.Status = "custom" })
+	newSubmissionQueueServiceFromApp(a).UpdateSubmissionByTurn("thread-1", "turn-1", func(s *domainsubmission.Submission) { s.Status = "custom" })
 	if got := a.store.GetSubmission(sub.ID); got == nil || got.Status != "custom" {
 		t.Fatalf("updateSubmissionByTurn() = %+v, want updated status", got)
 	}
@@ -2672,11 +2682,11 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
 		ActiveTurnID:            "turn-a",
 		ActiveSubmissionID:      "sub-a",
-		Status:                  state.SessionStatusTurnInProgress.String(),
+		Status:                  conversation.SessionStatusTurnInProgress.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession(root-a) error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-a",
 		SessionKey:       rootASessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -2685,7 +2695,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 		UserID:           "user-1",
 		ChatID:           "chat-1",
 		TriggerMessageID: "root-a",
-		Status:           state.SubmissionStatusRunning.String(),
+		Status:           domainsubmission.SubmissionStatusRunning.String(),
 	}); err != nil {
 		t.Fatalf("CreateSubmission(root-a) error = %v", err)
 	}
@@ -2818,7 +2828,7 @@ func TestHandleFeishuMessageP2PQueuesSubmissionOnSelectedWorkspace(t *testing.T)
 		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
 		ActiveTurnID:            "turn-a",
 		ActiveSubmissionID:      "sub-a",
-		Status:                  state.SessionStatusTurnInProgress.String(),
+		Status:                  conversation.SessionStatusTurnInProgress.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession(p2p active) error = %v", err)
 	}
@@ -3335,7 +3345,7 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 	}
 
 	// Real discard paths for recall/reaction.
-	subID, err := a.store.CreateSubmission(&state.Submission{
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "queued-sub",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

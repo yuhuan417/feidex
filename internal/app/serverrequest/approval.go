@@ -2,6 +2,8 @@ package serverrequest
 
 import (
 	"encoding/json"
+	domainsubmission "feidex/internal/domain/submission"
+
 	codexadapter "feidex/internal/adapter/backend/codex"
 	"log/slog"
 	"strings"
@@ -123,7 +125,7 @@ func (s *Service) ResumeSubmissionAfterRequest(pending *state.PendingRequest) {
 	if sub == nil {
 		return
 	}
-	_ = s.SetSubStatus(sub.ID, state.SubmissionStatusRunning.String())
+	_ = s.SetSubStatus(sub.ID, domainsubmission.SubmissionStatusRunning.String())
 }
 
 // ---------- Outbound card methods ----------
@@ -179,7 +181,7 @@ func (s *Service) SendApprovalCardPresentation(requestID json.RawMessage, presen
 		ItemID:          presentation.ItemID,
 		OwnerUserID:     sub.UserID,
 		PayloadJSON:     presentation.Payload.MarshalJSONText(),
-		WaitingStatus:   state.SubmissionStatusWaitingApproval.String(),
+		WaitingStatus:   domainsubmission.SubmissionStatusWaitingApproval.String(),
 		LinkKind:        linkKind,
 	})
 	if err == nil {
@@ -243,7 +245,7 @@ func (s *Service) SendUserInputCard(requestID json.RawMessage, payload ToolUserI
 		ItemID:          payload.ItemID,
 		OwnerUserID:     sub.UserID,
 		PayloadJSON:     mustJSON(payload),
-		WaitingStatus:   state.SubmissionStatusWaitingUserInput.String(),
+		WaitingStatus:   domainsubmission.SubmissionStatusWaitingUserInput.String(),
 		LinkKind:        "user_input_card",
 	})
 	if err == nil {

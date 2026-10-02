@@ -3,16 +3,16 @@ package submission
 import (
 	"context"
 	"encoding/json"
-	"feidex/internal/domain/conversation"
-	"sync"
-	"testing"
-	"time"
-
 	"feidex/internal/app/appcore"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"sync"
+	"testing"
+	"time"
 )
 
 func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
@@ -24,16 +24,16 @@ func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
 	if err := store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: "default",
-		Status:      state.SessionStatusQueued.String(),
+		Status:      conversation.SessionStatusQueued.String(),
 		Queue:       []string{"sub-1"},
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := store.CreateSubmission(&state.Submission{
+	if _, err := store.CreateSubmission(&domainsubmission.Submission{
 		ID:          "sub-1",
 		SessionKey:  sessionKey,
 		WorkspaceID: "default",
-		Status:      state.SubmissionStatusQueued.String(),
+		Status:      domainsubmission.SubmissionStatusQueued.String(),
 	}); err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
@@ -62,7 +62,7 @@ func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
 	if sess == nil {
 		t.Fatal("expected session")
 	}
-	if sess.Status == state.SessionStatusIdle.String() {
+	if sess.Status == conversation.SessionStatusIdle.String() {
 		t.Fatalf("session should not be reset to idle during concurrent start: %+v", sess)
 	}
 	if app.backend.calls() != 1 {
@@ -153,7 +153,7 @@ func (a *concurrentStartTestApp) SubmissionQueueReplyInThreadEnabled(string) boo
 	return false
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueReplyInThreadForSubmission(*state.Submission) bool {
+func (a *concurrentStartTestApp) SubmissionQueueReplyInThreadForSubmission(*domainsubmission.Submission) bool {
 	return false
 }
 
@@ -173,10 +173,10 @@ func (a *concurrentStartTestApp) SubmissionQueueReplyText(context.Context, strin
 	return nil
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueSendQueuedNotice(context.Context, *state.Submission) {
+func (a *concurrentStartTestApp) SubmissionQueueSendQueuedNotice(context.Context, *domainsubmission.Submission) {
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueSendStartFailureNotice(context.Context, *state.Submission, error, bool) {
+func (a *concurrentStartTestApp) SubmissionQueueSendStartFailureNotice(context.Context, *domainsubmission.Submission, error, bool) {
 }
 
 func (a *concurrentStartTestApp) SubmissionQueueRunAsync(fn func()) {
@@ -194,22 +194,24 @@ func (a *concurrentStartTestApp) SubmissionQueueFinishStart(sessionKey string) b
 func (a *concurrentStartTestApp) SubmissionQueueLogSessionState(string, string, *conversation.Session) {
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueMarkSubmissionQueuedReactions(*state.Submission) {}
-
-func (a *concurrentStartTestApp) SubmissionQueueMarkSubmissionRunningReactions(*state.Submission) {}
-
-func (a *concurrentStartTestApp) SubmissionQueueClearSubmissionProcessingReactions(*state.Submission) {
+func (a *concurrentStartTestApp) SubmissionQueueMarkSubmissionQueuedReactions(*domainsubmission.Submission) {
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueIsReviewSubmission(*state.Submission) bool {
+func (a *concurrentStartTestApp) SubmissionQueueMarkSubmissionRunningReactions(*domainsubmission.Submission) {
+}
+
+func (a *concurrentStartTestApp) SubmissionQueueClearSubmissionProcessingReactions(*domainsubmission.Submission) {
+}
+
+func (a *concurrentStartTestApp) SubmissionQueueIsReviewSubmission(*domainsubmission.Submission) bool {
 	return false
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueStartSubmissionTurn(context.Context, string, string, *state.Submission, string, string, string, string, string, string, string) (string, error) {
+func (a *concurrentStartTestApp) SubmissionQueueStartSubmissionTurn(context.Context, string, string, *domainsubmission.Submission, string, string, string, string, string, string, string) (string, error) {
 	return "", nil
 }
 
-func (a *concurrentStartTestApp) SubmissionQueueStartSubmissionReview(context.Context, string, *state.Submission) (string, error) {
+func (a *concurrentStartTestApp) SubmissionQueueStartSubmissionReview(context.Context, string, *domainsubmission.Submission) (string, error) {
 	return "", nil
 }
 
@@ -255,7 +257,7 @@ func (s *concurrentStartTestState) Session(key string) *conversation.Session {
 	return s.store.GetSession(key)
 }
 
-func (s *concurrentStartTestState) Submission(id string) *state.Submission {
+func (s *concurrentStartTestState) Submission(id string) *domainsubmission.Submission {
 	return s.store.GetSubmission(id)
 }
 
@@ -263,7 +265,7 @@ func (s *concurrentStartTestState) SaveSession(sess *conversation.Session) error
 	return s.store.UpsertSession(sess)
 }
 
-func (s *concurrentStartTestState) CreateSubmission(sub *state.Submission) (string, error) {
+func (s *concurrentStartTestState) CreateSubmission(sub *domainsubmission.Submission) (string, error) {
 	return s.store.CreateSubmission(sub)
 }
 
@@ -276,15 +278,15 @@ func (s *concurrentStartTestState) DequeueSubmission(sessionKey string) (string,
 }
 
 func (s *concurrentStartTestState) MarkSubmissionRunning(id, threadID, turnID string) error {
-	return s.store.UpdateSubmission(id, func(sub *state.Submission) {
+	return s.store.UpdateSubmission(id, func(sub *domainsubmission.Submission) {
 		sub.ThreadID = threadID
 		sub.TurnID = turnID
-		sub.Status = state.SubmissionStatusRunning.String()
+		sub.Status = domainsubmission.SubmissionStatusRunning.String()
 	})
 }
 
 func (s *concurrentStartTestState) FinalizeSubmission(id, status string) error {
-	return s.store.UpdateSubmission(id, func(sub *state.Submission) {
+	return s.store.UpdateSubmission(id, func(sub *domainsubmission.Submission) {
 		sub.Status = status
 		sub.Finalized = true
 	})
@@ -302,7 +304,7 @@ func (s *concurrentStartTestState) DeletePendingRequests(func(*state.PendingRequ
 
 func (s *concurrentStartTestState) DeleteMessageLinks(func(*state.MessageLink) bool) {}
 
-func (s *concurrentStartTestState) UpdateSubmission(id string, mutate func(*state.Submission)) error {
+func (s *concurrentStartTestState) UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error {
 	return s.store.UpdateSubmission(id, mutate)
 }
 
@@ -317,7 +319,7 @@ type concurrentStartBackend struct {
 	release chan struct{}
 }
 
-func (b *concurrentStartBackend) StartQueuedSubmission(string, *conversation.Session, *state.Submission, *config.Workspace, bool) error {
+func (b *concurrentStartBackend) StartQueuedSubmission(string, *conversation.Session, *domainsubmission.Submission, *config.Workspace, bool) error {
 	b.mu.Lock()
 	b.count++
 	b.mu.Unlock()
@@ -370,15 +372,16 @@ func (g *concurrentStartGuard) finish(sessionKey string) bool {
 
 type concurrentStartNoopSkillResolver struct{}
 
-func (concurrentStartNoopSkillResolver) ResolveSubmissionSkill(string, string, string, []state.SubmissionAttachment) QueueSkillResolution {
+func (concurrentStartNoopSkillResolver) ResolveSubmissionSkill(string, string, string, []domainsubmission.SubmissionAttachment) QueueSkillResolution {
 	return QueueSkillResolution{}
 }
-func (concurrentStartNoopSkillResolver) SetSessionPendingSkill(string, state.SubmissionSkill) {}
-func (concurrentStartNoopSkillResolver) ClearSessionPendingSkill(string)                      {}
+func (concurrentStartNoopSkillResolver) SetSessionPendingSkill(string, domainsubmission.SubmissionSkill) {
+}
+func (concurrentStartNoopSkillResolver) ClearSessionPendingSkill(string) {}
 
 type concurrentStartNoopAttachmentResolver struct{}
 
-func (concurrentStartNoopAttachmentResolver) ResolveInboundAttachments(*feishu.InboundMessage, string, string) ([]state.SubmissionAttachment, error) {
+func (concurrentStartNoopAttachmentResolver) ResolveInboundAttachments(*feishu.InboundMessage, string, string) ([]domainsubmission.SubmissionAttachment, error) {
 	return nil, nil
 }
 
@@ -410,28 +413,30 @@ func (concurrentStartNoopRuntimeState) BindTurnSubmission(string, string, string
 func (concurrentStartNoopRuntimeState) MarkTurnStartedAt(string, time.Time)                 {}
 func (concurrentStartNoopRuntimeState) ClearTurnBinding(string)                             {}
 func (concurrentStartNoopRuntimeState) ClearTurnItemStates(string)                          {}
-func (concurrentStartNoopRuntimeState) BoundSubmissionForTurn(string) (string, *state.Submission) {
+func (concurrentStartNoopRuntimeState) BoundSubmissionForTurn(string) (string, *domainsubmission.Submission) {
 	return "", nil
 }
 
 type concurrentStartNoopRuntimeMaintenance struct{}
 
-func (concurrentStartNoopRuntimeMaintenance) CleanupSubmissionRuntimeState(*state.Submission) {}
+func (concurrentStartNoopRuntimeMaintenance) CleanupSubmissionRuntimeState(*domainsubmission.Submission) {
+}
 
 type concurrentStartNoopReplyContinuation struct{}
 
-func (concurrentStartNoopReplyContinuation) RecordSubmissionSourceLinks(*state.Submission) {}
+func (concurrentStartNoopReplyContinuation) RecordSubmissionSourceLinks(*domainsubmission.Submission) {
+}
 func (concurrentStartNoopReplyContinuation) RecordRootTurnBinding(string, string, string, string) {
 }
 
 type concurrentStartNoopTurnStream struct{}
 
-func (concurrentStartNoopTurnStream) NoteTurnStarted(string, *state.Submission) {}
-func (concurrentStartNoopTurnStream) DeleteTurnStream(string)                   {}
+func (concurrentStartNoopTurnStream) NoteTurnStarted(string, *domainsubmission.Submission) {}
+func (concurrentStartNoopTurnStream) DeleteTurnStream(string)                              {}
 
 type concurrentStartNoopAutoRetry struct{}
 
-func (concurrentStartNoopAutoRetry) ObserveAutoRetryTerminal(string, string, string, *conversation.Session, *state.Submission, string, string) bool {
+func (concurrentStartNoopAutoRetry) ObserveAutoRetryTerminal(string, string, string, *conversation.Session, *domainsubmission.Submission, string, string) bool {
 	return false
 }
 

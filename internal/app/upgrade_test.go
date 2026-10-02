@@ -649,7 +649,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceRecoversFrontendThreadBindings(t *te
 		ActiveThreadID:          "thread-old",
 		ActiveThreadWorkspaceID: workspaceID,
 		ActiveThreadName:        "Old",
-		Status:                  appstate.SessionStatusIdle.String(),
+		Status:                  conversation.SessionStatusIdle.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -708,7 +708,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceRecoversFrontendThreadBindings(t *te
 		t.Fatalf("promoted calls = %+v, want %+v", calls, wantCalls)
 	}
 	sess := a.store.GetSession(sessionKey)
-	if sess == nil || sess.ActiveThreadID != "thread-new" || sess.ActiveThreadWorkspaceID != workspaceID || sess.Status != appstate.SessionStatusIdle.String() {
+	if sess == nil || sess.ActiveThreadID != "thread-new" || sess.ActiveThreadWorkspaceID != workspaceID || sess.Status != conversation.SessionStatusIdle.String() {
 		t.Fatalf("session after runtime refresh = %+v, want recovered thread-new idle", sess)
 	}
 	if sessionHasLiveThread(a, sessionKey, "thread-old") {

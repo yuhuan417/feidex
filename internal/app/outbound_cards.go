@@ -2,12 +2,13 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 
 	appcards "feidex/internal/app/cards"
+
 	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 type cardRenderer struct {
@@ -18,7 +19,7 @@ func cardRendererForApp(a *App) cardRenderer {
 	return cardRenderer{app: a}
 }
 
-func (r cardRenderer) prepareCardMarkdown(sub *state.Submission, text string) string {
+func (r cardRenderer) prepareCardMarkdown(sub *domainsubmission.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
@@ -29,15 +30,15 @@ func (r cardRenderer) prepareCardMarkdown(sub *state.Submission, text string) st
 	return prepareSubmissionCardMarkdown(r.app, sub, text)
 }
 
-func (r cardRenderer) renderReplyMarkdownCard(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+func (r cardRenderer) renderReplyMarkdownCard(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
 	return r.renderReplyMarkdownCardWithOptions(context.Background(), sub, title, color, body, buttons, false)
 }
 
-func (r cardRenderer) renderReplyMarkdownCardWithOptions(ctx context.Context, sub *state.Submission, title, color, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
+func (r cardRenderer) renderReplyMarkdownCardWithOptions(ctx context.Context, sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
 	return r.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, strings.TrimSpace(title) != "", body, buttons, enablePreview)
 }
 
-func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *state.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
+func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *domainsubmission.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
 	card := appcards.NewMarkdownBodyCardWithHeader(title, color, showHeader)
 	if r.app == nil {
 		if content := applinkutil.NormalizeCardMarkdown(body); content != "" {
@@ -64,7 +65,7 @@ func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Conte
 	return card
 }
 
-func (r cardRenderer) renderCompactMarkdownCard(sub *state.Submission, title, color, meta, body string, buttons []feishu.Button) map[string]any {
+func (r cardRenderer) renderCompactMarkdownCard(sub *domainsubmission.Submission, title, color, meta, body string, buttons []feishu.Button) map[string]any {
 	card := appcards.NewMarkdownBodyCard(title, color)
 	meta = strings.Join(strings.Fields(strings.TrimSpace(meta)), " ")
 	if meta != "" {

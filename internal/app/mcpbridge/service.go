@@ -7,7 +7,9 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"io"
 	"net"
 	"net/http"
@@ -17,9 +19,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"feidex/internal/app/turnitem"
-	"feidex/internal/state"
 )
 
 const (
@@ -48,7 +47,7 @@ type FeishuClient interface {
 type StateProvider interface {
 	GetSession(string) *conversation.Session
 	AllSessions() []*conversation.Session
-	GetSubmission(string) *state.Submission
+	GetSubmission(string) *domainsubmission.Submission
 }
 
 type StartedTurnItem struct {
@@ -64,8 +63,8 @@ type App interface {
 	Feishu() FeishuClient
 	State() StateProvider
 	StartedTurnItems() []StartedTurnItem
-	FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission)
-	ReplyInThreadForSubmission(sub *state.Submission) bool
+	FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission)
+	ReplyInThreadForSubmission(sub *domainsubmission.Submission) bool
 }
 
 type Service struct {
@@ -108,7 +107,7 @@ type toolContext struct {
 	ThreadID   string
 	TurnID     string
 	ItemID     string
-	Submission *state.Submission
+	Submission *domainsubmission.Submission
 }
 
 func NewService(a App) (*Service, error) {
@@ -435,7 +434,7 @@ func (s *Service) resolveToolContextFromSessionSnapshot(sess *conversation.Sessi
 			continue
 		}
 		sub := s.app.State().GetSubmission(submissionID)
-		if sub == nil || sub.Finalized || state.NormalizeSubmissionStatus(sub.Status) != state.SubmissionStatusRunning {
+		if sub == nil || sub.Finalized || domainsubmission.NormalizeSubmissionStatus(sub.Status) != domainsubmission.SubmissionStatusRunning {
 			continue
 		}
 		if strings.TrimSpace(sub.TriggerMessageID) == "" {

@@ -1,10 +1,12 @@
 package app
 
 import (
-	appfeishuwrap "feidex/internal/app/feishuwrap"
-	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
+	"feidex/internal/app/attachments"
+	appfeishuwrap "feidex/internal/app/feishuwrap"
+	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -12,19 +14,22 @@ import (
 	"sync"
 	"time"
 
-	"feidex/internal/app/attachments"
 	appautoretry "feidex/internal/app/autoretry"
 	"feidex/internal/app/backend"
 	"feidex/internal/app/goalcmd"
+
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/app/serverrequest"
+
 	appskillscmd "feidex/internal/app/skillscmd"
 	"feidex/internal/app/turnbinding"
 	"feidex/internal/app/turnitem"
+
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+
 	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
@@ -346,7 +351,7 @@ func buildTurnSandboxPolicy(mode string) map[string]any {
 	}
 }
 
-func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID string, sub *state.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
+func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID string, sub *domainsubmission.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
 	if sub == nil {
 		return "", fmt.Errorf("nil submission")
 	}

@@ -3,14 +3,14 @@ package app
 import (
 	"context"
 	"encoding/json"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appthreadmenu "feidex/internal/app/threadmenu"
+	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/feishu"
 	"strings"
 	"testing"
-
-	"feidex/internal/codexrpc"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
@@ -86,7 +86,7 @@ func TestGroupTopLevelCommandInterruptTargetsActiveChatAndClearsQueuedInputs(t *
 	}); err != nil {
 		t.Fatalf("UpdateSession(active) error = %v", err)
 	}
-	queuedID, err := a.store.CreateSubmission(&state.Submission{
+	queuedID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-queued-other-root",
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

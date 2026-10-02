@@ -6,17 +6,18 @@ package skillscmd
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	appcommandmatch "feidex/internal/app/commandmatch"
+
 	appskills "feidex/internal/app/skills"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -31,12 +32,12 @@ type SubmissionSkillResolution = appskills.SubmissionSkillResolution
 // PendingSkillTracker tracks per-session pending skills.
 type PendingSkillTracker struct {
 	mu     sync.Mutex
-	Skills map[string]state.SubmissionSkill
+	Skills map[string]domainsubmission.SubmissionSkill
 }
 
 // NewPendingSkillTracker creates a new PendingSkillTracker.
 func NewPendingSkillTracker() *PendingSkillTracker {
-	return &PendingSkillTracker{Skills: map[string]state.SubmissionSkill{}}
+	return &PendingSkillTracker{Skills: map[string]domainsubmission.SubmissionSkill{}}
 }
 
 // Service provides skills listing, selection, and pending skill tracking.
@@ -270,7 +271,7 @@ func (s *Service) CompleteSkillsSelect(action *feishu.CardAction, sessionKey, se
 			Card:  rawCard(card),
 		}, nil
 	}
-	s.SetSessionPendingSkill(sessionKey, state.SubmissionSkill{Name: strings.TrimSpace(skill.Name), Path: strings.TrimSpace(skill.Path)})
+	s.SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: strings.TrimSpace(skill.Name), Path: strings.TrimSpace(skill.Path)})
 	card, err := s.RenderSkillsCard(sessionKey, false)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{
@@ -288,22 +289,22 @@ func (s *Service) CompleteSkillsSelect(action *feishu.CardAction, sessionKey, se
 // ---------------------------------------------------------------------------
 
 // SessionPendingSkill returns the pending skill for the given session key.
-func (s *Service) SessionPendingSkill(sessionKey string) (state.SubmissionSkill, bool) {
+func (s *Service) SessionPendingSkill(sessionKey string) (domainsubmission.SubmissionSkill, bool) {
 	tracker := s.GetPendingSkillTracker()
 	if tracker == nil {
-		return state.SubmissionSkill{}, false
+		return domainsubmission.SubmissionSkill{}, false
 	}
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	skill, ok := tracker.Skills[strings.TrimSpace(sessionKey)]
 	if !ok || strings.TrimSpace(skill.Name) == "" || strings.TrimSpace(skill.Path) == "" {
-		return state.SubmissionSkill{}, false
+		return domainsubmission.SubmissionSkill{}, false
 	}
 	return skill, true
 }
 
 // SetSessionPendingSkill sets the pending skill for the given session key.
-func (s *Service) SetSessionPendingSkill(sessionKey string, skill state.SubmissionSkill) {
+func (s *Service) SetSessionPendingSkill(sessionKey string, skill domainsubmission.SubmissionSkill) {
 	if strings.TrimSpace(sessionKey) == "" {
 		return
 	}
@@ -314,7 +315,7 @@ func (s *Service) SetSessionPendingSkill(sessionKey string, skill state.Submissi
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
 	if tracker.Skills == nil {
-		tracker.Skills = map[string]state.SubmissionSkill{}
+		tracker.Skills = map[string]domainsubmission.SubmissionSkill{}
 	}
 	skill.Name = strings.TrimSpace(skill.Name)
 	skill.Path = strings.TrimSpace(skill.Path)
@@ -344,7 +345,7 @@ func (s *Service) ClearSessionPendingSkill(sessionKey string) {
 // ---------------------------------------------------------------------------
 
 // ResolveSubmissionSkill resolves which skill(s) apply to a submission.
-func (s *Service) ResolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []state.SubmissionAttachment) SubmissionSkillResolution {
+func (s *Service) ResolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []domainsubmission.SubmissionAttachment) SubmissionSkillResolution {
 	resolution := SubmissionSkillResolution{
 		InputText: strings.TrimSpace(inputText),
 	}
@@ -357,7 +358,7 @@ func (s *Service) ResolveSubmissionSkill(sessionKey, workspaceID, inputText stri
 	switch parsed.Mode {
 	case appskills.PrefixNone:
 		if hasPending {
-			resolution.Skills = []state.SubmissionSkill{pending}
+			resolution.Skills = []domainsubmission.SubmissionSkill{pending}
 		}
 		return resolution
 	case appskills.PrefixInvalid:
@@ -379,6 +380,6 @@ func (s *Service) ResolveSubmissionSkill(sessionKey, workspaceID, inputText stri
 		resolution.PendingReplacement = &skill
 		return resolution
 	}
-	resolution.Skills = []state.SubmissionSkill{skill}
+	resolution.Skills = []domainsubmission.SubmissionSkill{skill}
 	return resolution
 }

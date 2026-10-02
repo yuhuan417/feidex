@@ -3,11 +3,11 @@ package app
 import (
 	"context"
 	"feidex/internal/app/apputil"
+	domainsubmission "feidex/internal/domain/submission"
+
 	appdelivery "feidex/internal/app/delivery"
 	"fmt"
 	"strings"
-
-	"feidex/internal/state"
 )
 
 type replyChunkRenderSpec struct {
@@ -19,7 +19,7 @@ type replyChunkRenderSpec struct {
 	EnablePreview bool
 }
 
-func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *state.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []replyChunkRenderSpec {
+func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []replyChunkRenderSpec {
 	if a == nil {
 		return nil
 	}
@@ -52,7 +52,7 @@ func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *state.Submis
 	return specs
 }
 
-func sendReplyChunk(a *App, ctx context.Context, sub *state.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (appdelivery.SentReplyChunk, bool) {
+func sendReplyChunk(a *App, ctx context.Context, sub *domainsubmission.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (appdelivery.SentReplyChunk, bool) {
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return appdelivery.SentReplyChunk{}, false
 	}

@@ -8,14 +8,20 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
 
 	appcore "feidex/internal/app/appcore"
+
 	backendcaps "feidex/internal/app/backendcaps"
+
 	appcards "feidex/internal/app/cards"
+
 	menutypes "feidex/internal/app/menutypes"
+
 	appthreadview "feidex/internal/app/threadview"
+
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -87,7 +93,7 @@ type ConversationProvider interface {
 	// RecoverClaudeStartup recovers a claude startup conversation.
 	RecoverClaudeStartup(app App, sessionKey, workspaceID string, sess *conversation.Session)
 	// StartNextSubmission starts the next queued submission.
-	StartNextSubmission(app App, sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+	StartNextSubmission(app App, sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error
 	// MarkThreadLive marks a thread as live for a session.
 	MarkThreadLive(app App, sessionKey, threadID string)
 }
@@ -141,7 +147,7 @@ type ConversationBackendFacade interface {
 	InterruptActiveTurn(ctx context.Context, sessionKey string, sess *conversation.Session) error
 	ContinueActiveTurn(sessionKey, text string) error
 	TryReplyContinuation(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error)
-	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error
+	StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error
 }
 
 // UIWarningError is a sentinel error type for UI warning messages.
@@ -656,7 +662,7 @@ func (b *CodexConversationBackend) TryReplyContinuation(msg *feishu.InboundMessa
 	return b.app.ConvBackendConversation().TryCodexReplyContinuation(b.app, msg, link, sessionKey, sess)
 }
 
-func (b *CodexConversationBackend) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (b *CodexConversationBackend) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return b.app.ConvBackendConversation().StartNextSubmission(b.app, sessionKey, sess, sub, ws, notifyFailure)
 }
 
@@ -735,7 +741,7 @@ func (b *ClaudeConversationBackend) TryReplyContinuation(msg *feishu.InboundMess
 	return b.app.ConvBackendConversation().TryClaudeReplyContinuation(b.app, msg, link, sessionKey, sess)
 }
 
-func (b *ClaudeConversationBackend) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (b *ClaudeConversationBackend) StartQueuedSubmission(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return b.app.ConvBackendConversation().StartNextSubmission(b.app, sessionKey, sess, sub, ws, notifyFailure)
 }
 

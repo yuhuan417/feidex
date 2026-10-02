@@ -2,12 +2,11 @@ package app
 
 import (
 	"context"
-	"net/http"
-	"strings"
-
 	"feidex/internal/app/mcpbridge"
 	"feidex/internal/app/turnitem"
-	"feidex/internal/state"
+	domainsubmission "feidex/internal/domain/submission"
+	"net/http"
+	"strings"
 )
 
 const (
@@ -132,13 +131,13 @@ func (a mcpBridgeAppAdapter) StartedTurnItems() []mcpbridge.StartedTurnItem {
 	return items
 }
 
-func (a mcpBridgeAppAdapter) FindSubmissionByTurn(threadID, turnID string) (string, *state.Submission) {
+func (a mcpBridgeAppAdapter) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
 	if a.app == nil {
 		return "", nil
 	}
 	return newSubmissionQueueServiceFromApp(a.app).FindSubmissionByTurn(threadID, turnID)
 }
 
-func (a mcpBridgeAppAdapter) ReplyInThreadForSubmission(sub *state.Submission) bool {
+func (a mcpBridgeAppAdapter) ReplyInThreadForSubmission(sub *domainsubmission.Submission) bool {
 	return replyInThreadForSubmission(a.app, sub)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -276,7 +277,7 @@ func TestSessionContextAndExplicitBindingMetadata(t *testing.T) {
 	if sess == nil || sess.BindingID != "binding-1" || sess.ChatType != "group" || sess.ChatID != "chat-1" {
 		t.Fatalf("root session = %+v", sess)
 	}
-	sub := &Submission{SessionKey: key, BindingID: "binding-1", InputText: "hello"}
+	sub := &domainsubmission.Submission{SessionKey: key, BindingID: "binding-1", InputText: "hello"}
 	id, err := store.CreateSubmission(sub)
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
@@ -285,7 +286,7 @@ func TestSessionContextAndExplicitBindingMetadata(t *testing.T) {
 	if saved == nil || saved.BindingID != "binding-1" {
 		t.Fatalf("submission binding id = %+v", saved)
 	}
-	withoutMetadata := &Submission{SessionKey: key, InputText: "no implicit binding"}
+	withoutMetadata := &domainsubmission.Submission{SessionKey: key, InputText: "no implicit binding"}
 	withoutID, err := store.CreateSubmission(withoutMetadata)
 	if err != nil {
 		t.Fatalf("CreateSubmission(without metadata) error = %v", err)
@@ -429,10 +430,10 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 		t.Fatalf("Open() error = %v", err)
 	}
 
-	sub := &Submission{
+	sub := &domainsubmission.Submission{
 		SessionKey:       "session-1",
 		SourceMessageIDs: []string{"m-1", "m-2"},
-		Attachments:      []SubmissionAttachment{{Kind: "file", Name: "doc.txt", LocalPath: "/tmp/doc.txt"}},
+		Attachments:      []domainsubmission.SubmissionAttachment{{Kind: "file", Name: "doc.txt", LocalPath: "/tmp/doc.txt"}},
 	}
 	id, err := store.CreateSubmission(sub)
 	if err != nil {
@@ -458,7 +459,7 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 
 	before := saved.UpdatedAt
 	time.Sleep(1100 * time.Millisecond)
-	if err := store.UpdateSubmission(id, func(s *Submission) {
+	if err := store.UpdateSubmission(id, func(s *domainsubmission.Submission) {
 		s.Status = "done"
 	}); err != nil {
 		t.Fatalf("UpdateSubmission() error = %v", err)
@@ -471,7 +472,7 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 	if updated.UpdatedAt <= before {
 		t.Fatalf("UpdatedAt did not move forward: before=%d after=%d", before, updated.UpdatedAt)
 	}
-	if err := store.UpdateSubmission("missing", func(*Submission) {}); !errors.Is(err, os.ErrNotExist) {
+	if err := store.UpdateSubmission("missing", func(*domainsubmission.Submission) {}); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("UpdateSubmission(missing) error = %v, want %v", err, os.ErrNotExist)
 	}
 	if got := store.GetSubmission("missing"); got != nil {
@@ -570,7 +571,7 @@ func TestSubmissionPendingAndMessageLinksStayInMemory(t *testing.T) {
 func TestDeleteAndCollectionHelpers(t *testing.T) {
 	store := openTestStore(t)
 
-	subID, err := store.CreateSubmission(&Submission{SessionKey: "session-1"})
+	subID, err := store.CreateSubmission(&domainsubmission.Submission{SessionKey: "session-1"})
 	if err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}

@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 
 	appcore "feidex/internal/app/appcore"
 	"feidex/internal/app/attachments"
 	"feidex/internal/app/claudesession"
+
 	appconvbackend "feidex/internal/app/convbackend"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -82,7 +84,7 @@ func (a convBackendConversationAdapter) TryCodexReplyContinuation(app appconvbac
 	return appconvbackend.TryCodexReplyContinuation(appconvbackend.CodexReplyContinuationDeps{
 		Context:       root.Context,
 		RequireClient: func() (appconvbackend.CodexRPCClient, error) { return requireCodexClient(root) },
-		ResolveInboundAttachments: func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]state.SubmissionAttachment, error) {
+		ResolveInboundAttachments: func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 			return resolveInboundAttachments(root, msg, workspaceID, sessionKey)
 		},
 		PendingInputSessionKey:     replySvc.pendingInputSessionKey,
@@ -181,7 +183,7 @@ func (a convBackendConversationAdapter) RecoverClaudeStartup(app appconvbackend.
 	}, sessionKey, workspaceID, sess)
 }
 
-func (a convBackendConversationAdapter) StartNextSubmission(app appconvbackend.App, sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (a convBackendConversationAdapter) StartNextSubmission(app appconvbackend.App, sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 	if appcore.ConfiguredBackend(app) == "claude" {
 		return newSubmissionQueueServiceFromApp(app.(*App)).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 	}

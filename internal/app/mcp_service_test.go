@@ -2,16 +2,15 @@ package app
 
 import (
 	"encoding/json"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"feidex/internal/app/turnitem"
-	"feidex/internal/state"
 )
 
 func performMCPHTTPRequest(t *testing.T, handler http.Handler, token, sessionKey, body string) *httptest.ResponseRecorder {
@@ -139,7 +138,7 @@ func TestFeidexMCPFailsClosedOnAmbiguousMatch(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(second) error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-2",
 		SessionKey:       "sess-2",
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -249,11 +248,11 @@ func TestFeidexMCPFallbackWithoutSessionKeyFailsClosedWhenMultipleActiveSubmissi
 		OwnerUserID:        "user-1",
 		ChatID:             "chat-1",
 		ChatType:           "group",
-		Status:             state.SessionStatusTurnInProgress.String(),
+		Status:             conversation.SessionStatusTurnInProgress.String(),
 	}); err != nil {
 		t.Fatalf("UpsertSession(second) error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-2",
 		SessionKey:       "sess-2",
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
@@ -262,7 +261,7 @@ func TestFeidexMCPFallbackWithoutSessionKeyFailsClosedWhenMultipleActiveSubmissi
 		UserID:           "user-1",
 		ChatID:           "chat-1",
 		TriggerMessageID: "trigger-2",
-		Status:           state.SubmissionStatusRunning.String(),
+		Status:           domainsubmission.SubmissionStatusRunning.String(),
 	}); err != nil {
 		t.Fatalf("CreateSubmission(second) error = %v", err)
 	}

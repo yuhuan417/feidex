@@ -686,3 +686,5 @@
 - 核对 SM-04～SM-08、SM-09～SM-11、SM-14、SM-22～SM-26：thread/turn started 与 completed、review/compaction、goal continuation 的调用顺序和 owner 绑定规则不变。
 - `serverRequest/resolved` 仍是 Codex interaction 的权威终点，reply 成功仍仅推进到 replied；本次不改 approval/input 的协议行为。
 - 领域测试覆盖 backend lineage 隔离、活动操作合并/移除、workspace 恢复匹配和运行中 workspace 切换保留 lineage；原有 app 状态机契约测试继续运行。
+- submission 的状态枚举和 `MarkRunning`/`Finalize` 转换迁入 `internal/domain/submission`；未改变 SM-03、SM-04、SM-09～SM-11、SM-14、SM-22～SM-26 的协议终点，尤其没有把用户回复成功当作 resolved。
+- conversation queue 的 `Enqueue`/`Dequeue`/`RefreshPendingStatus` 迁入 domain；active turn 存在时仍禁止启动下一条 submission，未改变 turn started/completed 和 server-request resolve 的顺序。

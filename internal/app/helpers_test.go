@@ -1,13 +1,12 @@
 package app
 
 import (
+	"feidex/internal/config"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"feidex/internal/config"
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestResolveInboundAttachmentsUsesForwardedMessageID(t *testing.T) {
@@ -49,7 +48,7 @@ func TestDeliveryHelpers(t *testing.T) {
 		t.Fatalf("sendFinalMessages(nil app) = %+v, want nil", got)
 	}
 	a = &App{cfg: config.Default()}
-	if got := sendReplyMessages(a, nil, &state.Submission{}, "ignored", false, "final_message"); got != nil {
+	if got := sendReplyMessages(a, nil, &domainsubmission.Submission{}, "ignored", false, "final_message"); got != nil {
 		t.Fatalf("sendReplyMessages(without feishu) = %+v, want nil", got)
 	}
 }

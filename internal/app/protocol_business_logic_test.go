@@ -2,12 +2,11 @@ package app
 
 import (
 	"encoding/json"
+	"feidex/internal/app/turnitem"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
-
-	"feidex/internal/app/turnitem"
-	"feidex/internal/state"
 )
 
 func TestItemStartedBindsPendingSubmissionBeforeTurnStarted(t *testing.T) {
@@ -154,7 +153,7 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 	}
 }
 
-func seedStartingSubmission(t *testing.T, a *App, sessionKey, submissionID, threadID, kind string) *state.Submission {
+func seedStartingSubmission(t *testing.T, a *App, sessionKey, submissionID, threadID, kind string) *domainsubmission.Submission {
 	t.Helper()
 
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -169,7 +168,7 @@ func seedStartingSubmission(t *testing.T, a *App, sessionKey, submissionID, thre
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               submissionID,
 		SessionKey:       sessionKey,
 		WorkspaceID:      a.cfg.Workspaces[0].ID,

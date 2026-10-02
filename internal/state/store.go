@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,8 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	domainmodelconfig "feidex/internal/domain/modelconfig"
 )
 
 const currentSnapshotVersion = 12
@@ -37,7 +36,7 @@ type Snapshot struct {
 
 type runtimeState struct {
 	Sessions        map[string]*conversation.Session
-	Submissions     map[string]*Submission
+	Submissions     map[string]*domainsubmission.Submission
 	PendingRequests map[string]*PendingRequest
 	MessageLinks    map[string]*MessageLink
 	Counters        Counters
@@ -208,47 +207,6 @@ type AgentBindingPendingAttachment struct {
 	SourceMessageID string `json:"source_message_id,omitempty"`
 }
 
-type SubmissionAttachment struct {
-	Kind      string `json:"kind"`
-	Name      string `json:"name"`
-	LocalPath string `json:"local_path"`
-}
-
-type SubmissionSkill struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-}
-
-type Submission struct {
-	ModelConfig          domainmodelconfig.Snapshot `json:"model_config,omitempty"`
-	ID                   string                     `json:"id"`
-	SessionKey           string                     `json:"session_key"`
-	BindingID            string                     `json:"binding_id,omitempty"`
-	WorkspaceID          string                     `json:"workspace_id"`
-	ThreadID             string                     `json:"thread_id"`
-	TurnID               string                     `json:"turn_id"`
-	UserID               string                     `json:"user_id"`
-	ChatID               string                     `json:"chat_id"`
-	TriggerMessageID     string                     `json:"trigger_message_id"`
-	SourceMessageIDs     []string                   `json:"source_message_ids,omitempty"`
-	SourceRootMessageIDs []string                   `json:"source_root_message_ids,omitempty"`
-	InputText            string                     `json:"input_text"`
-	Skills               []SubmissionSkill          `json:"skills,omitempty"`
-	Attachments          []SubmissionAttachment     `json:"attachments,omitempty"`
-	Kind                 string                     `json:"kind,omitempty"`
-	ReviewTargetType     string                     `json:"review_target_type,omitempty"`
-	ReviewBranch         string                     `json:"review_branch,omitempty"`
-	ReviewCommitSHA      string                     `json:"review_commit_sha,omitempty"`
-	ReviewCommitTitle    string                     `json:"review_commit_title,omitempty"`
-	ReviewInstructions   string                     `json:"review_instructions,omitempty"`
-	Status               string                     `json:"status"`
-	WaitedInQueue        bool                       `json:"waited_in_queue,omitempty"`
-	StartNoticeSent      bool                       `json:"start_notice_sent,omitempty"`
-	Finalized            bool                       `json:"finalized"`
-	CreatedAt            int64                      `json:"created_at"`
-	UpdatedAt            int64                      `json:"updated_at"`
-}
-
 type PendingRequest struct {
 	FrontendID   string `json:"frontend_id,omitempty"`
 	ID           string `json:"id"`
@@ -294,7 +252,7 @@ func Open(path string) (*Store, error) {
 		},
 		runtime: runtimeState{
 			Sessions:        map[string]*conversation.Session{},
-			Submissions:     map[string]*Submission{},
+			Submissions:     map[string]*domainsubmission.Submission{},
 			PendingRequests: map[string]*PendingRequest{},
 			MessageLinks:    map[string]*MessageLink{},
 			Counters:        Counters{NextSubmission: 1, NextLocalID: 1},
@@ -857,7 +815,7 @@ func (s *Store) UpdateSession(key string, mutate func(*conversation.Session)) (*
 	return cloneSession(sess), nil
 }
 
-func (s *Store) CreateSubmission(sub *Submission) (string, error) {
+func (s *Store) CreateSubmission(sub *domainsubmission.Submission) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	id := strings.TrimSpace(sub.ID)
@@ -878,7 +836,7 @@ func (s *Store) CreateSubmission(sub *Submission) (string, error) {
 	return id, nil
 }
 
-func (s *Store) GetSubmission(id string) *Submission {
+func (s *Store) GetSubmission(id string) *domainsubmission.Submission {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sub, ok := s.runtime.Submissions[id]
@@ -888,7 +846,7 @@ func (s *Store) GetSubmission(id string) *Submission {
 	return cloneSubmission(sub)
 }
 
-func (s *Store) UpdateSubmission(id string, mutate func(*Submission)) error {
+func (s *Store) UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sub, ok := s.runtime.Submissions[id]
@@ -911,9 +869,7 @@ func (s *Store) QueueSubmission(sessionKey, submissionID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess := s.ensureSessionLocked(sessionKey)
-	if !slices.Contains(sess.Queue, submissionID) {
-		sess.Queue = append(sess.Queue, submissionID)
-	}
+	conversation.Enqueue(sess, submissionID)
 	sess.UpdatedAt = time.Now().Unix()
 	slog.Debug("store queue submission",
 		"session_key", sessionKey,
@@ -934,8 +890,7 @@ func (s *Store) DequeueSubmission(sessionKey string) (string, error) {
 	if len(sess.Queue) == 0 {
 		return "", nil
 	}
-	next := sess.Queue[0]
-	sess.Queue = append([]string(nil), sess.Queue[1:]...)
+	next := conversation.Dequeue(sess)
 	sess.UpdatedAt = time.Now().Unix()
 	slog.Debug("store dequeue submission",
 		"session_key", sessionKey,
@@ -1565,7 +1520,7 @@ func normalizeSessionValues(sess *conversation.Session) bool {
 			sess.RootMessageID = rootMessageID
 		}
 	}
-	normalizedStatus := NormalizeSessionStatus(sess.Status).String()
+	normalizedStatus := conversation.NormalizeSessionStatus(sess.Status).String()
 	if sess.Status != normalizedStatus {
 		changed = true
 	}
@@ -1583,11 +1538,11 @@ func normalizeSessionValues(sess *conversation.Session) bool {
 	return changed || before.ChatType != sess.ChatType || before.ChatID != sess.ChatID || before.RootMessageID != sess.RootMessageID || before.BindingID != sess.BindingID
 }
 
-func normalizeSubmissionValues(sub *Submission) {
+func normalizeSubmissionValues(sub *domainsubmission.Submission) {
 	if sub == nil {
 		return
 	}
-	sub.Status = NormalizeSubmissionStatus(sub.Status).String()
+	sub.Status = domainsubmission.NormalizeSubmissionStatus(sub.Status).String()
 }
 
 func normalizePendingRequestValues(req *PendingRequest) {
@@ -1668,7 +1623,7 @@ func sessionFromStored(sess *storedSession) *conversation.Session {
 		SubagentReasoningEffortOverride: sess.SubagentReasoningEffortOverride,
 		SmallModelOverride:              sess.SmallModelOverride,
 		RecentWorkspaceIDs:              cloneStringSlice(sess.RecentWorkspaceIDs),
-		Status:                          SessionStatusIdle.String(),
+		Status:                          conversation.SessionStatusIdle.String(),
 		UpdatedAt:                       sess.UpdatedAt,
 	}
 	if chatType, chatID, rootMessageID, ok := sessionContextFromKey(sess.Key); ok {
@@ -1898,15 +1853,15 @@ func normalizeStoredServiceTier(value string) string {
 	return ""
 }
 
-func cloneSubmission(sub *Submission) *Submission {
+func cloneSubmission(sub *domainsubmission.Submission) *domainsubmission.Submission {
 	if sub == nil {
 		return nil
 	}
 	cp := *sub
 	cp.SourceMessageIDs = append([]string(nil), sub.SourceMessageIDs...)
 	cp.SourceRootMessageIDs = append([]string(nil), sub.SourceRootMessageIDs...)
-	cp.Skills = append([]SubmissionSkill(nil), sub.Skills...)
-	cp.Attachments = append([]SubmissionAttachment(nil), sub.Attachments...)
+	cp.Skills = append([]domainsubmission.SubmissionSkill(nil), sub.Skills...)
+	cp.Attachments = append([]domainsubmission.SubmissionAttachment(nil), sub.Attachments...)
 	return &cp
 }
 
@@ -2066,7 +2021,7 @@ func fillSessionBlanks(dst, src *conversation.Session) {
 	if strings.TrimSpace(dst.ModelOverride) == "" {
 		dst.ModelOverride = src.ModelOverride
 	}
-	if strings.TrimSpace(dst.Status) == "" || strings.TrimSpace(dst.Status) == SessionStatusIdle.String() && strings.TrimSpace(src.Status) != "" {
+	if strings.TrimSpace(dst.Status) == "" || strings.TrimSpace(dst.Status) == conversation.SessionStatusIdle.String() && strings.TrimSpace(src.Status) != "" {
 		dst.Status = src.Status
 	}
 }
@@ -2117,7 +2072,7 @@ func (s *Store) ensureSessionLocked(key string) *conversation.Session {
 		s.runtime.Sessions[key] = sess
 		return sess
 	}
-	sess := &conversation.Session{Key: key, Status: SessionStatusIdle.String(), UpdatedAt: time.Now().Unix()}
+	sess := &conversation.Session{Key: key, Status: conversation.SessionStatusIdle.String(), UpdatedAt: time.Now().Unix()}
 	s.runtime.Sessions[key] = sess
 	s.syncPersistentSessionLocked(sess)
 	return sess

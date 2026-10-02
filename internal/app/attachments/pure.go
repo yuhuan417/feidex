@@ -3,15 +3,14 @@ package attachments
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/pathdisplay"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"feidex/internal/pathdisplay"
-	"feidex/internal/state"
 )
 
 const AttachmentsDirName = ".feidex-attachments"
@@ -30,7 +29,7 @@ func ShortHash(value string) string {
 	return hex.EncodeToString(sum[:12])
 }
 
-func BuildTurnInputs(sub *state.Submission) []map[string]any {
+func BuildTurnInputs(sub *domainsubmission.Submission) []map[string]any {
 	inputs := make([]map[string]any, 0, len(sub.Skills)+1+len(sub.Attachments))
 	for _, skill := range sub.Skills {
 		if strings.TrimSpace(skill.Name) == "" || strings.TrimSpace(skill.Path) == "" {
@@ -75,7 +74,7 @@ func TextInput(text string) map[string]any {
 	}
 }
 
-func AttachmentPrompt(attachment state.SubmissionAttachment) string {
+func AttachmentPrompt(attachment domainsubmission.SubmissionAttachment) string {
 	path := strings.TrimSpace(attachment.LocalPath)
 	if path == "" {
 		return ""
@@ -94,7 +93,7 @@ func AttachmentPrompt(attachment state.SubmissionAttachment) string {
 	}
 }
 
-func SubmissionInputPreview(sub *state.Submission) string {
+func SubmissionInputPreview(sub *domainsubmission.Submission) string {
 	parts := make([]string, 0, len(sub.Skills)+1+len(sub.Attachments))
 	for _, skill := range sub.Skills {
 		if strings.TrimSpace(skill.Name) == "" {
@@ -114,7 +113,7 @@ func SubmissionInputPreview(sub *state.Submission) string {
 	return strings.Join(parts, "\n")
 }
 
-func AttachmentPreview(attachment state.SubmissionAttachment) string {
+func AttachmentPreview(attachment domainsubmission.SubmissionAttachment) string {
 	name := strings.TrimSpace(attachment.Name)
 	if name == "" {
 		name = filepath.Base(attachment.LocalPath)

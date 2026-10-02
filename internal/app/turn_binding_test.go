@@ -1,17 +1,16 @@
 package app
 
 import (
-	appautoretry "feidex/internal/app/autoretry"
-	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
 	"encoding/json"
+	appautoretry "feidex/internal/app/autoretry"
+	"feidex/internal/codexrpc"
+	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
 	"time"
-
-	"feidex/internal/codexrpc"
-	"feidex/internal/state"
 )
 
 func TestFindSubmissionByTurnPrefersExplicitTurnBinding(t *testing.T) {
@@ -25,10 +24,10 @@ func TestFindSubmissionByTurnPrefersExplicitTurnBinding(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{ID: "sub-old", SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-old", Status: "completed"}); err != nil {
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{ID: "sub-old", SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-old", Status: "completed"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-old) error = %v", err)
 	}
-	if _, err := a.store.CreateSubmission(&state.Submission{ID: "sub-new", SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", Status: "running"}); err != nil {
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{ID: "sub-new", SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", Status: "running"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-new) error = %v", err)
 	}
 	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-old", "sess-1", "sub-old")
@@ -42,13 +41,13 @@ func TestFindSubmissionByTurnPrefersExplicitTurnBinding(t *testing.T) {
 func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	if err := a.store.UpdateSubmission(sub.ID, func(s *state.Submission) {
+	if err := a.store.UpdateSubmission(sub.ID, func(s *domainsubmission.Submission) {
 		s.Status = "running"
 	}); err != nil {
 		t.Fatalf("UpdateSubmission() error = %v", err)
 	}
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", &state.Submission{ID: sub.ID, SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-1"})
+	newTurnStreamService(a).noteTurnStarted("sess-1", &domainsubmission.Submission{ID: sub.ID, SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-1"})
 	finishTurn(a, "thread-1", "turn-1", "completed")
 
 	if len(ff.replyCards) == 0 {

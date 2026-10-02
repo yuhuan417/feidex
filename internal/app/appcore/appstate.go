@@ -2,9 +2,9 @@ package appcore
 
 import (
 	"feidex/internal/domain/conversation"
-	"strings"
-
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/state"
+	"strings"
 )
 
 // AppStateFacade centralizes app-level access to state.Store so lifecycle
@@ -71,7 +71,7 @@ func StateCloneSession(sess *conversation.Session) *conversation.Session {
 
 // SubmissionHasSourceRootMessages reports whether a submission already carries
 // explicit source root anchors for reply continuation binding.
-func SubmissionHasSourceRootMessages(sub *state.Submission) bool {
+func SubmissionHasSourceRootMessages(sub *domainsubmission.Submission) bool {
 	if sub == nil {
 		return false
 	}

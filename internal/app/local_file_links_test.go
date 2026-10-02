@@ -2,13 +2,12 @@ package app
 
 import (
 	"context"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
 
 func TestRewriteLocalFileLinksTextNormalizesInlineCodeRefsForPreview(t *testing.T) {
@@ -31,7 +30,7 @@ func TestRewriteLocalFileLinksTextNormalizesInlineCodeRefsForPreview(t *testing.
 		return strings.ReplaceAll(req.Text, raw, preview), nil
 	}
 
-	sub := &state.Submission{
+	sub := &domainsubmission.Submission{
 		ID:          "sub-1",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
 		ChatID:      "chat-1",

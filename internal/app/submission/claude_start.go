@@ -3,29 +3,29 @@ package submission
 import (
 	"context"
 	"errors"
-	"feidex/internal/domain/conversation"
-	"fmt"
-	"log/slog"
-	"strings"
-	"time"
-
 	"feidex/internal/app/appcore"
 	"feidex/internal/app/attachments"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/state"
+	"fmt"
+	"log/slog"
+	"strings"
+	"time"
 )
 
 // StartNextClaudeSubmissionWithFailureNotice is a convenience wrapper that
 // starts a non-steer Claude submission.
-func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure bool) error {
+func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNotice(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 	return s.StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, false)
 }
 
 // StartNextClaudeSubmissionWithFailureNoticeEx handles Claude-specific
 // submission startup: session resume, prompt build, EnsureSession with
 // retry, and startClaudeSubmissionAttempt with fallback.
-func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey string, sess *conversation.Session, sub *state.Submission, ws *config.Workspace, notifyFailure, steer bool) error {
+func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure, steer bool) error {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	claude := a.SubmissionQueueClaudeClient()
@@ -198,7 +198,7 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 	return nil
 }
 
-func (s SubmissionQueueService) startClaudeSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *conversation.Session, sub *state.Submission, claudeThreadID, prompt string, steer bool) (*conversation.Session, string, error) {
+func (s SubmissionQueueService) startClaudeSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, claudeThreadID, prompt string, steer bool) (*conversation.Session, string, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 
@@ -232,7 +232,7 @@ func (s SubmissionQueueService) startClaudeSubmissionAttempt(claude QueueClaudeC
 
 // startSteerSubmissionAttempt sends a steer message into the current
 // conversation without creating a separate CLI turn.
-func (s SubmissionQueueService) startSteerSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *conversation.Session, sub *state.Submission, claudeThreadID, prompt string) (*conversation.Session, string, error) {
+func (s SubmissionQueueService) startSteerSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, claudeThreadID, prompt string) (*conversation.Session, string, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 
@@ -259,7 +259,7 @@ func (s SubmissionQueueService) startSteerSubmissionAttempt(claude QueueClaudeCl
 	return updatedSess, turnID, nil
 }
 
-func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey string, sub *state.Submission, turnID string, preserveLineage bool) (*conversation.Session, *state.Submission, error) {
+func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey string, sub *domainsubmission.Submission, turnID string, preserveLineage bool) (*conversation.Session, *domainsubmission.Submission, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	submissionID := ""
@@ -276,10 +276,10 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 		}
 		switch {
 		case conversation.HasActiveOperations(current):
-			current.Status = state.SessionStatusTurnStarting.String()
+			current.Status = conversation.SessionStatusTurnStarting.String()
 			for _, op := range current.ActiveOperations {
 				if strings.TrimSpace(op.TurnID) != "" {
-					current.Status = state.SessionStatusTurnInProgress.String()
+					current.Status = conversation.SessionStatusTurnInProgress.String()
 					break
 				}
 			}
@@ -287,27 +287,27 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 			if !preserveLineage {
 				conversation.ClearThreadContext(current)
 			}
-			current.Status = state.SessionStatusQueued.String()
+			current.Status = conversation.SessionStatusQueued.String()
 		default:
 			if !preserveLineage {
 				conversation.ClearThreadContext(current)
 			}
-			current.Status = state.SessionStatusIdle.String()
+			current.Status = conversation.SessionStatusIdle.String()
 		}
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var refreshedSub *state.Submission
+	var refreshedSub *domainsubmission.Submission
 	if submissionID != "" {
-		if err := appState.UpdateSubmission(submissionID, func(current *state.Submission) {
+		if err := appState.UpdateSubmission(submissionID, func(current *domainsubmission.Submission) {
 			if current == nil {
 				return
 			}
 			current.ThreadID = ""
 			current.TurnID = ""
-			current.Status = state.SessionStatusQueued.String()
+			current.Status = conversation.SessionStatusQueued.String()
 			current.Finalized = false
 		}); err != nil {
 			return updatedSess, nil, err
@@ -333,7 +333,7 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 	return updatedSess, refreshedSub, nil
 }
 
-func (s SubmissionQueueService) bindClaudeSubmissionStartState(sessionKey string, sess *conversation.Session, sub *state.Submission, claudeThreadID, turnID string) (*conversation.Session, error) {
+func (s SubmissionQueueService) bindClaudeSubmissionStartState(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, claudeThreadID, turnID string) (*conversation.Session, error) {
 	a := s.App
 	appState := a.SubmissionQueueAppState()
 	conversation.SetThreadContext(sess, sub.WorkspaceID, claudeThreadID, firstNonEmpty(strings.TrimSpace(sess.ActiveThreadName), "Claude"), firstNonEmpty(strings.TrimSpace(sess.ActiveThreadPreview), truncate(sub.InputText, 48)))
@@ -353,14 +353,14 @@ func (s SubmissionQueueService) bindClaudeSubmissionStartState(sessionKey string
 		} else {
 			conversation.UpsertActiveOperation(current, op)
 		}
-		current.Status = state.SessionStatusTurnInProgress.String()
+		current.Status = conversation.SessionStatusTurnInProgress.String()
 	})
 	if err != nil {
 		return nil, err
 	}
 	sub.ThreadID = claudeThreadID
 	sub.TurnID = turnID
-	sub.Status = state.SubmissionStatusRunning.String()
+	sub.Status = domainsubmission.SubmissionStatusRunning.String()
 	a.SubmissionQueueRuntimeState().BindTurnSubmission(claudeThreadID, turnID, sessionKey, sub.ID)
 	if err := appState.MarkSubmissionRunning(sub.ID, claudeThreadID, turnID); err != nil {
 		return nil, err
@@ -378,7 +378,7 @@ func (s SubmissionQueueService) bindClaudeSubmissionStartState(sessionKey string
 
 // buildClaudePrompt builds the prompt text for a Claude submission from
 // skills, input text, and attachments.
-func buildClaudePrompt(sub *state.Submission) string {
+func buildClaudePrompt(sub *domainsubmission.Submission) string {
 	if sub == nil {
 		return ""
 	}
@@ -411,10 +411,10 @@ func truncate(s string, maxLen int) string {
 // Keep the failed prompt at the head and do not schedule further work. A later
 // input/queue retry re-attempts with the latest desired settings; /stop can
 // still cancel it. No auto-retry, finalization or fresh-session fallback.
-func (s SubmissionQueueService) deferClaudeModelConfig(sessionKey string, sub *state.Submission, applyErr error, notify bool) error {
+func (s SubmissionQueueService) deferClaudeModelConfig(sessionKey string, sub *domainsubmission.Submission, applyErr error, notify bool) error {
 	appState := s.App.SubmissionQueueAppState()
-	if err := appState.UpdateSubmission(sub.ID, func(current *state.Submission) {
-		current.Status = state.SubmissionStatusQueued.String()
+	if err := appState.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) {
+		current.Status = domainsubmission.SubmissionStatusQueued.String()
 		current.TurnID = ""
 	}); err != nil {
 		return err
@@ -430,7 +430,7 @@ func (s SubmissionQueueService) deferClaudeModelConfig(sessionKey string, sub *s
 		current.Queue = queue
 		current.ModelConfigError = applyErr.Error()
 		if !conversation.HasActiveOperations(current) {
-			current.Status = state.SessionStatusQueued.String()
+			current.Status = conversation.SessionStatusQueued.String()
 		}
 	})
 	if err != nil {

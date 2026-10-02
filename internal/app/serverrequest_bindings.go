@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/app/apputil"
 	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"
 
-	"feidex/internal/app/apputil"
 	appreview "feidex/internal/app/review"
+
 	appruntime "feidex/internal/app/runtime"
 	"feidex/internal/app/serverrequest"
 	"feidex/internal/feishu"
@@ -29,7 +31,7 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		UpdatePending:   func(id string, mutate func(*state.PendingRequest)) error { return a.State().UpdatePending(id, mutate) },
 		SavePending:     func(req *state.PendingRequest) error { return a.State().SavePending(req) },
 		SetSubStatus:    func(id, status string) error { return a.State().SetSubmissionStatus(id, status) },
-		Submission:      func(id string) *state.Submission { return a.State().Submission(id) },
+		Submission:      func(id string) *domainsubmission.Submission { return a.State().Submission(id) },
 		Session:         func(key string) *conversation.Session { return a.State().Session(key) },
 		SessionKeysEqual: func(left, right string) bool {
 			return sessionKeysEqual(a, left, right)
@@ -79,10 +81,10 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		HasOpenPendingRequestForTurn: func(threadID, turnID, excludeID string) bool {
 			return newRuntimeStateService(a).hasOpenPendingRequestForTurn(threadID, turnID, excludeID)
 		},
-		FindSubmissionByTurn: func(threadID, turnID string) (string, *state.Submission) {
+		FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
 			return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
 		},
-		DeliverPendingCard: func(sub *state.Submission, card map[string]any, delivery serverrequest.PendingCardDelivery) error {
+		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, delivery serverrequest.PendingCardDelivery) error {
 			return deliverPendingCard(a, sub, card, pendingCardDelivery{
 				requestKey:      delivery.RequestKey,
 				requestIDStored: delivery.RequestIDStored,
@@ -99,7 +101,7 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 				ttl:             delivery.TTL,
 			})
 		},
-		RenderApprovalCard: func(sub *state.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
+		RenderApprovalCard: func(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
 			return renderApprovalCard(a, "", sub, title, color, body, buttons)
 		},
 		PrepareMentionText: func(text, userID string) string {
