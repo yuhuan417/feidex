@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -28,7 +27,7 @@ func (s *ManagementService) BeginWorkspaceNew(msg *feishu.InboundMessage) error 
 	sessionKey, _, ws := s.currentWorkspaceForMessage(msg)
 	payload := NewPayload{
 		RootPath: "/",
-		SelectedCWD: appcore.FirstNonEmpty(func() string {
+		SelectedCWD: firstNonEmpty(func() string {
 			if ws == nil {
 				return ""
 			}
@@ -52,7 +51,7 @@ func (s *ManagementService) BeginWorkspaceWorktreeWithPayload(msg *feishu.Inboun
 		return err
 	}
 	card := s.RenderWorktreeCard(sessionKey, requestID, payload)
-	msgID, err := s.Deps.OutboundCapability().ReplyCard(appcore.Context(s.Deps), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
+	msgID, err := s.Deps.OutboundCapability().ReplyCard(s.Deps.Context(), msg.MessageID, card, false)
 	if err != nil {
 		return err
 	}
@@ -62,7 +61,7 @@ func (s *ManagementService) BeginWorkspaceWorktreeWithPayload(msg *feishu.Inboun
 		SessionKey:  sessionKey,
 		OwnerUserID: msg.UserID,
 		FeishuMsgID: msgID,
-		PayloadJSON: appcore.MustJSON(payload),
+		PayloadJSON: mustJSON(payload),
 		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
@@ -113,7 +112,7 @@ func (s *ManagementService) BeginWorkspaceNewWithPayload(msg *feishu.InboundMess
 		return err
 	}
 	card := s.RenderNewCard(sessionKey, requestID, payload)
-	msgID, err := s.Deps.OutboundCapability().ReplyCard(appcore.Context(s.Deps), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
+	msgID, err := s.Deps.OutboundCapability().ReplyCard(s.Deps.Context(), msg.MessageID, card, false)
 	if err != nil {
 		return err
 	}
@@ -123,7 +122,7 @@ func (s *ManagementService) BeginWorkspaceNewWithPayload(msg *feishu.InboundMess
 		SessionKey:  sessionKey,
 		OwnerUserID: msg.UserID,
 		FeishuMsgID: msgID,
-		PayloadJSON: appcore.MustJSON(payload),
+		PayloadJSON: mustJSON(payload),
 		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
@@ -142,7 +141,7 @@ func (s *ManagementService) CreateWorkspaceNewPending(sessionKey, userID, feishu
 		SessionKey:  sessionKey,
 		OwnerUserID: userID,
 		FeishuMsgID: strings.TrimSpace(feishuMsgID),
-		PayloadJSON: appcore.MustJSON(payload),
+		PayloadJSON: mustJSON(payload),
 		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
@@ -244,7 +243,7 @@ func (s *ManagementService) CloneWorkspaceAndSwitchInSelectedParent(msg *feishu.
 		parentDir = s.DefaultWorkspaceCloneParent(ws)
 	}
 	workspaceID, targetDir, err := s.CloneWorkspaceInParent(
-		appcore.Context(s.Deps),
+		s.Deps.Context(),
 		sessionKey,
 		msg.UserID,
 		msg.ChatID,
@@ -258,7 +257,7 @@ func (s *ManagementService) CloneWorkspaceAndSwitchInSelectedParent(msg *feishu.
 		return err
 	}
 	reply := "已从仓库创建并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
-	return s.Deps.OutboundCapability().ReplyText(appcore.Context(s.Deps), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
+	return s.Deps.OutboundCapability().ReplyText(s.Deps.Context(), msg.MessageID, reply, false)
 }
 
 // PrepareWorkspaceClone validates and prepares a clone operation.
@@ -430,7 +429,7 @@ func (s *ManagementService) DefaultCloneWorktreePayload(payload ClonePayload, pa
 	if parentDir == "" {
 		parentDir = strings.TrimSpace(payload.SelectedParentDir)
 	}
-	baseProject := appcore.FirstNonEmpty(strings.TrimSpace(repoName), "workspace")
+	baseProject := firstNonEmpty(strings.TrimSpace(repoName), "workspace")
 	botName := s.worktreeBotLabel()
 	workspaceID := strings.TrimSpace(payload.WorktreeWorkspaceID)
 	branchName := strings.TrimSpace(payload.WorktreeBranchName)
@@ -457,7 +456,7 @@ func (s *ManagementService) DefaultCloneWorktreePayload(payload ClonePayload, pa
 }
 
 func (s *ManagementService) prepareCloneWorktreePlan(payload ClonePayload, repoName, parentDir, cloneTargetDir string) (*CloneWorktreePlan, error) {
-	baseProject := appcore.FirstNonEmpty(strings.TrimSpace(repoName), "workspace")
+	baseProject := firstNonEmpty(strings.TrimSpace(repoName), "workspace")
 	botName := s.worktreeBotLabel()
 	workspaceID := strings.TrimSpace(payload.WorktreeWorkspaceID)
 	if workspaceID == "" {
@@ -534,7 +533,7 @@ func (s *ManagementService) worktreeBaseProjectLabel(ws *config.Workspace) strin
 	if base := cleanPathBase(ws.Cwd); base != "" {
 		return base
 	}
-	return appcore.FirstNonEmpty(strings.TrimSpace(ws.Name), strings.TrimSpace(ws.ID), "workspace")
+	return firstNonEmpty(strings.TrimSpace(ws.Name), strings.TrimSpace(ws.ID), "workspace")
 }
 
 func cleanPathBase(pathValue string) string {
@@ -721,11 +720,11 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 			payload.ErrorMessage = ""
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 				req.Status = state.PendingRequestStatusResolved.String()
-				req.PayloadJSON = appcore.MustJSON(payload)
+				req.PayloadJSON = mustJSON(payload)
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderCloneCanceledCard(sessionKey, payload, parentDir, op.Snapshot()))
+				s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderCloneCanceledCard(sessionKey, payload, parentDir, op.Snapshot()))
 			}
 			return
 		}
@@ -742,7 +741,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 				"error", takeoverErr.Err,
 			)
 			payload.SelectedParentDir = parentDir
-			payload.DraftID = appcore.FirstNonEmpty(strings.TrimSpace(payload.DraftID), strings.TrimSpace(takeoverErr.WorkspaceID))
+			payload.DraftID = firstNonEmpty(strings.TrimSpace(payload.DraftID), strings.TrimSpace(takeoverErr.WorkspaceID))
 			if takeoverErr.Err != nil {
 				payload.ErrorMessage = takeoverErr.Err.Error()
 			} else {
@@ -750,11 +749,11 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 			}
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 				req.Status = state.PendingRequestStatusResolved.String()
-				req.PayloadJSON = appcore.MustJSON(payload)
+				req.PayloadJSON = mustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
+				_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
 			}
 			return
 		}
@@ -770,11 +769,11 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 		payload.ErrorMessage = err.Error()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusPending.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderCloneCard(sessionKey, requestID, payload))
+			_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderCloneCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -789,10 +788,10 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 	payload.ErrorMessage = ""
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusResolved.String()
-		req.PayloadJSON = appcore.MustJSON(payload)
+		req.PayloadJSON = mustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderCloneSuccessCard(sessionKey, workspaceID, targetDir))
+		_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderCloneSuccessCard(sessionKey, workspaceID, targetDir))
 	}
 }
 
@@ -804,11 +803,11 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 		payload.ErrorMessage = planErr
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusPending.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
+			_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -819,42 +818,42 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 		if errors.Is(err, context.Canceled) {
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 				req.Status = state.PendingRequestStatusResolved.String()
-				req.PayloadJSON = appcore.MustJSON(payload)
+				req.PayloadJSON = mustJSON(payload)
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeCanceledCard(sessionKey, payload, plan, op.Snapshot()))
+				_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderWorktreeCanceledCard(sessionKey, payload, plan, op.Snapshot()))
 			}
 			return
 		}
 		payload.ErrorMessage = err.Error()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusPending.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
+			_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
 		}
 		return
 	}
 	if err := s.CreateWorkspaceAndSwitch(sessionKey, userID, chatID, chatType, plan.WorkspaceID, plan.WorkspaceID, plan.TargetDir); err != nil {
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
+			_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
 		}
 		return
 	}
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusResolved.String()
-		req.PayloadJSON = appcore.MustJSON(payload)
+		req.PayloadJSON = mustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeSuccessCard(sessionKey, plan.WorkspaceID, plan.TargetDir))
+		_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, s.RenderWorktreeSuccessCard(sessionKey, plan.WorkspaceID, plan.TargetDir))
 	}
 }
 
@@ -992,7 +991,7 @@ func (s *ManagementService) CompleteWorkspaceClone(action *feishu.CardAction, se
 	_, _, ws := s.currentWorkspaceForMessage(msg)
 	payload := ClonePayload{
 		RootPath:          s.DefaultWorkspaceCloneRoot(ws),
-		SelectedParentDir: appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/"),
+		SelectedParentDir: firstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/"),
 		CloneMode:         CloneModeWorkspace,
 	}
 	if err := s.SavePending(&state.PendingRequest{
@@ -1001,7 +1000,7 @@ func (s *ManagementService) CompleteWorkspaceClone(action *feishu.CardAction, se
 		SessionKey:  sessionKey,
 		OwnerUserID: action.UserID,
 		FeishuMsgID: strings.TrimSpace(action.MessageID),
-		PayloadJSON: appcore.MustJSON(payload),
+		PayloadJSON: mustJSON(payload),
 		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
@@ -1029,7 +1028,7 @@ func (s *ManagementService) CompleteWorkspaceWorktree(action *feishu.CardAction,
 		SessionKey:  sessionKey,
 		OwnerUserID: action.UserID,
 		FeishuMsgID: strings.TrimSpace(action.MessageID),
-		PayloadJSON: appcore.MustJSON(payload),
+		PayloadJSON: mustJSON(payload),
 		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
@@ -1078,16 +1077,16 @@ func (s *ManagementService) CompleteWorkspaceClonePickDir(action *feishu.CardAct
 	if currentPath == "" {
 		msg := s.CommandMessageFromAction(action, pending.SessionKey, "/workspace clone")
 		_, _, ws := s.currentWorkspaceForMessage(msg)
-		currentPath = appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/")
+		currentPath = firstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/")
 	}
 	payload = s.DefaultCloneWorktreePayload(payload, currentPath)
 	payload.Picker = &PathPickerPayload{
 		Mode:        PathPickerModeDirectory,
 		Style:       PathPickerStyleDropdown,
-		RootPath:    appcore.FirstNonEmpty(strings.TrimSpace(payload.RootPath), "/"),
+		RootPath:    firstNonEmpty(strings.TrimSpace(payload.RootPath), "/"),
 		CurrentPath: currentPath,
 	}
-	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = appcore.MustJSON(payload) })
+	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开父目录选择"},
 		Card:  rawCard(s.RenderCloneCard(pending.SessionKey, requestID, payload)),
@@ -1112,13 +1111,13 @@ func (s *ManagementService) CompleteWorkspaceCloneRefresh(action *feishu.CardAct
 	_, _, ws := s.currentWorkspaceForMessage(msg)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
-		parentDir = appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/")
+		parentDir = firstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/")
 	}
 	payload.SelectedParentDir = parentDir
 	payload = s.DefaultCloneWorktreePayload(payload, parentDir)
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusPending.String()
-		req.PayloadJSON = appcore.MustJSON(payload)
+		req.PayloadJSON = mustJSON(payload)
 		req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 	})
 	toast := "已更新创建方式"
@@ -1147,7 +1146,7 @@ func (s *ManagementService) CompleteWorkspaceCloneCancel(action *feishu.CardActi
 		snapshot := op.RequestCancel()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusCancelling.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		return &callback.CardActionTriggerResponse{
@@ -1172,14 +1171,14 @@ func (s *ManagementService) CompleteWorkspaceNewPickDir(action *feishu.CardActio
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
 	}
 	payload := MergeNewFormValues(NewPayloadFromPending(pending), action.FormValue)
-	currentPath := appcore.FirstNonEmpty(strings.TrimSpace(payload.SelectedCWD), "/")
+	currentPath := firstNonEmpty(strings.TrimSpace(payload.SelectedCWD), "/")
 	payload.Picker = &PathPickerPayload{
 		Mode:        PathPickerModeDirectory,
 		Style:       PathPickerStyleDropdown,
-		RootPath:    appcore.FirstNonEmpty(strings.TrimSpace(payload.RootPath), "/"),
+		RootPath:    firstNonEmpty(strings.TrimSpace(payload.RootPath), "/"),
 		CurrentPath: currentPath,
 	}
-	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = appcore.MustJSON(payload) })
+	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开目录选择"},
 		Card:  rawCard(s.RenderNewCard(pending.SessionKey, requestID, payload)),
@@ -1199,7 +1198,7 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 	payload := MergeNewFormValues(NewPayloadFromPending(pending), action.FormValue)
 	id := strings.TrimSpace(payload.DraftID)
 	if id == "" {
-		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = appcore.MustJSON(payload) })
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请填写 workspace_id"},
 			Card:  rawCard(s.RenderNewCard(pending.SessionKey, requestID, payload)),
@@ -1207,7 +1206,7 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 	}
 	cwd := strings.TrimSpace(payload.SelectedCWD)
 	if cwd == "" {
-		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = appcore.MustJSON(payload) })
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请先选择目录"},
 			Card:  rawCard(s.RenderNewCard(pending.SessionKey, requestID, payload)),
@@ -1220,7 +1219,7 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 	if existingWS := s.WorkspaceByIDAndCWD(id, cwd); existingWS != nil {
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		return &callback.CardActionTriggerResponse{
@@ -1232,11 +1231,11 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 	chatID := action.ChatID
 	chatType := ""
 	if sess != nil {
-		chatID = appcore.FirstNonEmpty(chatID, sess.ChatID)
+		chatID = firstNonEmpty(chatID, sess.ChatID)
 		chatType = sess.ChatType
 	}
 	if err := s.CreateWorkspaceAndSwitch(pending.SessionKey, action.UserID, chatID, chatType, id, name, cwd); err != nil {
-		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = appcore.MustJSON(payload) })
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
 			Card:  rawCard(s.RenderNewCard(pending.SessionKey, requestID, payload)),
@@ -1244,7 +1243,7 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 	}
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusResolved.String()
-		req.PayloadJSON = appcore.MustJSON(payload)
+		req.PayloadJSON = mustJSON(payload)
 	})
 	body := "已创建并切换到工作区 `" + id + "`\n\ncwd: `" + cwd + "`"
 	return &callback.CardActionTriggerResponse{
@@ -1266,7 +1265,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 	payload := MergeCloneFormValues(ClonePayloadFromPending(pending), action.FormValue)
 	payload.ErrorMessage = ""
 	if strings.TrimSpace(payload.RepoURL) == "" {
-		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = appcore.MustJSON(payload) })
+		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "请填写 git 地址"},
 			Card:  rawCard(s.RenderCloneCard(pending.SessionKey, requestID, payload)),
@@ -1277,10 +1276,10 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 	sessionKey, _, ws := s.currentWorkspaceForMessage(msg)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
-		parentDir = appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/")
+		parentDir = firstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), "/")
 	}
 	payload.SelectedParentDir = parentDir
-	messageID := appcore.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
+	messageID := firstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
 	if status := state.NormalizePendingRequestStatus(pending.Status); status == state.PendingRequestStatusProcessing || status == state.PendingRequestStatusCancelling {
 		snapshot := CloneProgressSnapshot{State: status.String()}
 		if op := s.GetWorkspaceCloneOperation(requestID); op != nil {
@@ -1297,7 +1296,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		if errors.As(err, &existingWorkspaceErr) {
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 				req.Status = state.PendingRequestStatusResolved.String()
-				req.PayloadJSON = appcore.MustJSON(payload)
+				req.PayloadJSON = mustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			return &callback.CardActionTriggerResponse{
@@ -1309,7 +1308,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		if errors.As(err, &existingDirErr) {
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 				req.Status = state.PendingRequestStatusResolved.String()
-				req.PayloadJSON = appcore.MustJSON(payload)
+				req.PayloadJSON = mustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			takeoverPayload := NewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, NewTakeoverNotice(existingDirErr.TargetDir))
@@ -1325,7 +1324,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		payload.ErrorMessage = err.Error()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusPending.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		return &callback.CardActionTriggerResponse{
@@ -1334,13 +1333,13 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		}, nil
 	}
 	payload = clonePayloadWithPlan(payload, plan)
-	ctx, cancel := context.WithCancel(appcore.Context(s.Deps))
+	ctx, cancel := context.WithCancel(s.Deps.Context())
 	op := NewCloneOperation(cancel)
 	s.SetWorkspaceCloneOperation(requestID, op)
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusProcessing.String()
-		req.PayloadJSON = appcore.MustJSON(payload)
-		req.FeishuMsgID = appcore.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
+		req.PayloadJSON = mustJSON(payload)
+		req.FeishuMsgID = firstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
 		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 	})
 	s.runWorkspaceAsync(func() {
@@ -1392,7 +1391,7 @@ func (s *ManagementService) CompleteWorkspaceWorktreeSubmit(action *feishu.CardA
 		if errors.As(err, &existingWorkspaceErr) {
 			_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 				req.Status = state.PendingRequestStatusResolved.String()
-				req.PayloadJSON = appcore.MustJSON(payload)
+				req.PayloadJSON = mustJSON(payload)
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			return &callback.CardActionTriggerResponse{
@@ -1403,7 +1402,7 @@ func (s *ManagementService) CompleteWorkspaceWorktreeSubmit(action *feishu.CardA
 		payload.ErrorMessage = err.Error()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusPending.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		return &callback.CardActionTriggerResponse{
@@ -1416,14 +1415,14 @@ func (s *ManagementService) CompleteWorkspaceWorktreeSubmit(action *feishu.CardA
 	payload.WorkspaceID = plan.WorkspaceID
 	payload.DirectoryName = plan.DirectoryName
 	payload.TargetDir = plan.TargetDir
-	messageID := appcore.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
-	ctx, cancel := context.WithCancel(appcore.Context(s.Deps))
+	messageID := firstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
+	ctx, cancel := context.WithCancel(s.Deps.Context())
 	op := NewCloneOperation(cancel)
 	s.SetWorkspaceCloneOperation(requestID, op)
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 		req.Status = state.PendingRequestStatusProcessing.String()
-		req.PayloadJSON = appcore.MustJSON(payload)
-		req.FeishuMsgID = appcore.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
+		req.PayloadJSON = mustJSON(payload)
+		req.FeishuMsgID = firstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
 		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 	})
 	msg := s.CommandMessageFromAction(action, pending.SessionKey, "/workspace new worktree")
@@ -1453,7 +1452,7 @@ func (s *ManagementService) CompleteWorkspaceWorktreeCancel(action *feishu.CardA
 		snapshot := op.RequestCancel()
 		_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusCancelling.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		return &callback.CardActionTriggerResponse{
@@ -1508,34 +1507,34 @@ func (s *ManagementService) CompleteWorkspaceNewText(msg *feishu.InboundMessage,
 	if strings.TrimSpace(cwd) == "" {
 		return fmt.Errorf("请先选择目录")
 	}
-	sessionKey := appcore.MakeSessionKey(s.Deps, msg)
+	sessionKey := makeSessionKey(s.Deps, msg)
 	if existingWS := s.WorkspaceByIDAndCWD(id, cwd); existingWS != nil {
 		payload.DraftID = id
 		payload.DraftName = name
 		_ = s.UpdatePending(pending.ID, func(req *state.PendingRequest) {
 			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = appcore.MustJSON(payload)
+			req.PayloadJSON = mustJSON(payload)
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		if pending.FeishuMsgID != "" {
-			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), pending.FeishuMsgID, s.RenderSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, NewExistingWorkspaceNotice()))
+			_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), pending.FeishuMsgID, s.RenderSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, NewExistingWorkspaceNotice()))
 		}
-		return s.Deps.OutboundCapability().ReplyText(appcore.Context(s.Deps), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
+		return s.Deps.OutboundCapability().ReplyText(s.Deps.Context(), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, false)
 	}
 	if err := s.CreateWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
 	_ = s.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	if pending.FeishuMsgID != "" {
-		_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), pending.FeishuMsgID, s.Deps.Renderer().SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
+		_ = s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), pending.FeishuMsgID, s.Deps.Renderer().SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}
-	return s.Deps.OutboundCapability().ReplyText(appcore.Context(s.Deps), msg.MessageID, "已创建并切换到工作区 "+id, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
+	return s.Deps.OutboundCapability().ReplyText(s.Deps.Context(), msg.MessageID, "已创建并切换到工作区 "+id, false)
 }
 
 // --- private helpers ---
 
 func (s *ManagementService) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace) {
-	sessionKey = appcore.MakeSessionKey(s.Deps, msg)
+	sessionKey = makeSessionKey(s.Deps, msg)
 	sess = s.GetSession(sessionKey)
 	workspaceID := selectedWorkspaceIDForMessage(s.Deps, msg, sess)
 	return sessionKey, sess, config.FindWorkspace(s.Deps.Config(), workspaceID)
@@ -1570,7 +1569,7 @@ func (s *ManagementService) CloneWorkspacePayloadInParent(ctx context.Context, s
 		return "", "", err
 	}
 	if ctx == nil {
-		ctx = appcore.Context(s.Deps)
+		ctx = s.Deps.Context()
 	}
 	if err := os.MkdirAll(filepath.Dir(plan.TargetDir), 0o755); err != nil {
 		return "", "", err
@@ -1618,7 +1617,7 @@ func (s *ManagementService) patchWorkspaceCloneProgressCard(messageID, requestID
 		return
 	}
 	card := s.RenderClonePreparingCard(requestID, payload, parentDir, snapshot)
-	if err := s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, card); err != nil {
+	if err := s.Deps.OutboundCapability().PatchCard(s.Deps.Context(), messageID, card); err != nil {
 		slog.Warn("workspace clone progress patch failed",
 			"request_id", requestID,
 			"message_id", messageID,

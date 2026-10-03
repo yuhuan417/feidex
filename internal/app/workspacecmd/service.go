@@ -4,12 +4,14 @@ package workspacecmd
 
 import (
 	"context"
+	"encoding/json"
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	frontendclients "feidex/internal/runtime"
+	"strings"
 	"sync"
 
-	"feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/codexrpc"
@@ -90,13 +92,14 @@ var (
 // composition root; workspace commands never receive the application root.
 // ---------------------------------------------------------------------------
 
-// Dependencies provides config, state, and Feishu client access. workspacecmd uses
-// appcore helpers (DefaultWorkspaceID, ConfiguredBackend, MakeSessionKey,
-// ReplyInThreadEnabled, FirstNonEmpty) which all accept this interface.
+// Dependencies provides config, state, lifecycle, and Feishu capabilities.
 type Dependencies struct {
 	ConfigProvider interface {
-		appcore.ConfigurationSource
-		appcore.FrontendIdentity
+		Config() *config.Config
+		ConfigMu() *sync.RWMutex
+		Backend() string
+		FrontendID() string
+		FrontendConfigIndex() int
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 		ConfigPath() string
@@ -916,3 +919,44 @@ func (a Dependencies) WorkspaceSelection() workspace.SelectionService {
 	}
 	return a.ConfigProvider.WorkspaceSelection()
 }
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+func makeSessionKey(a Dependencies, msg *feishu.InboundMessage) string {
+	if msg == nil {
+		return ""
+	}
+	if strings.TrimSpace(msg.SessionKey) != "" {
+		return identity.CanonicalSessionKey(a.FrontendID(), msg.SessionKey)
+	}
+	chatID := strings.TrimSpace(msg.ChatID)
+	if chatID == "" {
+		return ""
+	}
+	frontendID := strings.TrimSpace(a.FrontendID())
+	if frontendID == "" {
+		return "feishu:chat:" + chatID
+	}
+	return "feishu:frontend:" + frontendID + ":chat:" + chatID
+}
+func allowLegacyFallback(a Dependencies) bool {
+	if a.ConfigProvider == nil || a.Config() == nil || a.ConfigMu() == nil {
+		return false
+	}
+	a.ConfigMu().RLock()
+	defer a.ConfigMu().RUnlock()
+	return len(a.Config().ResolvedFrontends()) == 1
+}
+func defaultWorkspaceID(a Dependencies) string {
+	if a.Config() != nil && len(a.Config().Workspaces) > 0 && strings.TrimSpace(a.Config().Workspaces[0].ID) != "" {
+		return a.Config().Workspaces[0].ID
+	}
+	return "default"
+}
+func mustJSON(value any) string { data, _ := json.Marshal(value); return string(data) }

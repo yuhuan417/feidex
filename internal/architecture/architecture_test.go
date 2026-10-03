@@ -133,6 +133,17 @@ func TestThreadMenuDoesNotDependOnLegacyWorkspaceOrAppCoreHelpers(t *testing.T) 
 	}
 }
 
+func TestWorkspaceCommandDoesNotDependOnAppCore(t *testing.T) {
+	root := repositoryRoot(t)
+	violations, err := importsUnder(root, "internal/app/workspacecmd", []string{modulePath + "/internal/app/appcore"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("workspace command must use explicit configuration and identity capabilities: %v", violations)
+	}
+}
+
 func TestModelSettingsEntrypointsDoNotMutateBusinessState(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, relative := range []string{"internal/app/bot_profile.go", "internal/app/binding_scoped_commands.go", "internal/app/binding_model_actions.go"} {
