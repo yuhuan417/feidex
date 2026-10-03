@@ -8,7 +8,6 @@ import (
 
 	"context"
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
-	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
 	"os/exec"
 	"strings"
@@ -597,7 +596,7 @@ func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
 	if ws := findWorkspaceForTest(a, payload.WorkspaceID); ws == nil || strings.TrimSpace(ws.Cwd) != strings.TrimSpace(payload.TargetDir) {
 		t.Fatalf("created private worktree workspace = %+v, payload=%+v", ws, payload)
 	}
-	if selected := appcore.ResolveWorkspaceSelectionForMessage(a, msg, a.State().Session(makeSessionKey(a, msg))); selected != payload.WorkspaceID {
+	if selected := a.WorkspaceSelection().Resolve(msg.ChatType, msg.ChatID, msg.UserID, a.State().Session(makeSessionKey(a, msg))); selected != payload.WorkspaceID {
 		t.Fatalf("p2p selected workspace = %q, want %q", selected, payload.WorkspaceID)
 	}
 }

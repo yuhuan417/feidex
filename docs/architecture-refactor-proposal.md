@@ -594,4 +594,4 @@ Codex server request
 - 本批完成的是模型作用域与快照职责迁移；workspace renderer 状态读取、其余业务 callback、菜单政策、composition root 集中及旧桥接删除仍需继续，整体提案尚未完成。
 - workspace config、management 和 renderer 的构造实例已归入 frontend `appComposition`；backend/config 失效时统一清理 workspace capability cache，减少命令和 card action 重复组装同一组服务。
 - workspace presentation 现在在 frontend composition 初始化阶段一次性构造；配置或 backend 变化只影响其注入的查询快照，不再重建 Feishu renderer。
-- workspace selection 的生产调用已直接依赖 `application/workspace.SelectionService`；`internal/app/appcore` 的 selection wrapper 不再位于 app/workspacecmd 主路径，保留的兼容函数仅供旧测试迁移期间使用。
+- workspace selection 的生产调用已直接依赖 `application/workspace.SelectionService`；已删除 `internal/app/appcore/workspace_selection.go` 及其宿主 wrapper，app/workspacecmd 直接声明 selection capability。
