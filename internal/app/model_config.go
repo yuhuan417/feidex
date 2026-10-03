@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"feidex/internal/app/modelconfig"
+	"feidex/internal/adapter/feishu/modelconfig"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 

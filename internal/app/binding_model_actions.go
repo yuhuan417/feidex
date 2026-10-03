@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"feidex/internal/adapter/feishu/cards"
-	appmodelconfig "feidex/internal/app/modelconfig"
+	appmodelconfig "feidex/internal/adapter/feishu/modelconfig"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

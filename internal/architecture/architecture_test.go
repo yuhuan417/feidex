@@ -350,7 +350,14 @@ func TestPureCardRenderersDoNotImportFilesystemOrHostState(t *testing.T) {
 
 func TestModelCatalogPolicyLivesInApplication(t *testing.T) {
 	root := repositoryRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "modelconfig", "modelconfig.go"))
+	violations, err := importsUnder(root, "internal/adapter/feishu/modelconfig", []string{modulePath + "/internal/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("model config adapter must not depend on app orchestration: %v", violations)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "internal", "adapter", "feishu", "modelconfig", "modelconfig.go"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,8 +2,8 @@ package planmode
 
 import (
 	"context"
+	"feidex/internal/adapter/feishu/modelconfig"
 	"feidex/internal/app/appcore"
-	"feidex/internal/app/modelconfig"
 	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"

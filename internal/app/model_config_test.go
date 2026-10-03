@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"feidex/internal/app/modelconfig"
+	"feidex/internal/adapter/feishu/modelconfig"
 	"feidex/internal/claudecli"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"feidex/internal/app/modelconfig"
+	"feidex/internal/adapter/feishu/modelconfig"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
