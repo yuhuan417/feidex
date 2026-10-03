@@ -12,9 +12,14 @@ type runtimeStateService struct {
 }
 
 func newRuntimeStateService(app *App) runtimeStateService {
+	ensureCompositionState(app)
+	var state *backend.RuntimeStateService
+	if app != nil && app.composition != nil {
+		state = &app.composition.switchState
+	}
 	return runtimeStateService{
 		app:   app,
-		inner: &app.switchState,
+		inner: state,
 	}
 }
 

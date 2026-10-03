@@ -58,7 +58,6 @@ type App struct {
 	stateView              *appstate.Store
 	composition            *appComposition
 	deduper                *frontendruntime.InboundDeduper
-	switchState            backend.RuntimeStateService
 	asyncRunner            func(func())
 	waitAsync              func()
 	frontendRecoveryMu     sync.Mutex
@@ -66,7 +65,6 @@ type App struct {
 	frontendMessageTraffic int
 	sessionActorsMu        sync.Mutex
 	sessionActors          *frontendruntime.SessionActors
-	mcp                    *feidexMCPService
 }
 
 // appComposition owns lazily constructed application/backend services. Keeping
@@ -92,6 +90,8 @@ type appComposition struct {
 	serverRequestSvc *serverrequest.Service
 	dispatcher       *application.Dispatcher
 	effectRunner     *frontendruntime.EffectRunner
+	mcp              *feidexMCPService
+	switchState      backend.RuntimeStateService
 }
 
 func (a *App) configMutex() *sync.RWMutex {

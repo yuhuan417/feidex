@@ -32,7 +32,7 @@ func startMCPService(a *App, ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	if a.mcp != nil {
+	if a.composition != nil && a.composition.mcp != nil {
 		return nil
 	}
 	svc, err := newFeidexMCPService(a)
@@ -42,17 +42,18 @@ func startMCPService(a *App, ctx context.Context) error {
 	if err := svc.Start(ctx); err != nil {
 		return err
 	}
-	a.mcp = svc
+	ensureCompositionState(a)
+	a.composition.mcp = svc
 	publishMCPToCodexClient(a, currentCodexClient(a))
 	return nil
 }
 
 func stopMCPService(a *App, ctx context.Context) error {
-	if a == nil || a.mcp == nil {
+	if a == nil || a.composition == nil || a.composition.mcp == nil {
 		return nil
 	}
-	svc := a.mcp
-	a.mcp = nil
+	svc := a.composition.mcp
+	a.composition.mcp = nil
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -60,10 +61,10 @@ func stopMCPService(a *App, ctx context.Context) error {
 }
 
 func currentMCPPublication(a *App) mcpbridge.Publication {
-	if a == nil || a.mcp == nil {
+	if a == nil || a.composition == nil || a.composition.mcp == nil {
 		return mcpbridge.Publication{}
 	}
-	return a.mcp.Publication()
+	return a.composition.mcp.Publication()
 }
 
 func newFeidexMCPService(a *App) (*feidexMCPService, error) {
