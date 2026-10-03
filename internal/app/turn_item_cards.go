@@ -98,12 +98,12 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	}
 	card := newOutboundCardService(s.app).renderTurnItemCard(ctx, sub, payload, payload.IsFinalAnswer)
 	if strings.TrimSpace(reuseMessageID) != "" {
-		if err := s.app.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+		if err := patchCardEffect(ctx, s.app, reuseMessageID, card); err == nil {
 			recordMessageLink(s.app, reuseMessageID, kind, sub, payload.ItemID)
 			return reuseMessageID
 		}
 	}
-	id, err := s.app.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(s.app, sub))
+	id, err := replyCardWithIDEffect(ctx, s.app, sub.TriggerMessageID, card, replyInThreadForSubmission(s.app, sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := payload.SummaryText
 		if fallback == "" {
@@ -135,7 +135,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 	}
 	if strings.TrimSpace(reuseMessageID) != "" {
 		card := cardRendererForApp(s.app).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app, sub, title), color, "", body, nil)
-		if err := s.app.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+		if err := patchCardEffect(ctx, s.app, reuseMessageID, card); err == nil {
 			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
 		}
@@ -156,12 +156,12 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	}
 	card := cardRendererForApp(s.app).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app, sub, title), color, "", body, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
-		if err := s.app.feishu.PatchCard(ctx, reuseMessageID, card); err == nil {
+		if err := patchCardEffect(ctx, s.app, reuseMessageID, card); err == nil {
 			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
 		}
 	}
-	id, err := s.app.feishu.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(s.app, sub))
+	id, err := replyCardWithIDEffect(ctx, s.app, sub.TriggerMessageID, card, replyInThreadForSubmission(s.app, sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		sendTurnEventMessages(s.app, ctx, sub, body, replyInThreadForSubmission(s.app, sub), kind)
 		return ""
