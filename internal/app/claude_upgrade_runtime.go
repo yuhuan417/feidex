@@ -221,7 +221,7 @@ func (s backendUpgradeService) refreshClaudeRuntimeAfterMaintenance(ctx context.
 		return false, nil
 	}
 	if currentClaudeCore(s.app) == nil {
-		setCompositionClaude(s.app, newClaudeCore(s.app, s.app.cfg.Claude))
+		setClaudeCore(s.app, newClaudeCore(s.app, s.app.cfg.Claude))
 		return true, nil
 	}
 	if err := currentClaudeCore(s.app).Close(); err != nil {

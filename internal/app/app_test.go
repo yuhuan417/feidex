@@ -64,8 +64,9 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	notifier, ok := app.composition.feishuTransport.(*appfeishuwrap.NotifyingFeishuClient)
-	if app.composition.codex != fc || !ok || notifier.Base != ff {
+	notifier, ok := app.registry.FeishuTransport.(*appfeishuwrap.NotifyingFeishuClient)
+	codex, _ := app.registry.Codex.(CodexClient)
+	if codex != fc || !ok || notifier.Base != ff {
 		t.Fatalf("New() did not use injected clients: %+v", app)
 	}
 	if fc.onNotification == nil || fc.onRequest == nil {
@@ -1279,7 +1280,7 @@ func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
-	setCompositionClaude(a, &fakeClaudeCore{})
+	setClaudeCore(a, &fakeClaudeCore{})
 	sessionKey := "feishu:chat:chat"
 
 	toolsCard := renderToolsMenuCard(a, sessionKey)
@@ -1310,7 +1311,7 @@ func TestClaudeStaleReviewMenuActionPassthroughsAndFallsBackToToolsMenu(t *testi
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	sessionKey := "feishu:chat:chat"
 
 	resp, err := newMenuActionService(a).completeMenuReview(&feishu.CardAction{

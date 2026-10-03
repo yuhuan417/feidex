@@ -12,7 +12,6 @@ type runtimeStateService struct {
 }
 
 func newRuntimeStateService(app *App) runtimeStateService {
-	ensureCompositionState(app)
 	var state *backend.RuntimeStateService
 	if app != nil {
 		state, _ = registryFor(app).Get("switchState").(*backend.RuntimeStateService)

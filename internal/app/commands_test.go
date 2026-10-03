@@ -65,7 +65,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := &App{store: store, cfg: testCodexConfig(), composition: &appComposition{codex: codexrpc.New(config.CodexConfig{})}}
+	a := &App{store: store, cfg: testCodexConfig(), registry: testRegistryWithCodex(codexrpc.New(config.CodexConfig{}))}
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
@@ -460,7 +460,7 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 			a.cfg.Feishu.Backend = domainbackend.BackendClaude
 			setCodex(a, nil)
 			claude := &fakeClaudeCore{}
-			setCompositionClaude(a, claude)
+			setClaudeCore(a, claude)
 
 			msg := &feishu.InboundMessage{
 				MessageID: "m-1",
@@ -590,7 +590,7 @@ func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
 	}
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
-	a := &App{store: store, feishu: ff, cfg: testCodexConfig(), composition: &appComposition{codex: fc}}
+	a := &App{store: store, feishu: ff, cfg: testCodexConfig(), registry: testRegistryWithCodex(fc)}
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
@@ -630,7 +630,7 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	fc := &fakeCodexClient{callErr: context.DeadlineExceeded}
-	a := &App{store: store, feishu: &fakeFeishuClient{}, cfg: testCodexConfig(), composition: &appComposition{codex: fc}}
+	a := &App{store: store, feishu: &fakeFeishuClient{}, cfg: testCodexConfig(), registry: testRegistryWithCodex(fc)}
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
@@ -658,7 +658,7 @@ func TestHandleCommandCompactPassthroughsToClaude(t *testing.T) {
 	cfg := testCodexConfig()
 	cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	a := &App{store: store, feishu: &fakeFeishuClient{}, cfg: cfg, composition: &appComposition{claude: claude}}
+	a := &App{store: store, feishu: &fakeFeishuClient{}, cfg: cfg, registry: testRegistryWithClaude(claude)}
 
 	msg := &feishu.InboundMessage{
 		MessageID: "m-1",
@@ -691,7 +691,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
 	cfg := testCodexConfig()
-	a := &App{store: store, feishu: ff, cfg: cfg, composition: &appComposition{codex: fc}}
+	a := &App{store: store, feishu: ff, cfg: cfg, registry: testRegistryWithCodex(fc)}
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        "feishu:chat:chat",
 		WorkspaceID:                "default",
@@ -791,7 +791,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 				forkSessionID:  "claude-forked",
 				forkSessionSet: true,
 			}
-			setCompositionClaude(a, claude)
+			setClaudeCore(a, claude)
 
 			sessionKey := "feishu:chat:chat"
 			if err := a.store.UpsertSession(&conversation.Session{
@@ -839,7 +839,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 		forkSessionID:  "",
 		forkSessionSet: true,
 	}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{

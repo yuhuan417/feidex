@@ -30,7 +30,6 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 	if a == nil {
 		return nil
 	}
-	ensureCompositionState(a)
 	if value, ok := registryFor(a).Get("serverRequestSvc").(*serverrequest.Service); ok {
 		return value
 	}

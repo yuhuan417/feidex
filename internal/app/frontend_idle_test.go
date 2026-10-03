@@ -55,13 +55,13 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(foreign) error = %v", err)
 				}
-				a.composition.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
+				a.runtimeOwner = testOwnerWithAutoRetries(&appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					foreignSessionKey: {
 						SessionKey: foreignSessionKey,
 						ThreadID:   "thread-foreign",
 						Timer:      &fakeDelayedTask{},
 					},
-				}}
+				}})
 			},
 			wantIdle: true,
 			want:     "",
@@ -181,13 +181,13 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(current) error = %v", err)
 				}
-				a.composition.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
+				a.runtimeOwner = testOwnerWithAutoRetries(&appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					currentSessionKey: {
 						SessionKey: currentSessionKey,
 						ThreadID:   "thread-1",
 						Timer:      &fakeDelayedTask{},
 					},
-				}}
+				}})
 			},
 			want: "当前仍有自动重试中的任务",
 		},
@@ -201,13 +201,13 @@ func TestFrontendIdleState(t *testing.T) {
 				}); err != nil {
 					t.Fatalf("UpsertSession(current) error = %v", err)
 				}
-				a.composition.autoRetries = &appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
+				a.runtimeOwner = testOwnerWithAutoRetries(&appautoretry.Tracker{States: map[string]*appautoretry.RetryState{
 					currentSessionKey: {
 						SessionKey: currentSessionKey,
 						ThreadID:   "thread-1",
 						RetryCount: 1,
 					},
-				}}
+				}})
 			},
 			want: "当前仍有自动重试中的任务",
 		},
@@ -217,7 +217,6 @@ func TestFrontendIdleState(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			a, store := newTestApp(t)
 			if tt.seed != nil {
-				ensureCompositionState(a)
 				tt.seed(t, a, store)
 			}
 			got := frontendIdleBlockedReason(a)

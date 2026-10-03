@@ -514,11 +514,11 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.composition.claude = &fakeClaudeCore{
+	a.registry = testRegistryWithClaude(&fakeClaudeCore{
 		ensureSessionSet: true,
 		ensureSessionID:  "claude-session-1",
 		startTurnErr:     errors.New("claude start failed"),
-	}
+	})
 
 	scheduled := make([]scheduledRetry, 0, 4)
 	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {

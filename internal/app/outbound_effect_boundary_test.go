@@ -23,8 +23,8 @@ func TestComposedOutboundEffectsPreserveDeliveryAndCapture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := a.feishu.(*appfeishuwrap.EffectClient); !ok || a.feishu == a.composition.feishuTransport {
-		t.Fatal("composition must expose a separate effect capability")
+	if _, ok := a.feishu.(*appfeishuwrap.EffectClient); !ok {
+		t.Fatal("frontend must expose a separate effect capability")
 	}
 	ctx := context.Background()
 	card := map[string]any{"test": "card"}

@@ -29,12 +29,10 @@ func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeish
 		frontendID: strings.TrimSpace(frontendID),
 		feishu:     appfeishuwrap.WrapFeishuClient(ff),
 		started:    time.Now(),
-		composition: &appComposition{
-			liveThreads: frontendruntime.NewLiveThreads(),
-			trackers: &appTrackers{
-				groupAnnouncements: newGroupAnnouncementTracker(),
-			},
-		},
+		registry: testRegistryWithTrackers(&appTrackers{
+			groupAnnouncements: newGroupAnnouncementTracker(),
+		}),
+		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
 	}
 }
 

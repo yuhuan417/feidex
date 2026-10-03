@@ -17,7 +17,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 	setCodex(a, nil)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	setCompositionClaude(a, runtime)
+	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"
@@ -97,7 +97,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 	setCodex(a, nil)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	setCompositionClaude(a, runtime)
+	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"
@@ -135,7 +135,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *tes
 	setCodex(a, nil)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	setCompositionClaude(a, runtime)
+	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
 	sessionKey := "feishu:chat:chat"

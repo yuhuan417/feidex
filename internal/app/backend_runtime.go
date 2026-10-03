@@ -140,12 +140,12 @@ func (h *backendRuntimeHandle) install(a *App) {
 	if h == nil {
 		setRuntimeBackend(a, "")
 		replaceCodexClient(a, nil)
-		setCompositionClaude(a, nil)
+		setClaudeCore(a, nil)
 		return
 	}
 	setRuntimeBackend(a, h.backend)
 	replaceCodexClient(a, h.codex)
-	setCompositionClaude(a, h.claude)
+	setClaudeCore(a, h.claude)
 }
 
 type backendRuntimeFacade interface {

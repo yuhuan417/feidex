@@ -17,7 +17,7 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	setCompositionClaude(a, runtime)
+	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
 	ws := &a.cfg.Workspaces[0]
@@ -77,7 +77,7 @@ func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	setCompositionClaude(a, runtime)
+	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
 	ws := &a.cfg.Workspaces[0]

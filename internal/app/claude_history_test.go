@@ -18,7 +18,7 @@ func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
-	setCompositionClaude(a, &fakeClaudeCore{})
+	setClaudeCore(a, &fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -94,7 +94,7 @@ func TestRenderHistoryCardClaudeMarksLatestTurnRunningWhenSessionBusy(t *testing
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
-	setCompositionClaude(a, &fakeClaudeCore{})
+	setClaudeCore(a, &fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)

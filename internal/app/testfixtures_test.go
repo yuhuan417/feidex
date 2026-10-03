@@ -17,10 +17,12 @@ import (
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/codexrpc"
+	"feidex/internal/composition"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/release"
+	appautoretry "feidex/internal/runtime/autoretry"
 	"feidex/internal/runtime/turnbinding"
 	"feidex/internal/state"
 
@@ -882,20 +884,54 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 				fn()
 			}()
 		},
-		waitAsync: asyncWG.Wait,
-		composition: &appComposition{
-			codex:       fc,
-			liveThreads: frontendruntime.NewLiveThreads(),
-			trackers: &appTrackers{
-				turnStreams:  newTurnStreamTracker(),
-				turnBindings: turnbinding.NewTracker(store),
-			},
-		},
+		waitAsync:    asyncWG.Wait,
+		registry:     testRegistryWithCodex(fc),
+		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
 	}
+	a.registry.Set("trackers", &appTrackers{
+		turnStreams:  newTurnStreamTracker(),
+		turnBindings: turnbinding.NewTracker(store),
+	})
 	replaceCodexClient(a, fc)
 	configureGroupPrimaryEvents(a)
 	t.Cleanup(asyncWG.Wait)
 	return a, ff, fc
+}
+
+func testRegistryWithCodex(client CodexClient) *composition.Registry {
+	r := composition.NewRegistry(nil)
+	r.Codex = client
+	return r
+}
+
+func testRegistryWithClaude(core ClaudeCore) *composition.Registry {
+	r := composition.NewRegistry(nil)
+	r.Claude = core
+	return r
+}
+
+func testRegistryWithCodexAndTrackers(client CodexClient, trackers *appTrackers) *composition.Registry {
+	r := testRegistryWithCodex(client)
+	r.Set("trackers", trackers)
+	return r
+}
+
+func testRegistryWithTrackers(trackers *appTrackers) *composition.Registry {
+	r := composition.NewRegistry(nil)
+	r.Set("trackers", trackers)
+	return r
+}
+
+func testOwnerWithLiveThreads(live *frontendruntime.LiveThreads) *frontendruntime.FrontendOwner {
+	o := composition.NewFrontendOwner()
+	o.LiveThreads = live
+	return o
+}
+
+func testOwnerWithAutoRetries(tracker *appautoretry.Tracker) *frontendruntime.FrontendOwner {
+	o := composition.NewFrontendOwner()
+	o.AutoRetries = tracker
+	return o
 }
 
 func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *domainsubmission.Submission {

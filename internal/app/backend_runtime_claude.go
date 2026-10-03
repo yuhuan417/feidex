@@ -110,9 +110,8 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterruptContext(ctx backen
 	return ctx.clearActiveOperations(sessionKey, sess)
 }
 
-// clearActiveOperationsAfterInterrupt keeps the old in-package helper shape
-// for legacy tests and callers; production bindings use the explicit runtime
-// context method above.
+// clearActiveOperationsAfterInterrupt is the app-facing helper for callers
+// that already have an App; runtime bindings use the explicit context method.
 func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKey string, sess *conversation.Session) *conversation.Session {
 	return clearClaudeActiveOperationsAfterInterrupt(a, sessionKey, sess)
 }

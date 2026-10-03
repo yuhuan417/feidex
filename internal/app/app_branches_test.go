@@ -36,16 +36,13 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	ff := &downloadFeishuStub{fakeFeishuClient: &fakeFeishuClient{}, downloadPath: downloadPath}
 	fc := &fakeCodexClient{}
 	a := &App{
-		cfg:     cfg,
-		store:   store,
-		feishu:  ff,
-		started: time.Now(),
-		deduper: frontendruntime.NewInboundDeduper(),
-		composition: &appComposition{
-			codex:       fc,
-			liveThreads: frontendruntime.NewLiveThreads(),
-			trackers:    &appTrackers{turnStreams: newTurnStreamTracker()},
-		},
+		cfg:          cfg,
+		store:        store,
+		feishu:       ff,
+		started:      time.Now(),
+		deduper:      frontendruntime.NewInboundDeduper(),
+		registry:     testRegistryWithCodexAndTrackers(fc, &appTrackers{turnStreams: newTurnStreamTracker()}),
+		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
 	}
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "stale", CreatedAt: a.started.Add(-time.Minute).Unix()})
@@ -118,15 +115,12 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
 
 	bad := &App{
-		cfg:     &config.Config{Feishu: config.FeishuConfig{Backend: domainbackend.BackendCodex}},
-		store:   store,
-		feishu:  ff,
-		started: time.Now(),
-		composition: &appComposition{
-			codex:       fc,
-			liveThreads: frontendruntime.NewLiveThreads(),
-			trackers:    &appTrackers{turnStreams: newTurnStreamTracker()},
-		},
+		cfg:          &config.Config{Feishu: config.FeishuConfig{Backend: domainbackend.BackendCodex}},
+		store:        store,
+		feishu:       ff,
+		started:      time.Now(),
+		registry:     testRegistryWithCodexAndTrackers(fc, &appTrackers{turnStreams: newTurnStreamTracker()}),
+		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
 	}
 	bad.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID:   "bad-attach",

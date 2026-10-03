@@ -84,7 +84,7 @@ func TestClaudeInteractionPendingSurvivesTurnCleanup(t *testing.T) {
 func TestClaudeApprovalCardAnswerableAfterTurnCleanup(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	newClaudeInteractionPending(t, a, "claude-approval-2", "command", state.PendingRequestStatusPending.String())
 
 	newSubmissionCleanup(a).CleanupSubmissionRuntimeState(&domainsubmission.Submission{
@@ -134,7 +134,7 @@ func TestExpireClaudeInteractionCardsPatchesCard(t *testing.T) {
 func TestSendDetachedApprovalCardDeliversAnswerableCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	target := appclauderuntime.InteractionTarget{
 		SessionKey:       "feishu:chat:chat-1",

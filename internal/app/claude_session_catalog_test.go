@@ -60,7 +60,7 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
-	setCompositionClaude(a, &fakeClaudeCore{})
+	setClaudeCore(a, &fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -87,7 +87,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
-	setCompositionClaude(a, &fakeClaudeCore{})
+	setClaudeCore(a, &fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -145,7 +145,7 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true, ensureSessionID: "session-resume-1"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -189,7 +189,7 @@ func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testi
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
-	setCompositionClaude(a, &fakeClaudeCore{})
+	setClaudeCore(a, &fakeClaudeCore{})
 	altCwd := t.TempDir()
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: altCwd, ApprovalPolicy: "never", SandboxMode: "read-only"})
 

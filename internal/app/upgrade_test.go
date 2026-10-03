@@ -856,7 +856,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.backend = domainbackend.BackendClaude
-	setCompositionClaude(a, &fakeClaudeCore{})
+	setClaudeCore(a, &fakeClaudeCore{})
 	newMaintenanceStateService(a).BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
@@ -883,7 +883,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	a.backend = domainbackend.BackendClaude
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -942,7 +942,7 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 	a.backend = domainbackend.BackendClaude
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1003,7 +1003,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	a.backend = domainbackend.BackendClaude
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1059,7 +1059,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a.backend = domainbackend.BackendClaude
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1106,7 +1106,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 func TestRefreshClaudeRuntimeAfterMaintenanceOnlySmokesOnCodexBackend(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	origSmoke := runClaudeSmokeTest
 	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }

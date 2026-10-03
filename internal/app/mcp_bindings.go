@@ -20,7 +20,6 @@ func startMCPService(a *App, ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	ensureCompositionState(a)
 	if _, ok := registryFor(a).Get("mcp").(*feidexMCPService); ok {
 		return nil
 	}

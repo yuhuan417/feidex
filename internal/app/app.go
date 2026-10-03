@@ -10,12 +10,10 @@ import (
 
 	"context"
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
-	workspacecards "feidex/internal/adapter/feishu/workspace"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/backendops"
 	"feidex/internal/composition"
 	"feidex/internal/domain/conversation"
-	appcodexruntime "feidex/internal/runtime/codex"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -24,15 +22,11 @@ import (
 
 	"feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/goalcmd"
-	appautoretry "feidex/internal/runtime/autoretry"
-
-	"feidex/internal/adapter/feishu/serverrequest"
 
 	"feidex/internal/adapter/feishu/turnitem"
 	skillruntime "feidex/internal/runtime/skill"
 	"feidex/internal/runtime/turnbinding"
 
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -44,24 +38,21 @@ import (
 )
 
 type App struct {
-	cfg                 *config.Config
-	cfgPath             string
-	store               *state.Store
-	frontendID          string
-	frontendConfigIndex int
-	configMu            sync.RWMutex
-	sharedConfigMu      *sync.RWMutex
-	backend             string
-	backendDriver       backend.Driver
-	feishu              FeishuClient
-	started             time.Time
-	frontendRuntime     frontendruntime.FrontendRuntime
-	runtimeOwner        *frontendruntime.FrontendOwner
-	stateMu             sync.Mutex
-	stateView           *appstate.Store
-	// composition is retained only for hand-built legacy test fixtures. The
-	// production path uses registry, which is constructed by composition.
-	composition            *appComposition
+	cfg                    *config.Config
+	cfgPath                string
+	store                  *state.Store
+	frontendID             string
+	frontendConfigIndex    int
+	configMu               sync.RWMutex
+	sharedConfigMu         *sync.RWMutex
+	backend                string
+	backendDriver          backend.Driver
+	feishu                 FeishuClient
+	started                time.Time
+	frontendRuntime        frontendruntime.FrontendRuntime
+	runtimeOwner           *frontendruntime.FrontendOwner
+	stateMu                sync.Mutex
+	stateView              *appstate.Store
 	registry               *composition.Registry
 	deduper                *frontendruntime.InboundDeduper
 	asyncRunner            func(func())
@@ -70,31 +61,6 @@ type App struct {
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
 	runtimeOwnerMu         sync.Mutex
-	sessionActors          *frontendruntime.SessionActors // legacy mirror; runtimeOwner is authoritative
-}
-
-// appComposition is a test-fixture compatibility shape. Production frontends
-// never instantiate it; all runtime construction and service caches use the
-// composition.Registry stored in App.registry.
-type appComposition struct {
-	clientsMu        sync.RWMutex
-	feishuTransport  FeishuClient
-	codex            CodexClient
-	claude           ClaudeCore
-	trackers         *appTrackers
-	liveThreads      *frontendruntime.LiveThreads
-	autoRetries      *appautoretry.Tracker
-	codexRecovery    *appcodexruntime.RecoveryState
-	threadMenu       *appthreadmenu.Service
-	backendConfig    *backendConfigurationService
-	backendSelection *backendSelectionService
-	backendActions   *backend.ActionService
-	workspaceConfig  *appworkspacecmd.ConfigService
-	workspaceManage  *appworkspacecmd.ManagementService
-	workspaceRender  *workspacecards.Presentation
-	serverRequestSvc *serverrequest.Service
-	mcp              *feidexMCPService
-	switchState      *backend.RuntimeStateService
 }
 
 func (a *App) configMutex() *sync.RWMutex {
@@ -143,14 +109,10 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		backend:             backend,
 		backendDriver:       backendDriverForKind(backend),
 		registry:            composition.NewRegistry(feishuTransport),
-		// Keep a narrow compatibility mirror for package-local legacy tests. All
-		// production reads and writes go through registry/runtimeOwner.
-		composition:   &appComposition{feishuTransport: feishuTransport},
-		feishu:        feishuTransport,
-		started:       time.Now(),
-		deduper:       frontendruntime.NewInboundDeduper(),
-		runtimeOwner:  owner,
-		sessionActors: owner.SessionActors,
+		feishu:              feishuTransport,
+		started:             time.Now(),
+		deduper:             frontendruntime.NewInboundDeduper(),
+		runtimeOwner:        owner,
 	}
 	app.registry.Set("trackers", &appTrackers{
 		turnStreams:        newTurnStreamTracker(),

@@ -18,7 +18,7 @@ func newClaudePermissionMenuApp(t *testing.T, claude *fakeClaudeCore) (*App, *fa
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,

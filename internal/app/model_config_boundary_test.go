@@ -96,7 +96,7 @@ func TestModelConfigClaudeFailureRetainsQueueAndLineage(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: fmt.Errorf("%w: rejected", claudecli.ErrModelConfigApply)}
-	setCompositionClaude(a, fake)
+	setClaudeCore(a, fake)
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
 	second := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "second")
 	if err := startNextSubmission(a, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {
@@ -126,7 +126,7 @@ func TestModelConfigClaudeRestartedTurnFailureRetainsQueueAndLineage(t *testing.
 	a, _, _ := newTestApp(t)
 	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionID: "original-thread", startTurnErr: errors.New("restarted process rejected turn")}
-	a.composition.claude = &modelConfigProtectedClaude{fake}
+	a.registry = testRegistryWithClaude(&modelConfigProtectedClaude{fake})
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
 	second := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "second")
 	if err := startNextSubmission(a, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {
@@ -336,7 +336,7 @@ func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: errors.New("must not initialize while steering")}
-	setCompositionClaude(a, fake)
+	setClaudeCore(a, fake)
 	sub := seedActiveSubmission(t, a, "sess-steer", "original-thread", "turn-original")
 	if _, err := a.store.UpdateSession(sub.SessionKey, func(sess *conversation.Session) { sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID }); err != nil {
 		t.Fatal(err)
@@ -356,7 +356,7 @@ func TestModelConfigFailedSaveDoesNotPublish(t *testing.T) {
 		t.Run(backend, func(t *testing.T) {
 			a, _, _ := newTestApp(t)
 			a.backend, a.cfg.Feishu.Backend = backend, backend
-			setCompositionClaude(a, &fakeClaudeCore{})
+			setClaudeCore(a, &fakeClaudeCore{})
 			before := *config.Clone(a.cfg)
 			a.cfgPath = t.TempDir() // A directory cannot be replaced by config.toml.
 			var err error
@@ -407,7 +407,7 @@ func TestModelConfigGroupWritesDuringWorkPreservePending(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	fake := &fakeClaudeCore{}
-	setCompositionClaude(a, fake)
+	setClaudeCore(a, fake)
 	msg := &feishu.InboundMessage{ChatID: "group-model", ChatType: "group", UserID: "user", MessageID: "config"}
 	key := makeSessionKey(a, msg)
 	seedActiveSubmission(t, a, key, "group-thread", "group-turn")
@@ -467,7 +467,7 @@ func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T)
 	cli, logPath := writeModelConfigCLI(t)
 	a.cfg.Claude.Command, a.cfg.Claude.Model, a.cfg.Claude.Effort, a.cfg.Claude.SubagentModel = cli, "sonnet", "low", "fixed-subagent"
 	r := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
-	setCompositionClaude(a, r)
+	setClaudeCore(a, r)
 	t.Cleanup(func() { _ = r.Close() })
 	for _, key := range []string{"one", "two"} {
 		if err := a.store.UpsertSession(&conversation.Session{Key: key, ActiveThreadID: "thread-" + key, WorkspaceID: a.cfg.Workspaces[0].ID, Status: "idle"}); err != nil {

@@ -336,7 +336,7 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-session-42"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -407,7 +407,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -505,7 +505,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 			nil,
 		},
 	}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -658,7 +658,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -790,7 +790,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -871,7 +871,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	a.feishu = ff
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -971,7 +971,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	a.feishu = ff
 
 	payload := pendingforms.ToolUserInputPayload{
@@ -1027,7 +1027,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	a.feishu = ff
 
 	payload := pendingforms.ToolUserInputPayload{
@@ -1091,7 +1091,7 @@ func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	a.feishu = ff
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
@@ -1161,7 +1161,7 @@ func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	a.feishu = ff
 
 	sessionKey := "feishu:chat:chat"
@@ -1232,7 +1232,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -1284,7 +1284,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         "sess-1",
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -1337,7 +1337,7 @@ func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "review-cancel-1",
@@ -1377,7 +1377,7 @@ func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	targetSessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -1465,7 +1465,7 @@ func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -1695,7 +1695,7 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 
@@ -1788,7 +1788,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -1857,7 +1857,7 @@ func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	msg := &feishu.InboundMessage{
 		MessageID:     "cmd-msg-1",

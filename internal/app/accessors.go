@@ -139,40 +139,15 @@ func currentClaudeCore(a *App) ClaudeCore {
 	owner := ensureRuntimeOwner(a)
 	registry := registryFor(a)
 	registry.ClientsMu.RLock()
-	legacy, _ := registry.Claude.(ClaudeCore)
+	current, _ := registry.Claude.(ClaudeCore)
 	registry.ClientsMu.RUnlock()
-	if legacy == nil && a.composition != nil {
-		a.composition.clientsMu.RLock()
-		legacy = a.composition.claude
-		a.composition.clientsMu.RUnlock()
-		if legacy != nil {
-			registry.ClientsMu.Lock()
-			registry.Claude = legacy
-			registry.ClientsMu.Unlock()
-		}
-	}
 	if current := owner.ClaudeCore(); current != nil {
 		return current
 	}
-	return legacy
+	return current
 }
 
-func ensureCompositionState(a *App) {
-	if a == nil {
-		return
-	}
-	if a.composition == nil {
-		// Hand-built tests from the transitional app package still populate this
-		// compatibility fixture directly. Production ownership remains in the
-		// registry/runtime owner initialized by NewFrontend.
-		a.composition = &appComposition{feishuTransport: a.feishu}
-	}
-	registryFor(a)
-}
-
-// registryFor returns the production composition registry. Legacy fixtures
-// may still provide appComposition; their values are imported once so the
-// production access path remains the same for tests and real frontends.
+// registryFor returns the frontend-scoped composition registry.
 func registryFor(a *App) *composition.Registry {
 	if a == nil {
 		return nil
@@ -180,56 +155,10 @@ func registryFor(a *App) *composition.Registry {
 	if a.registry != nil {
 		return a.registry
 	}
-	r := composition.NewRegistry(a.feishu)
-	if legacy := a.composition; legacy != nil {
-		legacy.clientsMu.RLock()
-		r.Codex = legacy.codex
-		r.Claude = legacy.claude
-		legacy.clientsMu.RUnlock()
-		if legacy.feishuTransport != nil {
-			r.FeishuTransport = legacy.feishuTransport
-		}
-		if legacy.threadMenu != nil {
-			r.Set("threadMenu", legacy.threadMenu)
-		}
-		if legacy.backendConfig != nil {
-			r.Set("backendConfig", *legacy.backendConfig)
-		}
-		if legacy.backendSelection != nil {
-			r.Set("backendSelection", *legacy.backendSelection)
-		}
-		if legacy.backendActions != nil {
-			r.Set("backendActions", *legacy.backendActions)
-		}
-		if legacy.workspaceConfig != nil {
-			r.Set("workspaceConfig", legacy.workspaceConfig)
-		}
-		if legacy.workspaceManage != nil {
-			r.Set("workspaceManage", legacy.workspaceManage)
-		}
-		if legacy.workspaceRender != nil {
-			r.Set("workspaceRender", legacy.workspaceRender)
-		}
-		if legacy.serverRequestSvc != nil {
-			r.Set("serverRequestSvc", legacy.serverRequestSvc)
-		}
-		if legacy.mcp != nil {
-			r.Set("mcp", legacy.mcp)
-		}
-		if legacy.trackers != nil {
-			r.Set("trackers", legacy.trackers)
-		}
-		if legacy.switchState != nil {
-			r.Set("switchState", legacy.switchState)
-		}
-	}
-	a.registry = r
-	return r
+	a.registry = composition.NewRegistry(a.feishu)
+	return a.registry
 }
 
-// ensureRuntimeOwner binds hand-built legacy fixtures to the frontend-scoped
-// runtime owner. New production frontends are initialized by NewFrontend and
-// already have this owner.
 func ensureRuntimeOwner(a *App) *frontendruntime.FrontendOwner {
 	if a == nil {
 		return nil
@@ -238,51 +167,19 @@ func ensureRuntimeOwner(a *App) *frontendruntime.FrontendOwner {
 	defer a.runtimeOwnerMu.Unlock()
 	registry := registryFor(a)
 	if a.runtimeOwner != nil {
-		// Legacy test fixtures can still mutate the compatibility fields after
-		// the owner has been initialized. Import those values on demand while
-		// keeping the owner authoritative for production code.
-		if legacy := a.composition; legacy != nil {
-			if legacy.autoRetries != nil {
-				a.runtimeOwner.AutoRetries = legacy.autoRetries
-			}
-			if legacy.liveThreads != nil {
-				a.runtimeOwner.LiveThreads = legacy.liveThreads
-			}
-			if legacy.codexRecovery != nil {
-				a.runtimeOwner.CodexRecovery = legacy.codexRecovery
-			}
-		}
 		return a.runtimeOwner
 	}
 	a.runtimeOwner = composition.NewFrontendOwner()
-	if a.sessionActors != nil {
-		a.runtimeOwner.SessionActors = a.sessionActors
-	}
-	if legacy := a.composition; legacy != nil {
-		if legacy.liveThreads != nil {
-			a.runtimeOwner.LiveThreads = legacy.liveThreads
-		}
-		if legacy.autoRetries != nil {
-			a.runtimeOwner.AutoRetries = legacy.autoRetries
-		}
-		if legacy.codexRecovery != nil {
-			a.runtimeOwner.CodexRecovery = legacy.codexRecovery
-		}
-		if legacy.switchState != nil {
-			registry.Set("switchState", legacy.switchState)
-		}
-	}
 	registry.ClientsMu.RLock()
-	legacyCodex, _ := registry.Codex.(CodexClient)
-	legacyClaude, _ := registry.Claude.(ClaudeCore)
+	codexClient, _ := registry.Codex.(CodexClient)
+	claudeCore, _ := registry.Claude.(ClaudeCore)
 	registry.ClientsMu.RUnlock()
-	if legacyCodex != nil && a.runtimeOwner.CodexClient() == nil {
-		a.runtimeOwner.SetCodexClient(legacyCodex)
+	if codexClient != nil && a.runtimeOwner.CodexClient() == nil {
+		a.runtimeOwner.SetCodexClient(codexClient)
 	}
-	if legacyClaude != nil && a.runtimeOwner.ClaudeCore() == nil {
-		a.runtimeOwner.SetClaudeCore(legacyClaude)
+	if claudeCore != nil && a.runtimeOwner.ClaudeCore() == nil {
+		a.runtimeOwner.SetClaudeCore(claudeCore)
 	}
-	a.sessionActors = a.runtimeOwner.SessionActors
 	trackers := runtimeTrackers(a)
 	if trackers != nil {
 		trackers.submissionStarts = a.runtimeOwner.SubmissionStarts
@@ -290,7 +187,7 @@ func ensureRuntimeOwner(a *App) *frontendruntime.FrontendOwner {
 	return a.runtimeOwner
 }
 
-func setCompositionClaude(a *App, core ClaudeCore) {
+func setClaudeCore(a *App, core ClaudeCore) {
 	if a == nil {
 		return
 	}
@@ -298,11 +195,6 @@ func setCompositionClaude(a *App, core ClaudeCore) {
 	registry.ClientsMu.Lock()
 	registry.Claude = core
 	registry.ClientsMu.Unlock()
-	if a.composition != nil {
-		a.composition.clientsMu.Lock()
-		a.composition.claude = core
-		a.composition.clientsMu.Unlock()
-	}
 	ensureRuntimeOwner(a).SetClaudeCore(core)
 }
 
@@ -311,7 +203,6 @@ func (a *App) Trackers() *appTrackers {
 	if a == nil {
 		return nil
 	}
-	registryFor(a)
 	trackers, _ := registryFor(a).Get("trackers").(*appTrackers)
 	if trackers == nil {
 		trackers = &appTrackers{}
@@ -332,7 +223,6 @@ func runtimeSwitchState(a *App) *appbackend.RuntimeStateService {
 	if a == nil {
 		return nil
 	}
-	ensureCompositionState(a)
 	state, _ := registryFor(a).Get("switchState").(*appbackend.RuntimeStateService)
 	if state == nil {
 		state = &appbackend.RuntimeStateService{}
@@ -384,7 +274,6 @@ func compositionService[T any](a *App, key string, build func() T) T {
 	if a == nil {
 		return zero
 	}
-	ensureCompositionState(a)
 	registry := registryFor(a)
 	if value, ok := registry.Get(key).(T); ok {
 		return value

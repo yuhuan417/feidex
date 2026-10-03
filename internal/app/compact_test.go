@@ -319,7 +319,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 			close(claude.release)
 		}
 	}()
-	setCompositionClaude(a, claude)
+	setClaudeCore(a, claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
