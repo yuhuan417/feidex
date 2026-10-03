@@ -953,10 +953,4 @@ func allowLegacyFallback(a Dependencies) bool {
 	defer a.ConfigMu().RUnlock()
 	return len(a.Config().ResolvedFrontends()) == 1
 }
-func defaultWorkspaceID(a Dependencies) string {
-	if a.Config() != nil && len(a.Config().Workspaces) > 0 && strings.TrimSpace(a.Config().Workspaces[0].ID) != "" {
-		return a.Config().Workspaces[0].ID
-	}
-	return "default"
-}
 func mustJSON(value any) string { data, _ := json.Marshal(value); return string(data) }
