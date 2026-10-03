@@ -1,6 +1,9 @@
 package codexrpc
 
-import ("feidex/internal/domain/conversation"; "feidex/internal/domain/modelconfig")
+import (
+	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/modelconfig"
+)
 
 type ThreadStartResult struct {
 	Thread struct {

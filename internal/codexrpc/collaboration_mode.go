@@ -1,5 +1,7 @@
 package codexrpc
+
 import "feidex/internal/domain/modelconfig"
+
 type CollaborationModeListResponse = modelconfig.CollaborationModeListResponse
 type CollaborationModeMask = modelconfig.CollaborationModeMask
 type CollaborationMode struct {
