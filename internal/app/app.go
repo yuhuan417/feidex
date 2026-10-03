@@ -71,8 +71,9 @@ type App struct {
 // these bindings together prevents the frontend aggregate from becoming a
 // second service registry while preserving one cache per frontend runtime.
 type appComposition struct {
-	mu        sync.Mutex
-	clientsMu sync.RWMutex
+	mu          sync.Mutex
+	workspaceMu sync.Mutex
+	clientsMu   sync.RWMutex
 	// feishuTransport is used only by the effect runner; services get the proxy.
 	feishuTransport FeishuClient
 	// Runtime-owned state lives here so App remains the frontend entrypoint
@@ -87,6 +88,9 @@ type appComposition struct {
 	backendConfig    *backendConfigurationService
 	backendSelection *backendSelectionService
 	backendActions   *backend.ActionService
+	workspaceConfig  *appworkspacecmd.ConfigService
+	workspaceManage  *appworkspacecmd.ManagementService
+	workspaceRender  *appworkspacecmd.RenderService
 	serverRequestSvc *serverrequest.Service
 	dispatcher       *application.Dispatcher
 	effectRunner     *frontendruntime.EffectRunner

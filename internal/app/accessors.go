@@ -204,6 +204,11 @@ func (a *App) invalidateBackendConfigurationService() {
 		a.composition.mu.Lock()
 		a.composition.backendConfig = nil
 		a.composition.mu.Unlock()
+		a.composition.workspaceMu.Lock()
+		a.composition.workspaceConfig = nil
+		a.composition.workspaceManage = nil
+		a.composition.workspaceRender = nil
+		a.composition.workspaceMu.Unlock()
 	}
 }
 

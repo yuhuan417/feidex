@@ -578,3 +578,4 @@ Codex server request
 - `presentation.Action` 的 action value 改用 `json.RawMessage`，Feishu map 只在 outbound adapter 还原；goal command 的消息发送统一使用已注入的 semantic outbound capability。
 - workspace renderer 已移除对 `appcore` helper 的依赖，workspace selection key 和文本 fallback 直接使用 application/domain 值；新增守卫防止 renderer 重新依赖 transitional host helper。
 - 模型目录的默认项解析、ID/name 查找和 reasoning effort 能力判断已迁入 `internal/application/modelconfig`；`internal/app/modelconfig` 只保留兼容别名和 backend/config/Feishu 编排。
+- workspace config、management 和 renderer 的构造实例已归入 frontend `appComposition`；backend/config 失效时统一清理 workspace capability cache，减少命令和 card action 重复组装同一组服务。

@@ -19,6 +19,23 @@ func newWorkspaceCloneTracker() *appworkspacecmd.CloneTracker {
 }
 
 func newWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService {
+	if a != nil && a.composition != nil {
+		a.composition.workspaceMu.Lock()
+		defer a.composition.workspaceMu.Unlock()
+		if a.composition.workspaceManage != nil {
+			return a.composition.workspaceManage
+		}
+		service := buildWorkspaceManagementService(a)
+		a.composition.workspaceManage = service
+		return service
+	}
+	return buildWorkspaceManagementService(a)
+}
+
+func buildWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService {
+	if a == nil {
+		return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{})
+	}
 
 	st := a.State()
 	bcfg := newBackendConfigurationService(a)

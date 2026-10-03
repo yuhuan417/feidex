@@ -15,6 +15,23 @@ import (
 )
 
 func newWorkspaceRenderService(a *App) *appworkspacecmd.RenderService {
+	if a != nil && a.composition != nil {
+		a.composition.workspaceMu.Lock()
+		defer a.composition.workspaceMu.Unlock()
+		if a.composition.workspaceRender != nil {
+			return a.composition.workspaceRender
+		}
+		service := buildWorkspaceRenderService(a)
+		a.composition.workspaceRender = service
+		return service
+	}
+	return buildWorkspaceRenderService(a)
+}
+
+func buildWorkspaceRenderService(a *App) *appworkspacecmd.RenderService {
+	if a == nil {
+		return appworkspacecmd.NewRenderService(appworkspacecmd.RenderDeps{})
+	}
 
 	bcfg := newBackendConfigurationService(a)
 	return appworkspacecmd.NewRenderService(appworkspacecmd.RenderDeps{
