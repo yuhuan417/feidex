@@ -16,6 +16,15 @@ type RoutingConfiguration struct {
 
 func (s RoutingConfiguration) UpdateBinding(binding *domain.AgentBinding, mutate func(*domain.AgentBinding)) (*domain.AgentBinding, error) {
 	result, err := s.ConfigurationService.UpdateBinding(binding, mutate)
+	return s.runBindingResult(result, err)
+}
+
+func (s RoutingConfiguration) SetBinding(binding *domain.AgentBinding, setting domain.Setting, value string) (*domain.AgentBinding, error) {
+	result, err := s.ConfigurationService.SetBinding(binding, setting, value)
+	return s.runBindingResult(result, err)
+}
+
+func (s RoutingConfiguration) runBindingResult(result routing.BindingResult, err error) (*domain.AgentBinding, error) {
 	if err != nil {
 		return nil, err
 	}

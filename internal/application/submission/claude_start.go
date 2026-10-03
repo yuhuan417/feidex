@@ -82,12 +82,11 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 		return err
 	}
 
-	model := ""
-	if a.ResolveModelConfig != nil {
-		model = a.ResolveModelConfig(sess, sub).Model
-	} else {
-		model = effectiveClaudeModel(a, sess, sub, ws)
+	snapshot, err := s.modelSnapshot(sess, sub)
+	if err != nil {
+		return err
 	}
+	model := snapshot.Model
 	ensureCtx, ensureCancel := context.WithTimeout(a.context(), 30*time.Second)
 	resumeThreadID := threadID
 	claudeThreadID, err := claude.EnsureSession(ensureCtx, sessionKey, ws, resumeThreadID, model)

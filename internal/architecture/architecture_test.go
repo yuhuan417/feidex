@@ -15,6 +15,75 @@ import (
 
 const modulePath = "feidex"
 
+func TestModelSettingsRendererDoesNotReadConfigurationOrSessionState(t *testing.T) {
+	violations, err := importsUnder(repositoryRoot(t), "internal/adapter/feishu/modelsettings", []string{
+		modulePath + "/internal/config", modulePath + "/internal/state", modulePath + "/internal/adapter/storage",
+		modulePath + "/internal/domain/conversation", modulePath + "/internal/domain/routing",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("model renderer must consume application views: %v", violations)
+	}
+}
+
+func TestModelSettingsEntrypointsDoNotMutateBusinessState(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, relative := range []string{"internal/app/bot_profile.go", "internal/app/binding_scoped_commands.go", "internal/app/binding_model_actions.go"} {
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, relative), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			assignment, ok := node.(*ast.AssignStmt)
+			if !ok {
+				return true
+			}
+			for _, lhs := range assignment.Lhs {
+				selector, ok := lhs.(*ast.SelectorExpr)
+				if !ok {
+					continue
+				}
+				name := selector.Sel.Name
+				if strings.HasSuffix(name, "Override") || name == "AppliedModelConfig" || name == "ActiveTurnID" {
+					t.Errorf("%s mutates model/turn state directly: %s", relative, name)
+				}
+			}
+			return true
+		})
+	}
+}
+
+func TestModelConsumersUseSnapshotPorts(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, relative := range []string{"internal/application/conversation/service.go", "internal/application/submission/queue.go"} {
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, relative), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, declaration := range file.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if ok && (function.Name.Name == "effectiveCodexModel" || function.Name.Name == "effectiveClaudeModel" || function.Name.Name == "effectiveCodexReasoningEffort") {
+				t.Errorf("%s reintroduces model precedence outside domain: %s", relative, function.Name.Name)
+			}
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			field, ok := node.(*ast.Field)
+			if !ok {
+				return true
+			}
+			for _, name := range field.Names {
+				switch name.Name {
+				case "ResolveModel", "ResolveModelConfig", "ConfiguredCodexModel", "ConfiguredCodexReasoningEffort", "ConfiguredClaudeModel":
+					t.Errorf("%s reintroduces host model callback %s", relative, name.Name)
+				}
+			}
+			return true
+		})
+	}
+}
+
 func TestTargetPackagesDoNotReintroduceGodInterfaces(t *testing.T) {
 	root := repositoryRoot(t)
 	forbidden := map[string][]string{"internal/application": {"appcore.AppConfig", "appcore.AppExtended", "type App struct"}, "internal/domain": {"type App struct", "internal/adapter", "internal/app"}, "internal/composition": {"internal/app/appstate"}}

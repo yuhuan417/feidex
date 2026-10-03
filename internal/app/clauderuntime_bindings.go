@@ -160,7 +160,8 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		AuxiliaryModels: func(sessionKey string) (string, string) {
 			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
-			return effectiveClaudeSmallModel(app, sess), effectiveClaudeSubagentModel(app, sess)
+			settings := newModelSnapshotService(app).Desired(backendClaude, sess)
+			return settings.SmallModel, settings.SubagentModel
 		},
 	})
 

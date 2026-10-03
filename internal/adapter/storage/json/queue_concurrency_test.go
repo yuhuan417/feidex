@@ -2,10 +2,11 @@ package json
 
 import (
 	"context"
+	configadapter "feidex/internal/adapter/config"
+	applicationmodelconfig "feidex/internal/application/modelconfig"
 	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
-	"feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/runtime/turnbinding"
 	"feidex/internal/state"
@@ -46,10 +47,8 @@ func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
 		StartSubmissionTurn: func(ctx context.Context, key, thread string, sub *domainsubmission.Submission, cwd, policy, sandbox, tier, model, effort, multi string) (string, error) {
 			return "turn-1", app.backend.StartQueuedSubmission(key, nil, sub, nil, false)
 		},
-		ResolveModelConfig: func(*conversation.Session, *domainsubmission.Submission) modelconfig.Snapshot {
-			return modelconfig.Snapshot{Valid: true, Backend: "codex"}
-		},
-		LiveThread: concurrencyLive{}, RuntimeState: concurrencyRuntime{Tracker: turnbinding.NewTracker(store)},
+		ModelSettings: applicationmodelconfig.SnapshotService{Repository: configadapter.ModelSourceRepository{Config: config.Default()}},
+		LiveThread:    concurrencyLive{}, RuntimeState: concurrencyRuntime{Tracker: turnbinding.NewTracker(store)},
 		MarkSubmissionRunningReactions: func(*domainsubmission.Submission) {}, IsReviewSubmission: func(*domainsubmission.Submission) bool { return false },
 		ReplyContinuation: concurrencyLinks{}, TurnStream: concurrencyStream{},
 

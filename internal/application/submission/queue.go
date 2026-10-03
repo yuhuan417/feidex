@@ -65,13 +65,29 @@ type Dependencies struct {
 	StartSubmissionReview              func(ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error)
 	ClaudeClient                       func() QueueClaudeClient
 	ClaudePrompt                       func(*domainsubmission.Submission) string
-	ConfiguredClaudeModel              func() string
 	AgentBinding                       func(chatType, chatID string) *routing.AgentBinding
 	AgentBindingByID                   func(id string) *routing.AgentBinding
-	ResolveModelConfig                 func(sess *conversation.Session, sub *domainsubmission.Submission) domainmodelconfig.Snapshot
-	ConfiguredCodexModel               func() string
-	ConfiguredCodexReasoningEffort     func() string
+	ModelSettings                      ModelSettings
 	BotProfile                         func() *routing.BotProfile
+}
+
+type ModelSettings interface {
+	SubmissionSnapshot(string, *conversation.Session, *domainsubmission.Submission) domainmodelconfig.Snapshot
+}
+
+func (s SubmissionQueueService) modelSnapshot(sess *conversation.Session, sub *domainsubmission.Submission) (domainmodelconfig.Snapshot, error) {
+	if s.Deps.ModelSettings == nil {
+		return domainmodelconfig.Snapshot{}, fmt.Errorf("model settings source is unavailable")
+	}
+	backend := domainmodelconfig.BackendCodex
+	if s.Deps.Backend != nil {
+		backend = s.Deps.Backend()
+	}
+	snapshot := s.Deps.ModelSettings.SubmissionSnapshot(backend, sess, sub)
+	if !snapshot.Valid {
+		return domainmodelconfig.Snapshot{}, fmt.Errorf("model settings snapshot is invalid")
+	}
+	return snapshot, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -410,35 +426,6 @@ func submissionBinding(a Dependencies, sess *conversation.Session, sub *domainsu
 	return nil
 }
 
-func effectiveCodexModel(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace) string {
-	binding := submissionBinding(a, sess, sub)
-	return firstNonEmpty(
-		sessionModelOverride(sess),
-		bindingModelOverride(binding),
-		botProfileModel(a),
-		configuredCodexModel(a),
-	)
-}
-
-func effectiveCodexReasoningEffort(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission) string {
-	binding := submissionBinding(a, sess, sub)
-	return firstNonEmpty(
-		bindingReasoningEffortOverride(binding),
-		botProfileReasoningEffort(a),
-		configuredCodexReasoningEffort(a),
-	)
-}
-
-func effectiveClaudeModel(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace) string {
-	binding := submissionBinding(a, sess, sub)
-	return firstNonEmpty(
-		sessionModelOverride(sess),
-		bindingModelOverride(binding),
-		botProfileClaudeModel(a),
-		configuredClaudeModel(a),
-	)
-}
-
 func effectiveBindingApprovalPolicy(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace) string {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
 		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
@@ -509,74 +496,11 @@ func submissionBotProfile(a Dependencies) *routing.BotProfile {
 	return a.BotProfile()
 }
 
-func botProfileModel(a Dependencies) string {
-	if profile := submissionBotProfile(a); profile != nil {
-		return strings.TrimSpace(profile.Model)
-	}
-	return ""
-}
-
-func botProfileClaudeModel(a Dependencies) string {
-	if profile := submissionBotProfile(a); profile != nil {
-		return strings.TrimSpace(profile.ClaudeModel)
-	}
-	return ""
-}
-
-func botProfileReasoningEffort(a Dependencies) string {
-	if profile := submissionBotProfile(a); profile != nil {
-		return strings.TrimSpace(profile.ReasoningEffort)
-	}
-	return ""
-}
-
 func botProfileServiceTier(a Dependencies) string {
 	if profile := submissionBotProfile(a); profile != nil {
 		return strings.TrimSpace(profile.ServiceTier)
 	}
 	return ""
-}
-
-func configuredCodexModel(a Dependencies) string {
-	if a.ConfiguredCodexModel == nil {
-		return ""
-	}
-	return strings.TrimSpace(a.ConfiguredCodexModel())
-}
-
-func configuredCodexReasoningEffort(a Dependencies) string {
-	if a.ConfiguredCodexReasoningEffort == nil {
-		return ""
-	}
-	return strings.TrimSpace(a.ConfiguredCodexReasoningEffort())
-}
-
-func configuredClaudeModel(a Dependencies) string {
-	if a.ConfiguredClaudeModel == nil {
-		return ""
-	}
-	return strings.TrimSpace(a.ConfiguredClaudeModel())
-}
-
-func sessionModelOverride(sess *conversation.Session) string {
-	if sess == nil {
-		return ""
-	}
-	return strings.TrimSpace(sess.ModelOverride)
-}
-
-func bindingModelOverride(binding *routing.AgentBinding) string {
-	if binding == nil {
-		return ""
-	}
-	return strings.TrimSpace(binding.ModelOverride)
-}
-
-func bindingReasoningEffortOverride(binding *routing.AgentBinding) string {
-	if binding == nil {
-		return ""
-	}
-	return strings.TrimSpace(binding.ReasoningEffortOverride)
 }
 
 // PendingConfirmationText returns the pending confirmation text for a skill.
@@ -1028,16 +952,15 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		threadID = ""
 		conversation.ClearThreadContext(sess)
 	}
-	if a.ResolveModelConfig != nil {
-		sub.ModelConfig = a.ResolveModelConfig(sess, sub)
-		if err := appState.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) { current.ModelConfig = sub.ModelConfig }); err != nil {
-			return err
-		}
+	snapshot, err := s.modelSnapshot(sess, sub)
+	if err != nil {
+		return err
+	}
+	sub.ModelConfig = snapshot
+	if err := appState.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) { current.ModelConfig = snapshot }); err != nil {
+		return err
 	}
 	effectiveModel, effectiveReasoningEffort := sub.ModelConfig.Model, sub.ModelConfig.Effort
-	if !sub.ModelConfig.Valid {
-		effectiveModel, effectiveReasoningEffort = effectiveCodexModel(a, sess, sub, ws), effectiveCodexReasoningEffort(a, sess, sub)
-	}
 	effectiveApprovalPolicy := effectiveBindingApprovalPolicy(a, sess, sub, ws)
 	effectiveSandboxMode := effectiveBindingSandboxMode(a, sess, sub, ws)
 	effectiveServiceTier := effectiveBindingServiceTier(a, sess, sub)

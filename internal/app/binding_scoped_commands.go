@@ -3,6 +3,7 @@ package app
 import (
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
 
 	"context"
@@ -344,7 +345,7 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 			return err
 		}
 		next := appservicetiercmd.ToggleServiceTier(binding.ServiceTierOverride)
-		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.ServiceTierOverride = next })
+		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.ServiceTier, next)
 		if err != nil {
 			return err
 		}
@@ -364,7 +365,7 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.ModelOverride = modelID })
+	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Model, modelID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -384,7 +385,7 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.ReasoningEffortOverride = effort })
+	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Effort, effort)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -407,7 +408,7 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.ServiceTierOverride = serviceTier })
+	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.ServiceTier, serviceTier)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -424,18 +425,7 @@ func (s bindingService) completeBindingSimpleOverride(action *feishu.CardAction,
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)
-	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
-		switch fieldName {
-		case "sandbox":
-			current.SandboxModeOverride = value
-		case "policy":
-			current.ApprovalPolicyOverride = value
-		case "multiagent":
-			current.MultiAgentModeOverride = value
-		case "permissions":
-			current.ClaudePermissionMode = value
-		}
-	})
+	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Setting(fieldName), value)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}

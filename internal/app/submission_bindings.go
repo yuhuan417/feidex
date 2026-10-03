@@ -13,7 +13,6 @@ import (
 	codexadapter "feidex/internal/adapter/backend/codex"
 	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/config"
-	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -269,37 +268,15 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 			}
 			return claudeClientAdapter{claude: currentClaudeCore(a)}
 		},
-		ConfiguredClaudeModel: func() string {
-			a.ConfigMu().RLock()
-			defer a.ConfigMu().RUnlock()
-			return strings.TrimSpace(a.cfg.Claude.Model)
-		},
 		AgentBinding: func(chatType, chatID string) *state.AgentBinding {
 			return agentBindingForChat(a, chatType, chatID)
 		},
 		AgentBindingByID: func(id string) *state.AgentBinding {
 			return a.State().AgentBinding(id)
 		},
-		ConfiguredCodexModel: func() string {
-			a.ConfigMu().RLock()
-			defer a.ConfigMu().RUnlock()
-			return strings.TrimSpace(a.cfg.Codex.Model)
-		},
-		ConfiguredCodexReasoningEffort: func() string {
-			a.ConfigMu().RLock()
-			defer a.ConfigMu().RUnlock()
-			return strings.TrimSpace(a.cfg.Codex.ReasoningEffort)
-		},
 		BotProfile: func() *state.BotProfile {
 			return a.State().BotProfile()
 		},
-		ResolveModelConfig: func(sess *conversation.Session, sub *domainsubmission.Submission) domainmodelconfig.Snapshot {
-			if sess != nil && sub != nil && sub.BindingID != "" {
-				cp := *sess
-				cp.BindingID = sub.BindingID
-				sess = &cp
-			}
-			return modelConfigSnapshot(a, sess, configuredBackend(a))
-		},
+		ModelSettings: newModelSnapshotService(a),
 	})
 }

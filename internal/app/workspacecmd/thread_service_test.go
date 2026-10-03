@@ -5,8 +5,10 @@ import (
 	"errors"
 	claudeadapter "feidex/internal/adapter/backend/claude"
 	codexadapter "feidex/internal/adapter/backend/codex"
+	configadapter "feidex/internal/adapter/config"
 	feishutransport "feidex/internal/adapter/feishu/transport"
 	conversationapp "feidex/internal/application/conversation"
+	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
@@ -192,7 +194,7 @@ func (l threadTestLive) MarkSessionThreadLive(k, id string) {
 }
 func (l threadTestLive) ClearSessionLiveThread(string) {}
 func newTestThreadService(app *testWorkspaceApp, session *conversation.Session, opts threadServiceOptions) *conversationapp.Service {
-	svc := &conversationapp.Service{Deps: conversationapp.Dependencies{Backend: app.backend, Repository: &threadTestRepository{session: session}, Live: threadTestLive{mark: opts.markLive}, ResolveModel: func(*conversation.Session, *config.Workspace) string { return app.cfg.Claude.Model }}}
+	svc := &conversationapp.Service{Deps: conversationapp.Dependencies{Backend: app.backend, Repository: &threadTestRepository{session: session}, Live: threadTestLive{mark: opts.markLive}, ModelSettings: applicationmodelconfig.SnapshotService{Repository: configadapter.ModelSourceRepository{Config: app.cfg}}}}
 	if app.backend == domainbackend.BackendClaude {
 		svc.Deps.Gateway = claudeadapter.ConversationGateway{Client: opts.claude}
 	} else {

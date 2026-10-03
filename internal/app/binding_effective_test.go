@@ -4,7 +4,6 @@ import (
 	"feidex/internal/domain/conversation"
 	"testing"
 
-	"feidex/internal/config"
 	"feidex/internal/state"
 )
 
@@ -13,7 +12,6 @@ func TestEffectiveModelUsesSessionBindingThenBotDefault(t *testing.T) {
 	a.frontendID = "bot-a"
 	a.cfg.Codex.Model = "gpt-5-bot"
 	a.cfg.Claude.Model = "sonnet-bot"
-	ws := &config.Workspace{ID: "default", Cwd: t.TempDir()}
 	sess := &conversation.Session{
 		Key:         "feishu:frontend:bot-a:chat:chat-model-priority",
 		BindingID:   "binding-model-priority",
@@ -33,18 +31,18 @@ func TestEffectiveModelUsesSessionBindingThenBotDefault(t *testing.T) {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
 
-	if got := effectiveCodexModel(a, sess, ws); got != "gpt-5-binding" {
+	if got := newModelSnapshotService(a).Desired(backendCodex, sess).Model; got != "gpt-5-binding" {
 		t.Fatalf("effectiveCodexModel() = %q, want binding override", got)
 	}
-	if got := effectiveClaudeModel(a, sess, ws); got != "gpt-5-binding" {
+	if got := newModelSnapshotService(a).Desired(backendClaude, sess).Model; got != "gpt-5-binding" {
 		t.Fatalf("effectiveClaudeModel() = %q, want binding override", got)
 	}
 
 	sess.ModelOverride = "gpt-5-session"
-	if got := effectiveCodexModel(a, sess, ws); got != "gpt-5-session" {
+	if got := newModelSnapshotService(a).Desired(backendCodex, sess).Model; got != "gpt-5-session" {
 		t.Fatalf("effectiveCodexModel() = %q, want session override", got)
 	}
-	if got := effectiveClaudeModel(a, sess, ws); got != "gpt-5-session" {
+	if got := newModelSnapshotService(a).Desired(backendClaude, sess).Model; got != "gpt-5-session" {
 		t.Fatalf("effectiveClaudeModel() = %q, want session override", got)
 	}
 
@@ -59,10 +57,10 @@ func TestEffectiveModelUsesSessionBindingThenBotDefault(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding(clear) error = %v", err)
 	}
-	if got := effectiveCodexModel(a, sess, ws); got != "gpt-5-bot" {
+	if got := newModelSnapshotService(a).Desired(backendCodex, sess).Model; got != "gpt-5-bot" {
 		t.Fatalf("effectiveCodexModel() = %q, want bot default", got)
 	}
-	if got := effectiveClaudeModel(a, sess, ws); got != "sonnet-bot" {
+	if got := newModelSnapshotService(a).Desired(backendClaude, sess).Model; got != "sonnet-bot" {
 		t.Fatalf("effectiveClaudeModel() = %q, want bot default", got)
 	}
 }

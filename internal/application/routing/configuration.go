@@ -25,6 +25,32 @@ type BindingResult struct {
 	Effects []application.Effect
 }
 
+func (s ConfigurationService) SetBinding(binding *domain.AgentBinding, setting domain.Setting, value string) (BindingResult, error) {
+	// Validate before opening a repository transaction.
+	if err := domain.SetBinding(&domain.AgentBinding{}, setting, value); err != nil {
+		return BindingResult{}, err
+	}
+	return s.UpdateBinding(binding, func(current *domain.AgentBinding) {
+		_ = domain.SetBinding(current, setting, settingValue(setting, value))
+	})
+}
+
+func (s ConfigurationService) SetProfile(backend string, setting domain.Setting, value string) (*domain.BotProfile, error) {
+	if err := domain.SetProfile(&domain.BotProfile{}, backend, setting, value); err != nil {
+		return nil, err
+	}
+	return s.UpdateProfile(func(current *domain.BotProfile) {
+		_ = domain.SetProfile(current, backend, setting, settingValue(setting, value))
+	})
+}
+
+func settingValue(setting domain.Setting, value string) string {
+	if setting == domain.Workspace {
+		return strings.TrimSpace(value)
+	}
+	return domain.ClearableValue(value)
+}
+
 func (s ConfigurationService) EnsureBinding(chatType, chatID string) (*domain.AgentBinding, error) {
 	chatType, chatID = strings.TrimSpace(chatType), strings.TrimSpace(chatID)
 	if chatType != "group" || chatID == "" {

@@ -578,4 +578,15 @@ Codex server request
 - `presentation.Action` 的 action value 改用 `json.RawMessage`，Feishu map 只在 outbound adapter 还原；goal command 的消息发送统一使用已注入的 semantic outbound capability。
 - workspace renderer 已移除对 `appcore` helper 的依赖，workspace selection key 和文本 fallback 直接使用 application/domain 值；新增守卫防止 renderer 重新依赖 transitional host helper。
 - 模型目录的默认项解析、ID/name 查找和 reasoning effort 能力判断已迁入 `internal/application/modelconfig`；`internal/app/modelconfig` 只保留兼容别名和 backend/config/Feishu 编排。
+
+### 2026-10-03 模型作用域与启动快照职责迁移
+
+- `domain/routing.Setting` 与 typed transitions 统一 AgentBinding/BotProfile 的字段更新；群命令、群卡片与 Profile 入口不再各自维护辅助模型字段 switch。routing application 用例负责校验、继承值标准化和持久化，群更新继续返回 `RefreshGroupStatus` effect。
+- `application/modelconfig.SettingsService` 负责辅助模型保存时选择已有 session 或 frontend Profile；保存只修改 desired overrides，保留 active turn、queue、collaboration mode 与 applied snapshot，维护/切换准入通过 consumer-owned port 提供。
+- `application/modelconfig.SnapshotService` 统一 desired、turn 与 submission 的 scope source assembly；config adapter 在 config/profile/binding 的共享 revision lock 下读取 detached sources。submission 的 BindingID 覆盖规则也迁入该用例。
+- conversation 与 submission 删除根模型 resolver callbacks，改为注入 snapshot port；删除 app 与 submission 的两套重复模型优先级解析和旧配置回退。没有有效启动快照时显式返回错误，不以旧 submission 配置启动。
+- 模型应用状态由 application 生成 `StatusView`，Feishu `modelsettings` renderer 只接受该展示快照；根层删除 applied/pending 文案拼装与旧 notice 常量，保留原菜单文字和生效边界说明。
+- desired 查询不混入当前 collaboration preset；本地 turn snapshot 保留 Plan preset 回退。该区别保持 SM-04 的 Plan 模式与模型应用边界，SM-05 steer 不重新应用配置，审批 resolved 与后台 goal continuation 契约未变。
+- 新增活动 turn 不变、保存失败不发布、frontend/group 隔离、submission binding、不混读配置 revision 与 workspace `default` ID 回归；AST 架构守卫禁止模型入口直接写 override/turn 字段，并禁止 conversation/submission 重新引入根模型回调。
+- 本批完成的是模型作用域与快照职责迁移；workspace renderer 状态读取、其余业务 callback、菜单政策、composition root 集中及旧桥接删除仍需继续，整体提案尚未完成。
 - workspace config、management 和 renderer 的构造实例已归入 frontend `appComposition`；backend/config 失效时统一清理 workspace capability cache，减少命令和 card action 重复组装同一组服务。

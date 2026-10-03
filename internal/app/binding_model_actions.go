@@ -3,6 +3,7 @@ package app
 import (
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	catalog "feidex/internal/domain/modelconfig"
+	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
 
 	"context"
@@ -126,9 +127,10 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
 	sess := s.app.State().Session(sessionKey)
-	planModelDisplay := renderAuxModelSummary(binding.PlanModelOverride, effectiveCodexPlanModel(s.app, sess), modelName)
-	reviewModelDisplay := renderAuxModelSummary(binding.ReviewModelOverride, effectiveCodexReviewModel(s.app, sess), modelName)
-	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, effectiveCodexSubagentModel(s.app, sess), modelName)
+	settings := newModelSnapshotService(s.app).Desired(backendCodex, sess)
+	planModelDisplay := renderAuxModelSummary(binding.PlanModelOverride, settings.PlanModel, modelName)
+	reviewModelDisplay := renderAuxModelSummary(binding.ReviewModelOverride, settings.ReviewModel, modelName)
+	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, modelName)
 
 	card := cards.NewMarkdownBodyCard("模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model", "")})
@@ -250,8 +252,9 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
 	sess := s.app.State().Session(sessionKey)
-	smallModelDisplay := renderAuxModelSummary(binding.SmallModelOverride, effectiveClaudeSmallModel(s.app, sess), "Claude 内置 haiku")
-	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, effectiveClaudeSubagentModel(s.app, sess), currentModel)
+	settings := newModelSnapshotService(s.app).Desired(backendClaude, sess)
+	smallModelDisplay := renderAuxModelSummary(binding.SmallModelOverride, settings.SmallModel, "Claude 内置 haiku")
+	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, currentModel)
 
 	card := cards.NewMarkdownBodyCard("模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model", "")})
@@ -411,22 +414,7 @@ func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardActi
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
-		switch role {
-		case "plan":
-			current.PlanModelOverride = value
-		case "plan_effort":
-			current.PlanReasoningEffortOverride = value
-		case "review":
-			current.ReviewModelOverride = value
-		case "subagent":
-			current.SubagentModelOverride = value
-		case "subagent_effort":
-			current.SubagentReasoningEffortOverride = value
-		case "small":
-			current.SmallModelOverride = value
-		}
-	})
+	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Setting(role), value)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}

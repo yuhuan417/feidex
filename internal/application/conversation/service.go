@@ -48,13 +48,17 @@ type LiveThreads interface {
 	ClearSessionLiveThread(string)
 }
 
+type ModelSettings interface {
+	Desired(string, *domain.Session) modelconfig.Snapshot
+}
+
 type Dependencies struct {
-	Context      context.Context
-	Backend      string
-	Gateway      Gateway
-	Repository   Repository
-	Live         LiveThreads
-	ResolveModel func(*domain.Session, *workspace.Workspace) string
+	Context       context.Context
+	Backend       string
+	Gateway       Gateway
+	Repository    Repository
+	Live          LiveThreads
+	ModelSettings ModelSettings
 }
 
 type Service struct{ Deps Dependencies }
@@ -67,8 +71,8 @@ func (s *Service) context() context.Context {
 }
 func (s *Service) request(key string, sess *domain.Session, ws *workspace.Workspace) Request {
 	r := Request{SessionKey: key, Session: sess, Workspace: ws}
-	if s.Deps.ResolveModel != nil {
-		r.Model = strings.TrimSpace(s.Deps.ResolveModel(sess, ws))
+	if s.Deps.ModelSettings != nil {
+		r.Model = strings.TrimSpace(s.Deps.ModelSettings.Desired(s.Deps.Backend, sess).Model)
 	}
 	return r
 }

@@ -5,6 +5,7 @@ import (
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
 
 	"context"
@@ -112,9 +113,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model set MODEL_ID|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
-			current.ModelOverride = value
-		})
+		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Model, value)
 		if err != nil {
 			return err
 		}
@@ -124,9 +123,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
-			current.ReasoningEffortOverride = value
-		})
+		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Effort, value)
 		if err != nil {
 			return err
 		}
@@ -137,18 +134,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		}
 		value := clearableArg(args[1])
 		role := strings.ToLower(strings.TrimSpace(args[0]))
-		_, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
-			switch role {
-			case "plan":
-				current.PlanModelOverride = value
-			case "review":
-				current.ReviewModelOverride = value
-			case "subagent":
-				current.SubagentModelOverride = value
-			case "small":
-				current.SmallModelOverride = value
-			}
-		})
+		_, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Setting(role), value)
 		if err != nil {
 			return err
 		}
@@ -158,7 +144,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model subagent effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.SubagentReasoningEffortOverride = value })
+		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.SubagentEffort, value)
 		if err != nil {
 			return err
 		}
@@ -168,7 +154,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model plan effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { current.PlanReasoningEffortOverride = value })
+		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.PlanEffort, value)
 		if err != nil {
 			return err
 		}
@@ -187,21 +173,19 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 				return fmt.Errorf("unsupported service tier %q", args[1])
 			}
 		}
-		updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
-			current.ServiceTierOverride = value
-		})
+		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.ServiceTier, value)
 		if err != nil {
 			return err
 		}
 		return s.replyBindingUpdated(msg, "已更新当前群内响应速度: "+renderOptionalBacktick(updated.ServiceTierOverride))
 	case "sandbox":
-		return s.updateSimpleOverride(msg, binding, args, "sandbox", func(current *state.AgentBinding, value string) { current.SandboxModeOverride = value }, func(current *state.AgentBinding) string { return current.SandboxModeOverride })
+		return s.updateSimpleOverride(msg, binding, args, routing.Sandbox)
 	case "policy":
-		return s.updateSimpleOverride(msg, binding, args, "policy", func(current *state.AgentBinding, value string) { current.ApprovalPolicyOverride = value }, func(current *state.AgentBinding) string { return current.ApprovalPolicyOverride })
+		return s.updateSimpleOverride(msg, binding, args, routing.ApprovalPolicy)
 	case "multiagent":
-		return s.updateSimpleOverride(msg, binding, args, "multiagent", func(current *state.AgentBinding, value string) { current.MultiAgentModeOverride = value }, func(current *state.AgentBinding) string { return current.MultiAgentModeOverride })
+		return s.updateSimpleOverride(msg, binding, args, routing.MultiAgent)
 	case "permissions", "permission":
-		return s.updateSimpleOverride(msg, binding, args, "permissions", func(current *state.AgentBinding, value string) { current.ClaudePermissionMode = value }, func(current *state.AgentBinding) string { return current.ClaudePermissionMode })
+		return s.updateSimpleOverride(msg, binding, args, routing.Permissions)
 	default:
 		return fmt.Errorf("usage: %s", currentBotCommandUsage)
 	}
@@ -315,16 +299,16 @@ func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction
 	}, nil
 }
 
-func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding *state.AgentBinding, args []string, name string, set func(*state.AgentBinding, string), get func(*state.AgentBinding) string) error {
+func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding *state.AgentBinding, args []string, setting routing.Setting) error {
 	if len(args) != 2 {
-		return fmt.Errorf("usage: /workspace %s VALUE|default", name)
+		return fmt.Errorf("usage: /workspace %s VALUE|default", setting)
 	}
 	value := clearableArg(args[1])
-	updated, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) { set(current, value) })
+	_, err := newRoutingConfiguration(s.app).SetBinding(binding, setting, value)
 	if err != nil {
 		return err
 	}
-	return s.replyBindingUpdated(msg, "已更新当前群内 "+name+": "+renderOptionalBacktick(get(updated)))
+	return s.replyBindingUpdated(msg, "已更新当前群内 "+string(setting)+": "+renderOptionalBacktick(value))
 }
 
 func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, workspaceID string) (*state.AgentBinding, error) {
@@ -498,13 +482,7 @@ func resolveConfigRelativePath(a *App, value string) string {
 }
 
 func clearableArg(value string) string {
-	value = strings.TrimSpace(value)
-	switch strings.ToLower(value) {
-	case "", "default", "inherit", "follow", "clear", "unset":
-		return ""
-	default:
-		return value
-	}
+	return routing.ClearableValue(value)
 }
 
 func onOffLabel(value bool) string {

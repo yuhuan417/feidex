@@ -142,7 +142,8 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		ReplyInThreadEnabledFn: func(chatType string) bool { return replyInThreadEnabled(a, chatType) },
 		SessionHasActiveWorkFn: sessionHasActiveWork,
 		EffectivePlanSettingsFn: func(sess *conversation.Session) (string, string) {
-			return effectiveCodexPlanModel(a, sess), effectiveCodexPlanReasoningEffort(a, sess)
+			settings := newModelSnapshotService(a).Desired(backendCodex, sess)
+			return settings.PlanModel, settings.PlanEffort
 		},
 		ActionStringValueFn:          actionStringValue,
 		RunAsyncFn:                   func(fn func()) { runAsync(a, fn) },
