@@ -25,7 +25,9 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 	if err := a.store.UpsertPending(&state.PendingRequest{ID: "req-1", Status: "pending", ExpiresAt: time.Now().Add(time.Hour).Unix()}); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
-	newRuntimeMaintenanceService(a).ExpirePendingRequestsOnStartup()
+	if err := a.bindings.StartupState.ExpireInteractions(); err != nil {
+		t.Fatal(err)
+	}
 	if req := a.store.PendingByID("req-1"); req == nil || req.Status != "expired" {
 		t.Fatalf("expirePendingRequestsOnStartup() = %+v", req)
 	}
@@ -40,15 +42,15 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 	if err := a.store.UpsertMessageLink(&state.MessageLink{MessageID: "msg-1", SubmissionID: subID, TurnID: "turn-1"}); err != nil {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
-	newSubmissionCleanup(a).CleanupSubmissionRuntimeState(&domainsubmission.Submission{ID: subID, TurnID: "turn-1"})
+	a.bindings.SubmissionCleanup.CleanupSubmissionRuntimeState(&domainsubmission.Submission{ID: subID, TurnID: "turn-1"})
 	if a.store.GetSubmission(subID) != nil || a.store.PendingByID("req-turn") != nil || a.store.GetMessageLink("msg-1") != nil {
 		t.Fatal("cleanupSubmissionRuntimeState() should remove runtime artifacts")
 	}
 
 	ff.setCleanupState(feishu.PreviewDriveCleanupResult{}, context.Canceled)
-	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	a.bindings.MaintenanceCommands.RunDriveArtifactGC("test")
 	ff.setCleanupState(feishu.PreviewDriveCleanupResult{DeletedFileCount: 1}, nil)
-	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	a.bindings.MaintenanceCommands.RunDriveArtifactGC("test")
 
 	root := filepath.Join(a.cfg.Workspaces[0].Cwd, attachments.AttachmentsDirName, "old")
 	if err := os.MkdirAll(root, 0o755); err != nil {
@@ -62,7 +64,7 @@ func TestRuntimeMaintenanceAdditionalHelpers(t *testing.T) {
 	if err := os.Chtimes(old, oldTime, oldTime); err != nil {
 		t.Fatalf("Chtimes() error = %v", err)
 	}
-	newRuntimeMaintenanceService(a).CleanupAttachmentDir(root)
+	a.bindings.MaintenanceCommands.CleanupAttachmentDir(root)
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
 		t.Fatalf("cleanupAttachmentDir() should remove expired dir, stat err=%v", err)
 	}
@@ -79,7 +81,7 @@ func TestRunDriveArtifactGCUsesExtendedTimeout(t *testing.T) {
 		return feishu.PreviewDriveCleanupResult{}, nil
 	})
 
-	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	a.bindings.MaintenanceCommands.RunDriveArtifactGC("test")
 	if !gotDeadlineOK {
 		t.Fatal("CleanupArtifactsBefore context should have a deadline")
 	}
@@ -91,7 +93,9 @@ func TestRunDriveArtifactGCUsesExtendedTimeout(t *testing.T) {
 func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.feishu = appfeishuwrap.WrapFeishuClient(ff)
+	recomposeTestApp(a)
 	for _, sess := range []*conversation.Session{
 		{Key: "feishu:frontend:default:chat:chat-b", ChatID: "chat-b", ChatType: "p2p"},
 		{Key: "feishu:frontend:default:chat:chat-a", ChatID: "chat-a", ChatType: "p2p"},
@@ -112,7 +116,7 @@ func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
 		},
 	}
 
-	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	a.bindings.MaintenanceCommands.RunDriveArtifactGC("test")
 	if got, want := len(ff.sendCards), 2; got != want {
 		t.Fatalf("permission diagnostic send cards = %d, want %d", got, want)
 	}
@@ -126,7 +130,7 @@ func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
 		}
 	}
 
-	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	a.bindings.MaintenanceCommands.RunDriveArtifactGC("test")
 	if got, want := len(ff.sendCards), 2; got != want {
 		t.Fatalf("deduplicated permission diagnostic send cards = %d, want %d", got, want)
 	}
@@ -135,7 +139,9 @@ func TestRunDriveArtifactGCNotifiesPermissionIssueToKnownChats(t *testing.T) {
 func TestRunDriveArtifactGCQueuesPermissionIssueWithoutKnownChatsUntilNextMessage(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.feishu = appfeishuwrap.WrapFeishuClient(ff)
+	recomposeTestApp(a)
 	ff.cleanupErr = &permissionIssueTestError{
 		err: errors.New("permission denied"),
 		issue: &feishu.PermissionIssue{
@@ -145,7 +151,7 @@ func TestRunDriveArtifactGCQueuesPermissionIssueWithoutKnownChatsUntilNextMessag
 		},
 	}
 
-	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	a.bindings.MaintenanceCommands.RunDriveArtifactGC("test")
 	if got := len(ff.sendCards); got != 0 {
 		t.Fatalf("permission diagnostic send cards before inbound = %d, want 0", got)
 	}
@@ -176,7 +182,9 @@ func TestRunDriveArtifactGCQueuesPermissionIssueWithoutKnownChatsUntilNextMessag
 func TestRunDriveArtifactGCQueuesOnlyOneDeferredPermissionIssue(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.feishu = appfeishuwrap.WrapFeishuClient(ff)
+	recomposeTestApp(a)
 
 	ff.cleanupErr = &permissionIssueTestError{
 		err: errors.New("permission denied 1"),
@@ -186,7 +194,7 @@ func TestRunDriveArtifactGCQueuesOnlyOneDeferredPermissionIssue(t *testing.T) {
 			Message: "first no permission",
 		},
 	}
-	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	a.bindings.MaintenanceCommands.RunDriveArtifactGC("test")
 
 	ff.cleanupErr = &permissionIssueTestError{
 		err: errors.New("permission denied 2"),
@@ -196,7 +204,7 @@ func TestRunDriveArtifactGCQueuesOnlyOneDeferredPermissionIssue(t *testing.T) {
 			Message: "second no permission",
 		},
 	}
-	newRuntimeMaintenanceService(a).RunDriveArtifactGC("test")
+	a.bindings.MaintenanceCommands.RunDriveArtifactGC("test")
 
 	got := a.State().FrontendCardNotifications()
 	if len(got) != 1 {

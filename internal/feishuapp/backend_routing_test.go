@@ -9,10 +9,10 @@ import (
 
 func TestHandleCompactCommandWithoutBackendDoesNotFallbackToCodex(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = ""
+	a.SetBackend("")
 	a.cfg.Feishu.Backend = ""
 
-	err := newBackendActionService(a).HandleCompactCommand(&feishu.InboundMessage{
+	err := a.bindings.BackendActions.HandleCompactCommand(&feishu.InboundMessage{
 		MessageID: "msg-1",
 		ChatType:  "p2p",
 		UserID:    "user-1",

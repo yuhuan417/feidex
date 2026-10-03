@@ -2,6 +2,7 @@
 package asyncinput
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -17,7 +18,12 @@ type Repository interface {
 }
 type Dependencies struct {
 	Repository Repository
-	Backend    string
+	Backend    func() string
+	Context    func() context.Context
+	Run        func(string, func()) bool
+	Effects    interface {
+		Run(context.Context, []application.Effect) error
+	}
 }
 type Service struct{ Deps Dependencies }
 
@@ -26,7 +32,7 @@ func (s Service) Session(p *interaction.PendingRequest) (*conversation.Session, 
 		return nil, fmt.Errorf("请求已过期")
 	}
 	sess := s.Deps.Repository.Session(p.SessionKey)
-	if sess == nil || sess.ActiveThreadID != p.ThreadID || s.Deps.Backend != p.Backend {
+	if sess == nil || sess.ActiveThreadID != p.ThreadID || s.Deps.Backend() != p.Backend {
 		return nil, fmt.Errorf("会话已切换，请在当前会话中回答")
 	}
 	return sess, nil
@@ -95,4 +101,24 @@ func (s Service) Complete(p *interaction.PendingRequest, accepted bool) error {
 			current.Status = "resolved"
 		}
 	})
+}
+
+// Dispatch owns admission, answer execution and the local question lifecycle.
+func (s Service) Dispatch(p *interaction.PendingRequest, userID, text string, present func(error)) error {
+	if !s.Deps.Run(p.SessionKey, func() {
+		effect, err := s.AnswerEffect(p, userID, text)
+		if err == nil {
+			err = s.Deps.Effects.Run(s.Deps.Context(), []application.Effect{effect})
+		}
+		if completeErr := s.Complete(p, err == nil); completeErr != nil {
+			err = fmt.Errorf("answer state could not be saved: %w", completeErr)
+		}
+		present(err)
+	}) {
+		if err := s.Complete(p, false); err != nil {
+			return err
+		}
+		return fmt.Errorf("frontend is shutting down")
+	}
+	return nil
 }

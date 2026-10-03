@@ -23,17 +23,14 @@ func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeish
 	cfg := config.Default()
 	cfg.Feishu.Backend = domainbackend.BackendCodex
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	return &App{
-		cfg:        cfg,
-		store:      store,
-		frontendID: strings.TrimSpace(frontendID),
-		feishu:     appfeishuwrap.WrapFeishuClient(ff),
-		started:    time.Now(),
-		registry: testRegistryWithTrackers(&appTrackers{
-			groupAnnouncements: newGroupAnnouncementTracker(),
-		}),
+	return prepareTestApp(&App{
+		cfg:          cfg,
+		store:        store,
+		frontendID:   strings.TrimSpace(frontendID),
+		feishu:       appfeishuwrap.WrapFeishuClient(ff),
+		started:      time.Now(),
 		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
-	}
+	})
 }
 
 func newGroupAnnouncementStore(t *testing.T) *state.Store {
@@ -312,6 +309,7 @@ func TestGroupAnnouncementRefreshRecoversExistingBlockByMarker(t *testing.T) {
 	store := newGroupAnnouncementStore(t)
 	ff := &fakeFeishuClient{
 		botOpenID: "bot-open",
+		botName:   "bot-a",
 		announcementBlocks: []feishu.AnnouncementBlock{{
 			BlockID: "existing-block",
 			Text:    "old\n" + groupAnnouncementMarker("bot-a", "bot-open"),
@@ -334,14 +332,14 @@ func TestGroupAnnouncementRefreshRecoversExistingBlockByMarker(t *testing.T) {
 	}
 }
 
-func TestGroupAnnouncementRefreshRecoversLegacyUnknownMarker(t *testing.T) {
+func TestGroupAnnouncementRefreshDoesNotClaimLegacyUnknownMarker(t *testing.T) {
 	store := newGroupAnnouncementStore(t)
 	ff := &fakeFeishuClient{
 		botOpenID: "bot-open",
 		botName:   "luban-feidex",
 		announcementBlocks: []feishu.AnnouncementBlock{{
 			BlockID: "legacy-block",
-			Text:    "old\n" + groupAnnouncementLegacyMarker("default", ""),
+			Text:    "old\nfeidex-status-region:default:unknown",
 		}},
 	}
 	a := newGroupAnnouncementTestApp(t, store, ff, "default")
@@ -350,15 +348,12 @@ func TestGroupAnnouncementRefreshRecoversLegacyUnknownMarker(t *testing.T) {
 	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
-	if len(ff.announcementCreateCalls) != 0 || len(ff.announcementUpdateCalls) != 1 {
+	if len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 0 {
 		t.Fatalf("create/update calls = %d/%d", len(ff.announcementCreateCalls), len(ff.announcementUpdateCalls))
 	}
-	updated := ff.announcementUpdateCalls[0]
-	if updated.blockID != "legacy-block" {
-		t.Fatalf("updated block id = %q, want legacy-block", updated.blockID)
-	}
-	if !strings.Contains(updated.content, "feidex-status-region:luban-feidex:bot-open") || !strings.Contains(updated.content, groupAnnouncementField("Bot", "luban-feidex")) {
-		t.Fatalf("updated content did not replace legacy marker/name:\n%s", updated.content)
+	created := ff.announcementCreateCalls[0]
+	if !strings.Contains(created.content, "feidex-status-region:luban-feidex:bot-open") {
+		t.Fatalf("created content missing current marker:\n%s", created.content)
 	}
 }
 

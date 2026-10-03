@@ -8,10 +8,9 @@ import (
 	"log/slog"
 	"strings"
 
-	storagejson "feidex/internal/adapter/storage/json"
 	"feidex/internal/domain/identity"
+	domaininteraction "feidex/internal/domain/interaction"
 	appclauderuntime "feidex/internal/runtime/claude"
-	"feidex/internal/state"
 )
 
 // detachedCardAnchor converts a runtime interaction target into the delivery
@@ -38,47 +37,35 @@ func ExpireClaudeInteractionCards(a *App, sessionKey string, requestIDs []string
 	if a == nil {
 		return
 	}
-	sessionKey = strings.TrimSpace(sessionKey)
-	wanted := make(map[string]bool, len(requestIDs))
-	for _, id := range requestIDs {
-		if trimmed := strings.TrimSpace(id); trimmed != "" {
-			wanted[trimmed] = true
-		}
-	}
+	a.bindings.InteractionLifecycle.ExpireAndPresent(domainbackend.BackendClaude, sessionKey, requestIDs, reason)
+}
+
+type interactionExpiryPresentation struct{ app *App }
+
+func InteractionExpiryPresentation(a *App) interface {
+	ExpiredInteraction(*domaininteraction.PendingRequest, string)
+} {
+	return interactionExpiryPresentation{app: a}
+}
+func (p interactionExpiryPresentation) ExpiredInteraction(pending *domaininteraction.PendingRequest, reason string) {
+	a := p.app
 	body := claudeInteractionExpiredBody(reason)
-	for _, pending := range a.State().PendingRequests() {
-		if pending == nil || normalizeRuntimeBackend(pending.Backend) != domainbackend.BackendClaude {
-			continue
-		}
-		if !storagejson.IsPendingRequestOpen(pending) {
-			continue
-		}
-		if sessionKey != "" && !sessionKeysEqual(a, pending.SessionKey, sessionKey) {
-			continue
-		}
-		if len(wanted) > 0 && !wanted[strings.TrimSpace(pending.ID)] {
-			continue
-		}
-		_ = a.State().UpdatePending(pending.ID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusExpired.String()
-		})
-		messageID := strings.TrimSpace(pending.FeishuMsgID)
-		if messageID == "" || a.feishu == nil {
-			continue
-		}
-		title := contentCardTitleForSession(a, pending.SessionKey, "", "请求已失效")
-		card := a.feishu.SimpleStatusCard(title, "grey", body, nil)
-		if err := newEffectRunner(a).Run(context.Background(), []application.Effect{application.PatchCard{
-			Frontend:  identity.FrontendID(a.FrontendID()),
-			MessageID: messageID,
-			View:      feishuoutbound.Card(card),
-		}}); err != nil {
-			slog.Warn("expire claude interaction card failed",
-				"request_id", pending.ID,
-				"message_id", messageID,
-				"error", err,
-			)
-		}
+	messageID := strings.TrimSpace(pending.FeishuMsgID)
+	if messageID == "" || a.feishu == nil {
+		return
+	}
+	title := contentCardTitleForSession(a, pending.SessionKey, "", "请求已失效")
+	card := a.feishu.SimpleStatusCard(title, "grey", body, nil)
+	if err := newEffectRunner(a).Run(context.Background(), []application.Effect{application.PatchCard{
+		Frontend:  identity.FrontendID(a.FrontendID()),
+		MessageID: messageID,
+		View:      feishuoutbound.Card(card),
+	}}); err != nil {
+		slog.Warn("expire claude interaction card failed",
+			"request_id", pending.ID,
+			"message_id", messageID,
+			"error", err,
+		)
 	}
 }
 

@@ -316,7 +316,9 @@ func (s SubmissionQueueService) rollbackClaudeSubmissionStartState(sessionKey st
 			a.DeleteTurnArtifacts(turnID)
 		}
 		a.RuntimeState.ClearTurnBinding(turnID)
-		a.RuntimeState.ClearTurnItemStates(turnID)
+		if a.Items != nil {
+			a.Items.ClearTurn(turnID)
+		}
 		a.TurnStream.DeleteTurnStream(turnID)
 	}
 

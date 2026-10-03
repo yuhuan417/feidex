@@ -43,19 +43,19 @@ func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmiss
 }
 
 func (a *App) NextQueuedSubmissionSessionKey(sessionKey string) string {
-	return newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey)
+	return a.bindings.Submissions.NextQueuedSessionKey(sessionKey)
 }
 
 func (a *App) BindStandaloneCompactTurn(threadID, turnID string) bool {
-	return newCompactionService(a).BindStandaloneCompactTurn(threadID, turnID)
+	return a.bindings.Compaction.BindStandaloneCompactTurn(threadID, turnID)
 }
 
 func (a *App) BindGoalContinuationTurn(threadID, turnID string) bool {
-	return newGoalService(a).BindGoalContinuationTurn(threadID, turnID)
+	return a.bindings.GoalContinuation.BindGoalContinuationTurn(threadID, turnID)
 }
 
 func (a *App) FinishStandaloneCompactTurn(threadID, turnID, status string) bool {
-	return newCompactionService(a).FinishStandaloneCompactTurn(threadID, turnID, status)
+	return a.bindings.Compaction.FinishStandaloneCompactTurn(threadID, turnID, status)
 }
 
 func (a *App) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {

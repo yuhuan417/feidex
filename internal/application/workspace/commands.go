@@ -1,14 +1,15 @@
 package workspace
 
 import (
+	"context"
+	"feidex/internal/domain/conversation"
+	domain "feidex/internal/domain/workspace"
 	"fmt"
 	"strings"
 )
 
 const CommandUsage = "/workspace | /workspace list | /workspace new | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace sandbox [MODE] | /workspace policy [POLICY]"
 
-// ParseCloneArgs parses /workspace clone arguments into repository URL,
-// optional workspace ID, and optional parent directory.
 func ParseCloneArgs(args []string) (repoURL, workspaceID, parentDir string, err error) {
 	if len(args) < 2 || strings.TrimSpace(args[0]) != "clone" {
 		return "", "", "", fmt.Errorf("usage: %s", CommandUsage)
@@ -40,7 +41,6 @@ func ParseCloneArgs(args []string) (repoURL, workspaceID, parentDir string, err 
 	}
 }
 
-// ParseWorktreeArgs parses /workspace new worktree arguments.
 func ParseWorktreeArgs(args []string) (branchName, workspaceID string, err error) {
 	if len(args) < 2 || strings.TrimSpace(args[0]) != "new" || strings.TrimSpace(args[1]) != "worktree" {
 		return "", "", fmt.Errorf("usage: %s", CommandUsage)
@@ -55,4 +55,62 @@ func ParseWorktreeArgs(args []string) (branchName, workspaceID string, err error
 	default:
 		return "", "", fmt.Errorf("usage: %s", CommandUsage)
 	}
+}
+
+type SwitchOutcome struct {
+	Workspace    *domain.Workspace
+	Session      *conversation.Session
+	Binding      *conversation.ThreadBinding
+	BindingError error
+}
+
+func (w Workflow) Switch(req SwitchRequest, async bool) (SwitchOutcome, error) {
+	effects, err := w.Creation.Lifecycle.Switch(req)
+	if err != nil {
+		return SwitchOutcome{}, err
+	}
+	out := SwitchOutcome{Workspace: effects.Workspace, Session: effects.Session}
+	if async {
+		w.Effects.Apply(effects)
+	} else {
+		for _, key := range effects.ClearLiveThreads {
+			w.Effects.Runtime.ClearLive(key)
+		}
+		if effects.Session != nil && effects.Workspace != nil {
+			out.Binding, out.BindingError = w.Effects.Conversations.EnsureWorkspaceThreadBinding(effects.Session.Key, effects.Session, effects.Workspace)
+		}
+	}
+	return out, nil
+}
+
+func (w Workflow) ValidateDeletion(key, id string) error {
+	return w.Creation.Lifecycle.ValidateDeletion(key, id)
+}
+
+func (w Workflow) Delete(key, id string) error {
+	effects, err := w.Creation.Lifecycle.Delete(key, id)
+	if err == nil {
+		w.Effects.Apply(effects)
+	}
+	return err
+}
+
+func (w Workflow) Create(req SwitchRequest, id, name, cwd string) (CreationResult, error) {
+	result, err := w.Creation.CreateAndSwitch(req, id, name, cwd)
+	if err == nil {
+		w.Effects.Apply(result.Effects)
+	}
+	return result, err
+}
+
+func (w Workflow) Clone(ctx context.Context, req SwitchRequest, payload ClonePayload, parent string, report func(string)) (CreationResult, error) {
+	plan, err := w.Planning.PrepareWorkspaceClonePayload(payload, parent)
+	if err != nil {
+		return CreationResult{}, err
+	}
+	result, err := w.Creation.Clone(ctx, req, payload.RepoURL, plan, report)
+	if err == nil {
+		w.Effects.Apply(result.Effects)
+	}
+	return result, err
 }

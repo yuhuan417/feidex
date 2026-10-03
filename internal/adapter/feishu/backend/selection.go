@@ -2,9 +2,7 @@ package backend
 
 import (
 	"context"
-	configadapter "feidex/internal/adapter/config"
-	"feidex/internal/application/backendconfig"
-	"feidex/internal/domain/conversation"
+	"feidex/internal/application/backendselection"
 	"feidex/internal/domain/identity"
 	"fmt"
 	"log/slog"
@@ -17,18 +15,9 @@ import (
 )
 
 // AvailableBackend describes a backend binary found on this machine.
-type AvailableBackend struct {
-	Kind    string
-	Command string
-	Path    string
-}
+type AvailableBackend = backendselection.AvailableBackend
 
-// BackendRuntimeHandle is an opaque handle to a prepared backend runtime.
-// The caller invokes Close when done and Install to activate it.
-type BackendRuntimeHandle struct {
-	Close   func() error
-	Install func()
-}
+type BackendRuntimeHandle = backendselection.RuntimeHandle
 
 type SelectionRuntimeDeps struct {
 	ListAvailableBackends func() []AvailableBackend
@@ -58,7 +47,7 @@ type SelectionCommandDeps struct {
 
 type SelectionDeps struct {
 	Source   SelectionSource
-	Switch   *RuntimeStateService
+	UseCase  *backendselection.Service
 	Runtime  SelectionRuntimeDeps
 	Render   SelectionRenderDeps
 	Effects  SelectionEffectDeps
@@ -303,9 +292,6 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 
 	messageID := strings.TrimSpace(action.MessageID)
 	run := s.deps.Effects.RunAsync
-	if run == nil {
-		run = func(_ string, fn func()) { go fn() }
-	}
 	run(sessionKey, func() {
 		err := s.SwitchBackend(s.Source.Context(), target)
 		notice := "已切换到 `" + target + "`。"
@@ -339,127 +325,9 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 
 // SwitchBackend performs the backend switch.
 func (s SelectionService) SwitchBackend(ctx context.Context, target string) error {
-	if s.Source == nil {
-		return fmt.Errorf("app not initialized")
-	}
-	target = NormalizeRuntimeBackend(target)
-	if target == "" {
-		return fmt.Errorf("missing backend")
-	}
-	if !s.BackendAvailable(target) {
-		return fmt.Errorf("%s backend 当前不可用", BackendDisplayName(target))
-	}
-
-	s.deps.Switch.LockSwitch()
-	defer s.deps.Switch.UnlockSwitch()
-
-	if reason := s.BackendSwitchBlockedReason(); reason != "" {
-		return fmt.Errorf("%s", reason)
-	}
-
-	current := configuredBackend(s.Source)
-	if current == target && s.BackendRuntimeReady(target) {
-		return nil
-	}
-	ts := s.deps.Switch
-	ts.BeginBackendSwitchState(target)
-	defer ts.FinishBackendSwitchState()
-	slog.Info("backend switch begin",
-		"frontend_id", s.Source.FrontendID(),
-		"current_backend", current,
-		"target_backend", target,
-	)
-
-	nextSessions := s.FrontendSessionsAfterBackendSwitch(current, target)
-
-	if s.deps.Runtime.PrepareRuntime == nil {
-		return fmt.Errorf("PrepareRuntime callback not set")
-	}
-	newHandle, err := s.deps.Runtime.PrepareRuntime(ctx, target)
-	if err != nil {
-		return err
-	}
-
-	if s.deps.Runtime.SnapshotRuntime == nil {
-		_ = newHandle.Close()
-		return fmt.Errorf("SnapshotRuntime callback not set")
-	}
-	oldHandle := s.deps.Runtime.SnapshotRuntime()
-	oldBackend := runtimeBackend(s.Source)
-	if err := s.SetConfiguredBackend(target); err != nil {
-		_ = newHandle.Close()
-		return err
-	}
-
-	newHandle.Install()
-	for _, sess := range nextSessions {
-		if err := s.Source.Store().UpsertSession(sess); err != nil {
-			if oldHandle != nil {
-				oldHandle.Install()
-			}
-			s.Source.SetBackend(oldBackend)
-			_ = s.SetConfiguredBackend(current)
-			_ = newHandle.Close()
-			return err
-		}
-	}
-	slog.Info("backend switch runtime installed",
-		"frontend_id", s.Source.FrontendID(),
-		"target_backend", target,
-	)
-	if s.deps.Runtime.RecoverState != nil {
-		s.deps.Runtime.RecoverState()
-	}
-	if oldHandle != nil {
-		_ = oldHandle.Close()
-	}
-	slog.Info("backend switch completed",
-		"frontend_id", s.Source.FrontendID(),
-		"current_backend", current,
-		"target_backend", target,
-	)
-	return nil
+	return s.deps.UseCase.Switch(ctx, target)
 }
 
-// FrontendSessionsAfterBackendSwitch returns session copies with thread lineage
-// transferred from the current backend to the target backend.
-func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target string) []*conversation.Session {
-	store := s.Source.Store()
-	if store == nil {
-		return nil
-	}
-	out := make([]*conversation.Session, 0, 8)
-	for _, sess := range store.AllSessions() {
-		if sess == nil || !sessionBelongsToFrontend(s.Source, sess.Key) {
-			continue
-		}
-		cp := conversation.CloneSession(sess)
-		if cp == nil {
-			continue
-		}
-		if current != "" {
-			conversation.StoreBackendThread(cp, current)
-		}
-		if !conversation.RestoreBackendThread(cp, target) {
-			conversation.ClearThreadContext(cp)
-		}
-		cp.Status = firstNonEmpty(strings.TrimSpace(cp.Status), "idle")
-		out = append(out, cp)
-	}
-	return out
-}
-
-// SetConfiguredBackend persists the target backend to config.
-func (s SelectionService) SetConfiguredBackend(target string) error {
-	return (backendconfig.Service{Repository: configadapter.NewBackendRepository(s.Source)}).SetBackend(target)
-}
-
-func runtimeBackend(source SelectionSource) string {
-	if source == nil {
-		return ""
-	}
-	return NormalizeRuntimeBackend(source.Backend())
-}
 func makeSessionKey(source SelectionSource, msg *feishu.InboundMessage) string {
 	if msg == nil {
 		return ""
@@ -476,9 +344,4 @@ func makeSessionKey(source SelectionSource, msg *feishu.InboundMessage) string {
 		return "feishu:chat:" + chatID
 	}
 	return "feishu:frontend:" + frontendID + ":chat:" + chatID
-}
-func sessionBelongsToFrontend(source SelectionSource, key string) bool {
-	frontend, _, _, _, _ := identity.ParseSessionKey(key)
-	current := strings.TrimSpace(source.FrontendID())
-	return frontend == current || (frontend == "" && current != "")
 }

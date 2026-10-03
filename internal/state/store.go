@@ -79,14 +79,7 @@ type storedSession struct {
 	UpdatedAt                       int64                                        `json:"updated_at"`
 }
 
-type FrontendCardNotification struct {
-	Kind        string `json:"kind,omitempty"`
-	CollapseKey string `json:"collapse_key,omitempty"`
-	Title       string `json:"title"`
-	Color       string `json:"color,omitempty"`
-	Body        string `json:"body"`
-	CreatedAt   int64  `json:"created_at,omitempty"`
-}
+type FrontendCardNotification = routing.FrontendCardNotification
 
 // AgentBinding maps a local frontend/bot to one logical chat project.
 // WorkspaceID and the optional model settings refer to this local instance.
@@ -112,25 +105,7 @@ type GroupPrimary struct {
 
 // GroupAnnouncementBlock stores the Feishu upgraded group announcement block
 // owned by one local frontend/bot in one group chat.
-type GroupAnnouncementBlock struct {
-	ID              string `json:"id"`
-	FrontendID      string `json:"frontend_id"`
-	ChatID          string `json:"chat_id"`
-	ChatType        string `json:"chat_type"`
-	BotOpenID       string `json:"bot_open_id,omitempty"`
-	BlockID         string `json:"block_id,omitempty"`
-	Marker          string `json:"marker,omitempty"`
-	LastContentHash string `json:"last_content_hash,omitempty"`
-	LastUpdatedAt   int64  `json:"last_updated_at,omitempty"`
-	CreatedAt       int64  `json:"created_at"`
-	UpdatedAt       int64  `json:"updated_at"`
-
-	// BotAbsent records that Feishu reported the app is no longer a member of
-	// ChatID (announcement code 1772003). Refreshes are skipped while it is set
-	// so a chat the bot has left stops costing a doomed API call on every
-	// start. It is cleared when the bot is added back to the chat.
-	BotAbsent bool `json:"bot_absent,omitempty"`
-}
+type GroupAnnouncementBlock = routing.GroupAnnouncementBlock
 
 // AgentBindingPendingMessage stores one inbound group message while a binding
 // is waiting for a local workspace. It is replayed after binding activation.
@@ -707,13 +682,18 @@ func (s *Store) UpdateSession(key string, mutate func(*conversation.Session)) (*
 	if !ok {
 		return nil, os.ErrNotExist
 	}
+	previous := sess
+	sess = cloneSession(sess)
 	if mutate != nil {
 		mutate(sess)
 	}
 	normalizeSessionValues(sess)
 	sess.UpdatedAt = time.Now().Unix()
+	s.runtime.Sessions[key] = sess
 	s.syncPersistentSessionLocked(sess)
 	if err := s.saveLocked(); err != nil {
+		s.runtime.Sessions[key] = previous
+		s.syncPersistentSessionLocked(previous)
 		return nil, err
 	}
 	return cloneSession(sess), nil

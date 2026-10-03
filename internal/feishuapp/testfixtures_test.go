@@ -16,12 +16,13 @@ import (
 	"time"
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+	appautoretry "feidex/internal/application/autoretry"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/release"
-	appautoretry "feidex/internal/runtime/autoretry"
+	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/runtime/turnbinding"
 	"feidex/internal/state"
 
@@ -870,7 +871,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	ff := &fakeFeishuClient{botOpenID: "bot-open"}
 	fc := &fakeCodexClient{}
 	var asyncWG sync.WaitGroup
-	a := &App{
+	a := prepareTestApp(&App{
 		cfg:     loadedCfg,
 		cfgPath: cfgPath,
 		store:   store,
@@ -884,41 +885,26 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 			}()
 		},
 		waitAsync:    asyncWG.Wait,
-		registry:     testRegistryWithCodex(fc),
-		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
-	}
-	a.registry.Set("trackers", &appTrackers{
-		turnStreams:  newTurnStreamTracker(),
-		turnBindings: turnbinding.NewTracker(store),
+		runtimeOwner: testOwnerWithCodex(fc),
 	})
+	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
+	prepareTestApp(a)
 	replaceCodexClient(a, fc)
 	configureGroupPrimaryEvents(a)
 	t.Cleanup(asyncWG.Wait)
 	return a, ff, fc
 }
 
-func testRegistryWithCodex(client CodexClient) *frontendruntime.Registry {
-	r := frontendruntime.NewRegistry(nil)
-	r.Codex = client
-	return r
+func testOwnerWithCodex(client CodexClient) *frontendruntime.FrontendOwner {
+	o := frontendruntime.NewFrontendOwner()
+	o.SetCodexClient(client)
+	return o
 }
 
-func testRegistryWithClaude(core ClaudeCore) *frontendruntime.Registry {
-	r := frontendruntime.NewRegistry(nil)
-	r.Claude = core
-	return r
-}
-
-func testRegistryWithCodexAndTrackers(client CodexClient, trackers *appTrackers) *frontendruntime.Registry {
-	r := testRegistryWithCodex(client)
-	r.Set("trackers", trackers)
-	return r
-}
-
-func testRegistryWithTrackers(trackers *appTrackers) *frontendruntime.Registry {
-	r := frontendruntime.NewRegistry(nil)
-	r.Set("trackers", trackers)
-	return r
+func testOwnerWithClaude(core ClaudeCore) *frontendruntime.FrontendOwner {
+	o := frontendruntime.NewFrontendOwner()
+	o.SetClaudeCore(core)
+	return o
 }
 
 func testOwnerWithLiveThreads(live *frontendruntime.LiveThreads) *frontendruntime.FrontendOwner {
@@ -966,12 +952,12 @@ func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID str
 	return a.store.GetSubmission(subID)
 }
 
-func newTestClaudeRuntime(t *testing.T, a *App) *claudeRuntime {
+func newTestClaudeRuntime(t *testing.T, a *App) *appclauderuntime.Service {
 	t.Helper()
-	rc := newClaudeRuntime(a, a.cfg.Claude)
-	rt, ok := rc.(*claudeRuntime)
+	rc := a.bindings.ClaudeFactory(a.cfg.Claude)
+	rt, ok := rc.(*appclauderuntime.Service)
 	if !ok {
-		t.Fatalf("newTestClaudeRuntime: expected *claudeRuntime, got %T", rc)
+		t.Fatalf("newTestClaudeRuntime: expected *appclauderuntime.Service, got %T", rc)
 	}
 	return rt
 }

@@ -141,3 +141,15 @@ func first(values ...string) string {
 	}
 	return ""
 }
+
+func ResolveAuxiliary(s Sources) GlobalValues {
+	return GlobalValues{
+		PlanModel:        first(s.Session.PlanModel, s.Binding.PlanModel, s.Profile.PlanModel, s.Global.PlanModel),
+		PlanEffort:       first(s.Session.PlanEffort, s.Binding.PlanEffort, s.Profile.PlanEffort, s.Global.PlanEffort),
+		ReviewModel:      first(s.Session.ReviewModel, s.Binding.ReviewModel, s.Profile.ReviewModel, s.Global.ReviewModel),
+		SubagentModel:    first(s.Session.SubagentModel, s.Binding.SubagentModel, s.Profile.SubagentModel, s.Global.SubagentModel),
+		SubagentEffort:   first(s.Session.SubagentEffort, s.Binding.SubagentEffort, s.Profile.SubagentEffort, s.Global.SubagentEffort),
+		ClaudeSubagent:   first(s.Session.SubagentModel, s.Binding.SubagentModel, s.Profile.ClaudeSubagent, s.Global.ClaudeSubagent),
+		ClaudeSmallModel: first(s.Session.SmallModel, s.Binding.SmallModel, s.Profile.ClaudeSmallModel, s.Global.ClaudeSmallModel),
+	}
+}

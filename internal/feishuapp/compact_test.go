@@ -68,14 +68,14 @@ func TestStandaloneCompactionLifecycle(t *testing.T) {
 		return nil
 	}
 
-	sess, err := newCompactionService(a).StartThreadCompaction(sessionKey)
+	sess, err := a.bindings.Compaction.StartThreadCompaction(sessionKey)
 	if err != nil {
 		t.Fatalf("startThreadCompaction() error = %v", err)
 	}
 	if sess == nil || sess.Status != sessionStatusCompacting {
 		t.Fatalf("startThreadCompaction() = %+v", sess)
 	}
-	if !newCompactionService(a).NoteStandaloneCompactItemStarted("thread-1", "turn-1", map[string]any{
+	if !a.bindings.Compaction.NoteStandaloneCompactItemStarted("thread-1", "turn-1", map[string]any{
 		"id":   "item-compact",
 		"type": "contextCompaction",
 	}) {
@@ -84,7 +84,7 @@ func TestStandaloneCompactionLifecycle(t *testing.T) {
 	if updated := a.store.GetSession(sessionKey); updated == nil || updated.ActiveTurnID != "turn-1" || updated.Status != sessionStatusCompacting {
 		t.Fatalf("session after bind = %+v", updated)
 	}
-	if !newCompactionService(a).CompleteStandaloneCompactItem("thread-1", "turn-1", map[string]any{
+	if !a.bindings.Compaction.CompleteStandaloneCompactItem("thread-1", "turn-1", map[string]any{
 		"id":     "item-compact",
 		"type":   "contextCompaction",
 		"status": "completed",
@@ -120,7 +120,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}
 
 	a, ff, fc := newTestApp(t)
-	if _, err := newCompactionService(a).StartThreadCompaction("missing"); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
+	if _, err := a.bindings.Compaction.StartThreadCompaction("missing"); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
 		t.Fatalf("startThreadCompaction(missing) error = %v", err)
 	}
 
@@ -133,7 +133,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-busy) error = %v", err)
 	}
-	if _, err := newCompactionService(a).StartThreadCompaction("sess-busy"); err == nil || !strings.Contains(err.Error(), "当前任务仍在运行") {
+	if _, err := a.bindings.Compaction.StartThreadCompaction("sess-busy"); err == nil || !strings.Contains(err.Error(), "当前任务仍在运行") {
 		t.Fatalf("startThreadCompaction(busy) error = %v", err)
 	}
 
@@ -147,7 +147,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("UpsertSession(sess-restore) error = %v", err)
 	}
 	fc.callErr = errors.New("compact boom")
-	if _, err := newCompactionService(a).StartThreadCompaction("sess-restore"); err == nil || !strings.Contains(err.Error(), "compact boom") {
+	if _, err := a.bindings.Compaction.StartThreadCompaction("sess-restore"); err == nil || !strings.Contains(err.Error(), "compact boom") {
 		t.Fatalf("startThreadCompaction(restore) error = %v", err)
 	}
 	if updated := a.store.GetSession("sess-restore"); updated == nil || updated.Status != "waiting" {
@@ -166,7 +166,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-fail) error = %v", err)
 	}
-	if !newCompactionService(a).FailStandaloneCompactTurn("thread-fail", "", "boom") {
+	if !a.bindings.Compaction.FailStandaloneCompactTurn("thread-fail", "", "boom") {
 		t.Fatal("failStandaloneCompactTurn() should succeed")
 	}
 	if updated := a.store.GetSession("sess-fail"); updated == nil || updated.ActiveTurnID != "" || updated.Status != "idle" {
@@ -189,7 +189,7 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(sess-complete) error = %v", err)
 	}
-	if !newCompactionService(a).CompleteStandaloneCompactTurn("thread-complete", "") {
+	if !a.bindings.Compaction.CompleteStandaloneCompactTurn("thread-complete", "") {
 		t.Fatal("completeStandaloneCompactTurn() should succeed")
 	}
 	if updated := a.store.GetSession("sess-complete"); updated == nil || updated.ActiveTurnID != "" || updated.Status != "idle" {
@@ -209,8 +209,8 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("sendStandaloneCompactResult() sentTexts = %#v", ff.sentTexts)
 	}
 
-	newCompactionService(a).RestoreStandaloneCompactSession("sess-complete", "thread-other", "idle")
-	newCompactionService(a).RestoreStandaloneCompactSession("missing", "thread-missing", "idle")
+	a.bindings.Compaction.RestoreStandaloneCompactSession("sess-complete", "thread-other", "idle")
+	a.bindings.Compaction.RestoreStandaloneCompactSession("missing", "thread-missing", "idle")
 }
 
 func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
@@ -304,7 +304,7 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 
 func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &blockingClaudeCompactCore{
@@ -383,7 +383,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 
 func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = domainbackend.BackendCodex
+	a.SetBackend(domainbackend.BackendCodex)
 	a.cfg.Feishu.Backend = domainbackend.BackendCodex
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{

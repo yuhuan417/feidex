@@ -5,6 +5,7 @@ import (
 	configadapter "feidex/internal/adapter/config"
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+	"feidex/internal/application/fileshare"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	domainturn "feidex/internal/domain/turn"
@@ -27,11 +28,18 @@ func (o debugOutbound) PatchCard(ctx context.Context, messageID string, card map
 
 type debugArtifactSharer struct{ app *App }
 
-func (o debugArtifactSharer) ShareLocalFile(ctx context.Context, req feishu.SharedFileRequest) (feishu.SharedFileResult, error) {
+func (o debugArtifactSharer) Share(ctx context.Context, req fileshare.Request) (fileshare.Result, error) {
 	if o.app == nil || o.app.feishu == nil {
-		return feishu.SharedFileResult{}, context.Canceled
+		return fileshare.Result{}, context.Canceled
 	}
-	return o.app.feishu.ShareLocalFile(ctx, req)
+	result, err := o.app.feishu.ShareLocalFile(ctx, feishu.SharedFileRequest{LocalPath: req.LocalPath, ChatID: req.ChatID, UserID: req.UserID})
+	return fileshare.Result{FileName: result.FileName, URL: result.URL, SizeBytes: result.SizeBytes}, err
+}
+
+func FileSharePorts(a *App) (fileshare.Artifacts, fileshare.Presentation, func(string, func()) bool) {
+	return debugArtifactSharer{app: a}, appdebugviewcmd.DownloadPresentation{Dependencies: newDebugViewAppAdapter(a)}, func(key string, fn func()) bool {
+		return a.runtimeOwner.Lifecycle.Run(func() { runSession(a, key, fn) }, a.asyncRunner)
+	}
 }
 
 type debugCardRenderer struct{ app *App }
@@ -48,7 +56,7 @@ func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 		return appdebugviewcmd.Dependencies{}
 	}
 	return appdebugviewcmd.Dependencies{
-		ConfigProvider: app, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: debugOutbound{app: app}, ArtifactSharer: debugArtifactSharer{app: app}, CardRenderer: debugCardRenderer{app: app}, StateProvider: app.State(),
+		ConfigProvider: app, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: debugOutbound{app: app}, FileSharing: app.bindings.FileSharing, CardRenderer: debugCardRenderer{app: app}, StateProvider: app.State(),
 		RuntimeStateProvider: debugRuntimeStateAdapter{app: app}, ConversationBackendProvider: debugConversationBackendAdapter{app: app},
 		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{app: app}, WorkspaceRenderProvider: debugWorkspaceRenderAdapter{app: app},
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(app, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(app, v) },
@@ -61,11 +69,11 @@ func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 	}
 }
 
-func newDebugService(app *App) appdebugviewcmd.DebugService {
+func BuildDebug(app *App) appdebugviewcmd.DebugService {
 	return appdebugviewcmd.NewDebugService(newDebugViewAppAdapter(app))
 }
 
-func newUsageService(app *App) appdebugviewcmd.UsageService {
+func BuildUsage(app *App) appdebugviewcmd.UsageService {
 	return appdebugviewcmd.NewUsageService(newDebugViewAppAdapter(app))
 }
 
@@ -74,11 +82,11 @@ type debugRuntimeStateAdapter struct {
 }
 
 func (a debugRuntimeStateAdapter) TurnBindingTracker() appdebugviewcmd.TurnBindingTracker {
-	return newRuntimeStateService(a.app).turnBindingTracker()
+	return a.app.runtimeOwner.TurnBindings
 }
 
 func (a debugRuntimeStateAdapter) CurrentThreadUsage(threadID string) (domainturn.ThreadTokenUsage, bool) {
-	return newRuntimeStateService(a.app).currentThreadUsage(threadID)
+	return a.app.runtimeOwner.TurnBindings.CurrentThreadUsage(threadID)
 }
 
 type debugConversationBackendAdapter struct {
@@ -102,5 +110,5 @@ type debugWorkspaceRenderAdapter struct {
 }
 
 func (a debugWorkspaceRenderAdapter) RenderPathPickerCard(requestID string, payload appdebugviewcmd.PathPickerPayload) (map[string]any, error) {
-	return newWorkspaceRenderService(a.app).RenderPathPickerCard(requestID, payload)
+	return a.app.bindings.WorkspacePresentation.RenderPathPickerCard(requestID, payload)
 }

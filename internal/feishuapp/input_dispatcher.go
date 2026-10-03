@@ -26,7 +26,7 @@ import (
 func newInputDispatcher(a *App) application.Dispatcher {
 	router := newFeishuEventRouter(a)
 	cardActions := newCardActionService(a)
-	backendEvents := newBackendEventService(a)
+	backendEvents := a.bindings.BackendEvents
 	return application.NewDispatcher(identity.FrontendID(a.FrontendID()), application.Handlers{
 		Message: func(_ context.Context, event application.MessageReceived) (application.Result, error) {
 			router.handleMessage(&event.Message)
@@ -46,7 +46,7 @@ func newInputDispatcher(a *App) application.Dispatcher {
 			return application.Result{}, nil
 		},
 		Retry: func(_ context.Context, event application.RetryTimerFired) (application.Result, error) {
-			newAutoRetryService(a).RunAutoRetryTimer(string(event.SessionKey), event.Sequence)
+			a.bindings.AutoRetry.RunAutoRetryTimer(string(event.SessionKey), event.Sequence)
 			return application.Result{}, nil
 		},
 		Backend: func(ctx context.Context, event application.BackendEventReceived) (application.Result, error) {
@@ -55,10 +55,7 @@ func newInputDispatcher(a *App) application.Dispatcher {
 	})
 }
 func dispatchInput(a *App, input application.Input) (application.Result, error) {
-	dispatcher := newInputDispatcher(a)
-	if owner := ensureRuntimeOwner(a); owner != nil && owner.Dispatcher != nil {
-		dispatcher = *owner.Dispatcher
-	}
+	dispatcher := *a.runtimeOwner.Dispatcher
 	var result application.Result
 	var err error
 	if a == nil {
@@ -89,20 +86,7 @@ func sessionKeyForBackendEvent(a *App, event application.BackendEvent) string {
 	if a == nil || threadID == "" {
 		return ""
 	}
-	for _, sess := range a.State().Sessions() {
-		if sess == nil {
-			continue
-		}
-		if strings.TrimSpace(sess.ActiveThreadID) == threadID {
-			return sess.Key
-		}
-		for _, lineage := range sess.BackendThreads {
-			if strings.TrimSpace(lineage.ThreadID) == threadID {
-				return sess.Key
-			}
-		}
-	}
-	return ""
+	return a.bindings.ConversationQuery.SessionForBackendThread(threadID)
 }
 func dispatchCodexNotification(a *App, method string, params json.RawMessage) {
 	event, handled, err := codex.DecodeNotification(method, params)
@@ -119,17 +103,16 @@ func dispatchCodexRequest(a *App, req codexrpc.RequestEnvelope) {
 }
 
 func newEffectRunner(a *App) frontendruntime.EffectRunner {
-	if owner := ensureRuntimeOwner(a); owner != nil && owner.EffectRunner != nil {
-		return *owner.EffectRunner
-	}
+	return *a.runtimeOwner.EffectRunner
+}
+
+func buildEffectRunner(a *App) frontendruntime.EffectRunner {
 	if a == nil {
 		return frontendruntime.EffectRunner{}
 	}
 	transport := a.feishu
-	if registryFor(a) != nil && registryFor(a).FeishuTransport != nil {
-		if configured, ok := registryFor(a).FeishuTransport.(FeishuClient); ok {
-			transport = configured
-		}
+	if a.transport != nil {
+		transport = a.transport
 	}
 	runner := feishuoutbound.NewEffectRunner(transport)
 	if owner := ensureRuntimeOwner(a); owner != nil {
@@ -186,7 +169,7 @@ func newEffectRunner(a *App) frontendruntime.EffectRunner {
 		if string(e.Frontend) != a.FrontendID() {
 			return fmt.Errorf("enqueue effect frontend mismatch")
 		}
-		return newSubmissionQueueServiceFromApp(a).EnqueueSubmission(&e.Message, e.SessionKey, e.BindOnlyCurrentRoot)
+		return a.bindings.Submissions.EnqueueSubmission(&e.Message, e.SessionKey, e.BindOnlyCurrentRoot)
 	}
 	runner.RefreshGroup = func(ctx context.Context, e application.RefreshGroupStatus) error {
 		if string(e.Frontend) != a.FrontendID() {

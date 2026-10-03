@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/config"
 	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
@@ -33,7 +34,7 @@ func deliverTestPendingUserInputCard(t *testing.T, a *App, sub *domainsubmission
 
 func completeQuietCommandItem(t *testing.T, a *App, workspace, itemID, path string) {
 	t.Helper()
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", itemID, map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", itemID, turnitem.NewProtocolItemWithID(itemID, map[string]any{
 		"id":     itemID,
 		"type":   "commandExecution",
 		"status": "completed",
@@ -41,7 +42,7 @@ func completeQuietCommandItem(t *testing.T, a *App, workspace, itemID, path stri
 		"commandActions": []any{
 			map[string]any{"type": "read", "path": filepath.Join(workspace, path)},
 		},
-	})
+	}))
 }
 
 // Progress must only be patched onto the newest card while that card is still
@@ -53,7 +54,7 @@ func TestQuietWorkingCardStartsNewCardAfterPendingUserInputCard(t *testing.T) {
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	completeQuietCommandItem(t, a, workspace, "cmd-1", "first.go")
 	if len(ff.replyCards) != 1 {
@@ -87,12 +88,12 @@ func TestQuietWorkingCardReusesReasoningOnlyCardThenStartsFresh(t *testing.T) {
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", turnitem.NewProtocolItemWithID("reason-1", map[string]any{
 		"id":   "reason-1",
 		"type": "reasoning",
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
 	}

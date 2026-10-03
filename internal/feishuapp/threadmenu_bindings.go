@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"feidex/internal/domain/conversation"
+	backendruntime "feidex/internal/runtime"
 
 	"context"
 
@@ -19,8 +20,9 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		return appthreadmenu.Dependencies{}
 	}
 	return appthreadmenu.Dependencies{
-		ConfigProvider: a, Outbound: threadMenuOutbound{app: a},
-		AppStateFn: a.ThreadMenuAppState, EffectiveSessionKeyFn: a.ThreadMenuEffectiveSessionKey,
+		ConfigProvider: a, Outbound: threadMenuOutbound{app: a}, Controls: a.bindings.ConversationControls, Settings: a.bindings.ThreadSettings,
+		PermissionSettings: a.bindings.PermissionSettings,
+		AppStateFn:         a.ThreadMenuAppState, EffectiveSessionKeyFn: a.ThreadMenuEffectiveSessionKey,
 		ConversationBackendFn: a.ThreadMenuConversationBackend, BackendRuntimeFn: a.ThreadMenuBackendRuntime,
 		PendingQueueFn: a.ThreadMenuPendingQueue, WorkspaceThreadFn: a.ThreadMenuWorkspaceThread,
 		WorkspaceConfigFn: a.ThreadMenuWorkspaceConfig, BackendActionsFn: a.ThreadMenuBackendActions,
@@ -30,11 +32,8 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		ReplyCommandActionResponseFn: a.ReplyCommandActionResponse, CommandForkFn: a.CommandFork,
 		CompleteMenuCommandFn: a.CompleteMenuCommand, ActionStringValueFn: actionStringValue,
 		MenuCardBodyFn: menuCardBody, MenuCardBodyForBackendFn: menuCardBodyForBackend,
-		NormalizeRequestedClaudePermissionModeFn:  a.NormalizeRequestedClaudePermissionMode,
-		ApplyClaudePermissionModeToRuntimeFn:      a.ApplyClaudePermissionModeToRuntime,
-		ApplyClaudePermissionModeToRuntimeAsyncFn: a.ApplyClaudePermissionModeToRuntimeAsync,
-		RenderClaudeSessionPermissionMenuCardFn:   a.RenderClaudeSessionPermissionMenuCard,
-		ShowClaudeSessionPermissionMenuFromAppFn:  a.ShowClaudeSessionPermissionMenuFromApp,
+		RenderClaudeSessionPermissionMenuCardFn:  a.RenderClaudeSessionPermissionMenuCard,
+		ShowClaudeSessionPermissionMenuFromAppFn: a.ShowClaudeSessionPermissionMenuFromApp,
 	}
 }
 
@@ -46,15 +45,6 @@ func (o threadMenuOutbound) ReplyText(ctx context.Context, messageID, text strin
 
 func (o threadMenuOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
 	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
-}
-
-func threadMenuService(a *App) *appthreadmenu.Service {
-	return compositionService(a, "threadMenu", func() *appthreadmenu.Service {
-		if a == nil {
-			return appthreadmenu.NewService(appthreadmenu.Dependencies{})
-		}
-		return appthreadmenu.NewService(newThreadMenuDependencies(a))
-	})
 }
 
 // ---------------------------------------------------------------------------
@@ -72,10 +62,10 @@ func (a threadMenuConversationBackendAdapter) InterruptActiveTurn(ctx context.Co
 	return interruptConversation(a.app, ctx, sessionKey, sess)
 }
 func (a threadMenuConversationBackendAdapter) ContinueActiveTurn(sessionKey string, text string) error {
-	return newConversationService(a.app).ContinueActiveTurn(sessionKey, text)
+	return a.app.bindings.Conversations.ContinueActiveTurn(sessionKey, text)
 }
 func (a threadMenuConversationBackendAdapter) ResumeSelectedThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, selection appthreadmenu.ThreadResumeSelection) (*appthreadmenu.ThreadBinding, error) {
-	return newConversationService(a.app).ResumeSelectedThread(sessionKey, sess, ws, conversation.ThreadSelection(selection))
+	return a.app.bindings.Conversations.ResumeSelectedThread(sessionKey, sess, ws, conversation.ThreadSelection(selection))
 }
 func (a threadMenuConversationBackendAdapter) ForkReplyMessage(forkedID string) string {
 	return forkReplyMessage(a.app, forkedID)
@@ -83,21 +73,21 @@ func (a threadMenuConversationBackendAdapter) ForkReplyMessage(forkedID string) 
 
 type threadMenuBackendRuntimeAdapter struct {
 	app     *App
-	runtime backendRuntimeFacade
+	runtime backendruntime.BackendFacade
 }
 
 func (a threadMenuBackendRuntimeAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a.runtime == nil {
 		return sess
 	}
-	return a.runtime.reconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app), sessionKey, sess)
+	return a.runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app), sessionKey, sess)
 }
 
 func (a threadMenuBackendRuntimeAdapter) ClearActiveOperationsAfterInterrupt(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a.runtime == nil {
 		return sess
 	}
-	return a.runtime.clearActiveOperationsAfterInterruptContext(backendRuntimeContextForApp(a.app), sessionKey, sess)
+	return a.runtime.ClearActiveOperationsAfterInterruptContext(backendRuntimeContextForApp(a.app), sessionKey, sess)
 }
 
 type threadMenuBackendActionAdapter struct {
@@ -132,11 +122,11 @@ func (a *App) ThreadMenuBackendRuntime() appthreadmenu.BackendRuntimeProvider {
 }
 
 func (a *App) ThreadMenuPendingQueue() appthreadmenu.PendingQueueProvider {
-	return newPendingQueueService(a)
+	return a.bindings.PendingQueue
 }
 
 func (a *App) ThreadMenuWorkspaceThread() appthreadmenu.WorkspaceThreadProvider {
-	return newConversationService(a)
+	return a.bindings.Conversations
 }
 
 func (a *App) ThreadMenuWorkspaceConfig() appthreadmenu.WorkspaceConfigProvider {
@@ -144,7 +134,7 @@ func (a *App) ThreadMenuWorkspaceConfig() appthreadmenu.WorkspaceConfigProvider 
 }
 
 func (a *App) ThreadMenuBackendActions() appthreadmenu.BackendActionProvider {
-	return threadMenuBackendActionAdapter{service: newBackendActionService(a)}
+	return threadMenuBackendActionAdapter{service: a.bindings.BackendActions}
 }
 
 func (a *App) CommandFork(msg *feishu.InboundMessage, args []string) error {
@@ -164,21 +154,7 @@ func (a *App) MenuCardBodyForBackend(backend, action, body string) string {
 }
 
 func (a *App) CancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice string) bool {
-	return newAutoRetryService(a).CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
-}
-
-func (a *App) NormalizeRequestedClaudePermissionMode(ctx context.Context, raw string) (string, string, error) {
-	return normalizeRequestedClaudePermissionMode(a, ctx, raw)
-}
-
-func (a *App) ApplyClaudePermissionModeToRuntime(sessionKey, mode string) error {
-	return applyClaudePermissionModeToRuntime(a, sessionKey, mode)
-}
-
-// ApplyClaudePermissionModeToRuntimeAsync enqueues the runtime apply so a card
-// callback can ack immediately; a failure patches the menu card.
-func (a *App) ApplyClaudePermissionModeToRuntimeAsync(messageID, sessionKey, mode string) {
-	applyClaudePermissionModeToRuntimeAsync(a, messageID, sessionKey, mode)
+	return a.bindings.AutoRetry.CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
 }
 
 func (a *App) RenderClaudeSessionPermissionMenuCard(sessionKey string) (map[string]any, error) {

@@ -39,16 +39,28 @@ func NewRecoveryState() *RecoveryState {
 	return &RecoveryState{}
 }
 
-// SetRecoveringForTest sets the recovering flag for testing purposes.
-func (s *RecoveryState) SetRecoveringForTest() {
+func (s *RecoveryState) CurrentClient() CodexClient {
+	if s == nil {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.recovering = true
+	return s.client
+}
+func (s *RecoveryState) ReplaceClient(next CodexClient) CodexClient {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := s.client
+	s.client = next
+	return previous
 }
 
 // RecoveryService manages Codex transport recovery. All host-app
 // dependencies are injected as callback function fields.
-type RecoveryService struct {
+type RecoveryDependencies struct {
 	State   *RecoveryState
 	Context func() context.Context
 
@@ -78,21 +90,21 @@ type RecoveryService struct {
 	// Recovery itself remains frontend-wide, but queue mutations must preserve
 	// the same ordering as ordinary turn completion callbacks.
 	RunSessionAsync func(sessionKey string, fn func())
+	RunAsync        func(func())
+	ClearLive       func()
+	FailActiveWork  func(error)
 }
 
 // NewRecoveryService creates a new RecoveryService.
-func NewRecoveryService(state *RecoveryState) RecoveryService {
-	return RecoveryService{State: state}
+type RecoveryService RecoveryDependencies
+
+func NewRecoveryService(deps RecoveryDependencies) RecoveryService {
+	return RecoveryService(deps)
 }
 
 // CurrentClient returns the current Codex client (thread-safe).
 func (s RecoveryService) CurrentClient() CodexClient {
-	if s.State == nil {
-		return nil
-	}
-	s.State.mu.Lock()
-	defer s.State.mu.Unlock()
-	return s.State.client
+	return s.State.CurrentClient()
 }
 
 // RequireClient returns the current Codex client or an error.
@@ -106,14 +118,17 @@ func (s RecoveryService) RequireClient() (CodexClient, error) {
 
 // ReplaceClient replaces the current Codex client (thread-safe).
 func (s RecoveryService) ReplaceClient(next CodexClient) CodexClient {
-	if s.State == nil {
-		return nil
+	return s.State.ReplaceClient(next)
+}
+
+func (s RecoveryService) HandleTransportFailure(client CodexClient, cause error) {
+	if !s.BeginRecovery(client) {
+		return
 	}
-	s.State.mu.Lock()
-	defer s.State.mu.Unlock()
-	prev := s.State.client
-	s.State.client = next
-	return prev
+	skip := s.AutoThreadRecoveryActive()
+	s.ClearLive()
+	s.RunAsync(func() { s.FailActiveWork(cause) })
+	s.RunAsync(func() { s.RecoverAfterTransportFailure(client, skip) })
 }
 
 // ReplyError sends an error reply via the current Codex client.
@@ -268,7 +283,7 @@ func (s RecoveryService) RecoverAfterTransportFailure(failed CodexClient, skipFr
 
 // ResumeQueuedSessions resumes queued sessions after Codex runtime recovery.
 func (s RecoveryService) ResumeQueuedSessions() {
-	if s.SessionKeysForRecovery == nil || s.SessionShouldStartNextSubmissionAsync == nil || s.StartNextSubmissionAsync == nil {
+	if s.SessionKeysForRecovery == nil || s.SessionShouldStartNextSubmissionAsync == nil || s.StartNextSubmissionAsync == nil || s.RunSessionAsync == nil {
 		return
 	}
 	for _, sessionKey := range s.SessionKeysForRecovery() {
@@ -279,13 +294,9 @@ func (s RecoveryService) ResumeQueuedSessions() {
 		if !s.SessionShouldStartNextSubmissionAsync(sessionKey) {
 			continue
 		}
-		if s.RunSessionAsync != nil {
-			s.RunSessionAsync(sessionKey, func() {
-				s.StartNextSubmissionAsync(sessionKey, "codexRuntimeRecovered")
-			})
-			continue
-		}
-		go s.StartNextSubmissionAsync(sessionKey, "codexRuntimeRecovered")
+		s.RunSessionAsync(sessionKey, func() {
+			s.StartNextSubmissionAsync(sessionKey, "codexRuntimeRecovered")
+		})
 	}
 }
 

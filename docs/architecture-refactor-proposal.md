@@ -1,7 +1,7 @@
 # 长期架构目标与边界
 
 状态：目标架构定义
-更新时间：2026-10-03
+更新时间：2026-10-04
 
 本文只定义 Feidex 的最终架构目标、职责边界和完成判定，不记录阶段拆解、执行顺序或验收过程。实现必须继续遵守 [DEVELOPER.md](../DEVELOPER.md) 的工程契约和 [Codex App Server 状态机审计](codex-app-server-state-machine-audit.md) 的协议约束；thread、turn、approval、server request 和 goal continuation 的行为不能因为架构调整而改变。
 
@@ -133,7 +133,7 @@ internal/
     app.go
 ```
 
-目录结构表达最终 owner；实现可以暂时保留兼容目录，但不得改变这里定义的依赖方向和状态所有权。
+目录结构表达最终 owner；不得保留旧入口兼容转发层、测试专用兼容 owner 或运行时惰性构造。测试必须显式构造与生产相同的依赖边界。
 
 ## 4. 领域状态和 owner
 

@@ -9,12 +9,8 @@ import (
 
 func workspaceStateDeps(store *appstate.Store) appworkspacecmd.StateDeps {
 	return appworkspacecmd.StateDeps{
-		GetSession:    func(key string) *conversation.Session { return store.Session(key) },
-		Sessions:      func() []*conversation.Session { return store.Sessions() },
-		SaveSession:   func(sess *conversation.Session) error { return store.SaveSession(sess) },
-		NextLocalID:   func(prefix string) (string, error) { return store.NextLocalID(prefix) },
-		Pending:       func(id string) *state.PendingRequest { return store.Pending(id) },
-		SavePending:   func(req *state.PendingRequest) error { return store.SavePending(req) },
-		UpdatePending: func(id string, mutate func(*state.PendingRequest)) error { return store.UpdatePending(id, mutate) },
+		GetSession: func(key string) *conversation.Session { return store.Session(key) },
+		Sessions:   func() []*conversation.Session { return store.Sessions() },
+		Pending:    func(id string) *state.PendingRequest { return store.Pending(id) },
 	}
 }

@@ -17,8 +17,6 @@ type Service struct {
 	// State access
 	PendingRequests  func() []*state.PendingRequest
 	Pending          func(id string) *state.PendingRequest
-	UpdatePending    func(id string, mutate func(*state.PendingRequest)) error
-	SavePending      func(req *state.PendingRequest) error
 	Submission       func(id string) *domainsubmission.Submission
 	Session          func(key string) *conversation.Session
 	SessionKeysEqual func(a, b string) bool

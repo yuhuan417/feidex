@@ -4,6 +4,7 @@ import (
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
+	"feidex/internal/domain/routing"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -73,7 +74,11 @@ func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := &App{cfg: cfg, cfgPath: cfgPath}
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := prepareTestApp(&App{cfg: cfg, cfgPath: cfgPath, store: store})
 	result := catalog.ModelListResult{
 		Data: []catalog.ModelListEntry{
 			{
@@ -95,9 +100,7 @@ func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 	}
 	a.cfg.Codex.ReasoningEffort = "medium"
 	a.cfg.Codex.PlanReasoningEffort = "medium"
-	if err := newModelConfigService(a).updateGlobalModelConfig(func(c *config.CodexConfig) {
-		c.Model = "model-b"
-	}, result); err != nil {
+	if err := a.bindings.ModelCommands.UpdateGlobalModelConfig(map[routing.Setting]string{routing.Model: "model-b"}, result); err != nil {
 		t.Fatalf("updateGlobalModelConfig: %v", err)
 	}
 	if a.cfg.Codex.Model != "model-b" {
@@ -124,8 +127,8 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 		Status:                     "turn_in_progress",
 		Queue:                      []string{"sub-1"},
 	}
-	a := &App{cfg: cfg, backend: domainbackend.BackendCodex}
-	body := newBackendConfigurationService(a).statusCardBody(sess)
+	a := prepareTestApp(&App{cfg: cfg, runtimeOwner: testSelectedBackendOwner(nil, domainbackend.BackendCodex)})
+	body := a.bindings.BackendConfiguration.StatusCardBody(sess)
 	for _, want := range []string{
 		"版本: `0.1.0`",
 		"log level: `info`",
@@ -148,9 +151,9 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 
 func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	cfg := config.Default()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	presetEffort := "medium"
-	card := newModelConfigService(a).renderModelConfigCard(catalog.ModelListResult{
+	card := a.bindings.ModelCommands.RenderModelConfigCard(catalog.ModelListResult{
 		Data: []catalog.ModelListEntry{
 			{
 				ID:                     "gpt-5",
@@ -176,7 +179,7 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	if firstCardActionValueForTest(card, "menu.model_auxiliary") == nil {
 		t.Fatalf("model config card missing auxiliary model entry: %+v", cardButtonsForTest(card))
 	}
-	aux := newModelConfigService(a).renderCodexAuxiliaryModelConfigCard(catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{{ReasoningEffort: "low"}}}}}, &catalog.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model_auxiliary")
+	aux := a.bindings.ModelCommands.RenderCodexAuxiliaryModelConfigCard(catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{{ReasoningEffort: "low"}}}}}, &catalog.CollaborationModeMask{ReasoningEffort: &presetEffort}, "sess-1", "menu.model_auxiliary")
 	if got := cardSelectStaticForTest(aux); len(got) != 5 {
 		t.Fatalf("auxiliary model config selects = %+v, want 5 select_static elements", got)
 	}
@@ -199,7 +202,7 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 		}
 	}
 	assertLastModelConfigButtonIsBack("single-chat Codex", card)
-	groupCard := newBindingService(a).renderBindingCodexModelConfigCard("sess-1", &state.AgentBinding{}, catalog.ModelListResult{
+	groupCard := a.bindings.BindingCommands.renderBindingCodexModelConfigCard("sess-1", &state.AgentBinding{}, catalog.ModelListResult{
 		Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}},
 	})
 	if groupBody := cardMarkdownContent(t, groupCard); strings.Contains(groupBody, "Plan 模式模型") || strings.Contains(groupBody, "Plan 推理强度") {
@@ -214,9 +217,9 @@ func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	cfg.Claude.Model = "mimo-v2-pro"
 	cfg.Claude.ModelOptions = []string{"deepseek-v4-pro", "mimo-v2-pro"}
 	cfg.Claude.Effort = "high"
-	a := &App{cfg: cfg, backend: domainbackend.BackendClaude}
+	a := prepareTestApp(&App{cfg: cfg, runtimeOwner: testSelectedBackendOwner(nil, domainbackend.BackendClaude)})
 
-	card := newModelConfigService(a).renderClaudeModelConfigCard("sess-1", "menu.model")
+	card := a.bindings.ModelCommands.RenderClaudeModelConfigCard("sess-1", "menu.model")
 	selects := cardSelectStaticForTest(card)
 	if len(selects) != 3 {
 		t.Fatalf("claude model config selects = %+v, want 3 select_static elements", selects)
@@ -256,13 +259,13 @@ func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 
 func TestCompleteClaudeModelOptionAddAndRemovePersistConfig(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
 	sessionKey := "feishu:chat:chat"
 
-	resp, err := newModelConfigService(a).completeClaudeModelOptionAdd(&feishu.CardAction{
+	resp, err := a.bindings.ModelCommands.CompleteClaudeModelOptionAdd(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"menu_action": "menu.model",
@@ -289,7 +292,7 @@ func TestCompleteClaudeModelOptionAddAndRemovePersistConfig(t *testing.T) {
 		t.Fatalf("persisted Claude model options = %+v", got)
 	}
 
-	resp, err = newModelConfigService(a).completeClaudeModelOptionRemove(&feishu.CardAction{
+	resp, err = a.bindings.ModelCommands.CompleteClaudeModelOptionRemove(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"menu_action": "menu.model",
@@ -309,11 +312,11 @@ func TestCompleteClaudeModelOptionAddAndRemovePersistConfig(t *testing.T) {
 
 func TestCompleteClaudeModelOptionRemoveUsesSelectInputValue(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.ModelOptions = []string{"deepseek-v4-pro"}
 
-	resp, err := newModelConfigService(a).completeClaudeModelOptionRemove(&feishu.CardAction{
+	resp, err := a.bindings.ModelCommands.CompleteClaudeModelOptionRemove(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": "feishu:chat:chat",
 			"menu_action": "menu.model",
@@ -336,9 +339,9 @@ func TestStatusCardBodyUsesClaudeModelAndEffortOnClaudeBackend(t *testing.T) {
 	cfg.Feishu.Backend = domainbackend.BackendClaude
 	cfg.Claude.Model = "mimo-v2-pro"
 	cfg.Claude.Effort = "max"
-	a := &App{cfg: cfg, backend: domainbackend.BackendClaude}
+	a := prepareTestApp(&App{cfg: cfg, runtimeOwner: testSelectedBackendOwner(nil, domainbackend.BackendClaude)})
 
-	body := newBackendConfigurationService(a).statusCardBody(&conversation.Session{WorkspaceID: "default"})
+	body := a.bindings.BackendConfiguration.StatusCardBody(&conversation.Session{WorkspaceID: "default"})
 	if !strings.Contains(body, "Claude model: `mimo-v2-pro`") {
 		t.Fatalf("status body missing Claude model: %q", body)
 	}
@@ -383,12 +386,12 @@ func modelConfigFormCountForTest(t *testing.T, card map[string]any) int {
 
 func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "mimo-v2-pro"
 	a.cfg.Claude.Effort = "high"
 
-	card := newBackendConfigurationService(a).renderModelMenuCard("sess-1")
+	card := a.bindings.BackendConfiguration.RenderModelMenuCard("sess-1")
 	body := cardMarkdownContent(t, card)
 	if !strings.Contains(body, "当前 effort: `high`") {
 		t.Fatalf("Claude model menu body = %q", body)
@@ -417,10 +420,10 @@ func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {
 
 func TestRenderModelMenuCardWithoutBackendDoesNotFallbackToCodex(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = ""
+	a.SetBackend("")
 	a.cfg.Feishu.Backend = ""
 
-	card := newBackendConfigurationService(a).renderModelMenuCard("sess-1")
+	card := a.bindings.BackendConfiguration.RenderModelMenuCard("sess-1")
 	body := cardMarkdownContent(t, card)
 	if !strings.Contains(body, "还没有设置 backend") {
 		t.Fatalf("unset backend model menu body = %q, want backend selection prompt", body)
@@ -432,7 +435,7 @@ func TestRenderModelMenuCardWithoutBackendDoesNotFallbackToCodex(t *testing.T) {
 
 func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
@@ -451,10 +454,7 @@ func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) {
-		c.Model = "opus"
-		c.Effort = "max"
-	}); err != nil {
+	if err := a.bindings.ModelCommands.UpdateClaudeModelConfig(map[routing.Setting]string{routing.Model: "opus", routing.Effort: "max"}); err != nil {
 		t.Fatalf("updateClaudeModelConfig() error = %v", err)
 	}
 
@@ -472,13 +472,13 @@ func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 
 func TestCompleteClaudeModelSetDefersCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setModelApplied: true}
 	setClaudeCore(a, claude)
 
-	resp, err := newModelConfigService(a).completeClaudeModelSet(&feishu.CardAction{
+	resp, err := a.bindings.ModelCommands.CompleteClaudeModelSet(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"menu_action": "menu.model",
@@ -506,14 +506,14 @@ func TestCompleteClaudeModelSetDefersCurrentSession(t *testing.T) {
 
 func TestCompleteClaudeModelSetAllowsMessageTraffic(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
-	newRuntimeStateService(a).beginFrontendMessageTraffic()
-	defer newRuntimeStateService(a).finishFrontendMessageTraffic()
+	a.runtimeOwner.BeginMessageTraffic()
+	defer a.runtimeOwner.EndMessageTraffic()
 
-	resp, err := newModelConfigService(a).completeClaudeModelSet(&feishu.CardAction{
+	resp, err := a.bindings.ModelCommands.CompleteClaudeModelSet(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": "feishu:chat:chat",
 			"menu_action": "menu.model",
@@ -535,13 +535,13 @@ func TestCompleteClaudeModelSetAllowsMessageTraffic(t *testing.T) {
 
 func TestCompleteClaudeEffortSetDefersCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setEffortApplied: true}
 	setClaudeCore(a, claude)
 
-	resp, err := newModelConfigService(a).completeClaudeEffortSet(&feishu.CardAction{
+	resp, err := a.bindings.ModelCommands.CompleteClaudeEffortSet(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"menu_action": "menu.model",
@@ -569,13 +569,13 @@ func TestCompleteClaudeEffortSetDefersCurrentSession(t *testing.T) {
 
 func TestCompleteClaudeEffortSetDefaultDefersReinitialization(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setEffortErr: claudecli.ErrEffortDefaultHotApplyUnsupported}
 	setClaudeCore(a, claude)
 
-	resp, err := newModelConfigService(a).completeClaudeEffortSet(&feishu.CardAction{
+	resp, err := a.bindings.ModelCommands.CompleteClaudeEffortSet(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"menu_action": "menu.model",
@@ -603,14 +603,14 @@ func TestCompleteClaudeEffortSetDefaultDefersReinitialization(t *testing.T) {
 
 func TestUpdateClaudeModelConfigAllowsActiveFrontend(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
 
 	sessionKey := "sess-1"
 	sub := seedActiveSubmission(t, a, sessionKey, "claude-thread-1", "claude-turn-1")
-	newRuntimeStateService(a).bindTurnSubmission("claude-thread-1", "claude-turn-1", sessionKey, sub.ID)
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("claude-thread-1", "claude-turn-1", sessionKey, sub.ID)
 
 	if _, err := a.store.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID
@@ -618,9 +618,7 @@ func TestUpdateClaudeModelConfigAllowsActiveFrontend(t *testing.T) {
 		t.Fatalf("UpdateSession() error = %v", err)
 	}
 
-	if err := newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) {
-		c.Model = "haiku"
-	}); err != nil {
+	if err := a.bindings.ModelCommands.UpdateClaudeModelConfig(map[routing.Setting]string{routing.Model: "haiku"}); err != nil {
 		t.Fatalf("updateClaudeModelConfig() error = %v, want saved desired configuration", err)
 	}
 
@@ -641,7 +639,7 @@ func TestUpdateClaudeModelConfigAllowsActiveFrontend(t *testing.T) {
 
 func TestClaudeModelCardShowsSessionScopedSmallModel(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
 	sessionKey := "feishu:chat:chat-p2p"
@@ -657,7 +655,7 @@ func TestClaudeModelCardShowsSessionScopedSmallModel(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	card := newModelConfigService(a).renderClaudeModelConfigCard(sessionKey, "menu.model")
+	card := a.bindings.ModelCommands.RenderClaudeModelConfigCard(sessionKey, "menu.model")
 	body := cardMarkdownContent(t, card)
 	if !strings.Contains(body, "small: `deepseek`") {
 		t.Fatalf("Claude model card body = %q, want the session-scoped small model", body)
@@ -669,10 +667,10 @@ func TestClaudeModelCardShowsSessionScopedSmallModel(t *testing.T) {
 
 func TestModelCardBackReturnsToParentMenu(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
-	card := newModelConfigService(a).renderClaudeModelConfigCard("feishu:frontend:default:chat:chat-1", "menu.model")
+	card := a.bindings.ModelCommands.RenderClaudeModelConfigCard("feishu:chat:chat-1", "menu.model")
 	labels := cardButtonLabelsByAction(card)
 	if labels["menu.root"] == "" {
 		t.Fatalf("Claude model card labels = %+v, want a back control to menu.root", labels)
@@ -691,7 +689,7 @@ func TestModelCardBackReturnsToParentMenu(t *testing.T) {
 
 func TestCodexModelCardShowsEffectiveAuxiliaryModels(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendCodex
+	a.SetBackend(domainbackend.BackendCodex)
 	a.cfg.Feishu.Backend = domainbackend.BackendCodex
 	a.cfg.Codex.PlanModel = "gpt-5-plan"
 	a.cfg.Codex.ReviewModel = "gpt-5-mini"
@@ -707,7 +705,7 @@ func TestCodexModelCardShowsEffectiveAuxiliaryModels(t *testing.T) {
 		},
 	}}}
 
-	card := newModelConfigService(a).renderModelConfigCard(result, nil, "feishu:frontend:default:chat:chat-1", "menu.model")
+	card := a.bindings.ModelCommands.RenderModelConfigCard(result, nil, "feishu:chat:chat-1", "menu.model")
 	body := cardMarkdownContent(t, card)
 	if !strings.Contains(body, "plan: `gpt-5-plan`") {
 		t.Fatalf("Codex model card body = %q, want the effective plan model", body)
@@ -758,7 +756,7 @@ func markedClaudeOptionTexts(texts []string) []string {
 
 func TestRenderBindingClaudeModelConfigCardMarksOnlyTheGroupOverride(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}
@@ -772,7 +770,7 @@ func TestRenderBindingClaudeModelConfigCardMarksOnlyTheGroupOverride(t *testing.
 		ModelOverride: "claude-fable-5",
 	}
 
-	card, err := newBindingService(a).renderBindingModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
+	card, err := a.bindings.BindingCommands.renderBindingModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
 	if err != nil {
 		t.Fatalf("renderBindingModelConfigCard() error = %v", err)
 	}
@@ -789,7 +787,7 @@ func TestRenderBindingClaudeModelConfigCardMarksOnlyTheGroupOverride(t *testing.
 
 	// An override outside the candidate list is still selectable and marked.
 	binding.ModelOverride = "raw-model-x"
-	card, err = newBindingService(a).renderBindingModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
+	card, err = a.bindings.BindingCommands.renderBindingModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
 	if err != nil {
 		t.Fatalf("renderBindingModelConfigCard() error = %v", err)
 	}
@@ -801,7 +799,7 @@ func TestRenderBindingClaudeModelConfigCardMarksOnlyTheGroupOverride(t *testing.
 
 func TestRenderBindingClaudeAuxiliaryCardMarksEachOverride(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}
@@ -817,7 +815,7 @@ func TestRenderBindingClaudeAuxiliaryCardMarksEachOverride(t *testing.T) {
 		SubagentModelOverride: "opus",
 	}
 
-	card, err := newBindingService(a).renderBindingAuxiliaryModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
+	card, err := a.bindings.BindingCommands.renderBindingAuxiliaryModelConfigCard("feishu:frontend:claude-test:chat:chat-1", binding)
 	if err != nil {
 		t.Fatalf("renderBindingAuxiliaryModelConfigCard() error = %v", err)
 	}
@@ -833,19 +831,19 @@ func TestRenderBindingClaudeAuxiliaryCardMarksEachOverride(t *testing.T) {
 
 func TestRenderClaudeModelCardsMarkEachPickerValue(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	a.cfg.Claude.SmallModel = "haiku"
 	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}
 
-	mainCard := newModelConfigService(a).renderClaudeModelConfigCard("sess-1", "menu.model")
+	mainCard := a.bindings.ModelCommands.RenderClaudeModelConfigCard("sess-1", "menu.model")
 	mainTexts := claudeSelectOptionTextsForTest(t, mainCard, "claude_model_config_select_model")
 	if want := []string{"当前 · Opus (`opus`)"}; !reflect.DeepEqual(markedClaudeOptionTexts(mainTexts), want) {
 		t.Fatalf("Claude model picker marks %q, want %q", markedClaudeOptionTexts(mainTexts), want)
 	}
 
-	auxCard := newModelConfigService(a).renderClaudeAuxiliaryModelConfigCard("sess-1", "menu.model_auxiliary")
+	auxCard := a.bindings.ModelCommands.RenderClaudeAuxiliaryModelConfigCard("sess-1", "menu.model_auxiliary")
 	smallTexts := claudeSelectOptionTextsForTest(t, auxCard, "claude_aux_small_model")
 	if want := []string{"当前 · Haiku (`haiku`)"}; !reflect.DeepEqual(markedClaudeOptionTexts(smallTexts), want) {
 		t.Fatalf("Claude small model picker marks %q, want %q", markedClaudeOptionTexts(smallTexts), want)

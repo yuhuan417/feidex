@@ -44,7 +44,7 @@ func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *domainsubmissio
 }
 
 func commitQuietWorkingCardRender(a *App, turnID, messageID, body string) {
-	newTurnStreamService(a).commitTurnStreamQuietRender(turnID, messageID, body)
+	a.bindings.TurnPresentation.CommitStreamQuietRender(turnID, messageID, body)
 }
 
 // prepareQuietWorkingCardBoundaryLocked wraps turn.PrepareBoundaryLocked for use within the app package.

@@ -3,7 +3,8 @@ package feishuapp
 import (
 	"context"
 	"encoding/json"
-	goalcmd "feidex/internal/adapter/feishu/goalcmd"
+	"feidex/internal/adapter/feishu/goalcmd"
+	goalapp "feidex/internal/application/goal"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
@@ -155,7 +156,7 @@ func TestCommandGoalStatusAndSetUseCodexGoalRPC(t *testing.T) {
 
 	ff.sendCardIDs = []string{"goal-turn-root-1"}
 	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal-first"}}`))
-	foundSessionKey, sub := newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn("thread-1", "turn-goal-first")
+	foundSessionKey, sub := a.bindings.Submissions.FindSubmissionByTurn("thread-1", "turn-goal-first")
 	if foundSessionKey == "" || sub == nil {
 		t.Fatalf("first goal turn binding = %q / %+v, want synthetic submission", foundSessionKey, sub)
 	}
@@ -217,7 +218,7 @@ func TestCommandGoalWithoutCurrentGoalRendersCreateForm(t *testing.T) {
 	}
 
 	calls = nil
-	resp, err := newGoalService(a).CompleteGoalEditSubmit(&feishu.CardAction{
+	resp, err := a.bindings.GoalCommands.CompleteGoalEditSubmit(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"thread_id":   "thread-1",
@@ -381,7 +382,7 @@ func TestGoalActionsReplaceConfirmAndEditSubmit(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newGoalService(a).CompleteGoalReplaceConfirm(&feishu.CardAction{
+	resp, err := a.bindings.GoalCommands.CompleteGoalReplaceConfirm(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key": sessionKey,
 			"thread_id":   "thread-1",
@@ -412,7 +413,7 @@ func TestGoalActionsReplaceConfirmAndEditSubmit(t *testing.T) {
 
 	calls = nil
 	setParams = nil
-	resp, err = newGoalService(a).CompleteGoalEditSubmit(&feishu.CardAction{
+	resp, err = a.bindings.GoalCommands.CompleteGoalEditSubmit(&feishu.CardAction{
 		ActionValue: map[string]any{
 			"session_key":  sessionKey,
 			"thread_id":    "thread-1",
@@ -464,11 +465,11 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 	}
 
 	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal"}}`))
-	foundSessionKey, sub := newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn("thread-1", "turn-goal")
+	foundSessionKey, sub := a.bindings.Submissions.FindSubmissionByTurn("thread-1", "turn-goal")
 	if foundSessionKey != sessionKey || sub == nil {
 		t.Fatalf("goal continuation binding = %q / %+v, want %q", foundSessionKey, sub, sessionKey)
 	}
-	if sub.Kind != goalcmd.SubmissionKind || sub.InputText != goalcmd.ContinuationInputText || sub.TriggerMessageID != "goal-turn-root-1" || sub.Status != domainsubmission.SubmissionStatusRunning.String() {
+	if sub.Kind != goalapp.SubmissionKind || sub.InputText != goalapp.ContinuationInputText || sub.TriggerMessageID != "goal-turn-root-1" || sub.Status != domainsubmission.SubmissionStatusRunning.String() {
 		t.Fatalf("goal continuation submission = %+v", sub)
 	}
 	if len(sub.SourceRootMessageIDs) != 1 || sub.SourceRootMessageIDs[0] != "goal-turn-root-1" {
@@ -504,7 +505,7 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 	}
 
 	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal-2"}}`))
-	_, sub = newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn("thread-1", "turn-goal-2")
+	_, sub = a.bindings.Submissions.FindSubmissionByTurn("thread-1", "turn-goal-2")
 	if sub == nil || sub.TriggerMessageID != "goal-turn-root-2" {
 		t.Fatalf("second goal continuation submission = %+v, want fresh outbound root", sub)
 	}

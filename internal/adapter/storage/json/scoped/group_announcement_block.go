@@ -26,6 +26,19 @@ func (s *Store) GroupAnnouncementBlocksForChat(chatType, chatID string) []*state
 	return s.stateStore().GroupAnnouncementBlocksByChat(s.scopeFrontendID(), chatType, chatID)
 }
 
+func (s *Store) GroupAnnouncementBlocks() []*state.GroupAnnouncementBlock {
+	if s == nil || s.stateStore() == nil {
+		return nil
+	}
+	var records []*state.GroupAnnouncementBlock
+	for _, record := range s.stateStore().AllGroupAnnouncementBlocks() {
+		if record != nil && record.FrontendID == s.scopeFrontendID() {
+			records = append(records, record)
+		}
+	}
+	return records
+}
+
 // SaveGroupAnnouncementBlock persists an announcement block record in the current frontend scope.
 func (s *Store) SaveGroupAnnouncementBlock(record *state.GroupAnnouncementBlock) error {
 	if s == nil || s.stateStore() == nil {

@@ -49,8 +49,18 @@ func ThreadStartParams(config backendops.ThreadStartConfig) codexrpc.ThreadStart
 		PersistExtendedHistory: config.PersistExtendedHistory,
 		ServiceTier:            config.ServiceTier,
 		Model:                  config.Model,
-		Config:                 config.AuxiliaryConfig,
+		Config:                 AuxiliaryConfig(config.Initialization),
 	}
+}
+
+func AuxiliaryConfig(snapshot modelconfig.Snapshot) map[string]any {
+	result := map[string]any{}
+	for key, value := range map[string]string{"review_model": snapshot.ReviewModel, "agents.default_subagent_model": snapshot.SubagentModel, "agents.default_subagent_reasoning_effort": snapshot.SubagentEffort} {
+		if value = strings.TrimSpace(value); value != "" {
+			result[key] = value
+		}
+	}
+	return result
 }
 
 // ThreadForkParams is the only Codex thread/fork wire encoder.

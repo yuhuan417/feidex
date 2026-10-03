@@ -30,6 +30,10 @@ func (r *BackendRepository) SetBackend(target string) error {
 	}
 	r.source.ConfigMu().Lock()
 	defer r.source.ConfigMu().Unlock()
+	return r.setBackendLocked(target)
+}
+
+func (r *BackendRepository) setBackendLocked(target string) error {
 	next := fileconfig.Clone(r.source.Config())
 	idx := r.source.FrontendConfigIndex()
 	if idx >= 0 && idx < len(next.Frontends) {

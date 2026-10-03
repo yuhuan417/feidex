@@ -434,3 +434,10 @@ func (s *Service) RecordTurnMessageLink(messageID, sessionKey, threadID, turnID 
 		TurnID:     strings.TrimSpace(turnID),
 	})
 }
+
+func (s *Service) RecordReplyMessageLink(link conversation.MessageLink) error {
+	if strings.TrimSpace(link.MessageID) == "" {
+		return nil
+	}
+	return s.Deps.SaveMessageLink(&link)
+}

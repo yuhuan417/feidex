@@ -62,10 +62,10 @@ func scheduleLocalFileLinkPatch(a *App, sub *domainsubmission.Submission, messag
 	if a == nil || a.feishu == nil || sub == nil || messageID == "" || body == "" {
 		return
 	}
-	managed := newFinalCardPatchService(a).MarkFinalCardPreviewPending(messageID)
-	go func() {
+	managed := a.bindings.FinalCardPatch.MarkFinalCardPreviewPending(messageID)
+	if !runAsync(a, func() {
 		if managed {
-			defer newFinalCardPatchService(a).MarkFinalCardPreviewDone(messageID)
+			defer a.bindings.FinalCardPatch.MarkFinalCardPreviewDone(messageID)
 		}
 		ctx, cancel := context.WithTimeout(a.Context(), 2*time.Minute)
 		defer cancel()
@@ -73,7 +73,7 @@ func scheduleLocalFileLinkPatch(a *App, sub *domainsubmission.Submission, messag
 		if strings.TrimSpace(rewritten) == "" || strings.TrimSpace(rewritten) == body {
 			return
 		}
-		if managed && newFinalCardPatchService(a).UpdateFinalCardPatchBody(messageID, rewritten) {
+		if managed && a.bindings.FinalCardPatch.UpdateFinalCardPatchBody(messageID, rewritten) {
 			return
 		}
 		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(a.Context(), sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, rewritten, nil, true)
@@ -88,5 +88,7 @@ func scheduleLocalFileLinkPatch(a *App, sub *domainsubmission.Submission, messag
 				"error", err,
 			)
 		}
-	}()
+	}) && managed {
+		a.bindings.FinalCardPatch.MarkFinalCardPreviewDone(messageID)
+	}
 }

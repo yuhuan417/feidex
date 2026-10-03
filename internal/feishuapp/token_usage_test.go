@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	domainturn "feidex/internal/domain/turn"
 	"strings"
 	"testing"
 	"time"
 
-	"feidex/internal/claudecli"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/feishu"
 )
 
@@ -37,7 +38,7 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 		t.Fatal("token usage notification should not send a separate card")
 	}
 
-	card := newUsageService(a).RenderUsageCard(sessionKey)
+	card := a.bindings.Usage.RenderUsageCard(sessionKey)
 	body := cardMarkdownContent(t, card)
 	for _, want := range []string{
 		"累计 token usage (`total`):",
@@ -56,7 +57,7 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 
 func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "sess-1"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -67,7 +68,7 @@ func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	newUsageService(a).RecordClaudeThreadUsage("thread-1", claudecli.TurnUsage{
+	a.bindings.Usage.RecordClaudeThreadUsage("thread-1", domainturn.ClaudeThreadUsage{
 		InputTokens:                   20,
 		CacheCreationTokens:           10,
 		CacheReadTokens:               100,
@@ -80,7 +81,7 @@ func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 		CostUSD:                       0.054077,
 	})
 
-	card := newUsageService(a).RenderUsageCard(sessionKey)
+	card := a.bindings.Usage.RenderUsageCard(sessionKey)
 	body := cardMarkdownContent(t, card)
 	for _, want := range []string{
 		"累计 token usage (`modelUsage`):",
@@ -104,10 +105,10 @@ func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 func TestCommandUsageAndMenuAction(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := newUsageService(a).CommandUsage(msg, []string{"extra"}); err == nil {
+	if err := a.bindings.Usage.CommandUsage(msg, []string{"extra"}); err == nil {
 		t.Fatal("expected commandUsage(args) to fail")
 	}
-	if err := newUsageService(a).CommandUsage(msg, nil); err != nil {
+	if err := a.bindings.Usage.CommandUsage(msg, nil); err != nil {
 		t.Fatalf("commandUsage() error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -122,8 +123,8 @@ func TestCommandUsageAndMenuAction(t *testing.T) {
 func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
 	handleNotification(a, "thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
@@ -134,11 +135,11 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 			"modelContextWindow":1000
 		}
 	}`))
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-1", turnitem.NewProtocolItemWithID("item-1", map[string]any{
 		"type":  "agent_message",
 		"text":  "final text",
 		"phase": "final_answer",
-	})
+	}))
 
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected final card to be sent immediately")
@@ -170,8 +171,8 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 func TestFinalAnswerPrefersExactContextUsageFooter(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
 	handleNotification(a, "thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
@@ -182,12 +183,12 @@ func TestFinalAnswerPrefersExactContextUsageFooter(t *testing.T) {
 			"modelContextWindow":1000
 		}
 	}`))
-	newRuntimeStateService(a).recordTurnContextUsagePercent("turn-1", 73.25)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+	a.runtimeOwner.TurnBindings.RecordTurnContextUsagePercent("turn-1", 73.25)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-1", turnitem.NewProtocolItemWithID("item-1", map[string]any{
 		"type":  "agent_message",
 		"text":  "final text",
 		"phase": "final_answer",
-	})
+	}))
 
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected final card to be sent immediately")

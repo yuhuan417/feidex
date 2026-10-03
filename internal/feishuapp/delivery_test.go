@@ -95,18 +95,18 @@ func TestSendEmptyFinalCardWithReuseFallsBackToReplyText(t *testing.T) {
 func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 
-	newTurnStreamService(a).turnStreamTracker().Streams["ghost"] = &turnStream{TurnID: "ghost"}
-	if result := newTurnStreamService(a).flushTurnStream(context.Background(), "", "ghost"); result != (turnStreamFlushResult{}) {
+	a.bindings.TurnPresentation.Tracker().Streams["ghost"] = &turnStream{TurnID: "ghost"}
+	if result := a.bindings.TurnPresentation.FlushTurnStream(context.Background(), "", "ghost"); result != (turnStreamFlushResult{}) {
 		t.Fatalf("flushTurnStream(missing submission) = %+v", result)
 	}
-	if newTurnStreamService(a).turnStreamTracker().Streams["ghost"] != nil {
+	if a.bindings.TurnPresentation.Tracker().Streams["ghost"] != nil {
 		t.Fatal("flushTurnStream(missing submission) should remove stream")
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	stream := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"]
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	stream := a.bindings.TurnPresentation.Tracker().Streams["turn-1"]
 	stream.PendingPlan = "- [in_progress] run"
 	reasoningKey := turn.EntryKey(turn.QuietWorkingReasoningKey, 0)
 	stream.QuietWorking = &turn.QuietWorkingCard{
@@ -116,14 +116,14 @@ func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 	}
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
 
-	result := newTurnStreamService(a).flushTurnStream(context.Background(), "thread-1", "turn-1")
+	result := a.bindings.TurnPresentation.FlushTurnStream(context.Background(), "thread-1", "turn-1")
 	if result.SawFinal || result.SawPlanItem || result.PlanCompleted || result.PlanMarkdown != "" || result.LastError != "" || result.WorkingMessageID != "" || result.ShouldUsePlanExitPrompt {
 		t.Fatalf("flushTurnStream(plan reuse) unexpected flags = %+v", result)
 	}
 	if result.PlanMessageID != "reuse-plan" {
 		t.Fatalf("flushTurnStream(plan reuse) PlanMessageID = %q, want reuse-plan", result.PlanMessageID)
 	}
-	if newTurnStreamService(a).turnStreamTracker().Streams["turn-1"] != nil {
+	if a.bindings.TurnPresentation.Tracker().Streams["turn-1"] != nil {
 		t.Fatal("flushTurnStream(plan reuse) should clear stream")
 	}
 	if len(ff.patchedCards) != 1 {

@@ -31,7 +31,8 @@ func (s Scope) IsGroup() bool {
 // composition layer can execute them after persistence.
 type ScopedConfigurationService struct {
 	ConfigurationService
-	Backend string
+	Backend       string
+	BackendSource func() string
 }
 
 const FastServiceTier = "fast"
@@ -76,7 +77,11 @@ func (s ScopedConfigurationService) Set(scope Scope, setting routing.Setting, va
 	if scope.ChatID == "" {
 		return ScopedConfigurationResult{}, fmt.Errorf("conversation scope is incomplete")
 	}
-	profile, err := s.ConfigurationService.SetProfile(s.Backend, setting, value)
+	backend := s.Backend
+	if s.BackendSource != nil {
+		backend = s.BackendSource()
+	}
+	profile, err := s.ConfigurationService.SetProfile(backend, setting, value)
 	if err != nil {
 		return ScopedConfigurationResult{}, err
 	}
@@ -94,4 +99,31 @@ func (s ScopedConfigurationService) Ensure(scope Scope) (*routing.AgentBinding, 
 	}
 	profile, err := s.ConfigurationService.EnsureProfile()
 	return nil, profile, err
+}
+
+func (s ScopedConfigurationService) ChangeServiceTier(scope Scope, value string, toggle bool) (ScopedConfigurationResult, error) {
+	scope = scope.normalized()
+	if !toggle {
+		requested := strings.ToLower(strings.TrimSpace(value))
+		value = NormalizeServiceTier(requested)
+		if requested != "" && requested != "off" && requested != "default" && value == "" {
+			return ScopedConfigurationResult{}, fmt.Errorf("unsupported service tier %q", requested)
+		}
+		return s.Set(scope, routing.ServiceTier, value)
+	}
+	if scope.IsGroup() {
+		binding, err := s.ConfigurationService.EnsureBinding(scope.ChatType, scope.ChatID)
+		if err != nil {
+			return ScopedConfigurationResult{}, err
+		}
+		result, err := s.ConfigurationService.UpdateBinding(binding, func(current *routing.AgentBinding) {
+			current.ServiceTierOverride = ToggleServiceTier(current.ServiceTierOverride)
+		})
+		return ScopedConfigurationResult{Scope: scope, Binding: result.Binding, Effects: result.Effects}, err
+	}
+	if scope.ChatID == "" {
+		return ScopedConfigurationResult{}, fmt.Errorf("conversation scope is incomplete")
+	}
+	profile, err := s.ConfigurationService.UpdateProfile(func(current *routing.BotProfile) { current.ServiceTier = ToggleServiceTier(current.ServiceTier) })
+	return ScopedConfigurationResult{Scope: scope, Profile: profile}, err
 }

@@ -57,7 +57,7 @@ func TestClaudeInteractionPendingSurvivesTurnCleanup(t *testing.T) {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
 
-	newSubmissionCleanup(a).CleanupSubmissionRuntimeState(&domainsubmission.Submission{
+	a.bindings.SubmissionCleanup.CleanupSubmissionRuntimeState(&domainsubmission.Submission{
 		ID: subID, SessionKey: "feishu:chat:chat-1", ThreadID: "claude-thread-1", TurnID: "claude-turn-1",
 	})
 
@@ -87,7 +87,7 @@ func TestClaudeApprovalCardAnswerableAfterTurnCleanup(t *testing.T) {
 	setClaudeCore(a, claude)
 	newClaudeInteractionPending(t, a, "claude-approval-2", "command", state.PendingRequestStatusPending.String())
 
-	newSubmissionCleanup(a).CleanupSubmissionRuntimeState(&domainsubmission.Submission{
+	a.bindings.SubmissionCleanup.CleanupSubmissionRuntimeState(&domainsubmission.Submission{
 		ID: "sub-2", SessionKey: "feishu:chat:chat-1", ThreadID: "claude-thread-1", TurnID: "claude-turn-1",
 	})
 
@@ -145,7 +145,7 @@ func TestSendDetachedApprovalCardDeliversAnswerableCard(t *testing.T) {
 		ThreadID:         "claude-thread-1",
 		TurnID:           "claude-turn-1",
 	}
-	err := newClaudeSupportService(a).SendDetachedApprovalCard("req-detached-1", target, appapproval.Presentation{
+	err := a.bindings.ClaudeSupport.SendDetachedApprovalCard("req-detached-1", target, appapproval.Presentation{
 		Kind:     appapproval.KindCommand,
 		ThreadID: "claude-thread-1",
 		TurnID:   "claude-turn-1",

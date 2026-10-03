@@ -17,6 +17,9 @@ type Request struct {
 // ReplyAccepted records a successful reply. Backend-resolved requests remain
 // open until a separate authoritative resolution event arrives.
 func (r Request) ReplyAccepted() Request {
+	if !IsPendingRequestOpen(r.Status) {
+		return r
+	}
 	r.Status = "resolved"
 	if IsServerResolvedPendingKind(r.Kind) {
 		r.Status = "replied"
@@ -25,7 +28,7 @@ func (r Request) ReplyAccepted() Request {
 }
 
 func (r Request) Resolved() (Request, bool) {
-	if strings.TrimSpace(r.Status) == "resolved" {
+	if strings.TrimSpace(r.Status) == "resolved" || strings.TrimSpace(r.Status) == "expired" {
 		return r, false
 	}
 	r.Status = "resolved"

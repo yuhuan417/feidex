@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	reviewapp "feidex/internal/application/review"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 
@@ -16,6 +17,10 @@ import (
 )
 
 type reviewOutbound struct{ app *App }
+
+func (o reviewOutbound) ReplyInteractionCard(ctx context.Context, requestID, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyInteractionCardEffect(ctx, o.app, requestID, messageID, card, inThread)
+}
 
 func (o reviewOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
 	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
@@ -51,6 +56,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		return appreviewcmd.Dependencies{}
 	}
 	return appreviewcmd.Dependencies{
+		UseCase:        a.bindings.Review,
 		ConfigProvider: a, Outbound: reviewOutbound{app: a}, CardRenderer: reviewCardRenderer{app: a}, StateProvider: a.State(),
 		ContextProvider:        a,
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
@@ -63,7 +69,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		SessionHasActiveWorkFn: sessionHasActiveWork, SessionHasInFlightSubmissionFn: conversation.HasInFlightSubmission,
 		StartNextSubmissionFn:           func(s string) error { return startNextSubmission(a, s) },
 		SendSubmissionQueuedNoticeFn:    func(c context.Context, s *domainsubmission.Submission) { sendSubmissionQueuedNotice(a, c, s) },
-		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { newPendingQueueService(a).markSubmissionQueuedReactions(s) },
+		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { a.bindings.PendingQueue.MarkSubmissionQueuedReactions(s) },
 		CompleteAsyncCommandActionFn: func(x *feishu.CardAction, s, r, f, t string, p map[string]any, ok, fail func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
 			return completeAsyncCommandAction(a, x, s, r, f, t, p, ok, fail, w)
 		},
@@ -82,7 +88,7 @@ func (r reviewCardRenderer) SimpleStatusCard(title, color, body string, buttons 
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
-func newReviewFormService(app *App) appreviewcmd.ReviewFormService {
+func BuildReviewCommands(app *App) appreviewcmd.ReviewFormService {
 	return appreviewcmd.NewReviewFormService(newReviewAppAdapter(app))
 }
 
@@ -127,4 +133,34 @@ func (a reviewGitProviderAdapter) ReviewListBranches(cwd string) ([]appreview.Br
 
 func (a reviewGitProviderAdapter) ReviewListCommits(cwd string, limit int) ([]appreview.CommitOption, error) {
 	return (appreview.GitService{Context: a.app.Context()}).ListCommits(cwd, limit)
+}
+
+type reviewTargetResolver struct{ app *App }
+
+func (r reviewTargetResolver) Resolve(cwd string, target appreview.TargetSpec) (appreview.TargetSpec, error) {
+	return (appreview.GitService{Context: r.app.Context()}).ResolveTarget(cwd, target)
+}
+
+type reviewDispatcher struct{ app *App }
+
+func (d reviewDispatcher) StartNext(key string) error {
+	return d.app.bindings.Submissions.StartNextSubmission(key)
+}
+func (d reviewDispatcher) MarkQueued(sub *domainsubmission.Submission) {
+	d.app.bindings.PendingQueue.MarkSubmissionQueuedReactions(sub)
+}
+func (d reviewDispatcher) Notify(ctx context.Context, sub *domainsubmission.Submission) {
+	sendSubmissionQueuedNotice(d.app, ctx, sub)
+}
+func ReviewPorts(a *App) reviewapp.Dependencies {
+	return reviewapp.Dependencies{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Options: reviewOptions{app: a}, Gateway: func() (reviewapp.Gateway, error) { return requireCodexGateway(a) }, Repository: a.State(), Resolver: reviewTargetResolver{app: a}, Dispatcher: reviewDispatcher{app: a}}
+}
+
+type reviewOptions struct{ app *App }
+
+func (o reviewOptions) Branches(cwd string) ([]reviewapp.BranchOption, error) {
+	return (appreview.GitService{Context: o.app.Context()}).ListBranches(cwd)
+}
+func (o reviewOptions) Commits(cwd string, limit int) ([]reviewapp.CommitOption, error) {
+	return (appreview.GitService{Context: o.app.Context()}).ListCommits(cwd, limit)
 }

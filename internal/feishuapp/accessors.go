@@ -11,10 +11,6 @@ import (
 	"feidex/internal/state"
 )
 
-func backendDriverForKind(kind string) appbackend.Driver {
-	return appbackend.DriverForKind(kind)
-}
-
 // Feishu returns the Feishu client. Sub-packages should define narrow
 // interfaces for the methods they need rather than depending on this type.
 func (a *App) Feishu() FeishuClient {
@@ -45,24 +41,12 @@ func (a *App) Backend() string {
 	if a == nil {
 		return ""
 	}
-	return a.backend
+	return a.runtimeOwner.Backend()
 }
 
-// BackendDriver returns the driver selected for this frontend runtime.
-// Composition code updates it together with the runtime backend; the fallback
-// keeps manually constructed test apps working during migration.
+// BackendDriver follows the frontend backend selected at execution time.
 func (a *App) BackendDriver() appbackend.Driver {
-	if a == nil {
-		return appbackend.DriverForKind("")
-	}
-	if a.backendDriver != nil {
-		return a.backendDriver
-	}
-	kind := a.backend
-	if kind == "" {
-		kind = configuredBackend(a)
-	}
-	return appbackend.DriverForKind(kind)
+	return appbackend.SelectedDriver{Selected: func() string { return configuredBackend(a) }}
 }
 
 // Claude returns the Claude core client.
@@ -79,12 +63,6 @@ func (a *App) Codex() CodexClient {
 func (a *App) State() *appstate.Store {
 	if a == nil {
 		return nil
-	}
-	a.stateMu.Lock()
-	defer a.stateMu.Unlock()
-	if a.stateView == nil {
-		a.stateView = appstate.NewScoped(a.store, a.FrontendID(), configuredBackend(a), allowLegacyFrontendFallback(a))
-		a.stateView.RevisionMutex = a.ConfigMu()
 	}
 	return a.stateView
 }
@@ -127,7 +105,7 @@ func (a *App) FrontendID() string {
 }
 
 // BackendRuntime returns the runtime facade for the currently configured backend.
-func (a *App) BackendRuntime() backendRuntimeFacade {
+func (a *App) BackendRuntime() frontendruntime.BackendFacade {
 	return backendRuntime(a)
 }
 
@@ -135,53 +113,12 @@ func currentClaudeCore(a *App) ClaudeCore {
 	if a == nil {
 		return nil
 	}
-	owner := ensureRuntimeOwner(a)
-	registry := registryFor(a)
-	registry.ClientsMu.RLock()
-	current, _ := registry.Claude.(ClaudeCore)
-	registry.ClientsMu.RUnlock()
-	if current := owner.ClaudeCore(); current != nil {
-		return current
-	}
-	return current
-}
-
-// registryFor returns the frontend-scoped composition registry.
-func registryFor(a *App) *frontendruntime.Registry {
-	if a == nil {
-		return nil
-	}
-	if a.registry != nil {
-		return a.registry
-	}
-	a.registry = frontendruntime.NewRegistry(a.feishu)
-	return a.registry
+	return ensureRuntimeOwner(a).ClaudeCore()
 }
 
 func ensureRuntimeOwner(a *App) *frontendruntime.FrontendOwner {
 	if a == nil {
 		return nil
-	}
-	a.runtimeOwnerMu.Lock()
-	defer a.runtimeOwnerMu.Unlock()
-	registry := registryFor(a)
-	if a.runtimeOwner != nil {
-		return a.runtimeOwner
-	}
-	a.runtimeOwner = frontendruntime.NewFrontendOwner()
-	registry.ClientsMu.RLock()
-	codexClient, _ := registry.Codex.(CodexClient)
-	claudeCore, _ := registry.Claude.(ClaudeCore)
-	registry.ClientsMu.RUnlock()
-	if codexClient != nil && a.runtimeOwner.CodexClient() == nil {
-		a.runtimeOwner.SetCodexClient(codexClient)
-	}
-	if claudeCore != nil && a.runtimeOwner.ClaudeCore() == nil {
-		a.runtimeOwner.SetClaudeCore(claudeCore)
-	}
-	trackers := runtimeTrackers(a)
-	if trackers != nil {
-		trackers.submissionStarts = a.runtimeOwner.SubmissionStarts
 	}
 	return a.runtimeOwner
 }
@@ -190,103 +127,21 @@ func setClaudeCore(a *App, core ClaudeCore) {
 	if a == nil {
 		return
 	}
-	registry := registryFor(a)
-	registry.ClientsMu.Lock()
-	registry.Claude = core
-	registry.ClientsMu.Unlock()
 	ensureRuntimeOwner(a).SetClaudeCore(core)
 }
 
-// Trackers returns the per-service runtime tracker bundle.
-func (a *App) Trackers() *appTrackers {
-	if a == nil {
-		return nil
-	}
-	trackers, _ := registryFor(a).Get("trackers").(*appTrackers)
-	if trackers == nil {
-		trackers = &appTrackers{}
-		registryFor(a).Set("trackers", trackers)
-	}
-	return trackers
-}
-
-func runtimeTrackers(a *App) *appTrackers {
-	if a == nil {
-		return nil
-	}
-	trackers, _ := registryFor(a).Get("trackers").(*appTrackers)
-	return trackers
-}
-
-func runtimeSwitchState(a *App) *appbackend.RuntimeStateService {
-	if a == nil {
-		return nil
-	}
-	state, _ := registryFor(a).Get("switchState").(*appbackend.RuntimeStateService)
-	if state == nil {
-		state = &appbackend.RuntimeStateService{}
-		registryFor(a).Set("switchState", state)
-	}
-	return state
-}
-
 func submissionStartTracker(a *App) *frontendruntime.SubmissionStarts {
-	owner := ensureRuntimeOwner(a)
-	if owner == nil {
+	if a == nil {
 		return nil
 	}
-	if owner.SubmissionStarts == nil {
-		owner.SubmissionStarts = &frontendruntime.SubmissionStarts{}
-	}
-	return owner.SubmissionStarts
+	return a.runtimeOwner.SubmissionStarts
 }
 
 func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {
 	if a == nil {
 		return nil
 	}
-	owner := ensureRuntimeOwner(a)
-	if owner.SessionActors == nil {
-		owner.SessionActors = frontendruntime.NewSessionActors()
-	}
-	return owner.SessionActors
-}
-
-func (a *App) invalidateThreadMenuService() {
-	if a == nil {
-		return
-	}
-	clearCompositionService(a, "threadMenu")
-}
-
-func (a *App) invalidateBackendConfigurationService() {
-	if a == nil {
-		return
-	}
-	clearCompositionService(a, "backendConfig")
-	clearCompositionService(a, "workspaceConfig")
-	clearCompositionService(a, "workspaceManage")
-}
-
-func compositionService[T any](a *App, key string, build func() T) T {
-	var zero T
-	if a == nil {
-		return zero
-	}
-	registry := registryFor(a)
-	if value, ok := registry.Get(key).(T); ok {
-		return value
-	}
-	value := build()
-	registry.Set(key, value)
-	return value
-}
-
-func clearCompositionService(a *App, key string) {
-	if a == nil || registryFor(a) == nil {
-		return
-	}
-	registryFor(a).Delete(key)
+	return a.runtimeOwner.SessionActors
 }
 
 // ConfigMu returns the config read-write mutex.
@@ -310,25 +165,8 @@ func (a *App) SetBackend(backend string) {
 	if a == nil {
 		return
 	}
-	a.configMutex().Lock()
-	defer a.configMutex().Unlock()
-	a.backend = normalizeRuntimeBackend(backend)
-	a.backendDriver = appbackend.DriverForKind(a.backend)
-	a.invalidateThreadMenuService()
-	a.invalidateBackendConfigurationService()
+	a.runtimeOwner.SetBackend(normalizeRuntimeBackend(backend))
 	if a.stateView != nil {
-		a.stateView.SetBackend(a.backend)
+		a.stateView.SetBackend(a.runtimeOwner.Backend())
 	}
-}
-
-// MaintenanceTrackers returns the maintenance tracker map, lazily initializing it.
-func (a *App) MaintenanceTrackers() appbackend.TrackerMap {
-	if a == nil {
-		return nil
-	}
-	trackers := a.Trackers()
-	if trackers.maintenanceTrackers == nil {
-		trackers.maintenanceTrackers = make(appbackend.TrackerMap)
-	}
-	return trackers.maintenanceTrackers
 }

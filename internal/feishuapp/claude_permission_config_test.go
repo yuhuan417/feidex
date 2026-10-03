@@ -3,6 +3,7 @@ package feishuapp
 import (
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	appclauderuntime "feidex/internal/runtime/claude"
 	"strings"
 	"testing"
 
@@ -13,10 +14,10 @@ import (
 func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	setCodex(a, nil)
 
-	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
 	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
@@ -47,7 +48,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 		t.Fatalf("ActiveClaudePermissionMode = %q, want acceptEdits", got)
 	}
 
-	if _, err := runtime.sessionState(sessionKey); err == nil {
+	if _, err := runtime.SessionState(sessionKey); err == nil {
 		t.Fatal("expected runtime session to remain uninitialized in this test")
 	}
 }
@@ -55,7 +56,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Claude.DangerouslySkipPermissions = true
 
 	sessionKey := "feishu:chat:chat"
@@ -92,11 +93,11 @@ func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *t
 func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPermissionsDisabled(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Claude.DangerouslySkipPermissions = false
 	setCodex(a, nil)
 
-	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
 	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
@@ -131,10 +132,10 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	setCodex(a, nil)
 
-	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
 	setClaudeCore(a, runtime)
 	defer runtime.Close()
 

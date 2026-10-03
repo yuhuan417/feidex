@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -199,7 +201,7 @@ func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := newReviewFormService(a).BeginReviewForm(msg, reviewFormModeCustom); err != nil {
+	if err := a.bindings.ReviewCommands.BeginReviewForm(msg, reviewFormModeCustom); err != nil {
 		t.Fatalf("beginReviewForm(custom) error = %v", err)
 	}
 	pending := singleReviewPendingRequest(t, a)
@@ -217,7 +219,7 @@ func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newReviewFormService(a).CompleteReviewFormSubmit(&feishu.CardAction{
+	resp, err := a.bindings.ReviewCommands.CompleteReviewFormSubmit(&feishu.CardAction{
 		ActionValue: map[string]any{"request_id": pending.ID},
 		FormValue:   map[string]any{"instructions": "focus on tests and regressions"},
 		UserID:      msg.UserID,
@@ -248,11 +250,11 @@ func TestExitedReviewModeDeliversFinalInQuietFinal(t *testing.T) {
 	a.cfg.Feishu.Quiet = config.QuietModeFinal
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "review-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "review-1", turnitem.NewProtocolItemWithID("review-1", map[string]any{
 		"id":     "review-1",
 		"type":   "exitedReviewMode",
 		"review": "Looks solid overall...",
-	})
+	}))
 
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected quiet final review result to send a card")
@@ -267,22 +269,22 @@ func TestReviewResultSuppressesTrailingAgentMessageAndKeepsFooterOnLastSplitCard
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	ff.replyCardIDs = []string{"card-1", "card-2", "card-3", "card-4"}
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
 	modelContextWindow := int64(1000)
-	newRuntimeStateService(a).recordTurnTokenUsage("thread-1", "turn-1", codexrpc.ThreadTokenUsage{
+	a.runtimeOwner.TurnBindings.RecordTurnTokenUsage("thread-1", "turn-1", codexadapter.ThreadUsage(codexrpc.ThreadTokenUsage{
 		Last: codexrpc.TokenUsageBreakdown{
 			InputTokens: 150,
 		},
 		ModelContextWindow: &modelContextWindow,
-	})
+	}))
 
 	longReview := strings.Repeat("review-detail ", 1800)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "review-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "review-1", turnitem.NewProtocolItemWithID("review-1", map[string]any{
 		"id":     "review-1",
 		"type":   "exitedReviewMode",
 		"review": longReview,
-	})
+	}))
 	beforeTrailingAgent := len(ff.replyCards)
 	if beforeTrailingAgent < 2 {
 		t.Fatalf("review split replyCards = %d, want payload-driven split", beforeTrailingAgent)
@@ -297,11 +299,11 @@ func TestReviewResultSuppressesTrailingAgentMessageAndKeepsFooterOnLastSplitCard
 		t.Fatalf("review split last card missing footer lines: %q", lastFooter)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", turnitem.NewProtocolItemWithID("agent-1", map[string]any{
 		"id":   "agent-1",
 		"type": "agentMessage",
 		"text": "trailing review summary",
-	})
+	}))
 	if len(ff.replyCards) != beforeTrailingAgent {
 		t.Fatalf("trailing review agent_message should be suppressed, got %d -> %d cards", beforeTrailingAgent, len(ff.replyCards))
 	}

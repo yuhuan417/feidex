@@ -1,7 +1,7 @@
 package feishuapp
 
 import (
-	"feidex/internal/adapter/feishu/backend"
+	"feidex/internal/application/backendmaintenance"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/state"
 )
@@ -20,9 +20,6 @@ func (r maintenanceRepository) Sessions() []*conversation.Session {
 func (r maintenanceRepository) PendingRequests() []*state.PendingRequest {
 	return r.app.State().PendingRequests()
 }
-func newMaintenanceStateService(a *App) backend.MaintenanceStateService {
-	if a == nil {
-		return backend.MaintenanceStateService{}
-	}
-	return backend.NewMaintenanceStateService(a.MaintenanceTrackers(), maintenanceRepository{app: a})
+func MaintenanceRepository(a *App) backendmaintenance.MaintenanceRepository {
+	return maintenanceRepository{app: a}
 }

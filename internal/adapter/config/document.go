@@ -11,9 +11,9 @@ func configDir(path string) string { return filepath.Dir(path) }
 
 // DocumentRepository owns transactional updates to the config document. It
 // keeps normalization, persistence and publication out of command services.
-type DocumentRepository struct{ source BackendSource }
+type DocumentRepository struct{ source Source }
 
-func NewDocumentRepository(source BackendSource) *DocumentRepository {
+func NewDocumentRepository(source Source) *DocumentRepository {
 	return &DocumentRepository{source: source}
 }
 

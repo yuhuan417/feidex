@@ -6,15 +6,11 @@ import (
 )
 
 func recoverRuntimeState(a *App) {
-	newStartupRecovery(a).RecoverRuntimeState()
-}
-
-func recoverSharedRuntimeState(a *App) {
-	newStartupRecovery(a).RecoverSharedRuntimeState()
+	a.bindings.StartupRecovery.RecoverRuntimeState()
 }
 
 func recoverFrontendRuntimeState(a *App) {
-	newStartupRecovery(a).RecoverFrontendRuntimeState()
+	a.bindings.StartupRecovery.RecoverFrontendRuntimeState()
 }
 
 func resetLiveThreadState(a *App) {
@@ -29,5 +25,8 @@ func startupReadyChatIDs(sessions []*conversation.Session) []string {
 }
 
 func sendStartupReadyNotifications(a *App) {
-	newStartupRecovery(a).SendStartupReadyNotifications()
+	if a == nil || a.bindings == nil {
+		return
+	}
+	a.bindings.StartupRecovery.SendStartupReadyNotifications()
 }

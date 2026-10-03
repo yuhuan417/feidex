@@ -2,41 +2,26 @@ package goalcmd
 
 import (
 	"context"
+	goalapp "feidex/internal/application/goal"
 	"feidex/internal/domain/conversation"
-	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	appcards "feidex/internal/adapter/feishu/cards"
-	"feidex/internal/application/backendops"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 const (
-	CommandUsage          = "/goal | /goal <objective> | /goal pause | /goal resume | /goal clear | /goal edit"
-	MaxObjectiveRunes     = 4000
-	SubmissionKind        = "goal"
-	ContinuationInputText = "[goal continuation]"
+	CommandUsage      = "/goal | /goal <objective> | /goal pause | /goal resume | /goal clear | /goal edit"
+	MaxObjectiveRunes = 4000
 )
-
-type CodexClient interface {
-	GetGoal(context.Context, string) (backendops.GoalLookup, error)
-	SetGoal(context.Context, backendops.GoalUpdate) (backendops.GoalResult, error)
-	ClearGoal(context.Context, string) (backendops.GoalCleared, error)
-}
 
 type StateProvider interface {
 	Session(key string) *conversation.Session
 	Sessions() []*conversation.Session
-	SaveSession(sess *conversation.Session) error
-	CreateSubmission(sub *domainsubmission.Submission) (string, error)
-	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
-	DeleteSubmission(id string)
 }
 
 // Outbound is the semantic messaging capability used by goal commands. The
@@ -54,38 +39,26 @@ type CardRenderer interface {
 
 // Dependencies is the explicit capability set consumed by goal commands.
 type Dependencies struct {
-	StateProvider                 StateProvider
-	Outbound                      Outbound
-	CardRenderer                  CardRenderer
-	CodexClientProvider           func() (CodexClient, error)
-	GoalTracker                   *Tracker
-	MakeSessionKeyFn              func(*feishu.InboundMessage) string
-	ReplyInThreadEnabledFn        func(string) bool
-	MenuCardBodyForSessionFn      func(string, string, string) string
-	ActionStringValueFn           func(*feishu.CardAction, string) string
-	ActionSessionKeyFn            func(*feishu.CardAction) string
-	CompleteMenuCommandFn         func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
-	DefaultWorkspaceIDFn          func() string
-	SessionBelongsToFrontendFn    func(string) bool
-	BindTurnSubmissionFn          func(string, string, string, string)
-	MarkTurnStartedAtFn           func(string, time.Time)
-	RecordSubmissionSourceLinksFn func(*domainsubmission.Submission)
-	RecordRootTurnBindingFn       func(string, string, string, string)
-	NoteTurnStartedFn             func(string, *domainsubmission.Submission)
-	MarkSessionThreadLiveFn       func(string, string)
-	ContextProvider               interface{ Context() context.Context }
+	StateProvider StateProvider
+	Outbound      Outbound
+	CardRenderer  CardRenderer
+
+	GoalTracker              *goalapp.Tracker
+	GoalManagement           *goalapp.Management
+	MakeSessionKeyFn         func(*feishu.InboundMessage) string
+	ReplyInThreadEnabledFn   func(string) bool
+	MenuCardBodyForSessionFn func(string, string, string) string
+	ActionStringValueFn      func(*feishu.CardAction, string) string
+	ActionSessionKeyFn       func(*feishu.CardAction) string
+	CompleteMenuCommandFn    func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
+	ContextProvider          interface{ Context() context.Context }
 }
 
 func (d Dependencies) State() StateProvider   { return d.StateProvider }
 func (d Dependencies) Messaging() Outbound    { return d.Outbound }
 func (d Dependencies) Renderer() CardRenderer { return d.CardRenderer }
-func (d Dependencies) CodexClient() (CodexClient, error) {
-	if d.CodexClientProvider == nil {
-		return nil, fmt.Errorf("codex client unavailable")
-	}
-	return d.CodexClientProvider()
-}
-func (d Dependencies) Tracker() *Tracker { return d.GoalTracker }
+
+func (d Dependencies) Tracker() *goalapp.Tracker { return d.GoalTracker }
 func (d Dependencies) MakeSessionKey(m *feishu.InboundMessage) string {
 	if d.MakeSessionKeyFn == nil {
 		return ""
@@ -119,45 +92,7 @@ func (d Dependencies) CompleteMenuCommand(a *feishu.CardAction, s, r, f string) 
 	}
 	return d.CompleteMenuCommandFn(a, s, r, f)
 }
-func (d Dependencies) DefaultWorkspaceID() string {
-	if d.DefaultWorkspaceIDFn == nil {
-		return "default"
-	}
-	return d.DefaultWorkspaceIDFn()
-}
-func (d Dependencies) SessionBelongsToFrontend(s string) bool {
-	return d.SessionBelongsToFrontendFn == nil || d.SessionBelongsToFrontendFn(s)
-}
-func (d Dependencies) BindTurnSubmission(a, b, c, e string) {
-	if d.BindTurnSubmissionFn != nil {
-		d.BindTurnSubmissionFn(a, b, c, e)
-	}
-}
-func (d Dependencies) MarkTurnStartedAt(a string, t time.Time) {
-	if d.MarkTurnStartedAtFn != nil {
-		d.MarkTurnStartedAtFn(a, t)
-	}
-}
-func (d Dependencies) RecordSubmissionSourceLinks(s *domainsubmission.Submission) {
-	if d.RecordSubmissionSourceLinksFn != nil {
-		d.RecordSubmissionSourceLinksFn(s)
-	}
-}
-func (d Dependencies) RecordRootTurnBinding(a, b, c, e string) {
-	if d.RecordRootTurnBindingFn != nil {
-		d.RecordRootTurnBindingFn(a, b, c, e)
-	}
-}
-func (d Dependencies) NoteTurnStarted(a string, s *domainsubmission.Submission) {
-	if d.NoteTurnStartedFn != nil {
-		d.NoteTurnStartedFn(a, s)
-	}
-}
-func (d Dependencies) MarkSessionThreadLive(a, b string) {
-	if d.MarkSessionThreadLiveFn != nil {
-		d.MarkSessionThreadLiveFn(a, b)
-	}
-}
+
 func (d Dependencies) Context() context.Context {
 	if d.ContextProvider != nil {
 		if c := d.ContextProvider.Context(); c != nil {
@@ -165,146 +100,6 @@ func (d Dependencies) Context() context.Context {
 		}
 	}
 	return context.Background()
-}
-
-type Tracker struct {
-	mu                 sync.Mutex
-	goals              map[string]conversation.ThreadGoal
-	anchors            map[string]Anchor
-	continuationCounts map[string]int
-}
-
-type Anchor struct {
-	SessionKey string
-	ThreadID   string
-	MessageID  string
-	ChatID     string
-	ChatType   string
-	UserID     string
-}
-
-func NewTracker() *Tracker {
-	return &Tracker{
-		goals:              map[string]conversation.ThreadGoal{},
-		anchors:            map[string]Anchor{},
-		continuationCounts: map[string]int{},
-	}
-}
-
-func (t *Tracker) NoteGoal(goal conversation.ThreadGoal) {
-	if t == nil {
-		return
-	}
-	threadID := strings.TrimSpace(goal.ThreadID)
-	if threadID == "" {
-		return
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.goals == nil {
-		t.goals = map[string]conversation.ThreadGoal{}
-	}
-	t.goals[threadID] = goal
-}
-
-func (t *Tracker) ClearGoal(threadID string) {
-	if t == nil {
-		return
-	}
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	delete(t.goals, threadID)
-	delete(t.continuationCounts, threadID)
-}
-
-func (t *Tracker) ActiveGoal(threadID string) (conversation.ThreadGoal, bool) {
-	if t == nil {
-		return conversation.ThreadGoal{}, false
-	}
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return conversation.ThreadGoal{}, false
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	goal, ok := t.goals[threadID]
-	return goal, ok && goal.Status == conversation.ThreadGoalStatusActive
-}
-
-func (t *Tracker) RecordAnchor(anchor Anchor) {
-	if t == nil {
-		return
-	}
-	anchor.ThreadID = strings.TrimSpace(anchor.ThreadID)
-	anchor.SessionKey = strings.TrimSpace(anchor.SessionKey)
-	anchor.MessageID = strings.TrimSpace(anchor.MessageID)
-	if anchor.ThreadID == "" || anchor.SessionKey == "" || anchor.MessageID == "" {
-		return
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.anchors == nil {
-		t.anchors = map[string]Anchor{}
-	}
-	t.anchors[anchor.ThreadID] = anchor
-}
-
-func (t *Tracker) RecordContext(anchor Anchor) {
-	if t == nil {
-		return
-	}
-	anchor.ThreadID = strings.TrimSpace(anchor.ThreadID)
-	anchor.SessionKey = strings.TrimSpace(anchor.SessionKey)
-	if anchor.ThreadID == "" || anchor.SessionKey == "" {
-		return
-	}
-	anchor.MessageID = ""
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.anchors == nil {
-		t.anchors = map[string]Anchor{}
-	}
-	if existing, ok := t.anchors[anchor.ThreadID]; ok {
-		anchor.ChatID = firstNonEmpty(strings.TrimSpace(anchor.ChatID), strings.TrimSpace(existing.ChatID))
-		anchor.ChatType = firstNonEmpty(strings.TrimSpace(anchor.ChatType), strings.TrimSpace(existing.ChatType))
-		anchor.UserID = firstNonEmpty(strings.TrimSpace(anchor.UserID), strings.TrimSpace(existing.UserID))
-	}
-	t.anchors[anchor.ThreadID] = anchor
-}
-
-func (t *Tracker) Anchor(threadID string) (Anchor, bool) {
-	if t == nil {
-		return Anchor{}, false
-	}
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return Anchor{}, false
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	anchor, ok := t.anchors[threadID]
-	return anchor, ok
-}
-
-func (t *Tracker) NextContinuationOrdinal(threadID string) int {
-	if t == nil {
-		return 0
-	}
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return 0
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.continuationCounts == nil {
-		t.continuationCounts = map[string]int{}
-	}
-	t.continuationCounts[threadID]++
-	return t.continuationCounts[threadID]
 }
 
 type Service struct {
@@ -370,23 +165,15 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 		if err := validateGoalObjective(objective); err != nil {
 			return err
 		}
-		existing, err := s.threadGoalGet(threadID)
+		result, err := s.app.GoalManagement.ProposeObjective(threadID, objective)
 		if err != nil {
-			return fmt.Errorf("%s", goalFriendlyError("读取", err))
+			return fmt.Errorf("%s", goalFriendlyError("设置", err))
 		}
-		if existing != nil && shouldConfirmBeforeReplacingGoal(*existing) {
-			card := s.renderGoalReplaceConfirmCard(sessionKey, threadID, *existing, objective)
+		if result.NeedsConfirmation {
+			card := s.renderGoalReplaceConfirmCard(sessionKey, threadID, *result.Goal, objective)
 			_, err := a.Outbound.ReplyCard(s.app.Context(), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 			s.recordContext(sessionKey, threadID, msg)
 			return err
-		}
-		if existing != nil && existing.Status == conversation.ThreadGoalStatusComplete {
-			if _, err := s.threadGoalClear(threadID); err != nil {
-				return fmt.Errorf("%s", goalFriendlyError("替换", err))
-			}
-		}
-		if _, err := s.threadGoalSetObjective(threadID, objective, conversation.ThreadGoalStatusActive, nil); err != nil {
-			return fmt.Errorf("%s", goalFriendlyError("设置", err))
 		}
 		return s.replyGoalSetText(msg, sessionKey, threadID)
 	}
@@ -413,61 +200,14 @@ func goalIsSingleControlWord(tail, word string) bool {
 	return len(fields) == 1 && strings.EqualFold(fields[0], word)
 }
 
-func validateGoalObjective(objective string) error {
-	objective = strings.TrimSpace(objective)
-	if objective == "" {
-		return fmt.Errorf("goal objective must not be empty\n\nusage: %s", CommandUsage)
-	}
-	if count := len([]rune(objective)); count > MaxObjectiveRunes {
-		return fmt.Errorf("goal objective is too long: %d characters. Limit: %d characters. Put longer instructions in a file and refer to that file in the goal", count, MaxObjectiveRunes)
-	}
-	return nil
-}
-
-func shouldConfirmBeforeReplacingGoal(goal conversation.ThreadGoal) bool {
-	switch goal.Status {
-	case conversation.ThreadGoalStatusComplete:
-		return false
-	case conversation.ThreadGoalStatusActive,
-		conversation.ThreadGoalStatusPaused,
-		conversation.ThreadGoalStatusBlocked,
-		conversation.ThreadGoalStatusUsageLimited,
-		conversation.ThreadGoalStatusBudgetLimited:
-		return true
-	default:
-		return true
-	}
-}
+func validateGoalObjective(objective string) error { return goalapp.ValidateObjective(objective) }
 
 func editedGoalStatus(status conversation.ThreadGoalStatus) conversation.ThreadGoalStatus {
-	switch status {
-	case conversation.ThreadGoalStatusActive,
-		conversation.ThreadGoalStatusPaused,
-		conversation.ThreadGoalStatusBlocked,
-		conversation.ThreadGoalStatusUsageLimited:
-		return status
-	default:
-		return conversation.ThreadGoalStatusActive
-	}
+	return goalapp.EditedStatus(status)
 }
 
 func (s Service) threadGoalGet(threadID string) (*conversation.ThreadGoal, error) {
-	client, err := s.app.CodexClient()
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(s.app.Context(), 20*time.Second)
-	defer cancel()
-	resp, err := client.GetGoal(ctx, threadID)
-	if err != nil {
-		return nil, err
-	}
-	if resp.Goal == nil {
-		s.app.Tracker().ClearGoal(threadID)
-		return nil, nil
-	}
-	s.app.Tracker().NoteGoal(*resp.Goal)
-	return resp.Goal, nil
+	return s.app.GoalManagement.Get(threadID)
 }
 
 func (s Service) threadGoalSetStatus(threadID string, status conversation.ThreadGoalStatus) (*conversation.ThreadGoal, error) {
@@ -475,45 +215,11 @@ func (s Service) threadGoalSetStatus(threadID string, status conversation.Thread
 }
 
 func (s Service) threadGoalSetObjective(threadID, objective string, status conversation.ThreadGoalStatus, tokenBudget *int64) (*conversation.ThreadGoal, error) {
-	client, err := s.app.CodexClient()
-	if err != nil {
-		return nil, err
-	}
-	params := backendops.GoalUpdate{ThreadID: strings.TrimSpace(threadID)}
-	if strings.TrimSpace(objective) != "" {
-		trimmed := strings.TrimSpace(objective)
-		params.Objective = &trimmed
-	}
-	if status != "" {
-		statusCopy := status
-		params.Status = &statusCopy
-	}
-	if tokenBudget != nil {
-		params.TokenBudget = newBudgetUpdate(tokenBudget)
-	}
-	ctx, cancel := context.WithTimeout(s.app.Context(), 20*time.Second)
-	defer cancel()
-	resp, err := client.SetGoal(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-	s.app.Tracker().NoteGoal(resp.Goal)
-	return &resp.Goal, nil
+	return s.app.GoalManagement.Set(threadID, objective, status, tokenBudget)
 }
 
 func (s Service) threadGoalClear(threadID string) (bool, error) {
-	client, err := s.app.CodexClient()
-	if err != nil {
-		return false, err
-	}
-	ctx, cancel := context.WithTimeout(s.app.Context(), 20*time.Second)
-	defer cancel()
-	resp, err := client.ClearGoal(ctx, threadID)
-	if err != nil {
-		return false, err
-	}
-	s.app.Tracker().ClearGoal(threadID)
-	return resp.Cleared, nil
+	return s.app.GoalManagement.Clear(threadID)
 }
 
 func goalFriendlyError(action string, err error) string {
@@ -934,10 +640,7 @@ func (s Service) CompleteGoalReplaceConfirm(action *feishu.CardAction) (*callbac
 	if err := validateGoalObjective(objective); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	if _, err := s.threadGoalClear(threadID); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: goalFriendlyError("替换", err)}}, nil
-	}
-	goal, err := s.threadGoalSetObjective(threadID, objective, conversation.ThreadGoalStatusActive, nil)
+	goal, err := s.app.GoalManagement.Replace(threadID, objective)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: goalFriendlyError("设置", err)}}, nil
 	}
@@ -1031,7 +734,7 @@ func goalFormStringValue(action *feishu.CardAction, key string) string {
 }
 
 func (s Service) recordContext(sessionKey, threadID string, msg *feishu.InboundMessage) {
-	anchor := Anchor{SessionKey: sessionKey, ThreadID: threadID}
+	anchor := goalapp.Anchor{SessionKey: sessionKey, ThreadID: threadID}
 	if msg != nil {
 		anchor.ChatID = strings.TrimSpace(msg.ChatID)
 		anchor.ChatType = strings.TrimSpace(msg.ChatType)
@@ -1044,7 +747,7 @@ func (s Service) recordContextFromAction(action *feishu.CardAction, sessionKey, 
 	if action == nil {
 		return
 	}
-	s.app.Tracker().RecordContext(Anchor{
+	s.app.Tracker().RecordContext(goalapp.Anchor{
 		SessionKey: sessionKey,
 		ThreadID:   threadID,
 		ChatID:     strings.TrimSpace(action.ChatID),
@@ -1060,108 +763,7 @@ func OnThreadGoalCleared(a Dependencies, threadID string) {
 	a.Tracker().ClearGoal(threadID)
 }
 
-func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
-	threadID = strings.TrimSpace(threadID)
-	turnID = strings.TrimSpace(turnID)
-	if threadID == "" || turnID == "" {
-		return false
-	}
-	goal, ok := s.app.Tracker().ActiveGoal(threadID)
-	if !ok {
-		return false
-	}
-	sessionKey, sess := s.findGoalContinuationSession(threadID)
-	if sess == nil || sessionKey == "" {
-		return false
-	}
-	if conversation.HasActiveOperations(sess) {
-		return false
-	}
-	anchor, ok := s.sendGoalContinuationAnchor(sessionKey, threadID, turnID, sess, goal)
-	if !ok {
-		return false
-	}
-	triggerMessageID := anchor.MessageID
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.app.DefaultWorkspaceID())
-	sub := &domainsubmission.Submission{
-		SessionKey:           sessionKey,
-		WorkspaceID:          workspaceID,
-		ThreadID:             threadID,
-		TurnID:               turnID,
-		UserID:               strings.TrimSpace(sess.OwnerUserID),
-		ChatID:               strings.TrimSpace(anchor.ChatID),
-		TriggerMessageID:     triggerMessageID,
-		SourceMessageIDs:     goalUniqueNonEmpty([]string{triggerMessageID}),
-		SourceRootMessageIDs: goalUniqueNonEmpty([]string{triggerMessageID}),
-		InputText:            ContinuationInputText,
-		Kind:                 SubmissionKind,
-		Status:               domainsubmission.SubmissionStatusRunning.String(),
-	}
-	id, err := s.app.State().CreateSubmission(sub)
-	if err != nil || strings.TrimSpace(id) == "" {
-		return false
-	}
-	sub.ID = id
-	updatedSess, err := s.app.State().UpdateSession(sessionKey, func(current *conversation.Session) {
-		if current == nil {
-			return
-		}
-		conversation.UpsertActiveOperation(current, conversation.SessionActiveOperation{
-			Kind:         conversation.OpKindSubmission,
-			SubmissionID: id,
-			ThreadID:     threadID,
-			TurnID:       turnID,
-		})
-		current.Status = conversation.SessionStatusTurnInProgress.String()
-		conversation.SetThreadContext(current, workspaceID, threadID, current.ActiveThreadName, current.ActiveThreadPreview)
-	})
-	if err != nil || updatedSess == nil {
-		s.app.State().DeleteSubmission(id)
-		return false
-	}
-	s.app.BindTurnSubmission(threadID, turnID, sessionKey, id)
-	s.app.MarkTurnStartedAt(turnID, time.Now())
-	s.app.RecordSubmissionSourceLinks(sub)
-	s.app.RecordRootTurnBinding(triggerMessageID, sessionKey, threadID, turnID)
-	s.app.NoteTurnStarted(sessionKey, sub)
-	s.app.MarkSessionThreadLive(sessionKey, threadID)
-	return true
-}
-
-func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string, sess *conversation.Session, goal conversation.ThreadGoal) (Anchor, bool) {
-	if s.app.StateProvider == nil || s.app.Outbound == nil || sess == nil {
-		return Anchor{}, false
-	}
-	anchor := Anchor{
-		SessionKey: sessionKey,
-		ThreadID:   threadID,
-		ChatID:     strings.TrimSpace(sess.ChatID),
-		ChatType:   strings.TrimSpace(sess.ChatType),
-		UserID:     strings.TrimSpace(sess.OwnerUserID),
-	}
-	if recorded, ok := s.app.Tracker().Anchor(threadID); ok {
-		anchor.ChatID = firstNonEmpty(anchor.ChatID, strings.TrimSpace(recorded.ChatID))
-		anchor.ChatType = firstNonEmpty(anchor.ChatType, strings.TrimSpace(recorded.ChatType))
-		anchor.UserID = firstNonEmpty(anchor.UserID, strings.TrimSpace(recorded.UserID))
-	}
-	if anchor.ChatID == "" {
-		return Anchor{}, false
-	}
-	ordinal := s.app.Tracker().NextContinuationOrdinal(threadID)
-	card := s.renderGoalContinuationCard(sessionKey, threadID, turnID, goal, ordinal)
-	messageID, err := s.app.Outbound.SendCard(s.app.Context(), anchor.ChatID, card)
-	if err != nil {
-		return Anchor{}, false
-	}
-	anchor.MessageID = strings.TrimSpace(messageID)
-	if anchor.MessageID == "" {
-		return Anchor{}, false
-	}
-	s.app.Tracker().RecordAnchor(anchor)
-	return anchor, true
-}
-
-func (s Service) renderGoalContinuationCard(_, _, _ string, goal conversation.ThreadGoal, ordinal int) map[string]any {
+func RenderContinuationCard(goal conversation.ThreadGoal, ordinal int) map[string]any {
 	card := appcards.NewMarkdownBodyCard(renderGoalContinuationTitle(goal, ordinal), "blue")
 	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 		"tag":     "markdown",
@@ -1200,42 +802,6 @@ func formatGoalTokenProgress(goal conversation.ThreadGoal) string {
 	return used + " / " + formatGoalTokens(*goal.TokenBudget)
 }
 
-func (s Service) findGoalContinuationSession(threadID string) (string, *conversation.Session) {
-	if anchor, ok := s.app.Tracker().Anchor(threadID); ok {
-		if sess := s.app.State().Session(anchor.SessionKey); sess != nil && strings.TrimSpace(sess.ActiveThreadID) == threadID {
-			return anchor.SessionKey, sess
-		}
-	}
-	for _, sess := range s.app.State().Sessions() {
-		if sess == nil || !s.app.SessionBelongsToFrontend(sess.Key) {
-			continue
-		}
-		if strings.TrimSpace(sess.ActiveThreadID) == threadID {
-			return sess.Key, sess
-		}
-	}
-	return "", nil
-}
-
-func goalUniqueNonEmpty(items []string) []string {
-	trimmed := make([]string, 0, len(items))
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item != "" {
-			trimmed = append(trimmed, item)
-		}
-	}
-	return uniqueStrings(trimmed)
-}
-
-func newBudgetUpdate(value *int64) *backendops.BudgetUpdate {
-	if value == nil {
-		return &backendops.BudgetUpdate{}
-	}
-	cp := *value
-	return &backendops.BudgetUpdate{Value: &cp}
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -1250,20 +816,4 @@ func truncate(value string, limit int) string {
 		return value
 	}
 	return string([]rune(value)[:limit])
-}
-func uniqueStrings(values []string) []string {
-	out := make([]string, 0, len(values))
-	seen := map[string]struct{}{}
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
 }

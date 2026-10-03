@@ -4,20 +4,16 @@ package upgradecmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	appdelivery "feidex/internal/adapter/feishu/delivery"
+	"feidex/internal/application/upgrade"
 	"feidex/internal/config"
-	"feidex/internal/daemon"
 	"feidex/internal/feishu"
-	"feidex/internal/release"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -27,20 +23,10 @@ import (
 // Interfaces — what the service needs from the host application
 // ---------------------------------------------------------------------------
 
-// ReleaseClient abstracts the release query client.
-type ReleaseClient interface {
-	LatestLinuxBinary(ctx context.Context, goarch string) (*release.ReleaseInfo, error)
-	LatestDevLinuxBinary(ctx context.Context, goarch string) (*release.ReleaseInfo, error)
-	LinuxBinaryByVersion(ctx context.Context, version, goarch string) (*release.ReleaseInfo, error)
-}
-
 // UpgradeState narrows app state access to the pending-request operations
 // used by the upgrade service.
 type UpgradeState interface {
-	NextLocalID(prefix string) (string, error)
-	SavePending(req *state.PendingRequest) error
 	Pending(id string) *state.PendingRequest
-	UpdatePending(id string, mutate func(*state.PendingRequest)) error
 }
 
 type Outbound interface {
@@ -94,23 +80,7 @@ func (a *DefaultApp) MenuCardBody(action, body string) string {
 // ---------------------------------------------------------------------------
 
 // UpgradePendingPayload holds the data persisted for a pending upgrade request.
-type UpgradePendingPayload struct {
-	CurrentVersion string `json:"current_version"`
-	TargetVersion  string `json:"target_version"`
-	ReleaseTag     string `json:"release_tag"`
-	BinaryPath     string `json:"binary_path"`
-	DownloadURL    string `json:"download_url"`
-	SourcePath     string `json:"source_path"`
-	SourceKind     string `json:"source_kind"`
-	SourceName     string `json:"source_name"`
-	SourceSize     int64  `json:"source_size"`
-	SourceCommit   string `json:"source_commit"`
-	ExpectedSHA256 string `json:"expected_sha256"`
-	ReleaseURL     string `json:"release_url"`
-	UnitName       string `json:"unit_name,omitempty"`
-	ChatID         string `json:"chat_id,omitempty"`
-	FeishuMsgID    string `json:"feishu_msg_id,omitempty"`
-}
+type UpgradePendingPayload = upgrade.Payload
 
 // ---------------------------------------------------------------------------
 // Constants and variables
@@ -137,24 +107,21 @@ var DisplayLocation = time.Local
 // and make the service safe for concurrent use.
 type UpgradeServiceDeps struct {
 	CurrentVersion          func() string
-	CurrentGOOS             func() string
 	CurrentGOARCH           func() string
-	NewReleaseClient        func() ReleaseClient
-	NewDaemonManager        func(serviceName string) (daemon.Manager, error)
-	StartDaemonUpgrade      func(spec daemon.UpgradeSpec) (string, error)
 	NormalizeUpgradeVersion func(raw string) (string, error)
 	RenderSystemMenuCard    func(sessionKey string) map[string]any
 }
 
 // UpgradeService manages daemon upgrade commands for a single app instance.
 type UpgradeService struct {
-	app  *DefaultApp
-	deps UpgradeServiceDeps
+	app     *DefaultApp
+	deps    UpgradeServiceDeps
+	useCase *upgrade.Service
 }
 
 // NewUpgradeService creates a new upgrade service bound to the given app.
-func NewUpgradeService(app *DefaultApp, deps UpgradeServiceDeps) UpgradeService {
-	return UpgradeService{app: app, deps: deps}
+func NewUpgradeService(app *DefaultApp, deps UpgradeServiceDeps, useCase *upgrade.Service) UpgradeService {
+	return UpgradeService{app: app, deps: deps, useCase: useCase}
 }
 
 // ---------------------------------------------------------------------------
@@ -189,129 +156,60 @@ func (s UpgradeService) RenderUpgradeDevCard(sessionKey, ownerUserID string) (ma
 // RenderUpgradeCardForTarget renders the upgrade card for a given target
 // (specific version, latest, or dev release).
 func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requestedVersion string, useDevRelease bool) (map[string]any, error) {
-	st := s.app.UpgradeState()
-	goos := strings.TrimSpace(s.deps.CurrentGOOS())
-	var exePath, assetName string
-	var err error
-	if goos == "linux" {
-		exePath, assetName, err = s.ValidateUpgradeRuntime()
-	} else {
-		exePath, assetName, err = s.probeUpgradeRuntime()
-	}
+	result, err := s.useCase.Prepare(s.context(), sessionKey, ownerUserID, requestedVersion, useDevRelease)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx, cancel := context.WithTimeout(s.context(), 20*time.Second)
-	defer cancel()
-
-	current := s.deps.CurrentVersion()
-	goarch := strings.TrimSpace(s.deps.CurrentGOARCH())
-	bodyLines := []string{
-		"当前版本: `" + current + "`",
-		"目标平台: `" + firstNonEmpty(goos, "unknown") + "/" + firstNonEmpty(goarch, "unknown") + "`",
-		"目标包: `" + assetName + "`",
-		"二进制: `" + exePath + "`",
+	env, target := result.Environment, result.Target
+	lines := []string{"当前版本: `" + env.Version + "`", "目标平台: `" + env.GOOS + "/" + env.GOARCH + "`", "目标包: `" + env.AssetName + "`", "二进制: `" + env.Executable + "`"}
+	if result.QueryError != nil {
+		lines = append(lines, "", "远端版本检查失败。", "错误: "+result.QueryError.Error())
+		if env.GOOS == "linux" {
+			lines = append(lines, "你仍然可以选择本地 Binary 升级。")
+		}
+		buttons := upgradeBackButtons(sessionKey)
+		if env.GOOS == "linux" {
+			buttons = UpgradePanelButtons(sessionKey, nil, true)
+		}
+		return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(lines, "\n")), buttons), nil
 	}
-
-	target := &release.ReleaseInfo{}
-	forceVersion := strings.TrimSpace(requestedVersion) != ""
-	switch {
-	case useDevRelease:
-		target, err = s.deps.NewReleaseClient().LatestDevLinuxBinary(ctx, goarch)
-		if err != nil {
-			if goos != "linux" {
-				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
-				return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
-			}
-			return nil, fmt.Errorf("查询开发版 %s 失败: %w", release.DevReleaseTag, err)
-		}
-		bodyLines = append(bodyLines, "开发版本: `"+target.Version+"`")
-		if strings.TrimSpace(target.ReleaseTag) != "" && strings.TrimSpace(target.ReleaseTag) != strings.TrimSpace(target.Version) {
-			bodyLines = append(bodyLines, "Release Tag: `"+target.ReleaseTag+"`")
-		}
-		if commit := ShortUpgradeCommit(target.SourceCommit); commit != "" {
-			bodyLines = append(bodyLines, "提交: `"+commit+"`")
-		}
-	case forceVersion:
-		target, err = s.deps.NewReleaseClient().LinuxBinaryByVersion(ctx, requestedVersion, goarch)
-		if err != nil {
-			if goos != "linux" {
-				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
-				return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
-			}
-			return nil, fmt.Errorf("查询指定版本 %s 失败: %w", requestedVersion, err)
-		}
-		bodyLines = append(bodyLines, "指定版本: `"+target.Version+"`")
-	default:
-		target, err = s.deps.NewReleaseClient().LatestLinuxBinary(ctx, goarch)
-		if err != nil {
-			if goos != "linux" {
-				bodyLines = append(bodyLines, "", "远端版本检查失败。当前平台仅支持 release 检查。", "错误: "+err.Error())
-				return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
-			}
-			bodyLines = append(bodyLines, "", "远端版本检查失败。你仍然可以选择本地 Binary 升级。", "错误: "+err.Error())
-			return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), UpgradePanelButtons(sessionKey, nil, true)), nil
-		}
-		bodyLines = append(bodyLines, "最新版本: `"+target.Version+"`")
+	label := "最新版本"
+	if result.Forced {
+		label = "指定版本"
+	}
+	if result.Development {
+		label = "开发版本"
+	}
+	lines = append(lines, label+": `"+target.Version+"`")
+	if tag := strings.TrimSpace(target.ReleaseTag); tag != "" && tag != target.Version {
+		lines = append(lines, "Release Tag: `"+tag+"`")
+	}
+	if commit := ShortUpgradeCommit(target.SourceCommit); commit != "" {
+		lines = append(lines, "提交: `"+commit+"`")
 	}
 	if published := FormatUpgradeReleasePublishedAt(target.PublishedAt); published != "" {
-		bodyLines = append(bodyLines, "发布时间(本机时区): `"+published+"`")
+		lines = append(lines, "发布时间(本机时区): `"+published+"`")
 	}
-	if strings.TrimSpace(target.HTMLURL) != "" {
-		bodyLines = append(bodyLines, "Release: <"+target.HTMLURL+">")
+	if target.HTMLURL != "" {
+		lines = append(lines, "Release: <"+target.HTMLURL+">")
 	}
-
-	if goos != "linux" {
-		bodyLines = append(bodyLines, "", "当前平台仅支持 release 检查，不支持自动升级。")
-		title := "升级服务"
-		color := "blue"
-		if !forceVersion && !useDevRelease {
-			if cmp, cmpErr := release.CompareVersions(current, target.Version); cmpErr == nil && cmp >= 0 {
-				title = "已是最新版本"
-				color = "green"
-				bodyLines = append(bodyLines, "", "当前版本已不落后于远端最新版本。")
-			}
-		}
-		return s.app.UpgradeRenderer().SimpleStatusCard(title, color, s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), upgradeBackButtons(sessionKey)), nil
+	if result.Request != nil {
+		lines = append(lines, "", RemoteUpgradeSummary(result.Forced, result.Development))
+		return s.RenderUpgradeConfirmCard("升级确认", sessionKey, result.Request.ID, result.Payload, lines), nil
 	}
-
-	if !forceVersion && !useDevRelease {
-		if cmp, cmpErr := release.CompareVersions(current, target.Version); cmpErr == nil && cmp >= 0 {
-			bodyLines = append(bodyLines, "", "当前版本已不落后于远端最新版本。你仍然可以选择本地 Binary 升级。")
-			return s.app.UpgradeRenderer().SimpleStatusCard("已是最新版本", "green", s.app.MenuCardBody("menu.upgrade", strings.Join(bodyLines, "\n")), UpgradePanelButtons(sessionKey, nil, true)), nil
-		}
+	title, color := "升级服务", "blue"
+	if result.Current {
+		title, color = "已是最新版本", "green"
+		lines = append(lines, "", "当前版本已不落后于远端最新版本。")
 	}
-
-	requestID, err := st.NextLocalID("upgrade")
-	if err != nil {
-		return nil, err
+	buttons := upgradeBackButtons(sessionKey)
+	if env.GOOS == "linux" {
+		buttons = UpgradePanelButtons(sessionKey, nil, true)
+		lines = append(lines, "你仍然可以选择本地 Binary 升级。")
+	} else {
+		lines = append(lines, "", "当前平台仅支持 release 检查，不支持自动升级。")
 	}
-	payload := UpgradePendingPayload{
-		CurrentVersion: current,
-		TargetVersion:  target.Version,
-		ReleaseTag:     target.ReleaseTag,
-		BinaryPath:     exePath,
-		DownloadURL:    target.BinaryURL,
-		SourceCommit:   target.SourceCommit,
-		ExpectedSHA256: target.ExpectedSHA256,
-		ReleaseURL:     target.HTMLURL,
-	}
-	if err := st.SavePending(&state.PendingRequest{
-		ID:           requestID,
-		RequestIDRaw: requestID,
-		Kind:         "upgrade_release",
-		SessionKey:   sessionKey,
-		OwnerUserID:  ownerUserID,
-		PayloadJSON:  mustJSON(payload),
-		Status:       state.PendingRequestStatusPending.String(),
-		CreatedAt:    time.Now().Unix(),
-		ExpiresAt:    time.Now().Add(30 * time.Minute).Unix(),
-	}); err != nil {
-		return nil, err
-	}
-	bodyLines = append(bodyLines, "", RemoteUpgradeSummary(forceVersion, useDevRelease))
-	return s.RenderUpgradeConfirmCard("升级确认", sessionKey, requestID, payload, bodyLines), nil
+	return s.app.UpgradeRenderer().SimpleStatusCard(title, color, s.app.MenuCardBody("menu.upgrade", strings.Join(lines, "\n")), buttons), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -383,127 +281,23 @@ func (s UpgradeService) ReplyUpgradeDevCard(msg *feishu.InboundMessage) error {
 
 // CompleteUpgradeAction handles the card action for upgrade confirm/cancel.
 func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	st := s.app.UpgradeState()
-	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := st.Pending(requestID)
-	if pending == nil || pending.Kind != "upgrade_release" {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级请求已过期"}}, nil
+	if action == nil {
+		return &callback.CardActionTriggerResponse{}, nil
 	}
-	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个升级请求"}}, nil
-	}
+	id := actionStringValue(action, "request_id")
 	if actionName == "upgrade.cancel" {
-		_ = st.UpdatePending(requestID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
-		sessionKey, _ := action.ActionValue["session_key"].(string)
-		if strings.TrimSpace(sessionKey) == "" {
-			sessionKey = pending.SessionKey
+		req, err := s.useCase.Cancel(id, action.UserID)
+		if err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: "已取消升级"},
-			Card:  rawCard(s.deps.RenderSystemMenuCard(sessionKey)),
-		}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已取消升级"}, Card: rawCard(s.deps.RenderSystemMenuCard(req.SessionKey))}, nil
 	}
-
-	var payload UpgradePendingPayload
-	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "升级参数损坏"}}, nil
-	}
-	unitName, err := s.deps.StartDaemonUpgrade(daemon.UpgradeSpec{
-		ServiceName:    s.app.DaemonServiceName(),
-		Version:        firstNonEmpty(strings.TrimSpace(payload.TargetVersion), firstNonEmpty(strings.TrimSpace(payload.SourceName), "local-artifact")),
-		BinaryPath:     payload.BinaryPath,
-		DownloadURL:    payload.DownloadURL,
-		SourcePath:     payload.SourcePath,
-		ExpectedSHA256: payload.ExpectedSHA256,
-	})
+	payload, key, err := s.useCase.Confirm(s.context(), id, action.UserID, action.MessageID)
 	if err != nil {
-		slog.Error("start daemon upgrade failed",
-			"request_id", requestID,
-			"target_version", payload.TargetVersion,
-			"binary_path", payload.BinaryPath,
-			"source_path", payload.SourcePath,
-			"error", err,
-		)
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: "启动升级失败，请重试"},
-		}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	_ = st.UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusUpgrading.String()
-		var p UpgradePendingPayload
-		if jsonErr := json.Unmarshal([]byte(req.PayloadJSON), &p); jsonErr == nil {
-			p.UnitName = unitName
-			p.ChatID = pending.SessionKey // fallback
-			p.FeishuMsgID = pending.FeishuMsgID
-			if updated, marshalErr := json.Marshal(p); marshalErr == nil {
-				req.PayloadJSON = string(updated)
-			}
-		}
-	})
-	body := strings.Join([]string{
-		UpgradeStartedSummaryLine(payload),
-		"后台任务: `" + unitName + "`",
-		"服务即将重启；如果启动失败会自动回退。",
-	}, "\n")
-	sessionKey, _ := action.ActionValue["session_key"].(string)
-	if strings.TrimSpace(sessionKey) == "" {
-		sessionKey = pending.SessionKey
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已开始升级"},
-		Card: rawCard(s.app.UpgradeRenderer().SimpleStatusCard("升级中", "orange", s.app.MenuCardBody("menu.upgrade", body), []feishu.Button{
-			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
-		})),
-	}, nil
-}
-
-// ---------------------------------------------------------------------------
-// Runtime validation
-// ---------------------------------------------------------------------------
-
-// ValidateUpgradeRuntime checks that the current process is the daemon
-// service process and returns the executable path and asset name.
-func (s UpgradeService) ValidateUpgradeRuntime() (string, string, error) {
-	exePath, assetName, err := s.probeUpgradeRuntime()
-	if err != nil {
-		return "", "", err
-	}
-	if strings.TrimSpace(s.deps.CurrentGOOS()) != "linux" {
-		return "", "", fmt.Errorf("当前平台不支持 daemon 自动升级")
-	}
-	serviceName := s.app.DaemonServiceName()
-	manager, err := s.deps.NewDaemonManager(serviceName)
-	if err != nil {
-		return "", "", fmt.Errorf("当前环境不支持 daemon 升级: %w", err)
-	}
-	status, err := manager.Status()
-	if err != nil {
-		return "", "", fmt.Errorf("查询 daemon 状态失败: %w", err)
-	}
-	if status == nil || !status.Installed || !status.Running {
-		return "", "", fmt.Errorf("当前 daemon 未安装或未运行")
-	}
-	if status.PID > 0 && status.PID != os.Getpid() {
-		return "", "", fmt.Errorf("当前进程不是 daemon 服务进程，无法执行远程升级")
-	}
-	return exePath, assetName, nil
-}
-
-// probeUpgradeRuntime returns the current executable path and target release
-// asset for the active platform without checking daemon availability.
-func (s UpgradeService) probeUpgradeRuntime() (string, string, error) {
-	exePath, err := os.Executable()
-	if err != nil {
-		return "", "", fmt.Errorf("获取当前二进制路径失败: %w", err)
-	}
-	if realPath, err := filepath.EvalSymlinks(exePath); err == nil {
-		exePath = realPath
-	}
-	assetName, err := release.CurrentAssetName(s.deps.CurrentGOOS(), s.deps.CurrentGOARCH())
-	if err != nil {
-		return "", "", fmt.Errorf("当前平台不支持自动升级: %w", err)
-	}
-	return exePath, assetName, nil
+	body := strings.Join([]string{UpgradeStartedSummaryLine(payload), "后台任务: `" + payload.UnitName + "`", "服务即将重启；如果启动失败会自动回退。"}, "\n")
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已开始升级"}, Card: rawCard(s.app.UpgradeRenderer().SimpleStatusCard("升级中", "orange", s.app.MenuCardBody("menu.upgrade", body), upgradeBackButtons(key)))}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -648,11 +442,6 @@ func FormatUpgradeReleasePublishedAt(ts time.Time) string {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-func mustJSON(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
-}
 
 func rawCard(card map[string]any) *callback.Card {
 	return &callback.Card{Type: "raw", Data: card}

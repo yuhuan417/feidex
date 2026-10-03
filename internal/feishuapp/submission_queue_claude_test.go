@@ -10,6 +10,8 @@ import (
 
 func TestStartNextClaudeSubmissionFailsGracefullyWhenRuntimeUnavailable(t *testing.T) {
 	a, _, _ := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
 	sessionKey := "feishu:frontend:default:chat:chat-1"
@@ -43,7 +45,7 @@ func TestStartNextClaudeSubmissionFailsGracefullyWhenRuntimeUnavailable(t *testi
 		t.Fatal("expected queued submission")
 	}
 
-	err = newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, &a.cfg.Workspaces[0], false)
+	err = a.bindings.Submissions.StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, &a.cfg.Workspaces[0], false)
 	if err == nil || !strings.Contains(err.Error(), "claude backend not initialized") {
 		t.Fatalf("startNextClaudeSubmissionWithFailureNotice() error = %v, want claude backend not initialized", err)
 	}

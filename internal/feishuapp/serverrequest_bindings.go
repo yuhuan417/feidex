@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"feidex/internal/application"
 	"feidex/internal/application/backendops"
-	appsubmission "feidex/internal/application/submission"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
@@ -25,20 +24,21 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-// ServerRequestService returns the serverrequest.Service for this app.
 func (a *App) ServerRequestService() *serverrequest.Service {
 	if a == nil {
 		return nil
 	}
-	if value, ok := registryFor(a).Get("serverRequestSvc").(*serverrequest.Service); ok {
-		return value
+	return a.bindings.ServerRequests
+}
+
+func BuildServerRequests(a *App) *serverrequest.Service {
+	if a == nil {
+		return nil
 	}
 	service := &serverrequest.Service{
 		// State access
 		PendingRequests: func() []*state.PendingRequest { return a.State().PendingRequests() },
 		Pending:         func(id string) *state.PendingRequest { return a.State().Pending(id) },
-		UpdatePending:   func(id string, mutate func(*state.PendingRequest)) error { return a.State().UpdatePending(id, mutate) },
-		SavePending:     func(req *state.PendingRequest) error { return a.State().SavePending(req) },
 		Submission:      func(id string) *domainsubmission.Submission { return a.State().Submission(id) },
 		Session:         func(key string) *conversation.Session { return a.State().Session(key) },
 		SessionKeysEqual: func(left, right string) bool {
@@ -84,10 +84,10 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 
 		// Root service delegation
 		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
-			return newRuntimeStateService(a).finalizePendingReply(pending)
+			return a.bindings.PendingReplies.Finalize(pending)
 		},
 		FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-			return (appsubmission.SubmissionLookupService{State: a.State(), Runtime: newRuntimeStateService(a)}).FindSubmissionByTurn(threadID, turnID)
+			return a.bindings.SubmissionLookup.FindSubmissionByTurn(threadID, turnID)
 		},
 		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, delivery serverrequest.PendingCardDelivery) error {
 			return deliverPendingCard(a, sub, card, pendingCardDelivery{
@@ -121,7 +121,6 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		BackendCodex:  domainbackend.BackendCodex,
 		BackendClaude: domainbackend.BackendClaude,
 	}
-	registryFor(a).Set("serverRequestSvc", service)
 	return service
 }
 
@@ -147,7 +146,7 @@ func completePendingFormCancelDispatch(a *App, action *feishu.CardAction) (*call
 // completeRootPendingFormCancel handles cancel for kinds whose logic stays in root.
 func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, error) {
 	// claude_exit_plan_mode needs backend cancel via the Claude adapter.
-	if pending.Kind == claudePlanModePendingKind {
+	if pending.Kind == "claude_exit_plan_mode" {
 		adapter := a.ServerRequestService().AdapterForPending(pending)
 		if err := adapter.CancelPending(pending); err != nil {
 			slog.Error("root cancel backend reply failed", "kind", pending.Kind, "request_id", pending.ID, "error", err)
@@ -156,12 +155,12 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 			}, nil
 		}
 	}
-	newRuntimeStateService(a).finalizePendingReply(pending)
+	a.bindings.PendingReplies.Finalize(pending)
 	switch pending.Kind {
 	case "workspace_new", "workspace_clone", "workspace_worktree":
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},
-			Card:  rawCard(newWorkspaceRenderService(a).RenderWorkspaceMenuCard(pending.SessionKey)),
+			Card:  rawCard(a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(pending.SessionKey)),
 		}, nil
 	case "review_form":
 		body := reviewCancelledBody(pending)
@@ -193,22 +192,7 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 // rootPendingTextRequest finds the most recent open pending text request
 // for kinds whose logic stays in root (workspace_new, claude_exit_plan_mode).
 func rootPendingTextRequest(a *App, sessionKey, userID string) *state.PendingRequest {
-	var best *state.PendingRequest
-	for _, req := range a.State().PendingRequests() {
-		if req == nil || state.NormalizePendingRequestStatus(req.Status) != state.PendingRequestStatusPending || !sessionKeysEqual(a, req.SessionKey, sessionKey) {
-			continue
-		}
-		if req.OwnerUserID != "" && req.OwnerUserID != userID {
-			continue
-		}
-		switch req.Kind {
-		case "workspace_new", "claude_exit_plan_mode":
-			if best == nil || req.CreatedAt > best.CreatedAt {
-				best = req
-			}
-		}
-	}
-	return best
+	return a.bindings.InteractionLifecycle.LatestTextRequest(sessionKey, userID, "workspace_new", "claude_exit_plan_mode")
 }
 
 // handleRootPendingTextResponse dispatches a text reply for root-owned pending kinds.
@@ -219,8 +203,8 @@ func handleRootPendingTextResponse(a *App, msg *feishu.InboundMessage, pending *
 	svc := newPendingInputService(a)
 	switch pending.Kind {
 	case "workspace_new":
-		return newWorkspaceManagementService(a).CompleteWorkspaceNewText(msg, pending)
-	case claudePlanModePendingKind:
+		return a.bindings.WorkspaceManagement.CompleteWorkspaceNewText(msg, pending)
+	case "claude_exit_plan_mode":
 		return svc.completeClaudePlanModeText(msg, pending)
 	default:
 		return nil

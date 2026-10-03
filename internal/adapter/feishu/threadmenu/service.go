@@ -6,15 +6,15 @@ package threadmenu
 import (
 	"context"
 	"errors"
+	conversationapp "feidex/internal/application/conversation"
+	"feidex/internal/application/threadsettings"
 	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	appbackend "feidex/internal/adapter/feishu/backend"
 	appthreadview "feidex/internal/adapter/feishu/threadview"
@@ -34,7 +34,10 @@ const (
 // Dependencies is the explicit thread-menu capability set assembled by the
 // composition root. The menu service never receives the application root.
 type Dependencies struct {
-	ConfigProvider interface {
+	Controls           *conversationapp.Controls
+	Settings           threadsettings.Service
+	PermissionSettings threadsettings.PermissionService
+	ConfigProvider     interface {
 		Config() *config.Config
 		ConfigMu() *sync.RWMutex
 		Backend() string
@@ -43,30 +46,27 @@ type Dependencies struct {
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
-	Outbound                                  Outbound
-	AppStateFn                                func() StateProvider
-	EffectiveSessionKeyFn                     func(string) string
-	ConversationBackendFn                     func() ConversationBackendProvider
-	BackendRuntimeFn                          func() BackendRuntimeProvider
-	PendingQueueFn                            func() PendingQueueProvider
-	WorkspaceThreadFn                         func() WorkspaceThreadProvider
-	WorkspaceConfigFn                         func() WorkspaceConfigProvider
-	BackendActionsFn                          func() BackendActionProvider
-	BackendDriver                             appbackend.Driver
-	SessionHasActiveWorkFn                    func(*conversation.Session) bool
-	CancelAutoRetryFn                         func(string, bool, string) bool
-	LockAutoRetryDispatchFn                   func(string) func()
-	ReplyCommandActionResponseFn              func(*feishu.InboundMessage, *callback.CardActionTriggerResponse) error
-	CommandForkFn                             func(*feishu.InboundMessage, []string) error
-	CompleteMenuCommandFn                     func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
-	ActionStringValueFn                       func(*feishu.CardAction, string) string
-	MenuCardBodyFn                            func(string, string) string
-	MenuCardBodyForBackendFn                  func(string, string, string) string
-	NormalizeRequestedClaudePermissionModeFn  func(context.Context, string) (string, string, error)
-	ApplyClaudePermissionModeToRuntimeFn      func(string, string) error
-	ApplyClaudePermissionModeToRuntimeAsyncFn func(string, string, string)
-	RenderClaudeSessionPermissionMenuCardFn   func(string) (map[string]any, error)
-	ShowClaudeSessionPermissionMenuFromAppFn  func(*feishu.InboundMessage) error
+	Outbound                                 Outbound
+	AppStateFn                               func() StateProvider
+	EffectiveSessionKeyFn                    func(string) string
+	ConversationBackendFn                    func() ConversationBackendProvider
+	BackendRuntimeFn                         func() BackendRuntimeProvider
+	PendingQueueFn                           func() PendingQueueProvider
+	WorkspaceThreadFn                        func() WorkspaceThreadProvider
+	WorkspaceConfigFn                        func() WorkspaceConfigProvider
+	BackendActionsFn                         func() BackendActionProvider
+	BackendDriver                            appbackend.Driver
+	SessionHasActiveWorkFn                   func(*conversation.Session) bool
+	CancelAutoRetryFn                        func(string, bool, string) bool
+	LockAutoRetryDispatchFn                  func(string) func()
+	ReplyCommandActionResponseFn             func(*feishu.InboundMessage, *callback.CardActionTriggerResponse) error
+	CommandForkFn                            func(*feishu.InboundMessage, []string) error
+	CompleteMenuCommandFn                    func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
+	ActionStringValueFn                      func(*feishu.CardAction, string) string
+	MenuCardBodyFn                           func(string, string) string
+	MenuCardBodyForBackendFn                 func(string, string, string) string
+	RenderClaudeSessionPermissionMenuCardFn  func(string) (map[string]any, error)
+	ShowClaudeSessionPermissionMenuFromAppFn func(*feishu.InboundMessage) error
 }
 
 type Outbound interface {
@@ -213,23 +213,6 @@ func (d Dependencies) MenuCardBodyForBackend(x, a, b string) string {
 	}
 	return d.MenuCardBodyForBackendFn(x, a, b)
 }
-func (d Dependencies) NormalizeRequestedClaudePermissionMode(c context.Context, r string) (string, string, error) {
-	if d.NormalizeRequestedClaudePermissionModeFn == nil {
-		return "", "", fmt.Errorf("permission mode unavailable")
-	}
-	return d.NormalizeRequestedClaudePermissionModeFn(c, r)
-}
-func (d Dependencies) ApplyClaudePermissionModeToRuntime(s, m string) error {
-	if d.ApplyClaudePermissionModeToRuntimeFn == nil {
-		return fmt.Errorf("permission mode unavailable")
-	}
-	return d.ApplyClaudePermissionModeToRuntimeFn(s, m)
-}
-func (d Dependencies) ApplyClaudePermissionModeToRuntimeAsync(m, s, x string) {
-	if d.ApplyClaudePermissionModeToRuntimeAsyncFn != nil {
-		d.ApplyClaudePermissionModeToRuntimeAsyncFn(m, s, x)
-	}
-}
 func (d Dependencies) RenderClaudeSessionPermissionMenuCard(s string) (map[string]any, error) {
 	if d.RenderClaudeSessionPermissionMenuCardFn == nil {
 		return nil, fmt.Errorf("permission menu unavailable")
@@ -247,7 +230,6 @@ func (d Dependencies) ShowClaudeSessionPermissionMenuFromApp(m *feishu.InboundMe
 type StateProvider interface {
 	Session(key string) *conversation.Session
 	Sessions() []*conversation.Session
-	SaveSession(sess *conversation.Session) error
 }
 
 // ConversationBackendProvider narrows conversation backend access to the
@@ -383,10 +365,6 @@ func primaryConversationSummaryLabel(backend string) string {
 	return appbackend.DriverForKind(backend).Conversation().SummaryLabel()
 }
 
-func sessionHasInFlightSubmission(sess *conversation.Session) bool {
-	return conversation.HasInFlightSubmission(sess)
-}
-
 // Service manages thread/session menu actions for a single app instance.
 type Service struct {
 	app Dependencies
@@ -423,177 +401,10 @@ func (s *Service) messageForThreadMenu(msg *feishu.InboundMessage) (*feishu.Inbo
 	return &cp, effectiveSessionKey
 }
 
-func (s *Service) interruptSurfaceSessionKeys(sessionKey string) []string {
-	sessionKey = strings.TrimSpace(sessionKey)
-	keys := appendUniqueSessionKey(nil, sessionKey)
-	if s == nil || s.app.ConfigProvider == nil {
-		return keys
-	}
-	st := s.app.ThreadMenuAppState()
-	if st == nil {
-		return keys
-	}
-	chatType, chatID := sessionGroupChat(sessionKey, st.Session(sessionKey))
-	if chatType != "group" || strings.TrimSpace(chatID) == "" {
-		return keys
-	}
-	for _, sess := range st.Sessions() {
-		if sess == nil {
-			continue
-		}
-		candidateKey := strings.TrimSpace(sess.Key)
-		if candidateKey == "" || !sessionBelongsToFrontend(s.app, candidateKey) {
-			continue
-		}
-		candidateChatType, candidateChatID := sessionGroupChat(candidateKey, sess)
-		if candidateChatType == "group" && candidateChatID == chatID {
-			keys = appendUniqueSessionKey(keys, candidateKey)
-		}
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func appendUniqueSessionKey(keys []string, key string) []string {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return keys
-	}
-	for _, existing := range keys {
-		if strings.TrimSpace(existing) == key {
-			return keys
-		}
-	}
-	return append(keys, key)
-}
-
-func sessionGroupChat(sessionKey string, sess *conversation.Session) (chatType, chatID string) {
-	_, chatType, chatID, _, _ = parseSessionKey(sessionKey)
-	if chatType == "" && sess != nil {
-		chatType = strings.TrimSpace(sess.ChatType)
-		chatID = strings.TrimSpace(sess.ChatID)
-	}
-	return chatType, chatID
-}
-
-func (s *Service) discardInterruptSurfacePendingInputs(sessionKeys []string) int {
-	if s == nil || s.app.ConfigProvider == nil {
-		return 0
-	}
-	pendingQueue := s.app.ThreadMenuPendingQueue()
-	if pendingQueue == nil {
-		return 0
-	}
-	discarded := 0
-	for _, key := range sessionKeys {
-		discarded += pendingQueue.DiscardSessionPendingInputs(key)
-	}
-	return discarded
-}
-
-func (s *Service) interruptTargetSession(sessionKeys []string) (string, *conversation.Session) {
-	if s == nil || s.app.ConfigProvider == nil {
-		return "", nil
-	}
-	st := s.app.ThreadMenuAppState()
-	if st == nil {
-		return "", nil
-	}
-	var bestKey string
-	var best *conversation.Session
-	for _, key := range sessionKeys {
-		sess := st.Session(key)
-		if !interruptSessionActive(sess) {
-			continue
-		}
-		if best == nil || sess.UpdatedAt > best.UpdatedAt || (sess.UpdatedAt == best.UpdatedAt && strings.TrimSpace(key) > strings.TrimSpace(bestKey)) {
-			bestKey = strings.TrimSpace(key)
-			best = sess
-		}
-	}
-	return bestKey, best
-}
-
-func interruptSessionActive(sess *conversation.Session) bool {
-	return sess != nil && strings.TrimSpace(sess.ActiveTurnID) != "" && strings.TrimSpace(sess.ActiveThreadID) != ""
-}
-
-func (s *Service) cancelInterruptSurfaceAutoRetry(sessionKeys []string, activeSessionKey string, activeSess *conversation.Session) bool {
-	if s == nil || s.app.ConfigProvider == nil {
-		return false
-	}
-	st := s.app.ThreadMenuAppState()
-	canceled := false
-	for _, key := range sessionKeys {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		sess := activeSess
-		if key != strings.TrimSpace(activeSessionKey) && st != nil {
-			sess = st.Session(key)
-		}
-		keepUntilTerminal := key == strings.TrimSpace(activeSessionKey) && interruptSessionActive(sess)
-		if s.app.CancelAutoRetry(key, keepUntilTerminal, "已停止当前 session 的自动重试。") {
-			canceled = true
-		}
-	}
-	return canceled
-}
-
 // StartFreshThread creates a new workspace thread for the session.
 func (s *Service) StartFreshThread(sessionKey, userID, chatID, chatType string) (int, *ThreadBinding, error) {
-	if s.app.ConfigProvider == nil || s.app.Store() == nil {
-		return 0, nil, fmt.Errorf("store not initialized")
-	}
-	appState := s.app.ThreadMenuAppState()
-	defaultWorkspaceID := defaultWorkspaceID(s.app)
-	sess := appState.Session(sessionKey)
-	if sess != nil && s.app.SessionHasActiveWork(sess) {
-		return 0, nil, fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
-	}
-	if sess == nil {
-		sess = &conversation.Session{
-			Key:         sessionKey,
-			WorkspaceID: defaultWorkspaceID,
-			ChatID:      chatID,
-			ChatType:    chatType,
-			OwnerUserID: userID,
-		}
-	}
-	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = defaultWorkspaceID
-	}
-	discarded := s.app.ThreadMenuPendingQueue().DiscardSessionPendingInputs(sessionKey)
-	sess = appState.Session(sessionKey)
-	if sess == nil {
-		sess = &conversation.Session{
-			Key:         sessionKey,
-			WorkspaceID: defaultWorkspaceID,
-			ChatID:      chatID,
-			ChatType:    chatType,
-			OwnerUserID: userID,
-		}
-	}
-	if strings.TrimSpace(sess.OwnerUserID) == "" {
-		sess.OwnerUserID = userID
-	}
-	if strings.TrimSpace(sess.ChatID) == "" {
-		sess.ChatID = chatID
-	}
-	if strings.TrimSpace(sess.ChatType) == "" {
-		sess.ChatType = chatType
-	}
-	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID)
-	ws := config.FindWorkspace(s.app.Config(), workspaceID)
-	if ws == nil {
-		return discarded, nil, fmt.Errorf("workspace %q not found", workspaceID)
-	}
-	binding, err := s.app.ThreadMenuWorkspaceThread().StartWorkspaceThread(sessionKey, sess, ws)
-	if err != nil {
-		return discarded, nil, err
-	}
-	return discarded, binding, nil
+	result, err := s.app.Controls.Fresh(conversationapp.CommandContext{SessionKey: sessionKey, UserID: userID, ChatID: chatID, ChatType: chatType})
+	return result.Discarded, result.Binding, err
 }
 
 // CommandThreadsNew handles /thread new or /session new.
@@ -783,67 +594,29 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 
 // CommandInterrupt handles /stop — interrupts the active turn.
 func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
-	sessionKey := makeSessionKey(s.app, msg)
-	sessionKeys := s.interruptSurfaceSessionKeys(sessionKey)
-	sort.Strings(sessionKeys)
-	for _, key := range sessionKeys {
-		unlock := s.app.LockAutoRetryDispatch(key)
-		defer unlock()
-	}
-	discarded := s.discardInterruptSurfacePendingInputs(sessionKeys)
-	targetSessionKey, sess := s.interruptTargetSession(sessionKeys)
-	canceledRetry := s.cancelInterruptSurfaceAutoRetry(sessionKeys, targetSessionKey, sess)
-	if runtime := s.app.ThreadMenuBackendRuntime(); runtime != nil && sess != nil {
-		runtime.ReconcileCompletedTurnFromFinalOutput(targetSessionKey, sess)
-	}
-	// Notifications may have completed the turn while cancellation cards were sent.
-	targetSessionKey, sess = s.interruptTargetSession(sessionKeys)
-	if s.cancelInterruptSurfaceAutoRetry(sessionKeys, targetSessionKey, sess) {
-		canceledRetry = true
-	}
-	if !interruptSessionActive(sess) {
-		if canceledRetry {
-			reply := "已停止当前 session 的自动重试。"
-			if discarded > 0 {
-				reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
-			}
-			return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, false)
-		}
-		if discarded > 0 {
-			return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), false)
-		}
-		return fmt.Errorf("当前没有运行中的任务")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	if err := s.app.ThreadMenuConversationBackend().InterruptActiveTurn(ctx, targetSessionKey, sess); err != nil {
+	result, err := s.app.Controls.Stop(makeSessionKey(s.app, msg))
+	if err != nil {
 		return err
 	}
-	// For backends with asynchronous interrupt responses (e.g. Claude), clear
-	// stale active operations so the session doesn't get stuck in "queuing".
-	if runtime := s.app.ThreadMenuBackendRuntime(); runtime != nil {
-		// Only the side effect matters here: the store is updated in place and
-		// this function builds its reply from the local flags above.
-		runtime.ClearActiveOperationsAfterInterrupt(targetSessionKey, sess)
+	reply := ""
+	switch {
+	case result.Interrupted:
+		reply = "已请求中断当前任务。"
+	case result.CancelledRetry:
+		reply = "已停止当前 session 的自动重试。"
 	}
-	reply := "已请求中断当前任务。"
-	if discarded > 0 {
-		reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
+	if result.Discarded > 0 {
+		reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", result.Discarded)
 	}
-	if canceledRetry {
+	if result.Interrupted && result.CancelledRetry {
 		reply += " 当前 session 的自动重试也已停止。"
 	}
-	return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, false)
+	return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, strings.TrimSpace(reply), false)
 }
 
 // CommandAppend handles appending text to the active turn.
 func (s *Service) CommandAppend(msg *feishu.InboundMessage, text string) error {
-	sessionKey := makeSessionKey(s.app, msg)
-	sess := s.app.ThreadMenuAppState().Session(sessionKey)
-	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
-		return fmt.Errorf("当前没有可补充的任务")
-	}
-	return s.app.ThreadMenuConversationBackend().ContinueActiveTurn(sessionKey, text)
+	return s.app.Controls.Append(makeSessionKey(s.app, msg), text)
 }
 
 // ShowThreadSandboxMenu shows the sandbox configuration menu.
@@ -985,8 +758,8 @@ func (s *Service) CompleteClaudeSessionPermissionMenu(action *feishu.CardAction,
 func (s *Service) CompleteThreadSandboxSet(action *feishu.CardAction, sessionKey, threadID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
 	return s.app.PermissionDriver().CompleteConversationSandboxSet(sessionKey, threadID, sandboxMode, appbackend.ConversationPermissionUpdateDeps{
-		Session:     s.app.ThreadMenuAppState().Session,
-		SaveSession: s.app.ThreadMenuAppState().SaveSession,
+		Session:  s.app.ThreadMenuAppState().Session,
+		Settings: s.app.Settings,
 		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
 			return s.RenderThreadSandboxMenuCard(sessionKey)
 		},
@@ -1000,8 +773,8 @@ func (s *Service) CompleteThreadSandboxSet(action *feishu.CardAction, sessionKey
 func (s *Service) CompleteThreadPolicySet(action *feishu.CardAction, sessionKey, threadID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
 	return s.app.PermissionDriver().CompleteConversationPolicySet(sessionKey, threadID, approvalPolicy, appbackend.ConversationPermissionUpdateDeps{
-		Session:     s.app.ThreadMenuAppState().Session,
-		SaveSession: s.app.ThreadMenuAppState().SaveSession,
+		Session:  s.app.ThreadMenuAppState().Session,
+		Settings: s.app.Settings,
 		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
 			return s.RenderThreadSandboxMenuCard(sessionKey)
 		},
@@ -1015,8 +788,8 @@ func (s *Service) CompleteThreadPolicySet(action *feishu.CardAction, sessionKey,
 func (s *Service) CompleteThreadMultiAgentSet(action *feishu.CardAction, sessionKey, threadID, mode string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
 	return s.app.PermissionDriver().CompleteConversationMultiAgentSet(sessionKey, threadID, mode, appbackend.ConversationPermissionUpdateDeps{
-		Session:     s.app.ThreadMenuAppState().Session,
-		SaveSession: s.app.ThreadMenuAppState().SaveSession,
+		Session:  s.app.ThreadMenuAppState().Session,
+		Settings: s.app.Settings,
 		RenderSandboxMenu: func(sessionKey string) (map[string]any, error) {
 			return s.RenderThreadSandboxMenuCard(sessionKey)
 		},
@@ -1032,45 +805,14 @@ func (s *Service) CompleteThreadMultiAgentSet(action *feishu.CardAction, session
 // CompleteThreadResume handles resuming a previously created thread.
 func (s *Service) CompleteThreadResume(action *feishu.CardAction, sessionKey, threadID string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	appState := s.app.ThreadMenuAppState()
-	sess := appState.Session(sessionKey)
-	if sess == nil {
-		sess = &conversation.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
-	}
-	if sessionHasInFlightSubmission(sess) {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: "当前任务仍在运行，请先等待结束或中断"},
-		}, nil
-	}
-	if strings.TrimSpace(sess.OwnerUserID) == "" {
-		sess.OwnerUserID = action.UserID
-	}
-	if strings.TrimSpace(sess.ChatID) == "" {
-		sess.ChatID = action.ChatID
-	}
-	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = defaultWorkspaceID(s.app)
-	}
-	ws := config.FindWorkspace(s.app.Config(), sess.WorkspaceID)
-	if ws == nil {
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "error", Content: "workspace not found"},
-		}, nil
-	}
-	selectedName, _ := action.ActionValue["thread_name"].(string)
-	selectedPreview, _ := action.ActionValue["thread_preview"].(string)
-	selectedCWD, _ := action.ActionValue["thread_cwd"].(string)
-	if _, err := s.app.ThreadMenuConversationBackend().ResumeSelectedThread(sessionKey, sess, ws, ThreadResumeSelection{
-		ThreadID: threadID,
-		Name:     selectedName,
-		Preview:  selectedPreview,
-		Cwd:      selectedCWD,
+	if err := s.app.Controls.Resume(conversationapp.CommandContext{SessionKey: sessionKey, UserID: action.UserID, ChatID: action.ChatID}, ThreadResumeSelection{
+		ThreadID: threadID, Name: ActionStringValue(action, "thread_name"), Preview: ActionStringValue(action, "thread_preview"), Cwd: ActionStringValue(action, "thread_cwd"),
 	}); err != nil {
-		toastType := "error"
+		kind := "error"
 		if isUIWarningError(err) {
-			toastType = "warning"
+			kind = "warning"
 		}
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: toastType, Content: err.Error()}}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: kind, Content: err.Error()}}, nil
 	}
 	includeAll, _ := action.ActionValue["include_all"].(bool)
 	card, err := s.app.ThreadMenuConversationBackend().RenderThreadsCard(sessionKey, includeAll)
@@ -1094,25 +836,14 @@ func (s *Service) CompleteClaudeSessionPermissionModeSet(action *feishu.CardActi
 // is not on the card callback ack path (slash commands have no ack deadline).
 func (s *Service) completeClaudeSessionPermissionModeSet(action *feishu.CardAction, sessionKey, threadID, rawMode string, asyncRuntimeApply bool) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	applyRuntime := s.app.ApplyClaudePermissionModeToRuntime
-	if asyncRuntimeApply {
-		messageID := ""
-		if action != nil {
-			messageID = strings.TrimSpace(action.MessageID)
-		}
-		applyRuntime = func(key, mode string) error {
-			s.app.ApplyClaudePermissionModeToRuntimeAsync(messageID, key, mode)
-			return nil
-		}
+	messageID := ""
+	if action != nil {
+		messageID = strings.TrimSpace(action.MessageID)
 	}
 	return s.app.PermissionDriver().CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode, appbackend.ConversationPermissionModeUpdateDeps{
-		Permissions: s.app,
-		Session:     s.app.ThreadMenuAppState().Session,
-		SaveSession: s.app.ThreadMenuAppState().SaveSession,
-		NormalizeRequested: func(raw string) (string, string, error) {
-			return s.app.NormalizeRequestedClaudePermissionMode(context.Background(), raw)
-		},
-		ApplyRuntime: applyRuntime,
+		Settings:  s.app.PermissionSettings,
+		MessageID: messageID,
+		Async:     asyncRuntimeApply,
 		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
 			return s.app.PermissionDriver().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
 				Permissions:    s.app,
@@ -1138,14 +869,6 @@ func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
 	return d.ConfigProvider.WorkspaceSelection()
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
 func configuredBackend(a Dependencies) string {
 	if a.ConfigProvider == nil {
 		return ""
@@ -1163,16 +886,6 @@ func configuredBackend(a Dependencies) string {
 	}
 	return domainbackend.NormalizeBackend(cfg.Feishu.Backend)
 }
-func defaultWorkspaceID(a Dependencies) string {
-	if a.ConfigProvider == nil || a.ConfigProvider.Config() == nil {
-		return "default"
-	}
-	cfg := a.ConfigProvider.Config()
-	if len(cfg.Workspaces) > 0 && strings.TrimSpace(cfg.Workspaces[0].ID) != "" {
-		return cfg.Workspaces[0].ID
-	}
-	return "default"
-}
 func makeSessionKey(a Dependencies, msg *feishu.InboundMessage) string {
 	if msg == nil {
 		return ""
@@ -1188,11 +901,4 @@ func makeSessionKey(a Dependencies, msg *feishu.InboundMessage) string {
 		return "feishu:chat:" + strings.TrimSpace(msg.ChatID)
 	}
 	return "feishu:frontend:" + frontendID + ":chat:" + strings.TrimSpace(msg.ChatID)
-}
-func sessionBelongsToFrontend(a Dependencies, key string) bool {
-	frontend, _, _, _, _ := identity.ParseSessionKey(key)
-	return frontend == strings.TrimSpace(a.FrontendID()) || frontend == ""
-}
-func parseSessionKey(key string) (string, string, string, string, string) {
-	return identity.ParseSessionKey(key)
 }

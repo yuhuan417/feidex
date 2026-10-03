@@ -3,12 +3,11 @@ package feishuapp
 import (
 	"context"
 	"feidex/internal/adapter/feishu/goalcmd"
-	"feidex/internal/codexrpc"
-	domainsubmission "feidex/internal/domain/submission"
+	goalapp "feidex/internal/application/goal"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 	"log/slog"
 	"strings"
-	"time"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -36,58 +35,60 @@ func (r goalCardRenderer) SimpleStatusCard(title, color, body string, buttons []
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
-func goalTrackerForApp(a *App) *goalcmd.Tracker {
+func goalTrackerForApp(a *App) *goalapp.Tracker {
 	if a == nil {
 		return nil
 	}
-	trackers := a.Trackers()
-	if trackers.goals == nil {
-		trackers.goals = goalcmd.NewTracker()
-	}
-	return trackers.goals
+	return a.bindings.Goals
 }
 
 func commandGoalRaw(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
-	return newGoalService(a).CommandGoal(msg, raw, args)
+	return a.bindings.GoalCommands.CommandGoal(msg, raw, args)
 }
 
-func newGoalService(a *App) goalcmd.Service {
-	return goalcmd.NewService(goalDependenciesForApp(a))
-}
+func GoalCommandPorts(a *App) goalcmd.Dependencies { return goalDependenciesForApp(a) }
+
+func RequireCodexGoalGateway(a *App) (goalapp.Gateway, error) { return requireCodexGateway(a) }
 
 func goalDependenciesForApp(a *App) goalcmd.Dependencies {
 	if a == nil {
 		return goalcmd.Dependencies{}
 	}
 	return goalcmd.Dependencies{
-		StateProvider: a.State(), Outbound: goalOutbound{app: a}, CardRenderer: goalCardRenderer{app: a},
-		CodexClientProvider: func() (goalcmd.CodexClient, error) { return requireCodexGateway(a) }, GoalTracker: goalTrackerForApp(a),
+		StateProvider: a.State(), Outbound: goalOutbound{app: a}, CardRenderer: goalCardRenderer{app: a}, GoalManagement: a.bindings.GoalManagement,
+		GoalTracker:      goalTrackerForApp(a),
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
 		MenuCardBodyForSessionFn: func(s, x, b string) string { return menuCardBodyForSession(a, s, x, b) }, ActionStringValueFn: actionStringValue, ActionSessionKeyFn: actionSessionKey,
 		CompleteMenuCommandFn: func(x *feishu.CardAction, s, r, f string) (*callback.CardActionTriggerResponse, error) {
 			return completeMenuCommand(a, x, s, r, f)
-		}, DefaultWorkspaceIDFn: func() string { return defaultWorkspaceID(a) }, SessionBelongsToFrontendFn: func(s string) bool { return sessionBelongsToFrontend(a, s) },
-		BindTurnSubmissionFn: func(t, u, s, i string) { newRuntimeStateService(a).BindTurnSubmission(t, u, s, i) }, MarkTurnStartedAtFn: func(t string, v time.Time) { newRuntimeStateService(a).MarkTurnStartedAt(t, v) },
-		RecordSubmissionSourceLinksFn: func(s *domainsubmission.Submission) { newReplyContinuationService(a).RecordSubmissionSourceLinks(s) }, RecordRootTurnBindingFn: func(r, s, t, u string) { newReplyContinuationService(a).RecordRootTurnBinding(r, s, t, u) },
-		NoteTurnStartedFn: func(s string, sub *domainsubmission.Submission) { newTurnStreamService(a).NoteTurnStarted(s, sub) }, MarkSessionThreadLiveFn: func(s, t string) { markSessionThreadLive(a, s, t) }, ContextProvider: a,
+		}, ContextProvider: a,
 	}
 }
 
-func onThreadGoalUpdated(a *App, note codexrpc.ThreadGoalUpdatedNotification) {
-	goalcmd.OnThreadGoalUpdated(goalDependenciesForApp(a), note.Goal)
+type goalAnchorPresenter struct{ outbound goalcmd.Outbound }
+
+func (p goalAnchorPresenter) SendContinuationAnchor(ctx context.Context, chatID string, goal conversation.ThreadGoal, ordinal int) (string, error) {
+	return p.outbound.SendCard(ctx, chatID, goalcmd.RenderContinuationCard(goal, ordinal))
 }
 
-func onThreadGoalCleared(a *App, note codexrpc.ThreadGoalClearedNotification) {
-	goalcmd.OnThreadGoalCleared(goalDependenciesForApp(a), note.ThreadID)
+func GoalContinuationPorts(a *App) goalapp.Dependencies {
+	return goalapp.Dependencies{
+		Context: a.Context, Repository: a.State(), Tracker: goalTrackerForApp(a),
+		Presenter: goalAnchorPresenter{outbound: goalOutbound{app: a}},
+		Bindings:  a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
+		Streams: a.bindings.TurnPresentation, Live: turnRuntimePort{app: a},
+		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
+		BelongsToFrontend:  func(key string) bool { return sessionBelongsToFrontend(a, key) },
+	}
 }
 
 func completeMenuGoalAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return newGoalService(a).CompleteMenuGoal(action, sessionKey)
+		return a.bindings.GoalCommands.CompleteMenuGoal(action, sessionKey)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
 	runAsync(a, func() {
-		resp, err := newGoalService(a).CompleteMenuGoal(action, sessionKey)
+		resp, err := a.bindings.GoalCommands.CompleteMenuGoal(action, sessionKey)
 		completeGoalAsyncResult(a, action, sessionKey, messageID, resp, err, "goal menu patch failed")
 	})
 	return &callback.CardActionTriggerResponse{
@@ -102,11 +103,11 @@ func completeGoalRenderedActionAsync(
 	run func(goalcmd.Service) (*callback.CardActionTriggerResponse, error),
 ) (*callback.CardActionTriggerResponse, error) {
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return run(newGoalService(a))
+		return run(*a.bindings.GoalCommands)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
 	runAsync(a, func() {
-		resp, err := run(newGoalService(a))
+		resp, err := run(*a.bindings.GoalCommands)
 		completeGoalAsyncResult(a, action, sessionKey, messageID, resp, err, "goal action patch failed")
 	})
 	return &callback.CardActionTriggerResponse{

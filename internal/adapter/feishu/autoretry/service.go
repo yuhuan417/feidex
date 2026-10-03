@@ -3,8 +3,8 @@ package autoretry
 
 import (
 	"context"
+	retry "feidex/internal/application/autoretry"
 	"feidex/internal/feishu"
-	retry "feidex/internal/runtime/autoretry"
 	"feidex/internal/textutil"
 	"fmt"
 	"strings"
@@ -31,7 +31,6 @@ type Service struct {
 	Outbound    Outbound
 	Renderer    CardRenderer
 	Settings    func() Settings
-	SaveEnabled func(bool) error
 	SessionKey  func(*feishu.InboundMessage) string
 	MenuBody    func(string, string) string
 	ReplyAction func(*feishu.InboundMessage, *callback.CardActionTriggerResponse) error
@@ -47,8 +46,7 @@ func (s Service) context() context.Context {
 	}
 	return context.Background()
 }
-func (s Service) AutoRetryTitle() string                    { return s.Settings().Title }
-func (s Service) UpdateAutoRetryEnabled(enabled bool) error { return s.SaveEnabled(enabled) }
+func (s Service) AutoRetryTitle() string { return s.Settings().Title }
 func (s Service) RetryStatus(snapshot RetryState, phase, notice string) string {
 	if s.Outbound == nil {
 		return ""
@@ -206,9 +204,6 @@ func (s Service) CompleteAutoRetrySet(action *feishu.CardAction, enabled bool) (
 			Toast: &callback.Toast{Type: "error", Content: err.Error()},
 			Card:  RawCard(s.RenderAutoRetryConfigCard(sessionKey)),
 		}, nil
-	}
-	if !enabled {
-		s.CancelAllAutoRetry("已关闭自动重试。")
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新自动重试"},

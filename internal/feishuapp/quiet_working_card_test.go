@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 )
@@ -19,11 +20,11 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", turnitem.NewProtocolItemWithID("reason-1", map[string]any{
 		"id":   "reason-1",
 		"type": "reasoning",
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
 	}
@@ -34,7 +35,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("working card body after reasoning = %q", body)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", turnitem.NewProtocolItemWithID("cmd-1", map[string]any{
 		"id":     "cmd-1",
 		"type":   "commandExecution",
 		"status": "completed",
@@ -49,7 +50,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 				"path": filepath.Join(workspace, "internal", "app"),
 			},
 		},
-	})
+	}))
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched card count after command = %d, want 1", len(ff.patchedCards))
 	}
@@ -63,11 +64,11 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		}
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", turnitem.NewProtocolItemWithID("agent-1", map[string]any{
 		"id":   "agent-1",
 		"type": "agentMessage",
 		"text": "first reply",
-	})
+	}))
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after first agent message = %d, want 2", len(ff.replyCards))
 	}
@@ -75,14 +76,14 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("agent message body = %q", body)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "web-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "web-1", turnitem.NewProtocolItemWithID("web-1", map[string]any{
 		"id":    "web-1",
 		"type":  "webSearch",
 		"query": "latest golang release",
 		"action": map[string]any{
 			"type": "search",
 		},
-	})
+	}))
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after web search = %d, want 3", len(ff.replyCards))
 	}
@@ -93,7 +94,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("second working card body = %q", body)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "file-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "file-1", turnitem.NewProtocolItemWithID("file-1", map[string]any{
 		"id":     "file-1",
 		"type":   "fileChange",
 		"status": "completed",
@@ -103,7 +104,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 				"kind": map[string]any{"type": "update"},
 			},
 		},
-	})
+	}))
 	if len(ff.patchedCards) != 2 {
 		t.Fatalf("patched card count after file change = %d, want 2", len(ff.patchedCards))
 	}
@@ -111,7 +112,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("patched second working card body = %q", body)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "file-2", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "file-2", turnitem.NewProtocolItemWithID("file-2", map[string]any{
 		"id":     "file-2",
 		"type":   "fileChange",
 		"status": "completed",
@@ -121,7 +122,7 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 				"kind": map[string]any{"type": "update"},
 			},
 		},
-	})
+	}))
 	if len(ff.patchedCards) != 3 {
 		t.Fatalf("patched card count after second file change = %d, want 3", len(ff.patchedCards))
 	}
@@ -129,11 +130,11 @@ func TestQuietModeAggregatesIntermediateItemsBetweenAgentMessages(t *testing.T) 
 		t.Fatalf("patched second working card body = %q", body)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-2", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "agent-2", turnitem.NewProtocolItemWithID("agent-2", map[string]any{
 		"id":   "agent-2",
 		"type": "agentMessage",
 		"text": "second reply",
-	})
+	}))
 	if len(ff.replyCards) != 4 {
 		t.Fatalf("reply card count after second agent message = %d, want 4", len(ff.replyCards))
 	}
@@ -147,22 +148,22 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForNextAgentMessage(t *testing.T
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", turnitem.NewProtocolItemWithID("reason-1", map[string]any{
 		"id":   "reason-1",
 		"type": "reasoning",
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "agent-1", turnitem.NewProtocolItemWithID("agent-1", map[string]any{
 		"id":   "agent-1",
 		"type": "agentMessage",
 		"text": "reply after reasoning",
-	})
+	}))
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched cards = %d, want 1 when reasoning-only card is reused", len(ff.patchedCards))
 	}
@@ -179,11 +180,11 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForApprovalButNotFinal(t *testin
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", turnitem.NewProtocolItemWithID("reason-1", map[string]any{
 		"id":   "reason-1",
 		"type": "reasoning",
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
 	}
@@ -205,12 +206,12 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForApprovalButNotFinal(t *testin
 		t.Fatalf("approval card title = %q", got)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "final-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "final-1", turnitem.NewProtocolItemWithID("final-1", map[string]any{
 		"id":    "final-1",
 		"type":  "agentMessage",
 		"phase": "final_answer",
 		"text":  "审批后的最终答复",
-	})
+	}))
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("final should not patch the approval card, patched=%d", len(ff.patchedCards))
 	}
@@ -231,8 +232,8 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForApproval(t *testing.T) {
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-working", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "cmd-working", turnitem.NewProtocolItemWithID("cmd-working", map[string]any{
 		"id":     "cmd-working",
 		"type":   "commandExecution",
 		"status": "completed",
@@ -243,7 +244,7 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForApproval(t *testing.T) {
 				"path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
 			},
 		},
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after command working card = %d, want 1", len(ff.replyCards))
 	}
@@ -269,8 +270,8 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForFinalCard(t *testing.T) 
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", turnitem.NewProtocolItemWithID("cmd-1", map[string]any{
 		"id":     "cmd-1",
 		"type":   "commandExecution",
 		"status": "completed",
@@ -281,7 +282,7 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForFinalCard(t *testing.T) 
 				"path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
 			},
 		},
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after command = %d, want 1", len(ff.replyCards))
 	}
@@ -309,8 +310,8 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForTerminalCard(t *testing.
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "cmd-1", turnitem.NewProtocolItemWithID("cmd-1", map[string]any{
 		"id":     "cmd-1",
 		"type":   "commandExecution",
 		"status": "completed",
@@ -321,7 +322,7 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForTerminalCard(t *testing.
 				"path": filepath.Join(workspace, "internal", "app"),
 			},
 		},
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after command = %d, want 1", len(ff.replyCards))
 	}
@@ -348,7 +349,7 @@ func TestExecuteQuietWorkingCardOp(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &turn.QuietWorkingCard{}}
+	a.bindings.TurnPresentation.Tracker().Streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &turn.QuietWorkingCard{}}
 	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID: "turn-1",
 		Body:   "Read `quiet_mode.go`",
@@ -356,11 +357,11 @@ func TestExecuteQuietWorkingCardOp(t *testing.T) {
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("replyCards = %d, want 1", len(ff.replyCards))
 	}
-	if got := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking; got == nil || got.MessageID == "" || got.RenderedBody != "Read `quiet_mode.go`" {
+	if got := a.bindings.TurnPresentation.Tracker().Streams["turn-1"].QuietWorking; got == nil || got.MessageID == "" || got.RenderedBody != "Read `quiet_mode.go`" {
 		t.Fatalf("commitQuietWorkingCardRender(reply) = %+v", got)
 	}
 
-	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking = &turn.QuietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
+	a.bindings.TurnPresentation.Tracker().Streams["turn-1"].QuietWorking = &turn.QuietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
 	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
@@ -369,18 +370,18 @@ func TestExecuteQuietWorkingCardOp(t *testing.T) {
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patchedCards = %d, want 1", len(ff.patchedCards))
 	}
-	if got := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking.RenderedBody; got != "Update `quiet_mode.go`" {
+	if got := a.bindings.TurnPresentation.Tracker().Streams["turn-1"].QuietWorking.RenderedBody; got != "Update `quiet_mode.go`" {
 		t.Fatalf("commitQuietWorkingCardRender(patch) = %q", got)
 	}
 
 	ff.patchCardErr = errors.New("boom")
-	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking = &turn.QuietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
+	a.bindings.TurnPresentation.Tracker().Streams["turn-1"].QuietWorking = &turn.QuietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
 	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "after error",
 	})
-	if got := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].QuietWorking.RenderedBody; got != "stable" {
+	if got := a.bindings.TurnPresentation.Tracker().Streams["turn-1"].QuietWorking.RenderedBody; got != "stable" {
 		t.Fatalf("patch error should not commit render, got %q", got)
 	}
 }

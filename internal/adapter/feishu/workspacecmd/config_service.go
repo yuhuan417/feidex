@@ -3,6 +3,7 @@ package workspacecmd
 import (
 	"context"
 	"errors"
+	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
@@ -132,16 +133,16 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 			sess = &conversation.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 		}
 		reply := "已切换工作区到 " + ws.ID
-		if err := applyWorkspaceSwitch(s.Deps.Lifecycle, s.ClearSessionLiveThread, sess, ws.ID); err != nil {
+		out, err := s.Deps.Workflow.Switch(appworkspace.SwitchRequest{Session: sess, WorkspaceID: ws.ID}, false)
+		if err != nil {
 			return err
 		}
-		binding, err := s.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
-		if err != nil {
+		if out.BindingError != nil {
 			// Log warning but don't fail
 			reply += s.BackendWorkspaceSwitchBindingFailureNotice()
 			return s.Deps.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, false)
 		}
-		reply += s.BackendWorkspaceSwitchBindingNotice(binding)
+		reply += s.BackendWorkspaceSwitchBindingNotice(out.Binding)
 		return s.Deps.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, false)
 	}
 	return fmt.Errorf("usage: %s", s.BackendWorkspaceCommandUsage())
@@ -214,26 +215,13 @@ func (s *ConfigService) ShowWorkspaceDeleteMenu(msg *feishu.InboundMessage) erro
 
 // ValidateWorkspaceDeletion validates that a workspace can be deleted.
 func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string) error {
-	if s.Deps.Lifecycle == nil {
-		return fmt.Errorf("workspace lifecycle is unavailable")
-	}
-	return s.Deps.Lifecycle.ValidateDeletion(sessionKey, workspaceID)
+	return s.Deps.Workflow.ValidateDeletion(sessionKey, workspaceID)
 }
 
 // DeleteWorkspace commits reference cleanup and configuration deletion before
 // runtime cleanup or success cards can be published.
 func (s *ConfigService) DeleteWorkspace(sessionKey, workspaceID string) error {
-	if s.Deps.Lifecycle == nil {
-		return fmt.Errorf("workspace lifecycle is unavailable")
-	}
-	effects, err := s.Deps.Lifecycle.Delete(sessionKey, workspaceID)
-	if err != nil {
-		return err
-	}
-	for _, key := range effects.ClearLiveThreads {
-		s.ClearSessionLiveThread(key)
-	}
-	return nil
+	return s.Deps.Workflow.Delete(sessionKey, workspaceID)
 }
 
 // CompleteWorkspaceDeleteMenu handles the workspace delete menu action.

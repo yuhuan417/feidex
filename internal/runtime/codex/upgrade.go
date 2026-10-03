@@ -11,7 +11,7 @@ import (
 
 // UpgradeService manages Codex runtime upgrade and restart operations.
 // All host-app dependencies are injected as callback function fields.
-type UpgradeService struct {
+type UpgradeDependencies struct {
 	// CreateClient creates a new Codex client with the given config.
 	CreateClient func() CodexClient
 
@@ -39,10 +39,9 @@ type UpgradeService struct {
 	RecoverFrontendRuntimeState func()
 }
 
-// NewUpgradeService creates a new UpgradeService.
-func NewUpgradeService() UpgradeService {
-	return UpgradeService{}
-}
+type UpgradeService UpgradeDependencies
+
+func NewUpgradeService(deps UpgradeDependencies) UpgradeService { return UpgradeService(deps) }
 
 // StartVerifiedCodexClient creates, configures, starts, and verifies a
 // new Codex client. The caller is responsible for closing the returned

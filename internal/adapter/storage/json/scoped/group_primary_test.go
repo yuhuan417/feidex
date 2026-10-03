@@ -8,7 +8,7 @@ import (
 
 func TestGroupPrimaryUsesCanonicalKeyOnly(t *testing.T) {
 	store := newTestStateStore(t)
-	frontend := NewScoped(store, "default", "", false)
+	frontend := NewScoped(store, "default", "")
 	if err := store.UpsertGroupPrimary(&state.GroupPrimary{
 		ID:         "primary_default_group_chat-1",
 		FrontendID: "legacy",
@@ -26,8 +26,8 @@ func TestGroupPrimaryUsesCanonicalKeyOnly(t *testing.T) {
 
 func TestGroupPrimaryUsesFrontendScopedKey(t *testing.T) {
 	store := newTestStateStore(t)
-	frontendA := NewScoped(store, "frontend-a", "", false)
-	frontendB := NewScoped(store, "frontend-b", "", false)
+	frontendA := NewScoped(store, "frontend-a", "")
+	frontendB := NewScoped(store, "frontend-b", "")
 
 	if err := frontendA.SaveGroupPrimary(&state.GroupPrimary{ChatType: "group", ChatID: "chat-1", Enabled: true}); err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestGroupPrimaryUsesFrontendScopedKey(t *testing.T) {
 
 func TestGroupPrimarySaveAlwaysUsesCurrentFrontendScope(t *testing.T) {
 	store := newTestStateStore(t)
-	frontend := NewScoped(store, "frontend-a", "", false)
+	frontend := NewScoped(store, "frontend-a", "")
 
 	if err := frontend.SaveGroupPrimary(&state.GroupPrimary{
 		ID:         "primary-foreign",

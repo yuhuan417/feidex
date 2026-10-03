@@ -86,14 +86,14 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 	if codexApp.ConfigMu() != claudeApp.ConfigMu() {
 		t.Fatal("frontend apps should share one config mutex")
 	}
-	codexClient, _ := codexApp.registry.Codex.(CodexClient)
-	claudeOnCodex, _ := codexApp.registry.Claude.(ClaudeCore)
-	if codexApp.frontendID != "codex-main" || codexApp.backend != domainbackend.BackendCodex || codexClient != codexClients[0] || claudeOnCodex != nil {
+	codexClient := codexApp.runtimeOwner.CodexClient()
+	claudeOnCodex := codexApp.runtimeOwner.ClaudeCore()
+	if codexApp.frontendID != "codex-main" || codexApp.Backend() != domainbackend.BackendCodex || codexClient != codexClients[0] || claudeOnCodex != nil {
 		t.Fatalf("codex app = %+v", codexApp)
 	}
-	codexOnClaude, _ := claudeApp.registry.Codex.(CodexClient)
-	claudeClient, _ := claudeApp.registry.Claude.(ClaudeCore)
-	if claudeApp.frontendID != "claude-main" || claudeApp.backend != domainbackend.BackendClaude || codexOnClaude != nil || claudeClient != claudeClients[0] {
+	codexOnClaude := claudeApp.runtimeOwner.CodexClient()
+	claudeClient := claudeApp.runtimeOwner.ClaudeCore()
+	if claudeApp.frontendID != "claude-main" || claudeApp.Backend() != domainbackend.BackendClaude || codexOnClaude != nil || claudeClient != claudeClients[0] {
 		t.Fatalf("claude app = %+v", claudeApp)
 	}
 }
@@ -145,9 +145,9 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 	if codexCalls != 0 || claudeCalls != 0 {
 		t.Fatalf("runtime constructors should not run for unset backend, codex=%d claude=%d", codexCalls, claudeCalls)
 	}
-	codexClient, _ := svc.Frontends[0].registry.Codex.(CodexClient)
-	claudeClient, _ := svc.Frontends[0].registry.Claude.(ClaudeCore)
-	if svc.Frontends[0].backend != "" || codexClient != nil || claudeClient != nil {
+	codexClient := svc.Frontends[0].runtimeOwner.CodexClient()
+	claudeClient := svc.Frontends[0].runtimeOwner.ClaudeCore()
+	if svc.Frontends[0].Backend() != "" || codexClient != nil || claudeClient != nil {
 		t.Fatalf("unset backend app = %+v", svc.Frontends[0])
 	}
 }

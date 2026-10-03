@@ -64,8 +64,8 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	notifier, ok := app.registry.FeishuTransport.(*appfeishuwrap.NotifyingFeishuClient)
-	codex, _ := app.registry.Codex.(CodexClient)
+	notifier, ok := app.transport.(*appfeishuwrap.NotifyingFeishuClient)
+	codex := app.runtimeOwner.CodexClient()
 	if codex != fc || !ok || notifier.Base != ff {
 		t.Fatalf("New() did not use injected clients: %+v", app)
 	}
@@ -296,6 +296,7 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 		t.Fatalf("makeSessionKey(p2p) = %q", sessionKey)
 	}
 	a.frontendID = "frontend-a"
+	recomposeTestApp(a)
 	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:chat:chat" {
 		t.Fatalf("makeSessionKey(frontend group) = %q", got)
 	}
@@ -429,7 +430,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "repo /tmp/test-workspace Repo Name"}
-	pending := &state.PendingRequest{ID: "req-1", FeishuMsgID: "card-1", SessionKey: makeSessionKey(a, msg)}
+	pending := &state.PendingRequest{ID: "req-1", Kind: "workspace_new", Status: "pending", FeishuMsgID: "card-1", SessionKey: makeSessionKey(a, msg)}
 	if err := a.store.UpsertPending(pending); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
@@ -449,7 +450,7 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 		}
 	}
 
-	if err := newWorkspaceManagementService(a).CompleteWorkspaceNewText(msg, pending); err != nil {
+	if err := a.bindings.WorkspaceManagement.CompleteWorkspaceNewText(msg, pending); err != nil {
 		t.Fatalf("completeWorkspaceNewText() error = %v", err)
 	}
 	a.waitAsync()
@@ -580,6 +581,7 @@ func TestCompleteWorkspaceNewTextExistingWorkspacePromptsSwitch(t *testing.T) {
 	pending := &state.PendingRequest{
 		ID:          "req-existing-1",
 		Kind:        "workspace_new",
+		Status:      "pending",
 		FeishuMsgID: "card-1",
 		SessionKey:  makeSessionKey(a, msg),
 		PayloadJSON: mustJSON(appworkspacecmd.NewPayload{
@@ -591,7 +593,7 @@ func TestCompleteWorkspaceNewTextExistingWorkspacePromptsSwitch(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	if err := newWorkspaceManagementService(a).CompleteWorkspaceNewText(msg, pending); err != nil {
+	if err := a.bindings.WorkspaceManagement.CompleteWorkspaceNewText(msg, pending); err != nil {
 		t.Fatalf("completeWorkspaceNewText() error = %v", err)
 	}
 	if pending := a.store.PendingByID("req-existing-1"); pending == nil || pending.Status != "resolved" {
@@ -627,6 +629,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a)
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
@@ -849,13 +852,13 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 	if resp, err := newCardActionService(a).dispatch(&feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("dispatchCardAction(unknown) = %#v, %v", resp, err)
 	}
-	newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
+	a.runtimeOwner.BackendTransition.BeginBackendSwitchState(domainbackend.BackendCodex)
 	if resp, err := newCardActionService(a).dispatch(&feishu.CardAction{
 		ActionValue: map[string]any{"action": "menu.root"},
 	}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "当前正在切换到 Codex backend") {
 		t.Fatalf("dispatchCardAction(blocked) = %#v, %v", resp, err)
 	}
-	newRuntimeStateService(a).finishBackendSwitchState()
+	a.runtimeOwner.BackendTransition.FinishBackendSwitchState()
 
 	for name, fn := range map[string]func() (*callback.CardActionTriggerResponse, error){
 		"menu.root": func() (*callback.CardActionTriggerResponse, error) {
@@ -939,10 +942,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuStatus(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug": func() (*callback.CardActionTriggerResponse, error) {
-			return newDebugService(a).CompleteMenuDebug(action, action.ActionValue["session_key"].(string))
+			return a.bindings.Debug.CompleteMenuDebug(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.debug.logs": func() (*callback.CardActionTriggerResponse, error) {
-			return newDebugService(a).CompleteMenuDebugLogs(action, action.ActionValue["session_key"].(string))
+			return a.bindings.Debug.CompleteMenuDebugLogs(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
 			return newMenuActionService(a).completeMenuHelp(action, action.ActionValue["session_key"].(string))
@@ -951,28 +954,28 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuHistory(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.skills": func() (*callback.CardActionTriggerResponse, error) {
-			return newSkillsService(a).CompleteSkillsOpen(action, action.ActionValue["session_key"].(string))
+			return a.bindings.SkillCommands.CompleteSkillsOpen(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceConfigService(a).CompleteMenuWorkspace(action, action.ActionValue["session_key"].(string))
+			return a.bindings.WorkspaceConfiguration.CompleteMenuWorkspace(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.new": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceManagementService(a).CompleteWorkspaceNew(action, action.ActionValue["session_key"].(string))
+			return a.bindings.WorkspaceManagement.CompleteWorkspaceNew(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.delete.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceConfigService(a).CompleteWorkspaceDeleteMenu(action.ActionValue["session_key"].(string))
+			return a.bindings.WorkspaceConfiguration.CompleteWorkspaceDeleteMenu(action.ActionValue["session_key"].(string))
 		},
 		"workspace.clone": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceManagementService(a).CompleteWorkspaceClone(action, action.ActionValue["session_key"].(string))
+			return a.bindings.WorkspaceManagement.CompleteWorkspaceClone(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.worktree": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceManagementService(a).CompleteWorkspaceWorktree(action, action.ActionValue["session_key"].(string))
+			return a.bindings.WorkspaceManagement.CompleteWorkspaceWorktree(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceManagementService(a).CompleteWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
+			return a.bindings.WorkspaceManagement.CompleteWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"workspace.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return newWorkspaceManagementService(a).CompleteWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
+			return a.bindings.WorkspaceManagement.CompleteWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
 			return appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
@@ -1009,7 +1012,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 
 func TestProcessMessageBlockedWhileBackendSwitching(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
+	a.runtimeOwner.BackendTransition.BeginBackendSwitchState(domainbackend.BackendCodex)
 
 	msg := &feishu.InboundMessage{
 		MessageID: "msg-1",
@@ -1032,7 +1035,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	workspaceCard := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
+	workspaceCard := a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
 	workspaceActions := cardButtonsForTest(workspaceCard)
 	foundBackToMenu := false
 	foundClone := false
@@ -1065,7 +1068,7 @@ func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
 		t.Fatalf("workspace menu missing delete button: %+v", workspaceActions)
 	}
 
-	sandboxCard, err := newWorkspaceRenderService(a).RenderWorkspaceSandboxMenuCard(sessionKey)
+	sandboxCard, err := a.bindings.WorkspacePresentation.RenderWorkspaceSandboxMenuCard(sessionKey)
 	if err != nil {
 		t.Fatalf("renderWorkspaceSandboxMenuCard() error = %v", err)
 	}
@@ -1101,7 +1104,7 @@ func TestWorkspaceDeleteMenuUsesSelectStatic(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	card, err := newWorkspaceRenderService(a).RenderWorkspaceDeleteMenuCard(sessionKey)
+	card, err := a.bindings.WorkspacePresentation.RenderWorkspaceDeleteMenuCard(sessionKey)
 	if err != nil {
 		t.Fatalf("renderWorkspaceDeleteMenuCard() error = %v", err)
 	}
@@ -1215,7 +1218,7 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		t.Fatalf("tools menu last button = %q, want 返回上一级", lastToolsText)
 	}
 
-	modelCard := newBackendConfigurationService(a).renderModelMenuCard(sessionKey)
+	modelCard := a.bindings.BackendConfiguration.RenderModelMenuCard(sessionKey)
 	modelActions := cardButtonsForTest(modelCard)
 	modelLabelByAction := map[string]string{}
 	for _, action := range modelActions {
@@ -1296,7 +1299,7 @@ func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 		}
 	}
 
-	modelCard := newBackendConfigurationService(a).renderModelMenuCard(sessionKey)
+	modelCard := a.bindings.BackendConfiguration.RenderModelMenuCard(sessionKey)
 	modelLabels := cardButtonLabelsByAction(modelCard)
 	if _, ok := modelLabels["menu.fast"]; ok {
 		t.Fatalf("unexpected Claude model action menu.fast in %+v", modelLabels)
@@ -1827,7 +1830,7 @@ func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
 	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeService(a).CommandUpgrade(msg, nil); err != nil {
+	if err := a.bindings.Upgrades.CommandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -1885,7 +1888,7 @@ func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"v0.3.0"}); err != nil {
+	if err := a.bindings.Upgrades.CommandUpgrade(msg, []string{"v0.3.0"}); err != nil {
 		t.Fatalf("commandUpgrade(specified version) error = %v", err)
 	}
 	if releaseStub.latestCalls != 0 {
@@ -1956,7 +1959,7 @@ func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
 	appupgradecmd.DisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 	msg := &feishu.InboundMessage{MessageID: "m-dev", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"dev"}); err != nil {
+	if err := a.bindings.Upgrades.CommandUpgrade(msg, []string{"dev"}); err != nil {
 		t.Fatalf("commandUpgrade(dev) error = %v", err)
 	}
 	if releaseStub.latestCalls != 0 {
@@ -2005,7 +2008,7 @@ func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-local", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"local"}); err != nil {
+	if err := a.bindings.Upgrades.CommandUpgrade(msg, []string{"local"}); err != nil {
 		t.Fatalf("commandUpgrade(local) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -2110,6 +2113,11 @@ func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
 }
 
 func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
+	origManager := newDaemonManager
+	defer func() { newDaemonManager = origManager }()
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
 	origUpgrade := startDaemonUpgrade
 	defer func() { startDaemonUpgrade = origUpgrade }()
 
@@ -2134,10 +2142,10 @@ func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
 		if spec.Version != "v0.2.0" || spec.BinaryPath != "/tmp/feidex" {
 			t.Fatalf("unexpected upgrade spec: %+v", spec)
 		}
-		return "feidex-upgrade-1", nil
+		return spec.UnitName, nil
 	}
 
-	resp, err := newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{
+	resp, err := a.bindings.Upgrades.CompleteUpgradeAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "upgrade-1"},
 	}, "upgrade.confirm")
@@ -2349,10 +2357,10 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatalf("buildTurnSandboxPolicy(bad) = %+v, want nil", got)
 	}
 
-	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
+	if _, err := a.bindings.TurnStarter.Start(context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(nil submission) to fail")
 	}
-	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
+	if _, err := a.bindings.TurnStarter.Start(context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
 		t.Fatal("expected startSubmissionTurn(empty input) to fail")
 	}
 
@@ -2406,7 +2414,7 @@ func TestStartSubmissionTurnIncludesFastServiceTier(t *testing.T) {
 		return nil
 	}
 	sub := &domainsubmission.Submission{ID: "sub-1", InputText: "hello"}
-	if _, err := startSubmissionTurn(a, context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", "", ""); err != nil {
+	if _, err := a.bindings.TurnStarter.Start(context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", "", ""); err != nil {
 		t.Fatalf("startSubmissionTurn() error = %v", err)
 	}
 	if gotParams == nil {
@@ -2429,7 +2437,7 @@ func TestNotificationHelpers(t *testing.T) {
 	handleNotification(a, "error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
 	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"req-1"}`))
 
-	stream := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"]
+	stream := a.bindings.TurnPresentation.Tracker().Streams["turn-1"]
 	if stream == nil || !strings.Contains(stream.PendingPlan, "a") {
 		t.Fatalf("turn stream after notifications = %+v", stream)
 	}
@@ -2441,7 +2449,7 @@ func TestNotificationHelpers(t *testing.T) {
 		t.Fatalf("submission after error notification = %+v", updated)
 	}
 
-	newSubmissionQueueServiceFromApp(a).UpdateSubmissionByTurn("thread-1", "turn-1", func(s *domainsubmission.Submission) { s.Status = "custom" })
+	a.bindings.Submissions.UpdateSubmissionByTurn("thread-1", "turn-1", func(s *domainsubmission.Submission) { s.Status = "custom" })
 	if got := a.store.GetSubmission(sub.ID); got == nil || got.Status != "custom" {
 		t.Fatalf("updateSubmissionByTurn() = %+v, want updated status", got)
 	}
@@ -2519,7 +2527,7 @@ func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
 func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	targetSessionKey := "feishu:chat:chat-1"
-	bucketSessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	bucketSessionKey := a.bindings.Continuation.PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            targetSessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -2724,7 +2732,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 		}
 	}
 
-	if _, err := newBindingService(a).activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "alt"); err != nil {
+	if _, err := a.bindings.BindingCommands.activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "alt"); err != nil {
 		t.Fatalf("activateBindingWorkspace(group -> alt) error = %v", err)
 	}
 
@@ -2747,7 +2755,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 	if rootBSessionKey != rootASessionKey {
 		t.Fatalf("root-b session key = %q, want shared group session %q", rootBSessionKey, rootASessionKey)
 	}
-	if _, err := newBindingService(a).activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "default"); err != nil {
+	if _, err := a.bindings.BindingCommands.activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "default"); err != nil {
 		t.Fatalf("activateBindingWorkspace(group -> default) error = %v", err)
 	}
 
@@ -2893,7 +2901,7 @@ func TestStartNextSubmissionRefreshesRootTurnBinding(t *testing.T) {
 
 func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	sessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	sessionKey := a.bindings.Continuation.PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -2957,7 +2965,7 @@ func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
 func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	replySessionKey := "feishu:chat:chat-1"
-	bucketSessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	bucketSessionKey := a.bindings.Continuation.PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         replySessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -3170,11 +3178,11 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 		}
 	}
 
-	resp, err := newBackendConfigurationService(a).completeGlobalModelSet(&feishu.CardAction{}, "gpt-5")
+	resp, err := a.bindings.BackendConfiguration.CompleteGlobalModelSet(&feishu.CardAction{}, "gpt-5")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeGlobalModelSet() = %#v, %v", resp, err)
 	}
-	resp, err = newBackendConfigurationService(a).completeGlobalReasoningEffortSet(&feishu.CardAction{}, "high")
+	resp, err = a.bindings.BackendConfiguration.CompleteGlobalReasoningEffortSet(&feishu.CardAction{}, "high")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeGlobalReasoningEffortSet() = %#v, %v", resp, err)
 	}
@@ -3443,7 +3451,7 @@ func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
 		return nil
 	}
 
-	if err := newHistoryService(a).CommandHistory(msg, nil); err != nil {
+	if err := a.bindings.History.CommandHistory(msg, nil); err != nil {
 		t.Fatalf("commandHistory() error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {

@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	appbackend "feidex/internal/adapter/feishu/backend"
+	interactionapp "feidex/internal/application/interaction"
 	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -116,7 +117,10 @@ func SortThreadsByUpdated(items []conversation.ThreadEntry) {
 
 // Dependencies provides config, state, lifecycle, and Feishu capabilities.
 type Dependencies struct {
-	Lifecycle      *appworkspace.Lifecycle
+	Settings       appworkspace.SettingsService
+	Planning       *appworkspace.PlanningService
+	Workflow       *appworkspace.Workflow
+	Forms          *interactionapp.FormService
 	ConfigProvider interface {
 		Config() *config.Config
 		ConfigMu() *sync.RWMutex
@@ -223,13 +227,9 @@ func (a Dependencies) PermissionDriver() appbackend.PermissionDriver {
 
 // State access callbacks.
 type (
-	GetSessionFn    func(key string) *conversation.Session
-	SessionsFn      func() []*conversation.Session
-	SaveSessionFn   func(sess *conversation.Session) error
-	NextLocalIDFn   func(prefix string) (string, error)
-	PendingFn       func(id string) *state.PendingRequest
-	SavePendingFn   func(req *state.PendingRequest) error
-	UpdatePendingFn func(id string, mutate func(*state.PendingRequest)) error
+	GetSessionFn func(key string) *conversation.Session
+	SessionsFn   func() []*conversation.Session
+	PendingFn    func(id string) *state.PendingRequest
 )
 
 // Thread callbacks.
@@ -243,9 +243,7 @@ type (
 
 // Session context callbacks.
 type (
-	SessionHasInFlightFn    func(sess *conversation.Session) bool
-	SetSessionThreadCtxFn   func(sess *conversation.Session, workspaceID, threadID, name, preview string)
-	SessionResetActiveOpsFn func(sess *conversation.Session)
+	SessionHasInFlightFn func(sess *conversation.Session) bool
 )
 
 // Clone operation callbacks.
@@ -301,19 +299,13 @@ type (
 // ---------------------------------------------------------------------------
 
 type StateDeps struct {
-	GetSession    GetSessionFn
-	Sessions      SessionsFn
-	SaveSession   SaveSessionFn
-	NextLocalID   NextLocalIDFn
-	Pending       PendingFn
-	SavePending   SavePendingFn
-	UpdatePending UpdatePendingFn
+	GetSession GetSessionFn
+	Sessions   SessionsFn
+	Pending    PendingFn
 }
 
 type SessionContextDeps struct {
 	SessionHasInFlight     SessionHasInFlightFn
-	SetSessionThreadCtx    SetSessionThreadCtxFn
-	SessionResetActiveOps  SessionResetActiveOpsFn
 	ClearSessionLiveThread ClearSessionLiveThreadFn
 }
 
@@ -441,35 +433,11 @@ func (s ConfigService) Sessions() []*conversation.Session {
 	}
 	return s.deps.State.Sessions()
 }
-func (s ConfigService) SaveSession(sess *conversation.Session) error {
-	if s.deps.State.SaveSession == nil {
-		return nil
-	}
-	return s.deps.State.SaveSession(sess)
-}
-func (s ConfigService) NextLocalID(prefix string) (string, error) {
-	if s.deps.State.NextLocalID == nil {
-		return "", nil
-	}
-	return s.deps.State.NextLocalID(prefix)
-}
 func (s ConfigService) Pending(id string) *state.PendingRequest {
 	if s.deps.State.Pending == nil {
 		return nil
 	}
 	return s.deps.State.Pending(id)
-}
-func (s ConfigService) SavePending(req *state.PendingRequest) error {
-	if s.deps.State.SavePending == nil {
-		return nil
-	}
-	return s.deps.State.SavePending(req)
-}
-func (s ConfigService) UpdatePending(id string, mutate func(*state.PendingRequest)) error {
-	if s.deps.State.UpdatePending == nil {
-		return nil
-	}
-	return s.deps.State.UpdatePending(id, mutate)
 }
 func (s ConfigService) SessionHasInFlight(sess *conversation.Session) bool {
 	if s.deps.SessionContext.SessionHasInFlight == nil {
@@ -623,51 +591,17 @@ func (s ManagementService) Sessions() []*conversation.Session {
 	}
 	return s.deps.State.Sessions()
 }
-func (s ManagementService) SaveSession(sess *conversation.Session) error {
-	if s.deps.State.SaveSession == nil {
-		return nil
-	}
-	return s.deps.State.SaveSession(sess)
-}
-func (s ManagementService) NextLocalID(prefix string) (string, error) {
-	if s.deps.State.NextLocalID == nil {
-		return "", nil
-	}
-	return s.deps.State.NextLocalID(prefix)
-}
 func (s ManagementService) Pending(id string) *state.PendingRequest {
 	if s.deps.State.Pending == nil {
 		return nil
 	}
 	return s.deps.State.Pending(id)
 }
-func (s ManagementService) SavePending(req *state.PendingRequest) error {
-	if s.deps.State.SavePending == nil {
-		return nil
-	}
-	return s.deps.State.SavePending(req)
-}
-func (s ManagementService) UpdatePending(id string, mutate func(*state.PendingRequest)) error {
-	if s.deps.State.UpdatePending == nil {
-		return nil
-	}
-	return s.deps.State.UpdatePending(id, mutate)
-}
 func (s ManagementService) SessionHasInFlight(sess *conversation.Session) bool {
 	if s.deps.SessionContext.SessionHasInFlight == nil {
 		return false
 	}
 	return s.deps.SessionContext.SessionHasInFlight(sess)
-}
-func (s ManagementService) SetSessionThreadCtx(sess *conversation.Session, workspaceID, threadID, name, preview string) {
-	if s.deps.SessionContext.SetSessionThreadCtx != nil {
-		s.deps.SessionContext.SetSessionThreadCtx(sess, workspaceID, threadID, name, preview)
-	}
-}
-func (s ManagementService) SessionResetActiveOps(sess *conversation.Session) {
-	if s.deps.SessionContext.SessionResetActiveOps != nil {
-		s.deps.SessionContext.SessionResetActiveOps(sess)
-	}
 }
 func (s ManagementService) EnsureWorkspaceThreadBinding(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error) {
 	if s.deps.Threads.EnsureWorkspaceThreadBinding == nil {
@@ -910,7 +844,6 @@ func makeSessionKey(a Dependencies, msg *feishu.InboundMessage) string {
 	}
 	return "feishu:frontend:" + frontendID + ":chat:" + chatID
 }
-func mustJSON(value any) string { data, _ := json.Marshal(value); return string(data) }
 
 // Form values are decoded at the Feishu entrypoint before application policy
 // sees them. Preserve the existing explicit-empty and non-string coercion rules.

@@ -11,7 +11,7 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"primary": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newBindingService(a).commandPrimary(msg, args)
+					return a.bindings.BindingCommands.commandPrimary(msg, args)
 				},
 			},
 		},
@@ -40,7 +40,7 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 			if actionName != "menu.current_workspace" {
 				return nil, false
 			}
-			return newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey), true
+			return a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
@@ -50,7 +50,7 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 			case "current_workspace.choose":
 				return completeMenuCommand(s.app, action, sessionKey, "/workspace choose", "menu.workspace")
 			case "current_workspace.use":
-				return newBindingService(s.app).completeBindingUse(action, sessionKey, actionStringValue(action, "workspace_id"))
+				return s.app.bindings.BindingCommands.completeBindingUse(action, sessionKey, actionStringValue(action, "workspace_id"))
 			default:
 				return nil, nil
 			}

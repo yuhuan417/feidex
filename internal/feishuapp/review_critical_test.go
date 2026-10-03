@@ -6,7 +6,6 @@ import (
 
 	appreview "feidex/internal/adapter/feishu/review"
 
-	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"testing"
@@ -83,7 +82,7 @@ func TestStartSubmissionReviewUsesStoredTargetPayload(t *testing.T) {
 		return nil
 	}
 
-	turnID, err := appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a), context.Background(), "thread-1", &domainsubmission.Submission{
+	turnID, err := a.bindings.Review.StartSubmission(context.Background(), "thread-1", &domainsubmission.Submission{
 		Kind:              submissionKindReview,
 		ReviewTargetType:  appreview.TargetCommit,
 		ReviewCommitSHA:   "abcdef1234567890",
@@ -122,11 +121,11 @@ func TestReviewFormSelectorsUpdatePendingPayload(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := newReviewFormService(a).BeginReviewForm(msg, reviewFormModeBase); err != nil {
+	if err := a.bindings.ReviewCommands.BeginReviewForm(msg, reviewFormModeBase); err != nil {
 		t.Fatalf("beginReviewForm(base) error = %v", err)
 	}
 	basePending := singleReviewPendingRequest(t, a)
-	resp, err := newReviewFormService(a).CompleteReviewBaseSelect(&feishu.CardAction{
+	resp, err := a.bindings.ReviewCommands.CompleteReviewBaseSelect(&feishu.CardAction{
 		UserID:      msg.UserID,
 		ActionValue: map[string]any{"request_id": basePending.ID},
 		Option:      "main",
@@ -143,11 +142,11 @@ func TestReviewFormSelectorsUpdatePendingPayload(t *testing.T) {
 	}
 
 	a.store.DeletePending(basePending.ID)
-	if err := newReviewFormService(a).BeginReviewForm(msg, reviewFormModeCommit); err != nil {
+	if err := a.bindings.ReviewCommands.BeginReviewForm(msg, reviewFormModeCommit); err != nil {
 		t.Fatalf("beginReviewForm(commit) error = %v", err)
 	}
 	commitPending := singleReviewPendingRequest(t, a)
-	resp, err = newReviewFormService(a).CompleteReviewCommitSelect(&feishu.CardAction{
+	resp, err = a.bindings.ReviewCommands.CompleteReviewCommitSelect(&feishu.CardAction{
 		UserID:      msg.UserID,
 		ActionValue: map[string]any{"request_id": commitPending.ID},
 		Option:      commits[0],

@@ -15,20 +15,20 @@ import (
 )
 
 type HistoryDependencies struct {
-	Frontend            identity.FrontendID
-	AllowLegacyFallback bool
-	Repository          historyapp.Repository
-	Backend             func() string
-	CodexClient         func() codexadapter.RPCClient
-	Context             func() context.Context
-	Outbound            historycards.Outbound
-	SessionKey          func(*feishu.InboundMessage) string
-	ReplyInThread       func(string) bool
+	Frontend identity.FrontendID
+
+	Repository    historyapp.Repository
+	Backend       func() string
+	CodexClient   func() codexadapter.RPCClient
+	Context       func() context.Context
+	Outbound      historycards.Outbound
+	SessionKey    func(*feishu.InboundMessage) string
+	ReplyInThread func(string) bool
 }
 
 func NewHistory(deps HistoryDependencies) historycards.Service {
 	queries := historyapp.Service{
-		Frontend: deps.Frontend, AllowLegacyFallback: deps.AllowLegacyFallback,
+		Frontend:   deps.Frontend,
 		Repository: deps.Repository, Backend: deps.Backend,
 		Readers: map[string]historyapp.Reader{
 			backend.BackendCodex:  currentCodexHistory{client: deps.CodexClient},

@@ -3,10 +3,47 @@ package state
 import (
 	"feidex/internal/domain/conversation"
 	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"testing"
 )
+
+func TestSessionUpdateDiskFailureDoesNotPublishMutation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := "feishu:frontend:a:chat:private"
+	if err := store.UpsertSession(&conversation.Session{Key: key, ActiveThreadID: "thread", RecentWorkspaceIDs: []string{"original"}}); err != nil {
+		t.Fatal(err)
+	}
+	before := store.GetSession(key)
+	if err := os.Mkdir(path+".tmp", 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateSession(key, func(sess *conversation.Session) {
+		sess.RecentWorkspaceIDs[0] = "mutated"
+		sess.ActiveThreadID = "replacement"
+	}); err == nil {
+		t.Fatal("expected write failure")
+	}
+	if !reflect.DeepEqual(before, store.GetSession(key)) {
+		t.Fatal("failed session write published mutable snapshot")
+	}
+	if err := os.Remove(path + ".tmp"); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.GetSession(key); got == nil || len(got.RecentWorkspaceIDs) != 1 || got.RecentWorkspaceIDs[0] != "original" {
+		t.Fatal("failed session write changed disk")
+	}
+}
 
 func TestUpdateSessionSerializesConcurrentMutationsAndPersistsOwnerState(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")

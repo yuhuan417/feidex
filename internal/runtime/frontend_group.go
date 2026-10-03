@@ -7,8 +7,8 @@ import "context"
 type ManagedFrontend interface {
 	Prepare(context.Context) error
 	StartInboundGC()
-	RecoverShared()
-	RecoverFrontend()
+	ResetStartupState() error
+	RecoverFrontend() error
 	Serve() error
 	StartBackground()
 	Stop(context.Context) error
@@ -28,11 +28,17 @@ func (g FrontendGroup) Start(ctx context.Context) error {
 	for _, frontend := range g.Frontends {
 		frontend.StartInboundGC()
 	}
-	if len(g.Frontends) > 0 {
-		g.Frontends[0].RecoverShared()
+	for _, frontend := range g.Frontends {
+		if err := frontend.ResetStartupState(); err != nil {
+			_ = stopFrontends(ctx, started)
+			return err
+		}
 	}
 	for _, frontend := range g.Frontends {
-		frontend.RecoverFrontend()
+		if err := frontend.RecoverFrontend(); err != nil {
+			_ = stopFrontends(ctx, started)
+			return err
+		}
 	}
 	for _, frontend := range g.Frontends {
 		if err := frontend.Serve(); err != nil {

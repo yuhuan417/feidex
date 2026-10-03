@@ -13,12 +13,12 @@ type ConversationRepository struct {
 	Repository conversationapp.Repository
 	Runner     runtime.EffectRunner
 	Frontend   identity.FrontendID
-	Context    context.Context
+	Context    func() context.Context
 }
 
 func (r ConversationRepository) Session(key string) *conversation.Session {
 	return r.Repository.Session(key)
 }
 func (r ConversationRepository) SaveSession(session *conversation.Session) error {
-	return r.Runner.Run(r.Context, []application.Effect{application.SaveState{Frontend: r.Frontend, Session: session}})
+	return r.Runner.Run(r.Context(), []application.Effect{application.SaveState{Frontend: r.Frontend, Session: session}})
 }

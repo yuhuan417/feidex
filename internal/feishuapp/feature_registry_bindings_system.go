@@ -16,7 +16,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"debug": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newDebugService(a).CommandDebug(msg, args)
+					return a.bindings.Debug.CommandDebug(msg, args)
 				},
 			},
 		},
@@ -25,15 +25,15 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if actionName != "menu.debug.logs" {
 				return nil, false
 			}
-			return newDebugService(a).RenderDebugLogsCard(sessionKey), true
+			return a.bindings.Debug.RenderDebugLogsCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.debug":
-				return newDebugService(s.app).CompleteMenuDebug(action, sessionKey)
+				return s.app.bindings.Debug.CompleteMenuDebug(action, sessionKey)
 			case "menu.debug.logs":
-				return newDebugService(s.app).CompleteMenuDebugLogs(action, sessionKey)
+				return s.app.bindings.Debug.CompleteMenuDebugLogs(action, sessionKey)
 			default:
 				return nil, nil
 			}
@@ -73,7 +73,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"codex": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newBackendUpgradeService(a).commandCodex(msg, args)
+					return a.bindings.BackendUpgrades.commandCodex(msg, args)
 				},
 			},
 		},
@@ -84,24 +84,24 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			view, err := newBackendUpgradeService(a).loadCodexUpgradeView(ctx, false)
+			view, err := a.bindings.BackendUpgrades.loadCodexUpgradeView(ctx, false)
 			if err != nil {
 				return nil, false
 			}
-			return newUpgradeRenderService(a).renderUpgradeStatusCard(upgraderender.CodexSpec, sessionKey, view, false), true
+			return a.bindings.UpgradePresentation.renderUpgradeStatusCard(upgraderender.CodexSpec, sessionKey, view, false), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.codex_upgrade" {
 				return nil, nil
 			}
-			return newBackendUpgradeService(s.app).completeMenuUpgrade(backendUpgradeCodex, action)
+			return s.app.bindings.BackendUpgrades.completeMenuUpgrade(backendUpgradeCodex, action)
 		},
 	}
 	bindings["menu.claude_upgrade"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"claude": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newBackendUpgradeService(a).commandClaude(msg, args)
+					return a.bindings.BackendUpgrades.commandClaude(msg, args)
 				},
 			},
 		},
@@ -112,24 +112,24 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			view, err := newBackendUpgradeService(a).loadClaudeUpgradeView(ctx, false)
+			view, err := a.bindings.BackendUpgrades.loadClaudeUpgradeView(ctx, false)
 			if err != nil {
 				return nil, false
 			}
-			return newUpgradeRenderService(a).renderUpgradeStatusCard(upgraderender.ClaudeSpec, sessionKey, view, false), true
+			return a.bindings.UpgradePresentation.renderUpgradeStatusCard(upgraderender.ClaudeSpec, sessionKey, view, false), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.claude_upgrade" {
 				return nil, nil
 			}
-			return newBackendUpgradeService(s.app).completeMenuUpgrade(backendUpgradeClaude, action)
+			return s.app.bindings.BackendUpgrades.completeMenuUpgrade(backendUpgradeClaude, action)
 		},
 	}
 	bindings["menu.upgrade"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"upgrade": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newUpgradeService(a).CommandUpgrade(msg, args)
+					return a.bindings.Upgrades.CommandUpgrade(msg, args)
 				},
 			},
 		},

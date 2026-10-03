@@ -80,10 +80,7 @@ func (r EffectRunner) RunSendCard(ctx context.Context, effect application.SendCa
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	// Card sends can be intentionally repeated for menu navigation and command
-	// capture. Their stable identity is used by higher-level workflows when
-	// needed, while the transport operation itself remains one-shot here.
-	value, err := r.runValue(ctx, "", func() (any, error) {
+	value, err := r.runValue(ctx, application.EffectIdentity(effect), func() (any, error) {
 		if r.SendCardWithID != nil {
 			return r.SendCardWithID(ctx, effect)
 		}
@@ -125,13 +122,7 @@ func (r EffectRunner) Run(ctx context.Context, effects []application.Effect) err
 			}
 			err = r.run(ctx, application.EffectIdentity(e), func() error { return r.Send(ctx, e) })
 		case application.SendCard:
-			if r.SendCard == nil {
-				return fmt.Errorf("send card effect unavailable")
-			}
-			// Menu/card sends are presentation refreshes and may intentionally
-			// repeat for the same anchor; workflow callers can use transport-level
-			// capture or patch semantics when they need stronger deduplication.
-			err = r.SendCard(ctx, e)
+			_, err = r.RunSendCard(ctx, e)
 		case application.PatchCard:
 			if r.Patch == nil {
 				return fmt.Errorf("patch effect unavailable")

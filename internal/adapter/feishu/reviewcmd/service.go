@@ -6,14 +6,14 @@ package reviewcmd
 import (
 	"context"
 	"encoding/json"
+	interactionapp "feidex/internal/application/interaction"
+	reviewapp "feidex/internal/application/review"
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
-	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	apputil "feidex/internal/formatutil"
 
@@ -47,13 +47,8 @@ const (
 // operations used by the review service.
 type StateProvider interface {
 	Session(key string) *conversation.Session
-	SaveSession(sess *conversation.Session) error
-	CreateSubmission(sub *domainsubmission.Submission) (string, error)
 	QueueSubmission(sessionKey, submissionID string) error
 	Pending(id string) *state.PendingRequest
-	SavePending(req *state.PendingRequest) error
-	UpdatePending(id string, mutate func(*state.PendingRequest)) error
-	NextLocalID(prefix string) (string, error)
 }
 
 // WorkspaceProvider narrows workspace access to the lookup operations used
@@ -80,6 +75,7 @@ type CodexClient interface {
 
 // Outbound is the semantic messaging capability used by review commands.
 type Outbound interface {
+	ReplyInteractionCard(context.Context, string, string, map[string]any, bool) (string, error)
 	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
 	ReplyText(context.Context, string, string, bool) error
 }
@@ -91,6 +87,7 @@ type CardRenderer interface {
 // Dependencies is the explicit review capability set assembled by the
 // composition root.
 type Dependencies struct {
+	UseCase        *reviewapp.Service
 	ConfigProvider interface {
 		Config() *config.Config
 		ConfigMu() *sync.RWMutex
@@ -244,13 +241,7 @@ func (d Dependencies) ReviewCompleteAsyncRenderedCardAction(a *feishu.CardAction
 // ---------------------------------------------------------------------------
 
 // ReviewPendingPayload is the payload stored in a pending review request.
-type ReviewPendingPayload struct {
-	Mode         string `json:"mode"`
-	Branch       string `json:"branch,omitempty"`
-	CommitSHA    string `json:"commit_sha,omitempty"`
-	CommitTitle  string `json:"commit_title,omitempty"`
-	Instructions string `json:"instructions,omitempty"`
-}
+type ReviewPendingPayload = reviewapp.FormPayload
 
 // ---------------------------------------------------------------------------
 // Service — manages /review command actions
@@ -373,144 +364,21 @@ func StartInlineReview(a Dependencies, msg *feishu.InboundMessage, target apprev
 	if msg == nil {
 		return "", fmt.Errorf("nil message")
 	}
-	sessionKey := a.ReviewMakeSessionKey(msg)
-	wp := a.ReviewWorkspaceProvider()
-	stateProvider := a.ReviewAppState()
-	sess := stateProvider.Session(sessionKey)
-	ws := wp.ReviewWorkspaceForSessionKey(sessionKey)
+	key := a.ReviewMakeSessionKey(msg)
+	ws := a.ReviewWorkspaceProvider().ReviewWorkspaceForSessionKey(key)
 	if ws == nil {
 		return "", fmt.Errorf("current workspace not found")
 	}
-	if a.ReviewSessionHasActiveWork(sess) {
-		return "", fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
-	}
-	if sess != nil && len(sess.Queue) > 0 {
-		return "", fmt.Errorf("当前有排队输入，请先等待处理完成或清理队列")
-	}
-	if sess != nil && len(sess.StagedImages) > 0 {
-		return "", fmt.Errorf("当前有暂存图片输入，请先发送或丢弃")
-	}
-	resolved, err := a.ReviewGitProvider().ReviewResolveTarget(ws.Cwd, target)
+	resolved, err := a.UseCase.Start(a.Context(), reviewapp.Input{SessionKey: key, UserID: msg.UserID, ChatID: msg.ChatID, ChatType: msg.ChatType, MessageID: msg.MessageID, RootMessageID: msg.RootMessageID}, reviewapp.Workspace{ID: ws.ID, CWD: ws.Cwd}, target)
 	if err != nil {
-		return "", err
-	}
-	threadID := ""
-	if sess != nil {
-		threadID = strings.TrimSpace(sess.ActiveThreadID)
-	}
-	if err := EnqueueReviewSubmission(a, msg, sessionKey, ws, threadID, resolved); err != nil {
 		return "", err
 	}
 	return appreview.ConfirmationText(resolved), nil
 }
 
 // ---------------------------------------------------------------------------
-// Submission enqueue
-// ---------------------------------------------------------------------------
-
-// EnqueueReviewSubmission enqueues a review submission for processing.
-func EnqueueReviewSubmission(a Dependencies, msg *feishu.InboundMessage, sessionKey string, ws *config.Workspace, threadID string, target appreview.TargetSpec) error {
-	if msg == nil {
-		return fmt.Errorf("nil message")
-	}
-	stateProvider := a.ReviewAppState()
-	store := a.Store()
-	if store == nil {
-		return fmt.Errorf("store not initialized")
-	}
-	sess := stateProvider.Session(sessionKey)
-	if sess == nil {
-		sess = &conversation.Session{
-			Key:           sessionKey,
-			WorkspaceID:   ws.ID,
-			OwnerUserID:   msg.UserID,
-			ChatID:        msg.ChatID,
-			ChatType:      msg.ChatType,
-			RootMessageID: msg.RootMessageID,
-			Status:        conversation.SessionStatusIdle.String(),
-		}
-		if err := stateProvider.SaveSession(sess); err != nil {
-			return err
-		}
-	}
-	hasInFlight := a.ReviewSessionHasInFlightSubmission(sess)
-	queueLenBefore := len(sess.Queue)
-	shouldAttemptStart := !hasInFlight
-	willWaitInQueue := queueLenBefore > 0 || hasInFlight
-	if willWaitInQueue {
-		sess.Status = conversation.SessionStatusQueued.String()
-		if err := stateProvider.SaveSession(sess); err != nil {
-			return err
-		}
-	}
-	sub := &domainsubmission.Submission{
-		SessionKey:           sessionKey,
-		WorkspaceID:          ws.ID,
-		ThreadID:             strings.TrimSpace(threadID),
-		UserID:               msg.UserID,
-		ChatID:               msg.ChatID,
-		TriggerMessageID:     msg.MessageID,
-		SourceMessageIDs:     uniqueStrings([]string{msg.MessageID}),
-		SourceRootMessageIDs: uniqueStrings([]string{textutil.FirstNonEmpty(strings.TrimSpace(msg.RootMessageID), strings.TrimSpace(msg.MessageID))}),
-		InputText:            appreview.SubmissionInputText(target),
-		Kind:                 SubmissionKindReview,
-		ReviewTargetType:     strings.TrimSpace(target.Type),
-		ReviewBranch:         strings.TrimSpace(target.Branch),
-		ReviewCommitSHA:      strings.TrimSpace(target.CommitSHA),
-		ReviewCommitTitle:    strings.TrimSpace(target.CommitTitle),
-		ReviewInstructions:   strings.TrimSpace(target.Instructions),
-		Status:               domainsubmission.SubmissionStatusQueued.String(),
-		WaitedInQueue:        willWaitInQueue,
-	}
-	id, err := stateProvider.CreateSubmission(sub)
-	if err != nil {
-		return err
-	}
-	sub.ID = id
-	if err := stateProvider.QueueSubmission(sessionKey, id); err != nil {
-		return err
-	}
-	if shouldAttemptStart {
-		if err := a.ReviewStartNextSubmission(sessionKey); err != nil {
-			return err
-		}
-		if !willWaitInQueue {
-			return nil
-		}
-	}
-	a.ReviewMarkSubmissionQueuedReactions(sub)
-	a.ReviewSendSubmissionQueuedNotice(a.Context(), sub)
-	return nil
-}
-
-// ---------------------------------------------------------------------------
 // Submission review start
 // ---------------------------------------------------------------------------
-
-// StartSubmissionReview starts a review for a queued submission.
-func StartSubmissionReview(a Dependencies, ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error) {
-	if sub == nil {
-		return "", fmt.Errorf("nil submission")
-	}
-	target := ReviewTargetFromSubmission(sub)
-	if strings.TrimSpace(threadID) == "" {
-		return "", fmt.Errorf("review requires an active thread")
-	}
-	request := backendops.ReviewRequest{ThreadID: threadID, Target: target}
-	client, err := a.ReviewCodexClient()
-	if err != nil {
-		return "", err
-	}
-	reviewResp, err := client.StartReview(ctx, request)
-	if err != nil {
-		return "", err
-	}
-	turnID := strings.TrimSpace(reviewResp.Turn.ID)
-	if turnID == "" {
-		return "", fmt.Errorf("review/start returned empty turn id")
-	}
-	return turnID, nil
-}
 
 // ---------------------------------------------------------------------------
 // Review form methods
@@ -558,64 +426,30 @@ func (s ReviewFormService) RenderReviewMenuCard(sessionKey string) map[string]an
 
 // BeginReviewForm starts a review form interaction for the given mode.
 func (s ReviewFormService) BeginReviewForm(msg *feishu.InboundMessage, mode string) error {
-	sessionKey := s.app.ReviewMakeSessionKey(msg)
-	wp := s.app.ReviewWorkspaceProvider()
-	ws := wp.ReviewWorkspaceForSessionKey(sessionKey)
+	key := s.app.ReviewMakeSessionKey(msg)
+	ws := s.app.ReviewWorkspaceProvider().ReviewWorkspaceForSessionKey(key)
 	if ws == nil {
 		return fmt.Errorf("current workspace not found")
 	}
-	if strings.TrimSpace(mode) == "" {
-		return fmt.Errorf("review form mode is required")
-	}
-	payload := ReviewPendingPayload{Mode: strings.TrimSpace(mode)}
-	switch payload.Mode {
-	case ReviewFormModeBase:
-		options, err := s.app.ReviewGitProvider().ReviewListBranches(ws.Cwd)
-		if err != nil {
-			return err
-		}
-		if len(options) == 0 {
-			return fmt.Errorf("当前仓库没有可选 branch")
-		}
-		payload.Branch = options[0].Name
-	case ReviewFormModeCommit:
-		options, err := s.app.ReviewGitProvider().ReviewListCommits(ws.Cwd, 100)
-		if err != nil {
-			return err
-		}
-		if len(options) == 0 {
-			return fmt.Errorf("当前仓库没有可选 commit")
-		}
-		payload.CommitSHA = options[0].SHA
-		payload.CommitTitle = options[0].Subject
-	case ReviewFormModeCustom:
-	default:
-		return fmt.Errorf("unsupported review form mode %q", payload.Mode)
-	}
-	stateProvider := s.app.ReviewAppState()
-	requestID, err := stateProvider.NextLocalID("review")
+	req, _, err := s.app.UseCase.OpenForm(reviewapp.Input{SessionKey: key, UserID: msg.UserID}, reviewapp.Workspace{ID: ws.ID, CWD: ws.Cwd}, mode)
 	if err != nil {
 		return err
 	}
-	card, err := s.RenderReviewFormCard(sessionKey, requestID, payload)
+	return s.app.UseCase.Delivery.Open(s.app.Context(), interactionapp.DeliveryInput{Request: *req, NonBlocking: true}, formPresenter{service: s, message: msg})
+}
+
+type formPresenter struct {
+	service ReviewFormService
+	message *feishu.InboundMessage
+}
+
+func (p formPresenter) DeliverInteraction(ctx context.Context, input interactionapp.DeliveryInput) (string, error) {
+	payload := ReviewPendingPayloadFromPending(&input.Request)
+	card, err := p.service.RenderReviewFormCard(input.Request.SessionKey, input.Request.ID, payload)
 	if err != nil {
-		return err
+		return "", err
 	}
-	msgID, err := s.app.ReviewOutbound().ReplyCard(s.app.Context(), msg.MessageID, card, s.app.ReviewReplyInThreadEnabled(msg.ChatType))
-	if err != nil {
-		return err
-	}
-	return stateProvider.SavePending(&state.PendingRequest{
-		ID:          requestID,
-		Kind:        PendingKindReview,
-		SessionKey:  sessionKey,
-		OwnerUserID: msg.UserID,
-		FeishuMsgID: msgID,
-		PayloadJSON: mustJSON(payload),
-		Status:      state.PendingRequestStatusPending.String(),
-		CreatedAt:   time.Now().Unix(),
-		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
-	})
+	return p.service.app.ReviewOutbound().ReplyInteractionCard(ctx, input.Request.ID, p.message.MessageID, card, p.service.app.ReviewReplyInThreadEnabled(p.message.ChatType))
 }
 
 // RenderReviewFormCard dispatches to the appropriate form card renderer based
@@ -700,47 +534,36 @@ func (s ReviewFormService) RenderReviewCustomCard(sessionKey, requestID string, 
 }
 
 // CompleteReviewBaseSelect handles a base branch selection action.
-func (s ReviewFormService) CompleteReviewBaseSelect(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	pending, _, errResp := s.reviewPendingForAction(action, ReviewFormModeBase)
-	if errResp != nil {
-		return errResp, nil
+func (s ReviewFormService) selectForm(action *feishu.CardAction, mode string) (*callback.CardActionTriggerResponse, error) {
+	pending, _, resp := s.reviewPendingForAction(action, mode)
+	if resp != nil {
+		return resp, nil
 	}
-	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return s.completeReviewBaseSelectSync(action)
+	ws := s.app.ReviewWorkspaceProvider().ReviewWorkspaceForSessionKey(pending.SessionKey)
+	if ws == nil {
+		return nil, fmt.Errorf("current workspace not found")
 	}
-	return s.app.ReviewCompleteAsyncRenderedCardAction(
-		action,
-		pending.SessionKey,
-		"正在刷新 review 选项",
-		renderReviewPreparingCard(s.app, pending.SessionKey, "正在刷新 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
-		func() (*callback.CardActionTriggerResponse, error) {
-			return s.completeReviewBaseSelectSync(action)
-		},
-		func(sessionKey, errText string) map[string]any {
-			return renderReviewFailureCard(s.app, sessionKey, errText, "")
-		},
-		"review base select patch failed",
-	)
-}
-
-func (s ReviewFormService) completeReviewBaseSelectSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	pending, payload, errResp := s.reviewPendingForAction(action, ReviewFormModeBase)
-	if errResp != nil {
-		return errResp, nil
-	}
-	selected := strings.TrimSpace(action.Option)
-	if selected == "" {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 branch"}}, nil
-	}
-	payload.Branch = selected
-	_ = s.app.ReviewAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) {
-		req.PayloadJSON = mustJSON(payload)
-	})
-	card, err := s.RenderReviewBaseCard(pending.SessionKey, pending.ID, payload)
+	_, payload, err := s.app.UseCase.Select(pending.ID, action.UserID, mode, action.Option, reviewapp.Workspace{ID: ws.ID, CWD: ws.Cwd})
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
+	card, err := s.RenderReviewFormCard(pending.SessionKey, pending.ID, payload)
+	if err != nil {
+		return nil, err
+	}
 	return &callback.CardActionTriggerResponse{Card: rawCard(card)}, nil
+}
+func (s ReviewFormService) CompleteReviewBaseSelect(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	pending, _, resp := s.reviewPendingForAction(action, ReviewFormModeBase)
+	if resp != nil {
+		return resp, nil
+	}
+	if strings.TrimSpace(action.MessageID) == "" {
+		return s.selectForm(action, ReviewFormModeBase)
+	}
+	return s.app.ReviewCompleteAsyncRenderedCardAction(action, pending.SessionKey, "正在刷新 review 选项", renderReviewPreparingCard(s.app, pending.SessionKey, "正在刷新 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"), func() (*callback.CardActionTriggerResponse, error) { return s.selectForm(action, ReviewFormModeBase) }, func(sessionKey, errText string) map[string]any {
+		return renderReviewFailureCard(s.app, sessionKey, errText, "")
+	}, "review base select patch failed")
 }
 
 // CompleteReviewCommitSelect handles a commit selection action.
@@ -768,35 +591,7 @@ func (s ReviewFormService) CompleteReviewCommitSelect(action *feishu.CardAction)
 }
 
 func (s ReviewFormService) completeReviewCommitSelectSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	pending, payload, errResp := s.reviewPendingForAction(action, ReviewFormModeCommit)
-	if errResp != nil {
-		return errResp, nil
-	}
-	selected := strings.TrimSpace(action.Option)
-	if selected == "" {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效 commit"}}, nil
-	}
-	payload.CommitSHA = selected
-	wp := s.app.ReviewWorkspaceProvider()
-	if ws := wp.ReviewWorkspaceForSessionKey(pending.SessionKey); ws != nil {
-		options, err := s.app.ReviewGitProvider().ReviewListCommits(ws.Cwd, 100)
-		if err == nil {
-			for _, option := range options {
-				if option.SHA == selected {
-					payload.CommitTitle = option.Subject
-					break
-				}
-			}
-		}
-	}
-	_ = s.app.ReviewAppState().UpdatePending(pending.ID, func(req *state.PendingRequest) {
-		req.PayloadJSON = mustJSON(payload)
-	})
-	card, err := s.RenderReviewCommitCard(pending.SessionKey, pending.ID, payload)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{Card: rawCard(card)}, nil
+	return s.selectForm(action, ReviewFormModeCommit)
 }
 
 // CompleteReviewFormSubmit handles a review form submission action.
@@ -830,64 +625,36 @@ func (s ReviewFormService) CompleteReviewFormSubmit(action *feishu.CardAction) (
 }
 
 func (s ReviewFormService) completeReviewFormSubmitSync(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	stateProvider := s.app.ReviewAppState()
-	requestID := s.app.ReviewActionStringValue(action, "request_id")
-	pending := stateProvider.Pending(requestID)
-	if pending == nil || pending.Kind != PendingKindReview {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "review 请求已过期"}}, nil
+	if action == nil {
+		return &callback.CardActionTriggerResponse{}, nil
 	}
-	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个 review 请求"}}, nil
+	id := s.app.ReviewActionStringValue(action, "request_id")
+	pending, _, err := s.app.UseCase.Form(id, action.UserID, "")
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	payload := ReviewPendingPayloadFromPending(pending)
-	payload = mergeReviewCustomFormValues(payload, action.FormValue)
-
-	var target appreview.TargetSpec
-	switch strings.TrimSpace(payload.Mode) {
-	case ReviewFormModeBase:
-		target = appreview.TargetSpec{Type: appreview.TargetBaseBranch, Branch: strings.TrimSpace(payload.Branch)}
-	case ReviewFormModeCommit:
-		target = appreview.TargetSpec{Type: appreview.TargetCommit, CommitSHA: strings.TrimSpace(payload.CommitSHA), CommitTitle: strings.TrimSpace(payload.CommitTitle)}
-	case ReviewFormModeCustom:
-		target = appreview.TargetSpec{Type: appreview.TargetCustom, Instructions: strings.TrimSpace(payload.Instructions)}
-	default:
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未知 review 表单"}}, nil
+	ws := s.app.ReviewWorkspaceProvider().ReviewWorkspaceForSessionKey(pending.SessionKey)
+	if ws == nil {
+		return nil, fmt.Errorf("current workspace not found")
 	}
 	msg := s.app.ReviewCommandMessageFromAction(action, pending.SessionKey, "/review")
-	confirmation, err := StartInlineReview(s.app, msg, target)
+	var instructions *string
+	if value, ok := apputil.FormValueString(action.FormValue, "instructions"); ok {
+		instructions = &value
+	}
+	target, err := s.app.UseCase.SubmitForm(s.app.Context(), id, reviewapp.Input{SessionKey: pending.SessionKey, UserID: action.UserID, ChatID: msg.ChatID, ChatType: msg.ChatType, MessageID: msg.MessageID, RootMessageID: msg.RootMessageID}, reviewapp.Workspace{ID: ws.ID, CWD: ws.Cwd}, instructions)
 	if err != nil {
-		_ = stateProvider.UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-		card, renderErr := s.RenderReviewFormCard(pending.SessionKey, requestID, payload)
-		if renderErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(card),
-		}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	_ = stateProvider.UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusResolved.String()
-		req.PayloadJSON = mustJSON(payload)
-	})
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已启动 review"},
-		Card:  rawCard(s.app.ReviewRenderer().SimpleStatusCard("Review 已启动", "blue", confirmation, nil)),
-	}, nil
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已启动 review"}, Card: rawCard(s.app.ReviewRenderer().SimpleStatusCard("Review 已启动", "blue", appreview.ConfirmationText(target), nil))}, nil
 }
-
 func (s ReviewFormService) reviewPendingForAction(action *feishu.CardAction, mode string) (*state.PendingRequest, ReviewPendingPayload, *callback.CardActionTriggerResponse) {
-	requestID := s.app.ReviewActionStringValue(action, "request_id")
-	pending := s.app.ReviewAppState().Pending(requestID)
-	if pending == nil || pending.Kind != PendingKindReview {
-		return nil, ReviewPendingPayload{}, &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "review 请求已过期"}}
+	if action == nil {
+		return nil, ReviewPendingPayload{}, &callback.CardActionTriggerResponse{}
 	}
-	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
-		return nil, ReviewPendingPayload{}, &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个 review 请求"}}
-	}
-	payload := ReviewPendingPayloadFromPending(pending)
-	if strings.TrimSpace(payload.Mode) != strings.TrimSpace(mode) {
-		return nil, ReviewPendingPayload{}, &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "review 请求类型不匹配"}}
+	pending, payload, err := s.app.UseCase.Form(s.app.ReviewActionStringValue(action, "request_id"), action.UserID, mode)
+	if err != nil {
+		return nil, payload, &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}
 	}
 	return pending, payload, nil
 }
@@ -895,30 +662,6 @@ func (s ReviewFormService) reviewPendingForAction(action *feishu.CardAction, mod
 // ---------------------------------------------------------------------------
 // Local helpers (not exported)
 // ---------------------------------------------------------------------------
-
-func mergeReviewCustomFormValues(payload ReviewPendingPayload, values map[string]any) ReviewPendingPayload {
-	if value, ok := apputil.FormValueString(values, "instructions"); ok {
-		payload.Instructions = value
-	}
-	return payload
-}
-
-func uniqueStrings(vals []string) []string {
-	seen := make(map[string]struct{}, len(vals))
-	out := make([]string, 0, len(vals))
-	for _, v := range vals {
-		v = strings.TrimSpace(v)
-		if v == "" {
-			continue
-		}
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	return out
-}
 
 func commandLabel(label, slash string) string {
 	label = strings.TrimSpace(label)
@@ -943,11 +686,6 @@ func submenuCommandLabel(label, slash string) string {
 
 func rawCard(card map[string]any) *callback.Card {
 	return &callback.Card{Type: "raw", Data: card}
-}
-
-func mustJSON(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
 }
 
 func (d Dependencies) WorkspaceSelection() workspace.SelectionService {

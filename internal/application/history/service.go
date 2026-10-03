@@ -26,11 +26,10 @@ type Reader interface {
 }
 
 type Service struct {
-	Frontend            identity.FrontendID
-	AllowLegacyFallback bool
-	Repository          Repository
-	Backend             func() string
-	Readers             map[string]Reader
+	Frontend   identity.FrontendID
+	Repository Repository
+	Backend    func() string
+	Readers    map[string]Reader
 }
 
 type Snapshot struct {
@@ -52,7 +51,7 @@ func (s Service) Snapshot(ctx context.Context, key string) (Snapshot, error) {
 	}
 	frontend, _, _, _, _ := identity.ParseSessionKey(key)
 	owner := strings.TrimSpace(string(s.Frontend))
-	if (frontend != "" && frontend != owner) || (frontend == "" && owner != "" && !s.AllowLegacyFallback) {
+	if frontend != owner {
 		return Snapshot{}, fmt.Errorf("history session belongs to another frontend")
 	}
 	if s.Repository == nil {

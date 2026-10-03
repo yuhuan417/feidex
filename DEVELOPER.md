@@ -24,7 +24,7 @@ Feidex is not a general chat bot. It is a bridge between Feishu message flows an
 Keep these rules visible in day-to-day work:
 
 - `frontend` is the top-level runtime isolation boundary. Backend binding, session lineage, pending requests, and runtime caches must remain frontend-scoped.
-- Product semantics are split between `internal/domain` (state and invariants) and `internal/application` (use cases and effects). `internal/app` is a transitional composition and Feishu entrypoint layer. Backend-specific protocol methods, envelope quirks, and transport details belong in backend adapters.
+- Product semantics are split between `internal/domain` (state and invariants) and `internal/application` (use cases and effects). `internal/composition` is the sole production composition root. `internal/app` only binds Feishu handlers; `internal/feishuapp` converts frontend facts and application results. Backend-specific protocol methods, envelope quirks, and transport details belong in backend adapters.
 - Any capability exposed in a Feishu menu must also have a direct slash-command style entrypoint.
 - Slow workflows must follow `fast callback ack -> async work -> card patch/follow-up`. Do not run clone, review, upgrade, download, or similar work inline in card callbacks.
 - Backend switching remains idle-only. Model configuration writes save desired settings and are allowed during active work, queued/staged input and open forms; applying them must respect the turn/session boundaries below.
@@ -61,7 +61,8 @@ Use these boundaries when placing code:
 | `internal/adapter` | External adapters | Converts Feishu/backend/storage protocols to application inputs and effects. Must not own product policy. |
 | `internal/runtime` | Frontend/backend runtime | Owns lifecycle, process supervision, workers, cancellation, recovery, and effect execution. |
 | `internal/composition` | Composition root | Constructs repositories, adapters, application services, and runtime. |
-| `internal/app` | Transitional entrypoint | Feishu entrypoints and legacy orchestration being migrated into domain/application/runtime. New product logic should not default here. |
+| `internal/app` | Thin Feishu entrypoint | Binds composed handlers only. No state, service construction, backend clients, trackers, or product orchestration. |
+| `internal/feishuapp` | Feishu protocol bindings | Converts frontend facts and application results. Owners are injected by composition; no compatibility facades or lazy service construction. |
 | `internal/feishu` | Feishu adapter layer | Owns SDK calls, outbound pacing, local file link rewrite, file sharing, and permission issue handling. Do not put app policy here. |
 | `internal/codexrpc` | Codex App Server client and protocol types | Keep this transport/protocol-focused. No Feishu or app orchestration here. |
 | `internal/config` | Config parsing, normalization, Feishu setup flows | Owns config file semantics and setup helpers. |
@@ -75,11 +76,11 @@ Use these boundaries when placing code:
 Dependency direction should stay simple:
 
 - `cmd/*` may depend on `internal/*`.
-- `internal/composition` and transitional `internal/app` may depend on domain/application/adapter/runtime packages.
+- `internal/composition` constructs domain/application/adapter/runtime objects. `internal/app` depends only on the Feishu handler boundary.
 - `internal/domain` must not depend on application, adapters, runtime, storage, or `internal/app`.
 - `internal/application` must not depend on concrete adapters, SDKs, raw backend protocols, or `internal/app`.
 - `internal/adapter` must not depend on `internal/app`; adapters communicate through application ports and semantic values.
-- New code must follow the target direction even while legacy `internal/app` callers remain.
+- Product state and cross-module orchestration belong to domain/application owners. Feishu entrypoints use injected commands and semantic effects.
 
 ## Interaction Constraints
 

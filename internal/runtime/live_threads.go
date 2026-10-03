@@ -45,3 +45,9 @@ func (t *LiveThreads) Clear(sessionKey string) {
 	defer t.mu.Unlock()
 	delete(t.threads, strings.TrimSpace(sessionKey))
 }
+
+func (t *LiveThreads) Reset() {
+	t.mu.Lock()
+	t.threads = nil
+	t.mu.Unlock()
+}

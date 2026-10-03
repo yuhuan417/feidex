@@ -19,9 +19,10 @@ type SelectionRepository interface {
 	AgentBindingsForChat(string, string) []*routing.AgentBinding
 }
 type SelectionService struct {
-	Frontend         identity.FrontendID
-	DefaultWorkspace string
-	Repository       SelectionRepository
+	Frontend           identity.FrontendID
+	DefaultWorkspace   string
+	DefaultWorkspaceID func() string
+	Repository         SelectionRepository
 }
 
 func SelectionKey(frontend identity.FrontendID, chatType, chatID, userID string) string {
@@ -56,7 +57,11 @@ func (s SelectionService) Resolve(chatType, chatID, userID string, fallback *con
 	if fallback != nil && strings.TrimSpace(fallback.WorkspaceID) != "" {
 		return strings.TrimSpace(fallback.WorkspaceID)
 	}
-	if value := strings.TrimSpace(s.DefaultWorkspace); value != "" {
+	value := s.DefaultWorkspace
+	if s.DefaultWorkspaceID != nil {
+		value = s.DefaultWorkspaceID()
+	}
+	if value := strings.TrimSpace(value); value != "" {
 		return value
 	}
 	return "default"

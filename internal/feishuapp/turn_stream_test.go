@@ -25,7 +25,7 @@ func cardBodyElements(t *testing.T, card map[string]any) []map[string]any {
 func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
@@ -66,7 +66,7 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
@@ -99,7 +99,7 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
@@ -136,7 +136,7 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
@@ -170,24 +170,24 @@ func TestTurnStreamLifecycleDeliversItemCardsWithoutStoringAccumulation(t *testi
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).updatePendingPlan("turn-1", "- [in_progress] run")
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.UpdatePendingPlan("turn-1", "- [in_progress] run")
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "reason-1", turnitem.NewProtocolItemWithID("reason-1", map[string]any{
 		"type":    "reasoning",
 		"summary": []any{map[string]any{"type": "summary_text", "text": "thinking"}},
-	})
+	}))
 
 	updated := a.store.GetSubmission(sub.ID)
 	if updated == nil {
 		t.Fatalf("submission after completeTurnItem = %+v", updated)
 	}
 
-	result := newTurnStreamService(a).flushTurnStream(context.Background(), "thread-1", "turn-1")
+	result := a.bindings.TurnPresentation.FlushTurnStream(context.Background(), "thread-1", "turn-1")
 	updated = a.store.GetSubmission(sub.ID)
 	if result.SawFinal || updated == nil {
 		t.Fatalf("flushTurnStream() = %+v, submission=%+v", result, updated)
 	}
-	if newTurnStreamService(a).turnStreamTracker().Streams["turn-1"] != nil {
+	if a.bindings.TurnPresentation.Tracker().Streams["turn-1"] != nil {
 		t.Fatal("expected turn stream to be cleared after flush")
 	}
 	if len(ff.replyCards) < 2 {

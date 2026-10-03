@@ -24,17 +24,12 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 )
 
-// claudeRuntime wraps *clauderuntime.Service with *App-specific callbacks.
-type claudeRuntime struct {
-	app     *App
-	service *appclauderuntime.Service
-}
-
-func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
-	svc := appclauderuntime.NewService(appclauderuntime.Deps{
+func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps {
+	return appclauderuntime.Deps{
 		Context: app.Context,
 		Cfg:     cfg,
 		Lifecycle: appclauderuntime.LifecycleDeps{
@@ -54,7 +49,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 					sessionKey = sub.SessionKey
 				}
 				runSession(app, sessionKey, func() {
-					finishSteerSubmission(app, submissionID, status)
+					app.bindings.Turns.FinishSteerSubmission(submissionID, status)
 				})
 			},
 			FailClaudeSessionWork: func(sessionKey, threadID string, err error) {
@@ -71,7 +66,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		Usage: appclauderuntime.UsageDeps{
 			RecordClaudeThreadUsage: func(threadID string, usage claudecli.TurnUsage) {
-				newUsageService(app).RecordClaudeThreadUsage(threadID, domainturn.ClaudeThreadUsage{
+				app.bindings.Usage.RecordClaudeThreadUsage(threadID, domainturn.ClaudeThreadUsage{
 					InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens,
 					CacheReadTokens: usage.CacheReadTokens, CacheCreationTokens: usage.CacheCreationTokens,
 					CumulativeInputTokens: usage.CumulativeInputTokens, CumulativeOutputTokens: usage.CumulativeOutputTokens,
@@ -80,13 +75,13 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 				})
 			},
 			RecordTurnTokenUsage: func(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
-				newRuntimeStateService(app).recordTurnTokenUsage(threadID, turnID, usage)
+				app.runtimeOwner.TurnBindings.RecordTurnTokenUsage(threadID, turnID, codexadapter.ThreadUsage(usage))
 			},
 			RecordTurnContextUsagePercent: func(turnID string, percent float64) {
-				newRuntimeStateService(app).recordTurnContextUsagePercent(turnID, percent)
+				app.runtimeOwner.TurnBindings.RecordTurnContextUsagePercent(turnID, percent)
 			},
 			TurnFinalFooterLines: func(turnID string, completedAt time.Time) []string {
-				return newRuntimeStateService(app).turnFinalFooterLines(turnID, completedAt)
+				return app.bindings.TurnMetadata.TurnFinalFooterLines(turnID, completedAt)
 			},
 		},
 		Delivery: appclauderuntime.DeliveryDeps{
@@ -123,16 +118,16 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 				return sendClaudePlanModeCard(app, requestID, sessionKey, sub, threadID, turnID, body)
 			},
 			SendDetachedApprovalCard: func(requestID string, target appclauderuntime.InteractionTarget, presentation appapproval.Presentation) error {
-				return newClaudeSupportService(app).SendDetachedApprovalCard(requestID, target, presentation)
+				return app.bindings.ClaudeSupport.SendDetachedApprovalCard(requestID, target, presentation)
 			},
 			SendDetachedUserInputCard: func(requestID string, target appclauderuntime.InteractionTarget, payload apppendingforms.ToolUserInputPayload) error {
-				return newClaudeSupportService(app).SendDetachedUserInputCard(requestID, target, payload)
+				return app.bindings.ClaudeSupport.SendDetachedUserInputCard(requestID, target, payload)
 			},
 			SendDetachedUserInputFormCard: func(requestID string, target appclauderuntime.InteractionTarget, payload apppendingforms.ToolUserInputPayload) error {
-				return newClaudeSupportService(app).SendDetachedUserInputFormCard(requestID, target, payload)
+				return app.bindings.ClaudeSupport.SendDetachedUserInputFormCard(requestID, target, payload)
 			},
 			SendDetachedPlanModeCard: func(requestID string, target appclauderuntime.InteractionTarget, body string) error {
-				return newClaudeSupportService(app).SendDetachedPlanModeCard(requestID, target, body)
+				return app.bindings.ClaudeSupport.SendDetachedPlanModeCard(requestID, target, body)
 			},
 			ExpireInteractionCards: func(sessionKey string, requestIDs []string, reason string) {
 				ExpireClaudeInteractionCards(app, sessionKey, requestIDs, reason)
@@ -171,20 +166,15 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 			return modelConfigSnapshot(app, sess, domainbackend.BackendClaude)
 		},
 		ModelSettingsApplied: func(sessionKey string, settings domainmodelconfig.Snapshot) {
-			_, err := app.State().UpdateSession(sessionKey, func(sess *conversation.Session) {
-				sess.AppliedModelConfig = settings
-				sess.ModelConfigError = ""
-			})
+			err := app.bindings.ModelAcknowledgements.Applied(sessionKey, settings)
 			if err != nil {
 				slog.Warn("record Claude model settings failed", "session_key", sessionKey, "error", err)
 			}
 		},
 		AuxiliaryModels: func(sessionKey string) (string, string) {
 			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
-			settings := newModelSnapshotService(app).Desired(domainbackend.BackendClaude, sess)
+			settings := app.bindings.ModelSnapshots.Desired(domainbackend.BackendClaude, sess)
 			return settings.SmallModel, settings.SubagentModel
 		},
-	})
-
-	return &claudeRuntime{app: app, service: svc}
+	}
 }

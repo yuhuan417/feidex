@@ -21,7 +21,7 @@ func TestResolveInboundAttachmentsUsesForwardedMessageID(t *testing.T) {
 		fakeFeishuClient: &fakeFeishuClient{},
 		downloadPath:     downloadPath,
 	}
-	a := &App{cfg: cfg, feishu: stub}
+	a := prepareTestApp(&App{cfg: cfg, feishu: stub})
 
 	attachments, err := resolveInboundAttachments(a, &feishu.InboundMessage{
 		MessageID: "root-message",
@@ -47,7 +47,7 @@ func TestDeliveryHelpers(t *testing.T) {
 	if got := sendFinalMessages(a, nil, nil, "ignored", false); got != nil {
 		t.Fatalf("sendFinalMessages(nil app) = %+v, want nil", got)
 	}
-	a = &App{cfg: config.Default()}
+	a = prepareTestApp(&App{cfg: config.Default()})
 	if got := sendReplyMessages(a, nil, &domainsubmission.Submission{}, "ignored", false, "final_message"); got != nil {
 		t.Fatalf("sendReplyMessages(without feishu) = %+v, want nil", got)
 	}

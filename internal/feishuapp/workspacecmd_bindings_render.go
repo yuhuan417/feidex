@@ -8,12 +8,6 @@ import (
 	"feidex/internal/state"
 )
 
-func newWorkspaceRenderService(a *App) *workspacecards.Presentation {
-	return compositionService(a, "workspaceRender", func() *workspacecards.Presentation {
-		return buildWorkspaceRenderService(a)
-	})
-}
-
 func buildWorkspaceRenderService(a *App) *workspacecards.Presentation {
 	deps := compositionkit.WorkspacePresentationDependencies{}
 	if a != nil {

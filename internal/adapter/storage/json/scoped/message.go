@@ -23,13 +23,7 @@ func (s *Store) MessageLink(messageID string) *state.MessageLink {
 	if messageID == "" {
 		return nil
 	}
-	if link := s.stateStore().GetScopedMessageLink(s.scopeFrontendID(), messageID); link != nil {
-		return link
-	}
-	if s.scopeLegacyFallback() && s.scopeFrontendID() != "" {
-		return s.stateStore().GetMessageLink(messageID)
-	}
-	return nil
+	return s.stateStore().GetScopedMessageLink(s.scopeFrontendID(), messageID)
 }
 
 // SaveMessageLink persists a message link scoped to the current frontend.
@@ -82,11 +76,7 @@ func (s *Store) FrontendCardNotifications() []state.FrontendCardNotification {
 	if s == nil || s.stateStore() == nil {
 		return nil
 	}
-	notes := s.stateStore().FrontendCardNotifications(strings.TrimSpace(s.scopeFrontendID()))
-	if len(notes) == 0 && s.scopeLegacyFallback() && strings.TrimSpace(s.scopeFrontendID()) != "" {
-		return s.stateStore().FrontendCardNotifications("")
-	}
-	return notes
+	return s.stateStore().FrontendCardNotifications(s.scopeFrontendID())
 }
 
 // DrainFrontendCardNotifications drains pending frontend-scoped notifications.
@@ -94,9 +84,5 @@ func (s *Store) DrainFrontendCardNotifications() ([]state.FrontendCardNotificati
 	if s == nil || s.stateStore() == nil {
 		return nil, nil
 	}
-	notes, err := s.stateStore().DrainFrontendCardNotifications(strings.TrimSpace(s.scopeFrontendID()))
-	if err != nil || len(notes) > 0 || !s.scopeLegacyFallback() || strings.TrimSpace(s.scopeFrontendID()) == "" {
-		return notes, err
-	}
-	return s.stateStore().DrainFrontendCardNotifications("")
+	return s.stateStore().DrainFrontendCardNotifications(s.scopeFrontendID())
 }

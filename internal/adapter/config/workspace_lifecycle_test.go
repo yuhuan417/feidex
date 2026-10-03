@@ -27,7 +27,7 @@ func lifecycleFixture(t *testing.T) (workspaceapp.Lifecycle, *state.Store, *work
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope := scoped.NewScoped(store, "bot-a", "codex", false)
+	scope := scoped.NewScoped(store, "bot-a", "codex")
 	key := "feishu:frontend:bot-a:chat:private"
 	if err := scope.SaveSession(&conversation.Session{Key: key, ChatID: "private", ChatType: "p2p", OwnerUserID: "user", WorkspaceID: "default", ActiveThreadID: "old-thread", ActiveThreadWorkspaceID: "default", RecentWorkspaceIDs: []string{"default"}}); err != nil {
 		t.Fatal(err)

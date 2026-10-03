@@ -12,7 +12,6 @@ import (
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 	"feidex/internal/runtime"
-	"feidex/internal/state"
 )
 
 // backendUpgradeService is the shared entry point for the /claude and /codex
@@ -22,7 +21,7 @@ type backendUpgradeService struct {
 	runner runtime.EffectRunner
 }
 
-func newBackendUpgradeService(app *App) backendUpgradeService {
+func BuildBackendUpgrades(app *App) backendUpgradeService {
 	return backendUpgradeService{app: app, runner: newEffectRunner(app)}
 }
 
@@ -62,7 +61,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 			includeLatest = true
 			prepareUpgrade = true
 		case "restart":
-			return newBackendUpgradeService(s.app).startClaudeRestartFromMessage(msg)
+			return s.app.bindings.BackendUpgrades.startClaudeRestartFromMessage(msg)
 		default:
 			return errors.New(claudeUpgradeCommandUsage)
 		}
@@ -70,16 +69,16 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 	sessionKey := makeSessionKey(s.app, msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	view, err := newBackendUpgradeService(s.app).loadClaudeUpgradeView(ctx, includeLatest)
+	view, err := s.app.bindings.BackendUpgrades.loadClaudeUpgradeView(ctx, includeLatest)
 	if err != nil {
 		return err
 	}
 	if !prepareUpgrade {
-		card := newUpgradeRenderService(s.app).renderUpgradeStatusCard(upgraderender.ClaudeSpec, sessionKey, view, includeLatest)
+		card := s.app.bindings.UpgradePresentation.renderUpgradeStatusCard(upgraderender.ClaudeSpec, sessionKey, view, includeLatest)
 		_, err = s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
-	card, pendingID, err := newUpgradeRenderService(s.app).prepareUpgradeCard(upgraderender.ClaudeSpec, claudeUpgradePendingKind, "claude-upgrade", sessionKey, msg.UserID, view)
+	card, pendingID, err := s.app.bindings.UpgradePresentation.prepareUpgradeCard(upgraderender.ClaudeSpec, claudeUpgradePendingKind, "claude-upgrade", sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
@@ -88,57 +87,21 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 		return err
 	}
 	if strings.TrimSpace(pendingID) != "" {
-		_ = s.app.State().UpdatePending(pendingID, func(req *state.PendingRequest) {
-			req.FeishuMsgID = msgID
-		})
+		if err := s.app.bindings.Forms.SaveDraft(pendingID, nil, "", 0, msgID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includeLatest bool) (upgraderender.UpgradeView, error) {
-	manager := newClaudeInstallManager(s.app.cfg.Claude.Command)
-	probe, err := manager.Probe(ctx)
-	if err != nil {
-		return upgraderender.UpgradeView{}, err
-	}
-	view := upgraderender.UpgradeView{
-		Probe:      probe,
-		BusyReason: newMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(),
-		Snapshot:   newMaintenanceStateService(s.app).ClaudeUpgradeState(),
-		Restart:    newMaintenanceStateService(s.app).ClaudeRestartState(),
-	}
-	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
-		latest, latestErr := manager.LatestVersion(ctx)
-		if latestErr != nil {
-			view.LatestError = latestErr.Error()
-		} else {
-			view.LatestVersion = strings.TrimSpace(latest)
-		}
-	}
-	return view, nil
+	view, err := s.app.bindings.BackendMaintenance["claude"].View(ctx, includeLatest)
+	return upgraderender.UpgradeView{Probe: view.Probe, BusyReason: view.BusyReason, Snapshot: view.Snapshot, Restart: view.Restart, LatestVersion: view.LatestVersion, LatestError: view.LatestError}, err
 }
 
 func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (upgraderender.UpgradeView, error) {
-	manager := newCodexInstallManager(s.app.cfg.Codex.Command)
-	probe, err := manager.Probe(ctx)
-	if err != nil {
-		return upgraderender.UpgradeView{}, err
-	}
-	view := upgraderender.UpgradeView{
-		Probe:      probe,
-		BusyReason: newMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(),
-		Snapshot:   newMaintenanceStateService(s.app).CodexUpgradeState(),
-		Restart:    newMaintenanceStateService(s.app).CodexRestartState(),
-	}
-	if includeLatest && probe.Supported && !view.Snapshot.Running && !view.Restart.Running {
-		latest, latestErr := manager.LatestVersion(ctx)
-		if latestErr != nil {
-			view.LatestError = latestErr.Error()
-		} else {
-			view.LatestVersion = strings.TrimSpace(latest)
-		}
-	}
-	return view, nil
+	view, err := s.app.bindings.BackendMaintenance["codex"].View(ctx, includeLatest)
+	return upgraderender.UpgradeView{Probe: view.Probe, BusyReason: view.BusyReason, Snapshot: view.Snapshot, Restart: view.Restart, LatestVersion: view.LatestVersion, LatestError: view.LatestError}, err
 }
 
 func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []string) error {
@@ -158,7 +121,7 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 			includeLatest = true
 			prepareUpgrade = true
 		case "restart":
-			return newBackendUpgradeService(s.app).startCodexRestartFromMessage(msg)
+			return s.app.bindings.BackendUpgrades.startCodexRestartFromMessage(msg)
 		default:
 			return errors.New(codexUpgradeCommandUsage)
 		}
@@ -166,16 +129,16 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 	sessionKey := makeSessionKey(s.app, msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	view, err := newBackendUpgradeService(s.app).loadCodexUpgradeView(ctx, includeLatest)
+	view, err := s.app.bindings.BackendUpgrades.loadCodexUpgradeView(ctx, includeLatest)
 	if err != nil {
 		return err
 	}
 	if !prepareUpgrade {
-		card := newUpgradeRenderService(s.app).renderUpgradeStatusCard(upgraderender.CodexSpec, sessionKey, view, includeLatest)
+		card := s.app.bindings.UpgradePresentation.renderUpgradeStatusCard(upgraderender.CodexSpec, sessionKey, view, includeLatest)
 		_, err = s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
-	card, pendingID, err := newUpgradeRenderService(s.app).prepareUpgradeCard(upgraderender.CodexSpec, codexUpgradePendingKind, "codex-upgrade", sessionKey, msg.UserID, view)
+	card, pendingID, err := s.app.bindings.UpgradePresentation.prepareUpgradeCard(upgraderender.CodexSpec, codexUpgradePendingKind, "codex-upgrade", sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
@@ -184,9 +147,9 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 		return err
 	}
 	if strings.TrimSpace(pendingID) != "" {
-		_ = s.app.State().UpdatePending(pendingID, func(req *state.PendingRequest) {
-			req.FeishuMsgID = msgID
-		})
+		if err := s.app.bindings.Forms.SaveDraft(pendingID, nil, "", 0, msgID); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -1,15 +1,12 @@
 package runtime
 
-import "time"
+import (
+	"feidex/internal/domain/backend"
+	"time"
+)
 
 // BackendUpgradePendingPayload describes a pending backend self-upgrade.
-type BackendUpgradePendingPayload struct {
-	CurrentVersion string `json:"current_version"`
-	TargetVersion  string `json:"target_version"`
-	Command        string `json:"command"`
-	CommandPath    string `json:"command_path"`
-	UpdateCommand  string `json:"update_command"`
-}
+type BackendUpgradePendingPayload = backend.UpgradePayload
 
 // ClaudeSessionListMeta holds metadata for a Claude session list entry.
 type ClaudeSessionListMeta struct {

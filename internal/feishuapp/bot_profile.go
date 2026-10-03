@@ -16,40 +16,12 @@ import (
 )
 
 func commandWorkspaceProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
-	if err := commandWorkspace(a, msg, args); err != nil {
-		return err
-	}
-	if msg == nil || len(args) == 0 || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") {
-		return nil
-	}
-	if len(args) >= 2 {
-		setting := routing.Setting(strings.ToLower(strings.TrimSpace(args[0])))
-		if setting == "permission" {
-			setting = routing.Permissions
-		}
-		switch setting {
-		case routing.Sandbox, routing.ApprovalPolicy, routing.MultiAgent, routing.Permissions:
-			_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, setting, args[1])
-			return err
-		}
-	}
-	_, sess, ws := currentWorkspaceForMessage(a, msg)
-	workspaceID := ""
-	if ws != nil {
-		workspaceID = ws.ID
-	} else if sess != nil {
-		workspaceID = strings.TrimSpace(sess.WorkspaceID)
-	}
-	if workspaceID == "" {
-		return nil
-	}
-	_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Workspace, workspaceID)
-	return err
+	return commandWorkspace(a, msg, args)
 }
 
 func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") || len(args) == 0 {
-		return newBackendConfigurationService(a).handleBackendModelCommand(msg, args)
+		return a.bindings.BackendConfiguration.HandleBackendModelCommand(msg, args)
 	}
 	if len(args) == 3 {
 		setting := routing.Setting(strings.ToLower(strings.TrimSpace(args[0])))
@@ -66,18 +38,11 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 			}
 		}
 	}
-	if err := newBackendConfigurationService(a).handleBackendModelCommand(msg, args); err != nil {
-		return err
-	}
-	if len(args) == 2 && strings.EqualFold(strings.TrimSpace(args[0]), "set") {
-		_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, args[1])
-		return err
-	}
-	return nil
+	return a.bindings.BackendConfiguration.HandleBackendModelCommand(msg, args)
 }
 
 func saveAuxiliaryCommand(a *App, msg *feishu.InboundMessage, setting routing.Setting, value, label string) error {
-	result, err := newModelSettingsService(a).SaveAuxiliary(makeSessionKey(a, msg), configuredBackend(a), setting, value)
+	result, err := a.bindings.ModelSettings.SaveAuxiliary(makeSessionKey(a, msg), configuredBackend(a), setting, value)
 	if err != nil {
 		return err
 	}
@@ -90,47 +55,35 @@ func saveAuxiliaryCommand(a *App, msg *feishu.InboundMessage, setting routing.Se
 
 func commandEffortProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") || len(args) == 0 {
-		return newModelConfigService(a).commandEffort(msg, args)
+		return a.bindings.ModelCommands.CommandEffort(msg, args)
 	}
 	if len(args) != 1 {
 		return fmt.Errorf("usage: /effort | /effort EFFORT|default")
 	}
-	if err := newModelConfigService(a).commandEffort(msg, args); err != nil {
-		return err
-	}
-	_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, args[0])
-	return err
+	return a.bindings.ModelCommands.CommandEffort(msg, args)
 }
 
 func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") || (len(args) == 1 && strings.EqualFold(strings.TrimSpace(args[0]), "config")) {
 		return commandFast(a, msg, args)
 	}
-	value := ""
-	if len(args) == 0 || (len(args) == 1 && strings.EqualFold(strings.TrimSpace(args[0]), "toggle")) {
-		profile, err := newRoutingConfiguration(a).EnsureProfile()
-		if err != nil {
-			return err
-		}
-		value = applicationrouting.ToggleServiceTier(profile.ServiceTier)
-	} else if len(args) == 1 {
-		value = strings.ToLower(strings.TrimSpace(args[0]))
-		if value == "off" || value == "default" {
-			value = ""
-		} else {
-			value = applicationrouting.NormalizeServiceTier(value)
-			if value == "" {
-				return fmt.Errorf("unsupported service tier %q", args[0])
-			}
-		}
-	} else {
+	if len(args) > 1 {
 		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast off | /fast toggle")
 	}
-	_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, value)
+	value := ""
+	if len(args) == 1 {
+		value = args[0]
+	}
+	toggle := len(args) == 0 || strings.EqualFold(strings.TrimSpace(value), "toggle")
+	result, err := a.bindings.ScopedRoutingConfiguration.ChangeServiceTier(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, value, toggle)
 	if err != nil {
 		return err
 	}
-	return replyTextEffect(a, msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(value))
+	updated := value
+	if result.Profile != nil {
+		updated = result.Profile.ServiceTier
+	}
+	return replyTextEffect(a, msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(updated))
 }
 
 func effectiveBotProfile(a *App) *state.BotProfile {
@@ -141,25 +94,15 @@ func effectiveBotProfile(a *App) *state.BotProfile {
 }
 
 func completeBotProfileModelSet(a *App, action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	resp, err := newBackendConfigurationService(a).completeGlobalModelSet(action, modelID)
-	if err != nil || resp == nil || (resp.Toast != nil && strings.EqualFold(resp.Toast.Type, "error")) {
-		return resp, err
-	}
-	_, err = newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: "p2p", ChatID: "profile"}, routing.Model, modelID)
-	return resp, err
+	return a.bindings.BackendConfiguration.CompleteGlobalModelSet(action, modelID)
 }
 
 func completeBotProfileEffortSet(a *App, action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
-	resp, err := newBackendConfigurationService(a).completeGlobalReasoningEffortSet(action, effort)
-	if err != nil || resp == nil || (resp.Toast != nil && strings.EqualFold(resp.Toast.Type, "error")) {
-		return resp, err
-	}
-	_, err = newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: "p2p", ChatID: "profile"}, routing.Effort, effort)
-	return resp, err
+	return a.bindings.BackendConfiguration.CompleteGlobalReasoningEffortSet(action, effort)
 }
 
 func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
-	result, err := newModelSettingsService(a).SaveAuxiliary(actionSessionKey(action), configuredBackend(a), routing.Setting(role), value)
+	result, err := a.bindings.ModelSettings.SaveAuxiliary(actionSessionKey(action), configuredBackend(a), routing.Setting(role), value)
 	if err != nil {
 		kind := "error"
 		if errors.Is(err, applicationmodelconfig.ErrSaveBlocked) {
@@ -175,16 +118,9 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 }
 
 func completeBotProfileServiceTierSet(a *App, action *feishu.CardAction, serviceTier string) (*callback.CardActionTriggerResponse, error) {
-	value := applicationrouting.NormalizeServiceTier(serviceTier)
-	if strings.EqualFold(strings.TrimSpace(serviceTier), "default") || strings.EqualFold(strings.TrimSpace(serviceTier), "off") {
-		value = ""
-	}
-	if strings.TrimSpace(serviceTier) != "" && value == "" && !strings.EqualFold(strings.TrimSpace(serviceTier), "default") && !strings.EqualFold(strings.TrimSpace(serviceTier), "off") {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "unsupported service tier"}}, nil
-	}
-	_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: "p2p", ChatID: "profile"}, routing.ServiceTier, value)
+	_, err := a.bindings.ScopedRoutingConfiguration.ChangeServiceTier(applicationrouting.Scope{ChatType: "p2p", ChatID: "profile"}, serviceTier, false)
 	if err != nil {
-		return nil, err
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 Bot 默认响应速度"}, Card: rawCard(renderServiceTierMenuCard(a, actionSessionKey(action)))}, nil
 }

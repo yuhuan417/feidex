@@ -3,6 +3,7 @@
 package appstate
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -14,24 +15,22 @@ import (
 
 // Store provides frontend-scoped access to state.Store.
 type Store struct {
-	RevisionMutex  sync.Locker
-	revisionMu     sync.Mutex
-	scopeMu        sync.RWMutex
-	store          *state.Store
-	frontendID     string
-	backend        string
-	legacyFallback bool
+	RevisionMutex sync.Locker
+	revisionMu    sync.Mutex
+	scopeMu       sync.RWMutex
+	store         *state.Store
+	frontendID    string
+	backend       string
 }
 
 // NewScoped creates a frontend-scoped state gateway from explicit runtime
 // dependencies. Keeping construction here makes the scope visible at the
 // composition root and avoids a second app-level state facade.
-func NewScoped(store *state.Store, frontendID, backend string, legacyFallback bool) *Store {
+func NewScoped(store *state.Store, frontendID, backend string) *Store {
 	return &Store{
-		store:          store,
-		frontendID:     strings.TrimSpace(frontendID),
-		backend:        domainbackend.NormalizeBackend(backend),
-		legacyFallback: legacyFallback,
+		store:      store,
+		frontendID: strings.TrimSpace(frontendID),
+		backend:    domainbackend.NormalizeBackend(backend),
 	}
 }
 
@@ -55,9 +54,6 @@ func (s *Store) FrontendID() string { return s.scopeFrontendID() }
 
 // Backend returns the normalized backend scope owned by this gateway.
 func (s *Store) Backend() string { return s.scopeBackend() }
-
-// LegacyFallbackEnabled reports whether unscoped legacy records are visible.
-func (s *Store) LegacyFallbackEnabled() bool { return s.scopeLegacyFallback() }
 
 // SetBackend updates the backend scope after a runtime backend switch.
 func (s *Store) SetBackend(backend string) {
@@ -88,22 +84,8 @@ func (s *Store) scopeBackend() string {
 	return s.backend
 }
 
-func (s *Store) scopeLegacyFallback() bool {
-	if s == nil {
-		return false
-	}
-	if s.legacyFallback {
-		return true
-	}
-	return s.legacyFallback
-}
-
 func (s *Store) matchesFrontend(frontendID string) bool {
-	frontendID = strings.TrimSpace(frontendID)
-	if frontendID == strings.TrimSpace(s.scopeFrontendID()) {
-		return true
-	}
-	return frontendID == "" && s.scopeLegacyFallback()
+	return strings.TrimSpace(frontendID) == s.scopeFrontendID()
 }
 
 func cloneSession(sess *conversation.Session) *conversation.Session {
@@ -115,22 +97,39 @@ func (s *Store) Session(key string) *conversation.Session {
 	if s == nil || s.stateStore() == nil {
 		return nil
 	}
+	if !s.ownsSessionKey(key) {
+		return nil
+	}
 	resolved := s.resolveSessionKey(key)
 	return s.stateStore().GetSession(resolved)
 }
 
-// Sessions returns all sessions.
+// Sessions returns only sessions owned by this frontend.
 func (s *Store) Sessions() []*conversation.Session {
 	if s == nil || s.stateStore() == nil {
 		return nil
 	}
-	return s.stateStore().AllSessions()
+	var sessions []*conversation.Session
+	for _, sess := range s.stateStore().AllSessions() {
+		if sess != nil && s.ownsSessionKey(sess.Key) {
+			sessions = append(sessions, sess)
+		}
+	}
+	return sessions
+}
+
+func (s *Store) ownsSessionKey(key string) bool {
+	frontendID, _, _, _, _ := identity.ParseSessionKey(key)
+	return s.matchesFrontend(frontendID)
 }
 
 // SaveSession persists a session snapshot.
 func (s *Store) SaveSession(sess *conversation.Session) error {
 	if s == nil || s.stateStore() == nil || sess == nil {
 		return nil
+	}
+	if !s.ownsSessionKey(sess.Key) {
+		return fmt.Errorf("foreign frontend session")
 	}
 	cp := cloneSession(sess)
 	if cp == nil {
@@ -147,6 +146,9 @@ func (s *Store) SaveSession(sess *conversation.Session) error {
 func (s *Store) UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
 	if s == nil || s.stateStore() == nil {
 		return nil, nil
+	}
+	if !s.ownsSessionKey(key) {
+		return nil, fmt.Errorf("foreign frontend session")
 	}
 	return s.stateStore().UpdateSession(s.resolveSessionKey(key), func(sess *conversation.Session) {
 		if mutate != nil {
@@ -165,9 +167,6 @@ func (s *Store) canonicalSessionKey(key string) string {
 		return key
 	}
 	frontendID, _, _, _, _ := identity.ParseSessionKey(key)
-	if frontendID == "" && s.scopeLegacyFallback() {
-		frontendID = strings.TrimSpace(s.scopeFrontendID())
-	}
 	return identity.CanonicalSessionKey(frontendID, key)
 }
 

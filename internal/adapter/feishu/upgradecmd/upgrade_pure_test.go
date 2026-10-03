@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	filesystem "feidex/internal/adapter/filesystem/upgrade"
 	"feidex/internal/config"
 )
 
@@ -172,7 +173,7 @@ func TestResolveUpgradeLocalSourcePath(t *testing.T) {
 	ws := &config.Workspace{ID: "test", Cwd: dir}
 
 	t.Run("valid file", func(t *testing.T) {
-		got, err := ResolveUpgradeLocalSourcePath(ws, "mybin")
+		got, err := (filesystem.Artifacts{}).Resolve(ws, "mybin")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -181,19 +182,19 @@ func TestResolveUpgradeLocalSourcePath(t *testing.T) {
 		}
 	})
 	t.Run("directory rejected", func(t *testing.T) {
-		_, err := ResolveUpgradeLocalSourcePath(ws, ".")
+		_, err := (filesystem.Artifacts{}).Resolve(ws, ".")
 		if err == nil {
 			t.Fatal("expected error for directory")
 		}
 	})
 	t.Run("nonexistent rejected", func(t *testing.T) {
-		_, err := ResolveUpgradeLocalSourcePath(ws, "nonexistent")
+		_, err := (filesystem.Artifacts{}).Resolve(ws, "nonexistent")
 		if err == nil {
 			t.Fatal("expected error for nonexistent file")
 		}
 	})
 	t.Run("nil workspace rejected", func(t *testing.T) {
-		_, err := ResolveUpgradeLocalSourcePath(nil, "mybin")
+		_, err := (filesystem.Artifacts{}).Resolve(nil, "mybin")
 		if err == nil {
 			t.Fatal("expected error for nil workspace")
 		}
@@ -204,7 +205,7 @@ func TestNewUpgradeLocalPickerPayload(t *testing.T) {
 	dir := t.TempDir()
 	ws := &config.Workspace{ID: "test", Cwd: dir}
 
-	payload, err := NewUpgradeLocalPickerPayload(ws)
+	payload, err := (filesystem.Artifacts{}).Picker(ws)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

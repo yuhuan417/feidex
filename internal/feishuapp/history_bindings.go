@@ -15,10 +15,10 @@ func (o historyOutbound) ReplyCard(ctx context.Context, messageID string, card m
 	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
 }
 
-func newHistoryService(app *App) history.Service {
+func BuildHistory(app *App) history.Service {
 	return compositionkit.NewHistory(compositionkit.HistoryDependencies{
-		Frontend: identity.FrontendID(app.FrontendID()), AllowLegacyFallback: allowLegacyFrontendFallback(app),
-		Context: app.Context, Outbound: historyOutbound{app: app},
+		Frontend: identity.FrontendID(app.FrontendID()),
+		Context:  app.Context, Outbound: historyOutbound{app: app},
 		Repository: app.State(), Backend: func() string { return configuredBackend(app) },
 		CodexClient:   func() codexadapter.RPCClient { return currentCodexClient(app) },
 		SessionKey:    func(msg *feishu.InboundMessage) string { return makeSessionKey(app, msg) },

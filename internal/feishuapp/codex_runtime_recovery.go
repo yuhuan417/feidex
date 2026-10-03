@@ -18,27 +18,30 @@ func recoveryState(a *App) *appcodexruntime.RecoveryState {
 		return nil
 	}
 	owner := ensureRuntimeOwner(a)
-	if owner.CodexRecovery == nil {
-		owner.CodexRecovery = appcodexruntime.NewRecoveryState()
-	}
 	return owner.CodexRecovery
 }
 
-// buildCodexRecoveryService builds a codexruntime.RecoveryService with
-// all callbacks wired to *App dependencies. The StartVerifiedCodexClient
-// callback is set separately to avoid circular initialization.
-func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
-	return appcodexruntime.RecoveryService{
-		State:   recoveryState(a),
-		Context: a.Context,
+func CodexRecoveryPorts(a *App) appcodexruntime.RecoveryDependencies {
+	return appcodexruntime.RecoveryDependencies{
+		State:     recoveryState(a),
+		Context:   a.Context,
+		RunAsync:  func(fn func()) { runAsync(a, fn) },
+		ClearLive: func() { resetLiveThreadState(a) },
+		FailActiveWork: func(cause error) {
+			message := "Codex 后端异常退出。"
+			if detail := strings.TrimSpace(errorText(cause)); detail != "" {
+				message = "Codex 后端异常退出：" + detail
+			}
+			failBackendActiveWork(a, domainbackend.BackendCodex, "", "", message)
+		},
+		StartVerifiedCodexClient: func(ctx context.Context) (appcodexruntime.CodexClient, error) {
+			return a.bindings.CodexUpgrade.StartVerifiedCodexClient(ctx)
+		},
 		FrontendID: func() string {
 			return a.frontendID
 		},
 		IsBackendActive: func() bool {
-			if runtime := backendRuntimeForKind(domainbackend.BackendCodex); runtime != nil {
-				return runtime.isActive(backendRuntimeContextForApp(a))
-			}
-			return false
+			return configuredBackend(a) == domainbackend.BackendCodex
 		},
 		RecoverFrontendRuntimeState: func() {
 			recoverFrontendRuntimeState(a)
@@ -57,7 +60,7 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 			return conversation.ShouldStartNextSubmission(sess)
 		},
 		StartNextSubmissionAsync: func(sessionKey, reason string) {
-			newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, reason)
+			a.bindings.Submissions.StartNextSubmissionAsync(sessionKey, reason)
 		},
 		RunSessionAsync: func(sessionKey string, fn func()) {
 			runSessionAsync(a, sessionKey, fn)
@@ -65,35 +68,21 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 	}
 }
 
-func beginCodexTransportRecovery(a *App, client CodexClient) bool {
-	return buildCodexRecoveryService(a).BeginRecovery(client)
-}
-
 func codexRuntimeRecovering(a *App) bool {
-	return buildCodexRecoveryService(a).IsRecovering()
+	return a.bindings.CodexRecovery.IsRecovering()
 }
 
 func getCodex(a *App) CodexClient {
 	if a == nil {
 		return nil
 	}
-	owner := ensureRuntimeOwner(a)
-	registryFor(a).ClientsMu.RLock()
-	client, _ := registryFor(a).Codex.(CodexClient)
-	registryFor(a).ClientsMu.RUnlock()
-	if current := owner.CodexClient(); current != nil {
-		return current
-	}
-	return client
+	return ensureRuntimeOwner(a).CodexClient()
 }
 
 func setCodex(a *App, c CodexClient) {
 	if a == nil {
 		return
 	}
-	registryFor(a).ClientsMu.Lock()
-	registryFor(a).Codex = c
-	registryFor(a).ClientsMu.Unlock()
 	ensureRuntimeOwner(a).SetCodexClient(c)
 }
 
@@ -101,14 +90,7 @@ func currentCodexClient(a *App) CodexClient {
 	if a == nil {
 		return nil
 	}
-	svc := buildCodexRecoveryService(a)
-	if svc.IsRecovering() {
-		return svc.CurrentClient()
-	}
-	if c := getCodex(a); c != nil {
-		return c
-	}
-	return svc.CurrentClient()
+	return getCodex(a)
 }
 
 func requireCodexClient(a *App) (CodexClient, error) {
@@ -120,9 +102,7 @@ func requireCodexClient(a *App) (CodexClient, error) {
 }
 
 func replaceCodexClient(a *App, next CodexClient) CodexClient {
-	prev := buildCodexRecoveryService(a).ReplaceClient(next)
-	setCodex(a, next)
-	return prev
+	return a.bindings.CodexRecovery.ReplaceClient(next)
 }
 
 func replyCodexError(a *App, requestID json.RawMessage, code int, message string) {
@@ -132,24 +112,7 @@ func replyCodexError(a *App, requestID json.RawMessage, code int, message string
 }
 
 func beginCodexAutoThreadRecoveryScope(a *App) func() {
-	return buildCodexRecoveryService(a).BeginAutoThreadRecoveryScope()
-}
-
-func codexAutoThreadRecoveryActive(a *App) bool {
-	return buildCodexRecoveryService(a).AutoThreadRecoveryActive()
-}
-
-func recoverCodexRuntimeAfterTransportFailure(a *App, failed CodexClient, skipFrontendRecovery bool) {
-	svc := buildCodexRecoveryService(a)
-	svc.StartVerifiedCodexClient = func(ctx context.Context) (appcodexruntime.CodexClient, error) {
-		return newBackendUpgradeService(a).startVerifiedCodexClient(ctx)
-	}
-	svc.RecoverAfterTransportFailure(failed, skipFrontendRecovery)
-	if a != nil && !svc.IsRecovering() {
-		if next := svc.CurrentClient(); next != nil {
-			setCodex(a, next)
-		}
-	}
+	return a.bindings.CodexRecovery.BeginAutoThreadRecoveryScope()
 }
 
 func requireCodexGateway(a *App) (codexadapter.Gateway, error) {

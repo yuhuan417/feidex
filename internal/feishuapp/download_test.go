@@ -3,11 +3,11 @@ package feishuapp
 import (
 	"errors"
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
+	"feidex/internal/application/fileshare"
 	"feidex/internal/domain/conversation"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/feishu"
@@ -47,7 +47,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 		}
 	}
 
-	if err := a.store.UpsertPending(&state.PendingRequest{ID: "download-ok", Status: "processing"}); err != nil {
+	if err := a.store.UpsertPending(&state.PendingRequest{ID: "download-ok", Kind: fileshare.Kind, Status: "processing"}); err != nil {
 		t.Fatalf("UpsertPending(download-ok) error = %v", err)
 	}
 	ff.sharedFileResult = feishu.SharedFileResult{
@@ -55,11 +55,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 		URL:       "https://example.test/file",
 		SizeBytes: 2048,
 	}
-	appdebugviewcmd.FinishDownloadFileShare(newDebugViewAppAdapter(a), "download-ok", "msg-ok", payload, selectedPath, workspace, feishu.SharedFileRequest{
-		LocalPath: selectedPath,
-		ChatID:    "chat-1",
-		UserID:    "user-1",
-	})
+	a.bindings.FileSharing.Execute(fileshare.Execution{ID: "download-ok", MessageID: "msg-ok", Payload: payload, WorkspaceCWD: workspace, Request: fileshare.Request{LocalPath: selectedPath, ChatID: "chat-1", UserID: "user-1"}})
 	if req := a.store.PendingByID("download-ok"); req == nil || req.Status != "resolved" {
 		t.Fatalf("pending after success = %+v", req)
 	}
@@ -70,16 +66,12 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 		t.Fatalf("success patched body = %q", body)
 	}
 
-	if err := a.store.UpsertPending(&state.PendingRequest{ID: "download-fail", Status: "processing"}); err != nil {
+	if err := a.store.UpsertPending(&state.PendingRequest{ID: "download-fail", Kind: fileshare.Kind, Status: "processing"}); err != nil {
 		t.Fatalf("UpsertPending(download-fail) error = %v", err)
 	}
 	ff.shareFileErr = errors.New("share boom")
 	before := len(ff.patchedCards)
-	appdebugviewcmd.FinishDownloadFileShare(newDebugViewAppAdapter(a), "download-fail", "msg-fail", payload, selectedPath, workspace, feishu.SharedFileRequest{
-		LocalPath: selectedPath,
-		ChatID:    "chat-1",
-		UserID:    "user-1",
-	})
+	a.bindings.FileSharing.Execute(fileshare.Execution{ID: "download-fail", MessageID: "msg-fail", Payload: payload, WorkspaceCWD: workspace, Request: fileshare.Request{LocalPath: selectedPath, ChatID: "chat-1", UserID: "user-1"}})
 	if req := a.store.PendingByID("download-fail"); req == nil || req.Status != "pending" {
 		t.Fatalf("pending after failure = %+v", req)
 	}
@@ -89,11 +81,7 @@ func TestDownloadHelpersAndFileShareBranches(t *testing.T) {
 
 	ff.shareFileErr = nil
 	before = len(ff.patchedCards)
-	appdebugviewcmd.FinishDownloadFileShare(newDebugViewAppAdapter(a), "download-ok", "", payload, selectedPath, workspace, feishu.SharedFileRequest{
-		LocalPath: selectedPath,
-		ChatID:    "chat-1",
-		UserID:    "user-1",
-	})
+	a.bindings.FileSharing.Execute(fileshare.Execution{ID: "download-ok", Payload: payload, WorkspaceCWD: workspace, Request: fileshare.Request{LocalPath: selectedPath, ChatID: "chat-1", UserID: "user-1"}})
 	if len(ff.patchedCards) != before {
 		t.Fatalf("finishDownloadFileShare(empty message id) patchedCards = %d, want %d", len(ff.patchedCards), before)
 	}
@@ -129,6 +117,7 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 	}
 	pending := &state.PendingRequest{
 		ID:          "download-confirm",
+		Kind:        fileshare.Kind,
 		SessionKey:  "sess-download",
 		OwnerUserID: "owner-1",
 		FeishuMsgID: "pending-msg",
@@ -140,13 +129,13 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 	ff.sharedFileResult = feishu.SharedFileResult{FileName: "report.txt", URL: "https://example.test/download"}
 	resp, err = appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), &feishu.CardAction{
 		ChatID:    "",
-		UserID:    "",
+		UserID:    "owner-1",
 		MessageID: "",
 	}, pending, payload, selectedPath)
 	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Content != "正在生成下载链接" {
 		t.Fatalf("completeDownloadFileConfirm(start) = %+v, %v", resp, err)
 	}
-	time.Sleep(20 * time.Millisecond)
+	a.waitAsync()
 	if req := a.store.PendingByID("download-confirm"); req == nil || req.Status == "" {
 		t.Fatalf("pending after completeDownloadFileConfirm(start) = %+v", req)
 	}

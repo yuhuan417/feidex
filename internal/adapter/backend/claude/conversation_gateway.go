@@ -19,7 +19,7 @@ type ConversationClient interface {
 }
 
 type ConversationGateway struct {
-	Client   ConversationClient
+	Client   func() ConversationClient
 	Continue func(string, string) error
 }
 
@@ -27,15 +27,17 @@ func (g ConversationGateway) List(_ context.Context, ws *workspace.Workspace, al
 	return catalog.ListSessions("", ws, all)
 }
 func (g ConversationGateway) Start(ctx context.Context, r usecase.Request) (usecase.Thread, error) {
-	if g.Client == nil {
+	client := g.Client()
+	if client == nil {
 		return usecase.Thread{}, fmt.Errorf("claude backend not initialized")
 	}
-	_ = g.Client.ResetSession(r.SessionKey)
-	id, err := g.Client.EnsureSession(ctx, r.SessionKey, r.Workspace, "", r.Model)
+	_ = client.ResetSession(r.SessionKey)
+	id, err := client.EnsureSession(ctx, r.SessionKey, r.Workspace, "", r.Model)
 	return usecase.Thread{ID: id, Name: "Claude", Preview: textutil.FirstNonEmpty(r.Session.ActiveThreadPreview, r.Workspace.Name)}, err
 }
 func (g ConversationGateway) Resume(ctx context.Context, r usecase.Request) (usecase.Thread, error) {
-	if g.Client == nil {
+	client := g.Client()
+	if client == nil {
 		return usecase.Thread{}, fmt.Errorf("claude backend not initialized")
 	}
 	sel := r.Selection
@@ -55,21 +57,23 @@ func (g ConversationGateway) Resume(ctx context.Context, r usecase.Request) (use
 	if strings.TrimSpace(sel.Cwd) != "" && !conversation.SameWorkspaceCWD(sel.Cwd, r.Workspace.Cwd) {
 		return usecase.Thread{}, conversation.NewWarning("该会话不属于当前工作区，请先切换 workspace")
 	}
-	id, err := g.Client.EnsureSession(ctx, r.SessionKey, r.Workspace, sel.ThreadID, r.Model)
+	id, err := client.EnsureSession(ctx, r.SessionKey, r.Workspace, sel.ThreadID, r.Model)
 	return usecase.Thread{ID: id, Name: textutil.FirstNonEmpty(sel.Name, "Claude"), Preview: textutil.FirstNonEmpty(sel.Preview, r.Workspace.Name)}, err
 }
 func (g ConversationGateway) Fork(ctx context.Context, r usecase.Request) (usecase.Thread, error) {
-	if g.Client == nil {
+	client := g.Client()
+	if client == nil {
 		return usecase.Thread{}, fmt.Errorf("claude backend not initialized")
 	}
-	id, err := g.Client.ForkSession(ctx, r.SessionKey, r.Workspace, r.Session.ActiveThreadID, r.Model)
+	id, err := client.ForkSession(ctx, r.SessionKey, r.Workspace, r.Session.ActiveThreadID, r.Model)
 	return usecase.Thread{ID: id, Name: textutil.FirstNonEmpty(r.Session.ActiveThreadName, "Claude"), Preview: textutil.FirstNonEmpty(r.Session.ActiveThreadPreview, r.Workspace.Name)}, err
 }
 func (g ConversationGateway) Interrupt(ctx context.Context, sess *conversation.Session) error {
-	if g.Client == nil {
+	client := g.Client()
+	if client == nil {
 		return fmt.Errorf("claude backend not initialized")
 	}
-	return g.Client.Interrupt(ctx, sess.Key)
+	return client.Interrupt(ctx, sess.Key)
 }
 func (g ConversationGateway) Steer(_ context.Context, sess *conversation.Session, text string) error {
 	if g.Continue == nil {

@@ -1,33 +1,22 @@
 package feishuapp
 
 import (
+	"feidex/internal/application/backendmaintenance"
 	"strings"
-	"time"
 
 	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/upgraderender"
-	appruntime "feidex/internal/runtime"
-	"feidex/internal/state"
 )
 
-// upgradeTargetMatchesCurrent reports whether targetVersion names the version
-// already installed. "latest" and empty never match.
-func upgradeTargetMatchesCurrent(currentVersion, targetVersion string) bool {
-	targetVersion = strings.TrimSpace(targetVersion)
-	if targetVersion == "" || strings.EqualFold(targetVersion, "latest") {
-		return false
-	}
-	return strings.TrimSpace(currentVersion) == targetVersion
-}
-
-// upgradeRenderService renders upgrade cards for either backend; the spec
-// selects which one.
 type upgradeRenderService struct {
 	app      *App
 	renderer upgraderender.StatusCardRenderer
 }
 
-func newUpgradeRenderService(app *App) upgradeRenderService {
+// upgradeTargetMatchesCurrent reports whether targetVersion names the version
+// already installed. "latest" and empty never match.
+
+func BuildUpgradePresentation(app *App) upgradeRenderService {
 	var renderer upgraderender.StatusCardRenderer
 	if app != nil {
 		renderer = app.feishu
@@ -42,33 +31,16 @@ func (s upgradeRenderService) renderUpgradeStatusCard(spec upgraderender.Spec, s
 // prepareUpgradeCard renders the confirmation card and persists the pending
 // request, or returns the status card when the upgrade cannot start.
 func (s upgradeRenderService) prepareUpgradeCard(spec upgraderender.Spec, pendingKind, idPrefix string, sessionKey, ownerUserID string, view upgraderender.UpgradeView) (map[string]any, string, error) {
-	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || upgradeTargetMatchesCurrent(view.Probe.CurrentVersion, view.LatestVersion) {
-		return upgraderender.RenderUpgradeStatusCard(spec, s.renderer, sessionKey, view, true), "", nil
-	}
-	requestID, err := s.app.State().NextLocalID(idPrefix)
+	kind := strings.TrimSuffix(pendingKind, "_self_upgrade")
+	confirmation, err := s.app.bindings.BackendMaintenance[kind].Prepare(sessionKey, ownerUserID, backendmaintenance.View{Probe: view.Probe, BusyReason: view.BusyReason, Snapshot: view.Snapshot, Restart: view.Restart, LatestVersion: view.LatestVersion, LatestError: view.LatestError})
 	if err != nil {
 		return nil, "", err
 	}
-	payload := appruntime.BackendUpgradePendingPayload{
-		CurrentVersion: view.Probe.CurrentVersion,
-		TargetVersion:  view.LatestVersion,
-		Command:        view.Probe.Command,
-		CommandPath:    view.Probe.CommandPath,
-		UpdateCommand:  view.Probe.UpdateCommand,
+	if confirmation.RequestID == "" {
+		return upgraderender.RenderUpgradeStatusCard(spec, s.renderer, sessionKey, view, true), "", nil
 	}
-	if err := s.app.State().SavePending(&state.PendingRequest{
-		ID:          requestID,
-		Kind:        pendingKind,
-		SessionKey:  sessionKey,
-		OwnerUserID: ownerUserID,
-		PayloadJSON: mustJSON(payload),
-		Status:      state.PendingRequestStatusPending.String(),
-		CreatedAt:   time.Now().Unix(),
-		ExpiresAt:   time.Now().Add(15 * time.Minute).Unix(),
-	}); err != nil {
-		return nil, "", err
-	}
-	return upgraderender.RenderUpgradeConfirmCard(spec, s.renderer, sessionKey, requestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand), requestID, nil
+	payload := confirmation.Payload
+	return upgraderender.RenderUpgradeConfirmCard(spec, s.renderer, sessionKey, confirmation.RequestID, payload.CurrentVersion, payload.TargetVersion, payload.UpdateCommand), confirmation.RequestID, nil
 }
 
 func (s upgradeRenderService) renderUpgradePreparingCard(spec upgraderender.Spec, sessionKey, body string) map[string]any {

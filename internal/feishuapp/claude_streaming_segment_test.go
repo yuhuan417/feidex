@@ -18,7 +18,7 @@ func TestClaudeRuntimeAssistantTextRepliesImmediately(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -28,7 +28,7 @@ func TestClaudeRuntimeAssistantTextRepliesImmediately(t *testing.T) {
 		},
 	}
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "hello"})
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "hello"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after first assistant message = %d, want 1", len(ff.replyCards))
 	}
@@ -39,7 +39,7 @@ func TestClaudeRuntimeAssistantTextRepliesImmediately(t *testing.T) {
 		t.Fatalf("first assistant card body = %q, want hello", body)
 	}
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "world"})
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "world"})
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after second assistant message = %d, want 2", len(ff.replyCards))
 	}
@@ -55,7 +55,7 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -68,14 +68,14 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	first := "I need to split the changes. Let me first commit just the blur fix, then the tooltip."
 	second := "I'll temporarily revert the tooltip changes, commit the blur fix, then re-apply and commit the tooltip."
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: first})
-	runtime.service.HandleToolStarted(session, claudecli.ToolStartedEvent{
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: first})
+	runtime.HandleToolStarted(session, claudecli.ToolStartedEvent{
 		TurnNumber: 1,
 		ID:         "tool-1",
 		Name:       "Read",
 		Input:      map[string]any{"file_path": "/tmp/demo.txt"},
 	})
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: second})
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: second})
 
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count before completion = %d, want 3", len(ff.replyCards))
@@ -90,7 +90,7 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 		t.Fatalf("second assistant card lost leading chars: %q", body)
 	}
 
-	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: second})
+	runtime.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: second})
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after completion = %d, want no duplicate final card", len(ff.replyCards))
 	}
@@ -110,7 +110,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -120,7 +120,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 		},
 	}
 
-	runtime.service.HandleToolStarted(session, claudecli.ToolStartedEvent{
+	runtime.HandleToolStarted(session, claudecli.ToolStartedEvent{
 		TurnNumber: 1,
 		ID:         "tool-1",
 		Name:       "Read",
@@ -135,7 +135,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 		t.Fatalf("first working card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "first reply"})
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "first reply"})
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after assistant text = %d, want 2", len(ff.replyCards))
 	}
@@ -146,7 +146,7 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 		t.Fatalf("assistant reply body = %q, want first reply", body)
 	}
 
-	runtime.service.HandleToolStarted(session, claudecli.ToolStartedEvent{
+	runtime.HandleToolStarted(session, claudecli.ToolStartedEvent{
 		TurnNumber: 1,
 		ID:         "tool-2",
 		Name:       "TaskUpdate",
@@ -173,7 +173,7 @@ func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -183,7 +183,7 @@ func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText
 		},
 	}
 
-	runtime.service.HandleThinkingEvent(session, claudecli.ThinkingEvent{
+	runtime.HandleThinkingEvent(session, claudecli.ThinkingEvent{
 		TurnNumber:   1,
 		Thinking:     "private chain of thought",
 		FullThinking: "private chain of thought",
@@ -202,7 +202,7 @@ func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText
 		t.Fatalf("thinking working card should not expose raw reasoning: %q", thinkingBody)
 	}
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "visible answer"})
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "visible answer"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after assistant text = %d, want 1 because the thinking card should be reused", len(ff.replyCards))
 	}
@@ -229,7 +229,7 @@ func TestClaudeRuntimeThinkingRemainsHiddenOutsideProgress(t *testing.T) {
 			a, ff, _ := newTestApp(t)
 			a.cfg.Feishu.Quiet = mode
 			sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-			newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+			a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 			runtime := newTestClaudeRuntime(t, a)
 			session := &appclauderuntime.SessionState{
@@ -239,7 +239,7 @@ func TestClaudeRuntimeThinkingRemainsHiddenOutsideProgress(t *testing.T) {
 				},
 			}
 
-			runtime.service.HandleThinkingEvent(session, claudecli.ThinkingEvent{
+			runtime.HandleThinkingEvent(session, claudecli.ThinkingEvent{
 				TurnNumber:   1,
 				Thinking:     "private chain of thought",
 				FullThinking: "private chain of thought",
@@ -255,7 +255,7 @@ func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *test
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -265,7 +265,7 @@ func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *test
 		},
 	}
 
-	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 		Result:     "final answer",
@@ -289,7 +289,7 @@ func TestClaudeRuntimeTurnCompleteWithoutResultFallsBackToTerminalText(t *testin
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 	ff.replyCardErr = errors.New("boom")
 
 	runtime := newTestClaudeRuntime(t, a)
@@ -300,7 +300,7 @@ func TestClaudeRuntimeTurnCompleteWithoutResultFallsBackToTerminalText(t *testin
 		},
 	}
 
-	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 	})
@@ -314,9 +314,9 @@ func TestClaudeRuntimeTurnCompleteUsesResultUsageSynchronously(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -326,7 +326,7 @@ func TestClaudeRuntimeTurnCompleteUsesResultUsageSynchronously(t *testing.T) {
 		},
 	}
 
-	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 		Result:     "final answer",
@@ -357,7 +357,7 @@ func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -367,7 +367,7 @@ func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.
 		},
 	}
 
-	runtime.service.HandleThinkingEvent(session, claudecli.ThinkingEvent{
+	runtime.HandleThinkingEvent(session, claudecli.ThinkingEvent{
 		TurnNumber:   1,
 		Thinking:     "private chain of thought",
 		FullThinking: "private chain of thought",
@@ -376,7 +376,7 @@ func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.
 		t.Fatalf("reply card count after thinking = %d, want 1", len(ff.replyCards))
 	}
 
-	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 		Result:     "final answer",
@@ -403,7 +403,7 @@ func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -413,8 +413,8 @@ func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *
 		},
 	}
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "draft answer"})
-	runtime.service.HandleThinkingEvent(session, claudecli.ThinkingEvent{
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "draft answer"})
+	runtime.HandleThinkingEvent(session, claudecli.ThinkingEvent{
 		TurnNumber:   1,
 		Thinking:     "private chain of thought",
 		FullThinking: "private chain of thought",
@@ -426,7 +426,7 @@ func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *
 		t.Fatalf("thinking card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 
-	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
+	runtime.HandleTurnComplete(session, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 		Result:     "draft answer",
@@ -453,7 +453,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -466,7 +466,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 		},
 	}
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "before plan"})
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "before plan"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count before plan = %d, want 1", len(ff.replyCards))
 	}
@@ -474,7 +474,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		_, err := runtime.service.HandleExitPlanMode(ctx, session, claudecli.PlanInfo{Plan: "1. inspect\n2. implement"})
+		_, err := runtime.HandleExitPlanMode(ctx, session, claudecli.PlanInfo{Plan: "1. inspect\n2. implement"})
 		errCh <- err
 	}()
 
@@ -494,7 +494,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 		t.Fatalf("handleExitPlanMode() error = %v, want context canceled", err)
 	}
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "after plan"})
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "after plan"})
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after second assistant message = %d, want assistant + plan confirmation + assistant", len(ff.replyCards))
 	}
@@ -502,7 +502,7 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 		t.Fatalf("post-plan assistant card body = %q, want after plan", body)
 	}
 
-	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "after plan"})
+	runtime.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "after plan"})
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after completion = %d, want no duplicate final card", len(ff.replyCards))
 	}
@@ -521,7 +521,7 @@ func TestClaudeRuntimeQuietFinalSuppressesIntermediateTextButStillDeliversFinalA
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeFinal
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
 	session := &appclauderuntime.SessionState{
@@ -531,12 +531,12 @@ func TestClaudeRuntimeQuietFinalSuppressesIntermediateTextButStillDeliversFinalA
 		},
 	}
 
-	runtime.service.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "intermediate answer"})
+	runtime.HandleTextEvent(session, claudecli.TextEvent{TurnNumber: 1, Text: "intermediate answer"})
 	if len(ff.replyCards) != 0 || len(ff.patchedCards) != 0 {
 		t.Fatalf("quiet final should suppress intermediate text, replies=%d patches=%d", len(ff.replyCards), len(ff.patchedCards))
 	}
 
-	runtime.service.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "final answer"})
+	runtime.HandleTurnComplete(session, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true, Result: "final answer"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after final completion = %d, want 1", len(ff.replyCards))
 	}

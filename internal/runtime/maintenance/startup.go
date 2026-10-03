@@ -3,141 +3,51 @@ package maintenance
 import (
 	"context"
 	"feidex/internal/domain/conversation"
-	"feidex/internal/textutil"
 	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
 	"feidex/internal/domain/identity"
-	"feidex/internal/domain/workspace"
 	"sync"
 )
 
-func (s StartupRecovery) RecoverRuntimeState() {
-	s.RecoverSharedRuntimeState()
-	s.RecoverFrontendRuntimeState()
+func (s StartupRecovery) RecoverRuntimeState() error {
+	if err := s.ResetStartupState(); err != nil {
+		return err
+	}
+	return s.RecoverFrontendRuntimeState()
 }
 
-func (s StartupRecovery) RecoverSharedRuntimeState() {
+func (s StartupRecovery) ResetStartupState() error {
 	if s.deps.Repository == nil {
-		return
+		return nil
 	}
 	s.deps.ResetLiveThreads()
-	appState := s.deps.Repository
-	if appState == nil {
-		return
+	if err := s.deps.ResetState(); err != nil {
+		return err
 	}
-	sessions := appState.Sessions()
-	cleared := 0
-	for _, sess := range sessions {
-		if sess == nil {
-			continue
-		}
-		if strings.TrimSpace(sess.WorkspaceID) == "" {
-			sess.WorkspaceID = s.deps.DefaultWorkspaceID()
-			slog.Warn("repairing empty workspace on startup",
-				"session_key", sess.Key,
-				"workspace_id", sess.WorkspaceID,
-			)
-		}
-		if !conversation.HasInFlightSubmission(sess) && len(sess.Queue) == 0 && len(sess.StagedImages) == 0 && conversation.NormalizeSessionStatus(sess.Status) == conversation.SessionStatusIdle {
-			if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
-				conversation.ClearThreadContext(sess)
-			}
-			_ = appState.SaveSession(sess)
-			continue
-		}
-		slog.Warn("clearing stale runtime session state on startup",
-			"session_key", sess.Key,
-			"active_thread_id", sess.ActiveThreadID,
-			"active_turn_id", sess.ActiveTurnID,
-			"active_submission_id", sess.ActiveSubmissionID,
-			"queue_len", len(sess.Queue),
-			"status", sess.Status,
-		)
-		conversation.ResetActiveOperations(sess)
-		sess.Queue = nil
-		sess.StagedImages = nil
-		sess.Status = conversation.SessionStatusIdle.String()
-		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == "" {
-			conversation.ClearThreadContext(sess)
-		}
-		_ = appState.SaveSession(sess)
-		cleared++
-	}
-	if cleared > 0 {
-		slog.Debug("runtime session state recovery complete", "cleared_sessions", cleared)
-	}
-	s.deps.ExpireRequests()
 	s.deps.CleanupAttachments()
+	return nil
 }
 
-func (s StartupRecovery) RecoverFrontendRuntimeState() {
+func (s StartupRecovery) RecoverFrontendRuntimeState() error {
 	if s.deps.Repository == nil {
-		return
+		return nil
 	}
 	s.deps.RecoveryMu.Lock()
 	defer s.deps.RecoveryMu.Unlock()
 	{
 		s.deps.ResetLiveThreads()
 		if !s.deps.BackendConfigured() {
-			return
+			return nil
 		}
 		endBackendRecovery := s.deps.BeginRecovery()
 		if endBackendRecovery == nil {
 			endBackendRecovery = func() {}
 		}
 		defer endBackendRecovery()
-		s.recoverSessionThreadsOnStartup()
-	}
-}
-
-func (s StartupRecovery) recoverSessionThreadsOnStartup() {
-	if s.deps.Repository == nil {
-		return
-	}
-	appState := s.deps.Repository
-	if appState == nil {
-		return
-	}
-	for _, sess := range appState.Sessions() {
-		if sess == nil {
-			continue
-		}
-		if !s.deps.BelongsToFrontend(sess.Key) {
-			continue
-		}
-		if strings.TrimSpace(sess.ActiveThreadID) == "" {
-			continue
-		}
-		if conversation.NormalizeSessionStatus(textutil.FirstNonEmpty(sess.Status, conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
-			continue
-		}
-		if conversation.HasInFlightSubmission(sess) {
-			continue
-		}
-		if len(sess.Queue) != 0 || len(sess.StagedImages) != 0 {
-			continue
-		}
-
-		sessionKey := strings.TrimSpace(sess.Key)
-		workspaceID := textutil.FirstNonEmpty(sess.ActiveThreadWorkspaceID, sess.WorkspaceID, s.deps.DefaultWorkspaceID())
-		ws := s.deps.Workspace(workspaceID)
-		if ws == nil {
-			slog.Warn("startup thread recovery dropped unknown workspace lineage",
-				"session_key", sessionKey,
-				"thread_id", sess.ActiveThreadID,
-				"workspace_id", workspaceID,
-			)
-			conversation.ClearThreadContext(sess)
-			sess.Status = conversation.SessionStatusIdle.String()
-			_ = appState.SaveSession(sess)
-			s.deps.ClearLiveThread(sessionKey)
-			continue
-		}
-		effectiveModel := s.deps.EffectiveModel(sess)
-		s.deps.RecoverConversation(sessionKey, workspaceID, sess, ws, effectiveModel)
+		return s.deps.RestoreState()
 	}
 }
 
@@ -220,21 +130,17 @@ type SessionRepository interface {
 	SaveSession(*conversation.Session) error
 }
 type RecoveryDependencies struct {
-	Context             func() context.Context
-	Repository          SessionRepository
-	RecoveryMu          *sync.Mutex
-	DefaultWorkspaceID  func() string
-	Workspace           func(string) *workspace.Workspace
-	ResetLiveThreads    func()
-	ClearLiveThread     func(string)
-	BelongsToFrontend   func(string) bool
-	BackendConfigured   func() bool
-	BeginRecovery       func() func()
-	EffectiveModel      func(*conversation.Session) string
-	RecoverConversation func(string, string, *conversation.Session, *workspace.Workspace, string)
-	ExpireRequests      func()
-	CleanupAttachments  func()
-	SendText            func(context.Context, string, string) error
+	Context            func() context.Context
+	Repository         SessionRepository
+	RecoveryMu         *sync.Mutex
+	ResetLiveThreads   func()
+	BelongsToFrontend  func(string) bool
+	BackendConfigured  func() bool
+	BeginRecovery      func() func()
+	ResetState         func() error
+	RestoreState       func() error
+	CleanupAttachments func()
+	SendText           func(context.Context, string, string) error
 }
 type StartupRecovery struct{ deps RecoveryDependencies }
 

@@ -3,6 +3,7 @@ package backend
 import (
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/routing"
 	"fmt"
 	"strings"
 
@@ -333,19 +334,7 @@ func (d claudePermissionDriver) HandleConversationCommand(req ConversationPermis
 }
 
 func (d codexPermissionDriver) CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := strings.TrimSpace(sandboxMode) == ""
-	for _, opt := range domainworkspace.SandboxOptions() {
-		if opt.Value == sandboxMode {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 sandbox"}}, nil
-	}
-	if _, err := deps.UpdateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
-		w.SandboxMode = sandboxMode
-	}); err != nil {
+	if err := deps.Settings.Set(sessionKey, workspaceID, routing.Sandbox, sandboxMode); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	card, err := deps.RenderSandboxMenu(sessionKey)
@@ -359,19 +348,7 @@ func (d codexPermissionDriver) CompleteWorkspaceSandboxSet(sessionKey, workspace
 }
 
 func (d codexPermissionDriver) CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := strings.TrimSpace(approvalPolicy) == ""
-	for _, opt := range domainworkspace.ApprovalPolicyOptions() {
-		if opt.Value == approvalPolicy {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 policy"}}, nil
-	}
-	if _, err := deps.UpdateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
-		w.ApprovalPolicy = approvalPolicy
-	}); err != nil {
+	if err := deps.Settings.Set(sessionKey, workspaceID, routing.ApprovalPolicy, approvalPolicy); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	card, err := deps.RenderPolicyMenu(sessionKey)
@@ -385,19 +362,7 @@ func (d codexPermissionDriver) CompleteWorkspacePolicySet(sessionKey, workspaceI
 }
 
 func (d codexPermissionDriver) CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := false
-	for _, opt := range domainworkspace.MultiAgentModeOptions() {
-		if opt.Value == mode {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持 multi-agent mode"}}, nil
-	}
-	if _, err := deps.UpdateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
-		w.MultiAgentMode = mode
-	}); err != nil {
+	if err := deps.Settings.Set(sessionKey, workspaceID, routing.MultiAgent, mode); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	card, err := deps.RenderMultiAgentMenu(sessionKey)
@@ -411,38 +376,14 @@ func (d codexPermissionDriver) CompleteWorkspaceMultiAgentSet(sessionKey, worksp
 }
 
 func (d claudePermissionDriver) CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode string, deps WorkspacePermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	mode := ""
-	warning := ""
-	if override, ok := driverClaudePermissionOverrideValue(rawMode); ok {
-		mode = override
-	} else {
-		var err error
-		mode, warning, err = driverNormalizeRequestedClaudePermissionMode(deps.Permissions.Config(), rawMode)
-		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-	}
-	if _, err := deps.UpdateWorkspaceDefaults(workspaceID, func(w *config.Workspace) {
-		w.ClaudePermissionMode = mode
-	}); err != nil {
+	if err := deps.Settings.Set(sessionKey, workspaceID, routing.Permissions, rawMode); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	if deps.Session != nil && deps.Permissions != nil && deps.Permissions.Config() != nil {
-		if sess := deps.Session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) == strings.TrimSpace(workspaceID) && strings.TrimSpace(sess.ActiveClaudePermissionMode) == "" {
-			effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(deps.Permissions.Config(), workspaceID), deps.Permissions.Config().Claude)
-			if err := deps.ApplyRuntime(sessionKey, effective); err != nil {
-				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-			}
-		}
 	}
 	card, err := deps.RenderPermissionMenu(sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	content := "已更新 Claude 工作区权限模式"
-	if warning != "" {
-		content = warning
-	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: content},
 		Card:  RawCard(card),
@@ -725,22 +666,7 @@ func (d codexPermissionDriver) RenderConversationPermissionModeMenu(string, Conv
 }
 
 func (d codexPermissionDriver) CompleteConversationSandboxSet(sessionKey, threadID, sandboxMode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := strings.TrimSpace(sandboxMode) == ""
-	for _, opt := range domainworkspace.SandboxOptions() {
-		if opt.Value == sandboxMode {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 sandbox"}}, nil
-	}
-	sess := deps.Session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 thread 已失效"}}, nil
-	}
-	sess.ActiveThreadSandboxMode = sandboxMode
-	if err := deps.SaveSession(sess); err != nil {
+	if _, err := deps.Settings.Set(sessionKey, threadID, routing.Sandbox, sandboxMode); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	card, err := deps.RenderSandboxMenu(sessionKey)
@@ -754,22 +680,7 @@ func (d codexPermissionDriver) CompleteConversationSandboxSet(sessionKey, thread
 }
 
 func (d codexPermissionDriver) CompleteConversationPolicySet(sessionKey, threadID, approvalPolicy string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := strings.TrimSpace(approvalPolicy) == ""
-	for _, opt := range domainworkspace.ApprovalPolicyOptions() {
-		if opt.Value == approvalPolicy {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持的 policy"}}, nil
-	}
-	sess := deps.Session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 thread 已失效"}}, nil
-	}
-	sess.ActiveThreadApprovalPolicy = approvalPolicy
-	if err := deps.SaveSession(sess); err != nil {
+	if _, err := deps.Settings.Set(sessionKey, threadID, routing.ApprovalPolicy, approvalPolicy); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	card, err := deps.RenderPolicyMenu(sessionKey)
@@ -783,22 +694,7 @@ func (d codexPermissionDriver) CompleteConversationPolicySet(sessionKey, threadI
 }
 
 func (d codexPermissionDriver) CompleteConversationMultiAgentSet(sessionKey, threadID, mode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	valid := false
-	for _, opt := range domainworkspace.MultiAgentModeOptions() {
-		if opt.Value == mode {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "不支持 multi-agent mode"}}, nil
-	}
-	sess := deps.Session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前 thread 已失效"}}, nil
-	}
-	sess.ActiveThreadMultiAgentMode = mode
-	if err := deps.SaveSession(sess); err != nil {
+	if _, err := deps.Settings.Set(sessionKey, threadID, routing.MultiAgent, mode); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	card, err := deps.RenderMultiAgentMenu(sessionKey)
@@ -812,39 +708,15 @@ func (d codexPermissionDriver) CompleteConversationMultiAgentSet(sessionKey, thr
 }
 
 func (d claudePermissionDriver) CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode string, deps ConversationPermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error) {
-	sess := deps.Session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "当前会话已失效"}}, nil
-	}
-	mode := ""
-	warning := ""
-	if override, ok := driverClaudePermissionOverrideValue(rawMode); ok {
-		mode = override
-	} else {
-		var err error
-		mode, warning, err = deps.NormalizeRequested(rawMode)
-		if err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-	}
-	sess.ActiveClaudePermissionMode = mode
-	if err := deps.SaveSession(sess); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	if deps.Permissions != nil && deps.Permissions.Config() != nil {
-		effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(deps.Permissions.Config(), sess.WorkspaceID), deps.Permissions.Config().Claude)
-		if err := deps.ApplyRuntime(sessionKey, effective); err != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-		}
+	_, err := deps.Settings.Set(sessionKey, threadID, rawMode, deps.MessageID, deps.Async)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	card, err := deps.RenderPermissionMenu(sessionKey)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	content := "已更新 Claude 会话权限模式"
-	if warning != "" {
-		content = warning
-	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: content},
 		Card:  RawCard(card),
@@ -880,28 +752,6 @@ func driverClaudePermissionModeOptions(includeBypass bool) []appruntime.ClaudePe
 		options = append(options, appruntime.ClaudePermissionModeOption{Value: string(appruntime.ClaudePermissionModeBypass), Label: "bypassPermissions"})
 	}
 	return options
-}
-
-func driverNormalizeRequestedClaudePermissionMode(cfg *config.Config, raw string) (string, string, error) {
-	mode := normalizeClaudePermissionModeValue(raw)
-	switch mode {
-	case string(appruntime.ClaudePermissionModeDefault), string(appruntime.ClaudePermissionModeAcceptEdits), string(appruntime.ClaudePermissionModeBypass):
-	default:
-		return "", "", fmt.Errorf("不支持的 Claude 权限模式 `%s`", strings.TrimSpace(raw))
-	}
-	if mode == string(appruntime.ClaudePermissionModeBypass) && !driverClaudeBypassEnabled(cfg) {
-		return "", "", fmt.Errorf("当前未启用 `claude.dangerously_skip_permissions`，不能切到 `bypassPermissions`")
-	}
-	return mode, "", nil
-}
-
-func driverClaudePermissionOverrideValue(raw string) (string, bool) {
-	switch strings.TrimSpace(raw) {
-	case "", "inherit", "follow", "workspace", "global":
-		return "", true
-	default:
-		return "", false
-	}
 }
 
 func defaultWorkspaceIDFromConfig(cfg *config.Config) string {

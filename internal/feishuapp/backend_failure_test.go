@@ -1,8 +1,8 @@
 package feishuapp
 
 import (
+	appautoretry "feidex/internal/application/autoretry"
 	"feidex/internal/domain/conversation"
-	appautoretry "feidex/internal/runtime/autoretry"
 	appclauderuntime "feidex/internal/runtime/claude"
 
 	"errors"
@@ -33,7 +33,7 @@ func TestFailSubmissionWithoutTerminalCompletionMentionsUserWhenQueueEmpty(t *te
 	if got := a.store.GetSubmission(sub.ID); got != nil {
 		t.Fatalf("submission after forced failure = %+v, want deleted", got)
 	}
-	if pending := a.State().Pending("req-1"); pending != nil {
+	if pending := a.store.PendingByID("req-1"); pending != nil {
 		t.Fatalf("pending request after forced failure = %+v, want cleared", pending)
 	}
 	sess := a.store.GetSession("sess-1")
@@ -76,10 +76,10 @@ func TestFailSubmissionWithoutTerminalCompletionSkipsMentionWhenQueuePending(t *
 func TestFailSubmissionWithoutTerminalCompletionSuppressesTerminalStatusDuringAutoRetry(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
-	newAutoRetryService(a).AutoRetryTracker().After = func(time.Duration, func()) appautoretry.DelayedTask {
+	a.bindings.AutoRetry.AutoRetryTracker().After = func(time.Duration, func()) appautoretry.DelayedTask {
 		return &fakeDelayedTask{}
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := a.bindings.AutoRetry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
@@ -113,7 +113,7 @@ func TestClaudeHandleSessionErrorFailsRunningSubmissionOnFatalProcessExit(t *tes
 	}
 	session.SessionID = "claude-thread-1"
 
-	runtime.service.HandleSessionError(session, claudecli.ErrorEvent{
+	runtime.HandleSessionError(session, claudecli.ErrorEvent{
 		TurnNumber: 1,
 		Error:      &claudecli.ProcessError{Message: "Claude CLI process exited", Cause: errors.New("exit status 1")},
 		Context:    "stdout_eof",

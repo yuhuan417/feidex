@@ -585,7 +585,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -621,7 +621,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	}); err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	newRuntimeStateService(a).bindTurnSubmission("claude-stale", "claude-turn-1", sessionKey, "sub-1")
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("claude-stale", "claude-turn-1", sessionKey, "sub-1")
 
 	state := &appclauderuntime.SessionState{
 		SessionKey: sessionKey,
@@ -635,7 +635,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 		},
 	}
 
-	runtime.handleTurnComplete(state, claudecli.TurnCompleteEvent{
+	runtime.HandleTurnComplete(state, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    false,
 		Error:      errors.New("No conversation found with session ID: stale"),
@@ -645,7 +645,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	if sub == nil || sub.Finalized || sub.Status != "running" {
 		t.Fatalf("submission after suppressed completion = %+v", sub)
 	}
-	if _, bound := newRuntimeStateService(a).boundSubmissionForTurn("claude-turn-1"); bound == nil {
+	if _, bound := a.runtimeOwner.TurnBindings.BoundSubmissionForTurn("claude-turn-1"); bound == nil {
 		t.Fatalf("turn binding should remain until retry cleanup")
 	}
 	if state.Turns[1] != nil {
@@ -722,7 +722,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 		t.Fatalf("submission after Claude ready = %+v", sub)
 	}
 
-	binding := newRuntimeStateService(a).turnBindingTracker().Bindings[sub.TurnID]
+	binding := a.runtimeOwner.TurnBindings.Bindings[sub.TurnID]
 	if binding.ThreadID != "claude-session-ready" {
 		t.Fatalf("turn binding after Claude ready = %+v", binding)
 	}
@@ -873,6 +873,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
 	a.feishu = ff
+	recomposeTestApp(a)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "approve-1",
@@ -955,7 +956,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 	if err := sendClaudePlanModeCard(a, "plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
 		t.Fatalf("sendClaudePlanModeCard() error = %v", err)
 	}
-	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != domainbackend.BackendClaude || pending.Kind != claudePlanModePendingKind || pending.Status != "pending" {
+	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != domainbackend.BackendClaude || pending.Kind != "claude_exit_plan_mode" || pending.Status != "pending" {
 		t.Fatalf("plan pending = %+v, want Claude plan pending", pending)
 	}
 	if len(ff.replyCards) != 3 {
@@ -973,6 +974,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
 	a.feishu = ff
+	recomposeTestApp(a)
 
 	payload := pendingforms.ToolUserInputPayload{
 		ThreadID: "claude-thread-1",
@@ -1029,6 +1031,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
 	a.feishu = ff
+	recomposeTestApp(a)
 
 	payload := pendingforms.ToolUserInputPayload{
 		ThreadID: "claude-thread-1",
@@ -1093,6 +1096,7 @@ func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
 	a.feishu = ff
+	recomposeTestApp(a)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "question-text-1",
@@ -1163,6 +1167,7 @@ func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
 	a.feishu = ff
+	recomposeTestApp(a)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -1188,14 +1193,14 @@ func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 }
 
 func TestClaudePlanFilePathFromTool(t *testing.T) {
-	got := claudePlanFilePathFromTool("Write", map[string]interface{}{
+	got := appclauderuntime.PlanFilePathFromTool("Write", map[string]interface{}{
 		"file_path": "/home/yuhuan/.claude/plans/example-plan.md",
 	})
 	if got != "/home/yuhuan/.claude/plans/example-plan.md" {
-		t.Fatalf("claudePlanFilePathFromTool() = %q", got)
+		t.Fatalf("appclauderuntime.PlanFilePathFromTool() = %q", got)
 	}
-	if got := claudePlanFilePathFromTool("Edit", map[string]interface{}{"file_path": "/home/yuhuan/.claude/plans/example-plan.md"}); got != "" {
-		t.Fatalf("claudePlanFilePathFromTool(non-write) = %q, want empty", got)
+	if got := appclauderuntime.PlanFilePathFromTool("Edit", map[string]interface{}{"file_path": "/home/yuhuan/.claude/plans/example-plan.md"}); got != "" {
+		t.Fatalf("appclauderuntime.PlanFilePathFromTool(non-write) = %q, want empty", got)
 	}
 }
 
@@ -1243,7 +1248,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 	pending := &state.PendingRequest{
 		ID:          "plan-1",
 		Backend:     domainbackend.BackendClaude,
-		Kind:        claudePlanModePendingKind,
+		Kind:        "claude_exit_plan_mode",
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		FeishuMsgID: "msg-1",
@@ -1295,7 +1300,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 	pending := &state.PendingRequest{
 		ID:          "plan-cancel-1",
 		Backend:     domainbackend.BackendClaude,
-		Kind:        claudePlanModePendingKind,
+		Kind:        "claude_exit_plan_mode",
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
 		PayloadJSON: mustJSON(map[string]any{
@@ -1647,8 +1652,8 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	}
 
 	// Bind both turns
-	newRuntimeStateService(a).bindTurnSubmission("claude-thread-1", "claude-turn-1", sessionKey, "sub-1")
-	newRuntimeStateService(a).bindTurnSubmission("claude-thread-1", steerTurnID, sessionKey, steerSubID)
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("claude-thread-1", "claude-turn-1", sessionKey, "sub-1")
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("claude-thread-1", steerTurnID, sessionKey, steerSubID)
 	markSessionThreadLive(a, sessionKey, "claude-thread-1")
 
 	// Create SessionState with ONE turn (new architecture: steer is not a
@@ -1672,7 +1677,7 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	// Complete the turn (turn number 1). With the steer fix, the steer
 	// submission is finalized together with the turn via FinishSteerSubmission.
 	t.Log("=== handleTurnComplete for turn (turnNumber=1) ===")
-	runtime.handleTurnComplete(claudeState, claudecli.TurnCompleteEvent{
+	runtime.HandleTurnComplete(claudeState, claudecli.TurnCompleteEvent{
 		TurnNumber: 1,
 		Success:    true,
 	})
@@ -1749,8 +1754,7 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 
 	// Call ClearActiveOperationsAfterInterrupt (the Claude-specific fix)
 	t.Log("=== calling ClearActiveOperationsAfterInterrupt ===")
-	runtime := claudeRuntimeFacade{}
-	sess = runtime.clearActiveOperationsAfterInterrupt(a, sessionKey, sess)
+	sess = a.bindings.Conversations.ClearInterruptedOperations(sessionKey, sess)
 
 	dumpSessionState(t, "after-clear", sess)
 
@@ -1827,7 +1831,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	if sess == nil {
 		t.Fatal("session missing")
 	}
-	steered, err := newReplyContinuationService(a).TryClaudeReplyContinuation(&feishu.InboundMessage{
+	steered, err := a.bindings.Continuation.TryClaudeReplyContinuation(&feishu.InboundMessage{
 		MessageID:       "reply-1",
 		ChatID:          "chat-1",
 		ChatType:        "group",

@@ -3,6 +3,7 @@ package review
 import (
 	"context"
 	"errors"
+	reviewapp "feidex/internal/application/review"
 	domainreview "feidex/internal/domain/review"
 	"fmt"
 	"os/exec"
@@ -24,19 +25,8 @@ const (
 
 type TargetSpec = domainreview.TargetSpec
 
-type BranchOption struct {
-	Name      string
-	UpdatedAt int64
-	Current   bool
-	Default   bool
-}
-
-type CommitOption struct {
-	SHA      string
-	ShortSHA string
-	Date     string
-	Subject  string
-}
+type BranchOption = reviewapp.BranchOption
+type CommitOption = reviewapp.CommitOption
 
 type GitService struct{ Context context.Context }
 

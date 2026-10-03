@@ -52,7 +52,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			if actionName != "menu.group.model" {
 				return nil, false
 			}
-			return newBackendConfigurationService(a).renderModelMenuCard(sessionKey), true
+			return a.bindings.BackendConfiguration.RenderModelMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.group.model" {
@@ -80,7 +80,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"backend": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newBackendSelectionService(a).commandBackend(msg, args)
+					return a.bindings.BackendSelection.CommandBackend(msg, args)
 				},
 			},
 		},
@@ -95,15 +95,15 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.group.backend":
-				return newBackendSelectionService(s.app).completeMenuBackend(action, sessionKey)
+				return s.app.bindings.BackendSelection.CompleteMenuBackend(action, sessionKey)
 			case "menu.backend", "menu.backend.switch":
 				return newMenuActionService(s.app).completeMenuBackendSwitch(action, sessionKey)
 			case "menu.auto_retry":
 				return completeMenuCommand(s.app, action, sessionKey, "/backend retry", "menu.group.backend")
 			case "backend.select":
-				return newBackendSelectionService(s.app).completeBackendSelect(action, sessionKey, actionStringValue(action, "backend"))
+				return s.app.bindings.BackendSelection.CompleteBackendSelect(action, sessionKey, actionStringValue(action, "backend"))
 			case "auto_retry.set":
-				return newAutoRetryService(s.app).CompleteAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
+				return s.app.bindings.AutoRetry.CompleteAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
 			default:
 				return nil, nil
 			}

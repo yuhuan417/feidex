@@ -8,15 +8,7 @@ func modelConfigBlockedReason(a *App) string {
 	if a == nil {
 		return ""
 	}
-	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
-		return reason
-	}
-	for _, runtime := range backendRuntimeFacades() {
-		if runtime.maintenanceActive(backendRuntimeContextForApp(a)) {
-			return runtime.idleMaintenanceBlockedReason()
-		}
-	}
-	return ""
+	return frontendActivity(a, false).ModelWriteBlockedReason()
 }
 
 func ensureSessionModelConfigWritable(a *App, _ string) error {

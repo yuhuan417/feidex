@@ -11,7 +11,6 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
-	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 	"os"
 	"path/filepath"
@@ -35,22 +34,20 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	}
 	ff := &downloadFeishuStub{fakeFeishuClient: &fakeFeishuClient{}, downloadPath: downloadPath}
 	fc := &fakeCodexClient{}
-	a := &App{
+	a := prepareTestApp(&App{
 		cfg:          cfg,
 		store:        store,
 		feishu:       ff,
 		started:      time.Now(),
-		deduper:      frontendruntime.NewInboundDeduper(),
-		registry:     testRegistryWithCodexAndTrackers(fc, &appTrackers{turnStreams: newTurnStreamTracker()}),
-		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
-	}
+		runtimeOwner: testOwnerWithCodex(fc),
+	})
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "stale", CreatedAt: a.started.Add(-time.Minute).Unix()})
 	if got := a.store.AllSessions(); len(got) != 0 {
 		t.Fatal("stale message should be ignored")
 	}
 
-	_ = a.deduper.Claim("dup")
+	_ = a.runtimeOwner.InboundDeduper.Claim("dup")
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "dup"})
 
 	sessionKey := "feishu:chat:chat"
@@ -114,14 +111,13 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
 
-	bad := &App{
+	bad := prepareTestApp(&App{
 		cfg:          &config.Config{Feishu: config.FeishuConfig{Backend: domainbackend.BackendCodex}},
 		store:        store,
 		feishu:       ff,
 		started:      time.Now(),
-		registry:     testRegistryWithCodexAndTrackers(fc, &appTrackers{turnStreams: newTurnStreamTracker()}),
-		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
-	}
+		runtimeOwner: testOwnerWithCodex(fc),
+	})
 	bad.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID:   "bad-attach",
 		ChatID:      "chat",
@@ -157,7 +153,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	if err := startNextSubmission(a, "missing"); err != nil {
 		t.Fatalf("startNextSubmission(missing) error = %v", err)
 	}
-	if got := defaultWorkspaceID(&App{cfg: &config.Config{}}); got != "default" {
+	if got := defaultWorkspaceID(prepareTestApp(&App{cfg: &config.Config{}})); got != "default" {
 		t.Fatalf("defaultWorkspaceID() = %q, want default", got)
 	}
 	if got := nonZero(0, 0); got != 0 {

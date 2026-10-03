@@ -2,6 +2,12 @@ package feishuapp
 
 import "strings"
 
+func SessionTaskRunner(a *App) func(string, func()) bool {
+	return func(key string, fn func()) bool {
+		return runAsync(a, func() { runSession(a, key, fn) })
+	}
+}
+
 // runSessionAsync admits asynchronous work under the same frontend session
 // actor used by the input dispatcher. Backend callbacks may arrive from a
 // different goroutine, but their state transition still has one owner.

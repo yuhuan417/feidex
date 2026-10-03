@@ -1,27 +1,35 @@
 package feishuapp
 
-import "context"
+import (
+	"context"
+	"feidex/internal/runtime/maintenance"
+	"time"
+)
 
 func (a *App) Prepare(ctx context.Context) error {
 	a.beginLifecycle(ctx)
 	if err := startMCPService(a, a.Context()); err != nil {
-		a.frontendRuntime.Cancel()
+		ensureRuntimeOwner(a).Lifecycle.Cancel()
 		return err
 	}
 	if err := startBackend(a, a.Context()); err != nil {
-		a.frontendRuntime.Cancel()
+		ensureRuntimeOwner(a).Lifecycle.Cancel()
 		return err
 	}
 	return nil
 }
-func (a *App) StartInboundGC()  { runAsync(a, func() { a.deduper.RunGC(a.Context()) }) }
-func (a *App) RecoverShared()   { recoverSharedRuntimeState(a) }
-func (a *App) RecoverFrontend() { recoverFrontendRuntimeState(a) }
-func (a *App) Serve() error     { return startFrontend(a, a.Context()) }
+func (a *App) StartInboundGC() {
+	runAsync(a, func() { a.runtimeOwner.InboundDeduper.RunGC(a.Context()) })
+}
+func (a *App) ResetStartupState() error { return a.bindings.StartupRecovery.ResetStartupState() }
+func (a *App) RecoverFrontend() error {
+	return a.bindings.StartupRecovery.RecoverFrontendRuntimeState()
+}
+func (a *App) Serve() error { return startFrontend(a, a.Context()) }
 func (a *App) StartBackground() {
-	newRuntimeMaintenanceService(a).StartDriveArtifactGCLoop(a.Context())
-	newRuntimeMaintenanceService(a).StartUpgradeCheckLoop(a.Context())
+	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 24*time.Hour, a.bindings.MaintenanceCommands.RunDriveArtifactGC)
+	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 30*time.Second, a.bindings.MaintenanceCommands.CheckPendingUpgrades)
 	scheduleStartupGroupAnnouncementRefreshes(a)
-	go sendStartupReadyNotifications(a)
+	runAsync(a, func() { sendStartupReadyNotifications(a) })
 	runAsync(a, func() { runFeishuAppConfigHeal(a) })
 }

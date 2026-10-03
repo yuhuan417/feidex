@@ -1,6 +1,6 @@
 package runtime
 
-import "time"
+import "feidex/internal/domain/backend"
 
 // ClaudePermissionMode represents the permission mode for Claude sessions.
 type ClaudePermissionMode string
@@ -22,34 +22,15 @@ type ClaudeApprovalResolution struct {
 }
 
 // BackendKey identifies a backend for maintenance tracking.
-type BackendKey string
+type BackendKey = backend.Key
 
 const (
-	BackendKeyCodex  BackendKey = "codex"
-	BackendKeyClaude BackendKey = "claude"
+	BackendKeyCodex  = backend.KeyCodex
+	BackendKeyClaude = backend.KeyClaude
 )
 
 // BackendUpgradeSnapshot captures the state of a backend upgrade operation.
-type BackendUpgradeSnapshot struct {
-	Running         bool
-	Phase           string
-	Result          string
-	Message         string
-	CurrentVersion  string
-	PreviousVersion string
-	TargetVersion   string
-	LatestVersion   string
-	StartedAt       time.Time
-	UpdatedAt       time.Time
-}
+type BackendUpgradeSnapshot = backend.UpgradeSnapshot
 
 // BackendRestartSnapshot captures the state of a backend restart operation.
-type BackendRestartSnapshot struct {
-	Running        bool
-	Phase          string
-	Result         string
-	Message        string
-	CurrentVersion string
-	StartedAt      time.Time
-	UpdatedAt      time.Time
-}
+type BackendRestartSnapshot = backend.RestartSnapshot

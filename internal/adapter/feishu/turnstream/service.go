@@ -24,7 +24,6 @@ import (
 // StateProvider narrows app state access to the methods used by the service.
 type StateProvider interface {
 	Submission(id string) *domainsubmission.Submission
-	UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error
 }
 
 // SubmissionFinderProvider narrows the submission-by-turn lookup to the
@@ -132,6 +131,7 @@ type FlushResult = applicationturn.StreamSummary
 
 // Service manages turn streams for a single app instance.
 type Dependencies struct {
+	Context           func() context.Context
 	Tracker           *Tracker
 	Finder            SubmissionFinderProvider
 	Lifecycle         TurnLifecycleProvider
@@ -156,11 +156,11 @@ func (svc Service) Tracker() *Tracker {
 }
 
 // NoteTurnStarted records that a turn has started for the given submission.
-func (svc Service) NoteTurnStarted(ctx context.Context, sessionKey string, sub *domainsubmission.Submission) {
+func (svc Service) NoteTurnStarted(sessionKey string, sub *domainsubmission.Submission) {
 	if sub == nil || strings.TrimSpace(sub.TurnID) == "" {
 		return
 	}
-	svc.deps.SendStartedNotice(ctx, sub)
+	svc.deps.SendStartedNotice(svc.deps.Context(), sub)
 	tracker := svc.Tracker()
 	tracker.Mu.Lock()
 	defer tracker.Mu.Unlock()
@@ -232,6 +232,14 @@ func (svc Service) UpdateInFlightTurnItem(ctx context.Context, threadID, turnID,
 	if hasPayload && (!quietModeEnabled(svc.feishuConfig()) || shouldDeliverTurnItemPayload(quietMode(svc.feishuConfig()), payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)) {
 		svc.deps.Outbound.SendTurnItemCardWithReuse(ctx, sub, payload, "")
 	}
+}
+
+func (svc Service) ShowStartedProgress(item turnitem.ProtocolItem) bool {
+	return turnitem.NormalizeTurnItemType(item.Type) == "mcp_tool_call"
+}
+
+func (svc Service) ProgressEnabled() bool {
+	return quietmode.WorkingCardEnabled(svc.deps.FeishuConfig())
 }
 
 // CompleteTurnItemWithResult processes a completed turn item and returns the
@@ -369,7 +377,7 @@ func (svc Service) CompleteTurnItemWithResult(ctx context.Context, threadID, tur
 func (svc Service) FlushTurnStream(ctx context.Context, threadID, turnID string) FlushResult {
 	sessionKey, sub := svc.deps.Finder.FindSubmissionByTurn(threadID, turnID)
 	if sub == nil {
-		svc.DeleteStream(turnID)
+		svc.DeleteTurnStream(turnID)
 		svc.deps.Runtime.ClearTurnItemStates(turnID)
 		return FlushResult{}
 	}
@@ -461,7 +469,7 @@ func (svc Service) EnsureStreamLocked(tracker *Tracker, sessionKey string, sub *
 }
 
 // DeleteStream removes the stream entry for the given turn.
-func (svc Service) DeleteStream(turnID string) {
+func (svc Service) DeleteTurnStream(turnID string) {
 	tracker := svc.Tracker()
 	if tracker == nil {
 		return

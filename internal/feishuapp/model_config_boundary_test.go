@@ -6,7 +6,9 @@ import (
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
+	"feidex/internal/domain/routing"
 	domainsubmission "feidex/internal/domain/submission"
+	appclauderuntime "feidex/internal/runtime/claude"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,9 +55,7 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := newModelConfigService(a).inner.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) {
-		c.Model, c.ReasoningEffort, c.PlanModel, c.PlanReasoningEffort = "new", "high", "new-plan", "high"
-	}); err != nil {
+	if err := a.bindings.ModelCommands.UpdateGlobalAuxiliaryConfig(map[routing.Setting]string{routing.Model: "new", routing.Effort: "high", routing.PlanModel: "new-plan", routing.PlanEffort: "high"}); err != nil {
 		t.Fatal(err)
 	}
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -71,7 +71,7 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 			t.Fatalf("stale plan: %+v", mode)
 		}
 		// A subsequent write during the RPC cannot change the captured submission.
-		if err := newModelConfigService(a).inner.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.Model = "later" }); err != nil {
+		if err := a.bindings.ModelCommands.UpdateGlobalAuxiliaryConfig(map[routing.Setting]string{routing.Model: "later"}); err != nil {
 			t.Fatal(err)
 		}
 		out.(*codexrpc.TurnStartResult).Turn.ID = "turn-config"
@@ -94,7 +94,8 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 
 func TestModelConfigClaudeFailureRetainsQueueAndLineage(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: fmt.Errorf("%w: rejected", claudecli.ErrModelConfigApply)}
 	setClaudeCore(a, fake)
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
@@ -124,9 +125,10 @@ func (*modelConfigProtectedClaude) CanRetryFreshSession(string) bool { return fa
 
 func TestModelConfigClaudeRestartedTurnFailureRetainsQueueAndLineage(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionID: "original-thread", startTurnErr: errors.New("restarted process rejected turn")}
-	a.registry = testRegistryWithClaude(&modelConfigProtectedClaude{fake})
+	a.runtimeOwner = testOwnerWithClaude(&modelConfigProtectedClaude{fake})
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
 	second := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "second")
 	if err := startNextSubmission(a, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {
@@ -164,7 +166,7 @@ func TestModelConfigCodexResumeAcknowledgesAuxiliarySettings(t *testing.T) {
 		return nil
 	}
 	sess := a.store.GetSession(sub.SessionKey)
-	_, err := newConversationService(a).ResumeSelectedThread(sub.SessionKey, sess, &a.cfg.Workspaces[0], conversation.ThreadSelection{ThreadID: "old-thread", Cwd: a.cfg.Workspaces[0].Cwd})
+	_, err := a.bindings.Conversations.ResumeSelectedThread(sub.SessionKey, sess, &a.cfg.Workspaces[0], conversation.ThreadSelection{ThreadID: "old-thread", Cwd: a.cfg.Workspaces[0].Cwd})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,6 +181,7 @@ func TestModelConfigStartupRecoveryUsesSessionScope(t *testing.T) {
 		t.Run(fmt.Sprintf("resumeFails=%t", resumeFails), func(t *testing.T) {
 			a, _, fc := newTestApp(t)
 			a.frontendID = "bot-a"
+			recomposeTestApp(a)
 			a.cfg.Codex.Model = "config-default"
 			if err := a.State().SaveBotProfile(&state.BotProfile{Model: "gpt-5.6-sol"}); err != nil {
 				t.Fatal(err)
@@ -280,6 +283,7 @@ func TestModelConfigStartupRecoveryUsesSessionScope(t *testing.T) {
 func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	a.cfg.Codex.Model = "gpt-5.6-sol"
 	a.cfg.Codex.ReviewModel, a.cfg.Codex.SubagentModel = "review-model", "subagent-model"
 	key := "feishu:frontend:bot-a:chat:group-model"
@@ -308,7 +312,7 @@ func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 	}
 	assertStatus := func(applied string, pending bool) {
 		t.Helper()
-		card := newBindingService(a).renderBindingCodexModelConfigCard(key, binding, catalog.ModelListResult{
+		card := a.bindings.BindingCommands.renderBindingCodexModelConfigCard(key, binding, catalog.ModelListResult{
 			Data: []catalog.ModelListEntry{{ID: "gpt-6.1-sol", Model: "gpt-6.1-sol"}},
 		})
 		got := mustJSON(card)
@@ -334,7 +338,8 @@ func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 
 func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: errors.New("must not initialize while steering")}
 	setClaudeCore(a, fake)
 	sub := seedActiveSubmission(t, a, "sess-steer", "original-thread", "turn-original")
@@ -342,7 +347,7 @@ func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	follow := modelBoundaryQueuedSubmission(t, a, sub.SessionKey, "original-thread", "answer")
-	err := newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNoticeEx(sub.SessionKey, a.store.GetSession(sub.SessionKey), follow, &a.cfg.Workspaces[0], false, true)
+	err := a.bindings.Submissions.StartNextClaudeSubmissionWithFailureNoticeEx(sub.SessionKey, a.store.GetSession(sub.SessionKey), follow, &a.cfg.Workspaces[0], false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,15 +360,17 @@ func TestModelConfigFailedSaveDoesNotPublish(t *testing.T) {
 	for _, backend := range []string{domainbackend.BackendCodex, domainbackend.BackendClaude} {
 		t.Run(backend, func(t *testing.T) {
 			a, _, _ := newTestApp(t)
-			a.backend, a.cfg.Feishu.Backend = backend, backend
+			a.SetBackend(backend)
+			a.cfg.Feishu.Backend = backend
 			setClaudeCore(a, &fakeClaudeCore{})
 			before := *config.Clone(a.cfg)
-			a.cfgPath = t.TempDir() // A directory cannot be replaced by config.toml.
+			a.cfgPath = t.TempDir()
+			recomposeTestApp(a) // A directory cannot be replaced by config.toml.
 			var err error
 			if backend == domainbackend.BackendClaude {
-				err = newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) { c.Model = "changed" })
+				err = a.bindings.ModelCommands.UpdateClaudeModelConfig(map[routing.Setting]string{routing.Model: "changed"})
 			} else {
-				err = newModelConfigService(a).inner.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.Model = "changed" })
+				err = a.bindings.ModelCommands.UpdateGlobalAuxiliaryConfig(map[routing.Setting]string{routing.Model: "changed"})
 			}
 			if err == nil || a.cfg.Codex.Model != before.Codex.Model || a.cfg.Claude.Model != before.Claude.Model {
 				t.Fatalf("failed save published settings: %v", err)
@@ -384,7 +391,7 @@ func TestModelConfigSnapshotConcurrentWritesRemainCoherent(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < 50; i++ {
 			value := fmt.Sprint(i)
-			if err := newModelConfigService(a).inner.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.Model, c.ReasoningEffort = value, value }); err != nil {
+			if err := a.bindings.ModelCommands.UpdateGlobalAuxiliaryConfig(map[routing.Setting]string{routing.Model: value, routing.Effort: value}); err != nil {
 				t.Error(err)
 				return
 			}
@@ -393,7 +400,7 @@ func TestModelConfigSnapshotConcurrentWritesRemainCoherent(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		// Configuration cards and starts can read concurrently with writes.
 		if i%10 == 0 {
-			_ = newModelConfigService(a).inner.RenderModelConfigCard(catalog.ModelListResult{}, nil, "", "menu.model")
+			_ = a.bindings.ModelCommands.RenderModelConfigCard(catalog.ModelListResult{}, nil, "", "menu.model")
 		}
 		got := modelConfigSnapshot(a, nil, domainbackend.BackendCodex)
 		if got.Model != got.Effort {
@@ -405,7 +412,8 @@ func TestModelConfigSnapshotConcurrentWritesRemainCoherent(t *testing.T) {
 
 func TestModelConfigGroupWritesDuringWorkPreservePending(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{}
 	setClaudeCore(a, fake)
 	msg := &feishu.InboundMessage{ChatID: "group-model", ChatType: "group", UserID: "user", MessageID: "config"}
@@ -425,7 +433,7 @@ func TestModelConfigGroupWritesDuringWorkPreservePending(t *testing.T) {
 	if err := a.State().SavePending(&state.PendingRequest{ID: "pending", SessionKey: key, ThreadID: "group-thread", Kind: "async_user_input", Status: "pending"}); err != nil {
 		t.Fatal(err)
 	}
-	resp, err := newBindingService(a).completeBindingModelSet(&feishu.CardAction{ActionValue: map[string]any{"session_key": key}}, key, "opus")
+	resp, err := a.bindings.BindingCommands.completeBindingModelSet(&feishu.CardAction{ActionValue: map[string]any{"session_key": key}}, key, "opus")
 	if err != nil || resp.Toast.Type != "success" {
 		t.Fatalf("save rejected: %v %+v", err, resp)
 	}
@@ -463,10 +471,11 @@ for line in sys.stdin:
 
 func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	cli, logPath := writeModelConfigCLI(t)
 	a.cfg.Claude.Command, a.cfg.Claude.Model, a.cfg.Claude.Effort, a.cfg.Claude.SubagentModel = cli, "sonnet", "low", "fixed-subagent"
-	r := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	r := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
 	setClaudeCore(a, r)
 	t.Cleanup(func() { _ = r.Close() })
 	for _, key := range []string{"one", "two"} {
@@ -477,15 +486,15 @@ func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	one, _ := r.sessionState("one")
-	two, _ := r.sessionState("two")
-	if err := newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) { c.Model, c.Effort = "opus", "high" }); err != nil {
+	one, _ := r.SessionState("one")
+	two, _ := r.SessionState("two")
+	if err := a.bindings.ModelCommands.UpdateClaudeModelConfig(map[routing.Setting]string{routing.Model: "opus", routing.Effort: "high"}); err != nil {
 		t.Fatal(err)
 	}
 	if id, err := r.EnsureSession(context.Background(), "one", &a.cfg.Workspaces[0], "thread-one", ""); err != nil || id != "thread-one" {
 		t.Fatalf("apply = %s %v", id, err)
 	}
-	got, _ := r.sessionState("one")
+	got, _ := r.SessionState("one")
 	if got != one || got.AppliedModelConfig.Model != "opus" || got.AppliedModelConfig.Effort != "high" {
 		t.Fatalf("hot apply failed: %+v", got.AppliedModelConfig)
 	}
@@ -496,18 +505,18 @@ func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T)
 	if err != nil || !strings.Contains(string(data), "set_model") || !strings.Contains(string(data), "apply_flag_settings") {
 		t.Fatalf("missing controls: %s %v", data, err)
 	}
-	if err := newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) { c.Effort = "" }); err != nil {
+	if err := a.bindings.ModelCommands.UpdateClaudeModelConfig(map[routing.Setting]string{routing.Effort: ""}); err != nil {
 		t.Fatal(err)
 	}
 	if id, err := r.EnsureSession(context.Background(), "one", &a.cfg.Workspaces[0], "thread-one", ""); err != nil || id != "thread-one" {
 		t.Fatalf("resume = %s %v", id, err)
 	}
-	got, _ = r.sessionState("one")
-	other, _ := r.sessionState("two")
+	got, _ = r.SessionState("one")
+	other, _ := r.SessionState("two")
 	if got == one || other != two || got.AppliedModelConfig.Effort != "" {
 		t.Fatal("default effort did not recreate only the target")
 	}
-	if err := newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) { c.Model = "bad-init" }); err != nil {
+	if err := a.bindings.ModelCommands.UpdateClaudeModelConfig(map[routing.Setting]string{routing.Model: "bad-init"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.EnsureSession(context.Background(), "one", &a.cfg.Workspaces[0], "thread-one", ""); !errors.Is(err, claudecli.ErrModelConfigApply) {

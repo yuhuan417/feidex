@@ -24,9 +24,6 @@ func canonicalizeStoredSessionKeys(a *App) error {
 			return key
 		}
 		frontendID := textutil.FirstNonEmpty(strings.TrimSpace(parsedFrontendID), strings.TrimSpace(frontendHint))
-		if frontendID == "" && allowLegacyFrontendFallback(a) {
-			frontendID = strings.TrimSpace(a.FrontendID())
-		}
 		if frontendID == "" {
 			return key
 		}
@@ -57,9 +54,6 @@ func canonicalSessionKeyForApp(a *App, key, chatType, chatID string) string {
 		return key
 	}
 	frontendID := strings.TrimSpace(parsedFrontendID)
-	if frontendID == "" && a != nil && allowLegacyFrontendFallback(a) {
-		frontendID = strings.TrimSpace(a.FrontendID())
-	}
 	return identity.CanonicalSessionKey(frontendID, "feishu:chat:"+chatID)
 }
 

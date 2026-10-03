@@ -48,7 +48,7 @@ Codex wire 参数（如 thread start/resume/fork、turn start/steer 和 reply pa
 
 ## 5. Runtime layer
 
-`internal/runtime` 负责 frontend lifecycle/cancellation、session actors、effect execution/dedupe、backend process supervision、recovery、retry、turn binding 和 workspace process。`FrontendOwner` 是 frontend-scoped mutable state 的单一构造入口；runtime 不导入 transitional app，也不承接菜单或产品策略。
+`internal/runtime` 负责 frontend lifecycle/cancellation、session actors、effect execution/dedupe、backend process supervision、recovery、定时任务执行、turn binding 和 workspace process。自动重试状态、退避策略、队列优先级、submission 创建和开关后的取消流程由 `internal/application/autoretry/` 负责，定时执行通过显式注入的 scheduler 完成。`FrontendOwner` 是 frontend-scoped mutable state 的单一构造入口；runtime 不导入 transitional app，也不承接菜单或产品策略。
 
 当前主要实现：
 
@@ -56,7 +56,7 @@ Codex wire 参数（如 thread start/resume/fork、turn start/steer 和 reply pa
 - `internal/runtime/session_actors.go`
 - `internal/runtime/effect_runner.go`、`internal/runtime/effect_deduper.go`
 - `internal/runtime/codex/`、`internal/runtime/claude/`
-- `internal/runtime/autoretry/`、`internal/runtime/turnbinding/`、`internal/runtime/workspace/`
+- `internal/runtime/delayed_task.go`、`internal/runtime/turnbinding/`、`internal/runtime/workspace/`
 
 ## 放置规则
 

@@ -46,12 +46,12 @@ func startThreadFork(a *App, sessionKey string) (int, string, error) {
 	if ws == nil {
 		return 0, "", fmt.Errorf("workspace %q not found", workspaceID)
 	}
-	discarded := newPendingQueueService(a).discardSessionPendingInputs(sessionKey)
+	discarded := a.bindings.PendingQueue.DiscardSessionPendingInputs(sessionKey)
 	sess = appState.Session(sessionKey)
 	if sess == nil {
 		return 0, "", fmt.Errorf("session %q disappeared", sessionKey)
 	}
-	forkedID, err := newConversationService(a).ForkActiveConversation(sessionKey, sess, ws)
+	forkedID, err := a.bindings.Conversations.ForkActiveConversation(sessionKey, sess, ws)
 	if err != nil {
 		return 0, "", err
 	}

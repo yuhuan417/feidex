@@ -143,7 +143,9 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 
 func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	recoveryState(a).SetRecoveringForTest()
+	if !a.bindings.CodexRecovery.BeginRecovery(currentCodexClient(a)) {
+		t.Fatal("recovery did not begin")
+	}
 
 	sessionKey := "sess-recovering"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -170,7 +172,7 @@ func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 		t.Fatalf("queueSubmission() error = %v", err)
 	}
 
-	if err := newSubmissionQueueServiceFromApp(a).StartNextSubmissionWithFailureNotice(sessionKey, true); err != nil {
+	if err := a.bindings.Submissions.StartNextSubmissionWithFailureNotice(sessionKey, true); err != nil {
 		t.Fatalf("startNextSubmissionWithFailureNotice() error = %v", err)
 	}
 
@@ -250,7 +252,7 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 		return ok && current == promoted && !codexRuntimeRecovering(a)
 	})
 
-	if !fc.closed {
+	if _, closed := fc.statusSnapshot(); !closed {
 		t.Fatal("failed codex client should be closed after recovery")
 	}
 
@@ -280,7 +282,7 @@ func TestCodexRecoveryIsFrontendScoped(t *testing.T) {
 	b, _, second := newTestApp(t)
 	replaceCodexClient(a, first)
 	replaceCodexClient(b, second)
-	if !beginCodexTransportRecovery(a, first) {
+	if !a.bindings.CodexRecovery.BeginRecovery(first) {
 		t.Fatal("first frontend recovery not admitted")
 	}
 	if codexRuntimeRecovering(b) || currentCodexClient(b) != second {
@@ -289,7 +291,7 @@ func TestCodexRecoveryIsFrontendScoped(t *testing.T) {
 	if currentCodexClient(a) != nil {
 		t.Fatal("recovering frontend exposed failed client")
 	}
-	if require, err := requireCodexClient(&App{}); err == nil || require != nil {
+	if require, err := requireCodexClient(prepareTestApp(&App{})); err == nil || require != nil {
 		t.Fatal("uninitialized frontend borrowed another frontend client")
 	}
 }

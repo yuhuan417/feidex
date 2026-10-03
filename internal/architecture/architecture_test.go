@@ -15,6 +15,119 @@ import (
 
 const modulePath = "feidex"
 
+func TestAutoRetryPolicyHasOneApplicationOwner(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, path := range []string{"internal/runtime/autoretry/engine.go", "internal/runtime/autoretry/state.go"} {
+		if _, err := os.Stat(filepath.Join(root, path)); !os.IsNotExist(err) {
+			t.Fatalf("removed retry policy returned: %s", path)
+		}
+	}
+	violations, err := importsUnder(root, "internal/application/autoretry", []string{
+		modulePath + "/internal/runtime", modulePath + "/internal/adapter",
+		modulePath + "/internal/config", modulePath + "/internal/state",
+		modulePath + "/internal/feishu", modulePath + "/internal/feishuapp",
+		modulePath + "/internal/codexrpc", modulePath + "/internal/claudecli",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) > 0 {
+		t.Fatalf("retry policy imports concrete boundary: %v", violations)
+	}
+	file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, "internal/adapter/feishu/autoretry/service.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		if call, ok := node.(*ast.CallExpr); ok {
+			if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "CancelAllAutoRetry" {
+				t.Error("retry adapter must delegate disable/cancel policy to the application owner")
+			}
+		}
+		return true
+	})
+}
+
+func TestRemovedRuntimeAndServiceFacadesCannotReturn(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, path := range []string{"internal/runtime/registry.go", "internal/feishuapp/backend_state_service.go", "internal/feishuapp/turn_binding.go", "internal/feishuapp/turn_item_state.go", "internal/adapter/feishu/backend/failure.go", "internal/adapter/feishu/backend/transition_state.go"} {
+		if _, err := os.Stat(filepath.Join(root, path)); !os.IsNotExist(err) {
+			t.Fatalf("removed facade returned: %s", path)
+		}
+	}
+	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range entries {
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range file.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok {
+				for _, forbidden := range []string{"newRuntimeStateService", "newSubmissionQueueServiceFromApp", "newConversationService", "newTurnLifecycleService", "newPendingQueueService", "newTurnStreamService", "newBackendSelectionService"} {
+					if fn.Name.Name == forbidden {
+						t.Fatalf("%s reintroduced %s", path, forbidden)
+					}
+				}
+			}
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				typ, ok := spec.(*ast.TypeSpec)
+				if !ok || typ.Name.Name != "App" {
+					continue
+				}
+				structure, ok := typ.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+				for _, field := range structure.Fields.List {
+					for _, name := range field.Names {
+						if name.Name == "backend" || name.Name == "switchState" || name.Name == "trackers" {
+							t.Fatalf("App holds runtime state: %s", name.Name)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestMigratedLocalFormsUseInteractionOwner(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, path := range []string{"internal/feishuapp/binding_workspace_actions.go", "internal/feishuapp/path_picker_actions.go", "internal/feishuapp/upgrade_actions.go", "internal/feishuapp/backend_upgrade.go", "internal/adapter/feishu/workspacecmd/management_service.go"} {
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, path), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "UpdatePending" {
+					t.Errorf("%s bypasses local form owner", path)
+				}
+			}
+			return true
+		})
+	}
+}
+
+func TestNewBusinessOwnersRemainProtocolIndependent(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, path := range []string{"internal/application/backendfailure", "internal/application/backendselection", "internal/application/plan", "internal/application/review", "internal/application/goal", "internal/application/inbound", "internal/application/interaction", "internal/application/workspace"} {
+		violations, err := importsUnder(root, path, []string{modulePath + "/internal/adapter", modulePath + "/internal/feishu", modulePath + "/internal/feishuapp", modulePath + "/internal/codexrpc", modulePath + "/internal/runtime", modulePath + "/internal/state"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(violations) > 0 {
+			t.Errorf("business owner imports concrete boundary: %v", violations)
+		}
+	}
+}
+
 func TestDeletedHostBridgesCannotReturn(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, relative := range []string{"internal/app/appcore", "internal/app/workspace", "internal/app/commandmatch", "internal/app/skillscmd"} {
@@ -403,19 +516,19 @@ func TestBackendProtocolAssemblyStaysBehindAdapters(t *testing.T) {
 	}
 }
 
-func TestCodexStartupRecoveryUsesSemanticAdapterOperations(t *testing.T) {
+func TestStartupRecoveryIsApplicationOwned(t *testing.T) {
 	root := repositoryRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "internal/runtime/codex/startup_recovery.go"))
+	data, err := os.ReadFile(filepath.Join(root, "internal/application/conversation/recovery.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(data)
-	for _, forbidden := range []string{"client.Call(", "codexrpc.ThreadStartParams", "codexrpc.ThreadResumeParams"} {
+	for _, forbidden := range []string{"internal/codexrpc", "internal/adapter", "internal/runtime", "client.Call("} {
 		if strings.Contains(source, forbidden) {
-			t.Fatalf("startup recovery must use Codex adapter operations, found %q", forbidden)
+			t.Fatalf("startup recovery crossed its semantic boundary: %q", forbidden)
 		}
 	}
-	for _, required := range []string{"codexadapter.StartThread(", "codexadapter.ResumeThread("} {
+	for _, required := range []string{"endpoint.Gateway.Start(", "endpoint.Gateway.Resume(", "endpoint.Current()"} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("startup recovery must call %s", required)
 		}
@@ -473,7 +586,7 @@ func TestSessionOwnedAsyncPathsUseActorAwarePorts(t *testing.T) {
 		{"internal/feishuapp/session_async.go", []string{"sessionActorRuntime().Run"}, nil},
 		{"internal/adapter/feishu/backend/selection.go", nil, []string{"go func()"}},
 		{"internal/runtime/codex/recovery.go", []string{"RunSessionAsync"}, nil},
-		{"internal/adapter/feishu/backend/failure.go", []string{"RunSessionAsync"}, nil},
+		{"internal/application/backendfailure/service.go", []string{"RunSessionAsync"}, nil},
 	}
 	for _, check := range checks {
 		data, err := os.ReadFile(filepath.Join(root, check.path))
@@ -787,7 +900,7 @@ func TestApplicationDoesNotCallSynchronousOutboundPorts(t *testing.T) {
 	}
 }
 
-func TestApplicationBackendEventServiceUsesOneSinkPort(t *testing.T) {
+func TestApplicationBackendEventServiceUsesExplicitOwners(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "internal", "application", "backendevents", "service.go")
 	data, err := os.ReadFile(path)
@@ -795,11 +908,13 @@ func TestApplicationBackendEventServiceUsesOneSinkPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(data)
-	if strings.Contains(source, "ItemStarted          func(") || strings.Contains(source, "InteractionRequested func(") {
-		t.Fatalf("backend event service reintroduced per-event callback fields")
+	if strings.Contains(source, "EventSink") || strings.Contains(source, "*App") {
+		t.Fatal("backend events must coordinate owner ports in application")
 	}
-	if !strings.Contains(source, "type EventSink interface") || !strings.Contains(source, "Sink EventSink") {
-		t.Fatalf("backend event service must expose one explicit EventSink port")
+	for _, owner := range []string{"Lifecycle", "Items", "Presentation", "Compaction", "Submissions", "Usage", "Goals", "Interactions"} {
+		if !strings.Contains(source, owner+" interface") {
+			t.Errorf("backend event service has no explicit %s owner port", owner)
+		}
 	}
 }
 

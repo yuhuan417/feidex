@@ -22,20 +22,31 @@ func (s compactSessionStoreAdapter) AllSessions() []*conversation.Session { retu
 func (s compactSessionStoreAdapter) SaveSession(sess *conversation.Session) error {
 	return s.Save(sess)
 }
-func newCompactionService(a *App) compaction.Service {
+
+func CompactionPorts(a *App) compaction.Dependencies {
 	if a == nil {
-		return compaction.Service{}
+		return compaction.Dependencies{}
 	}
 	st := a.State()
-	return compaction.Service{Deps: compaction.Dependencies{
+	return compaction.Dependencies{
 		Context: a.Context, Repository: compactSessionStoreAdapter{Session: st.Session, Sessions: st.Sessions, Save: st.SaveSession},
-		Gateway: codexadapter.Gateway{Client: currentCodexClient(a)},
+		Gateway: compactGateway{client: func() (CodexClient, error) { return requireCodexClient(a) }},
 		Notices: func(ctx context.Context, sess *conversation.Session, text string) {
 			if a.feishu != nil && sess.ChatID != "" {
 				_ = sendTextEffect(ctx, a, sess.ChatID, text)
 			}
 		},
-	}}
+	}
+}
+
+type compactGateway struct{ client func() (CodexClient, error) }
+
+func (g compactGateway) StartCompaction(ctx context.Context, threadID string) error {
+	client, err := g.client()
+	if err != nil {
+		return err
+	}
+	return (codexadapter.Gateway{Client: client}).StartCompaction(ctx, threadID)
 }
 func commandCompact(a *App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
@@ -44,11 +55,11 @@ func commandCompact(a *App, msg *feishu.InboundMessage, args []string) error {
 	if a == nil {
 		return nil
 	}
-	return newBackendActionService(a).HandleCompactCommand(msg, newCompactionService(a))
+	return a.bindings.BackendActions.HandleCompactCommand(msg, a.bindings.Compaction)
 }
 func runMenuCompactAction(a *App, action *feishu.CardAction, key string) error {
 	if a == nil {
 		return nil
 	}
-	return newBackendActionService(a).RunMenuCompactAction(action, key, newCompactionService(a))
+	return a.bindings.BackendActions.RunMenuCompactAction(action, key, a.bindings.Compaction)
 }

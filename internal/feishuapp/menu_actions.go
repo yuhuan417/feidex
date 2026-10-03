@@ -1,7 +1,6 @@
 package feishuapp
 
 import (
-	"context"
 	"log/slog"
 	"strings"
 
@@ -49,7 +48,7 @@ func (s menuActionService) completeMenuGroupSystem(action *feishu.CardAction, se
 func (s menuActionService) completeMenuBackendSwitch(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开切换后端"},
-		Card:  rawCard(newBackendSelectionService(s.app).renderBackendSelectionCard(sessionKey, "")),
+		Card:  rawCard(s.app.bindings.BackendSelection.RenderBackendSelectionCard(sessionKey, "")),
 	}, nil
 }
 
@@ -95,7 +94,7 @@ func (s menuActionService) completeMenuReview(action *feishu.CardAction, session
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"},
-		Card:  rawCard(newReviewFormService(s.app).RenderReviewMenuCard(sessionKey)),
+		Card:  rawCard(s.app.bindings.ReviewCommands.RenderReviewMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -135,7 +134,7 @@ func (s menuActionService) completeMenuHistory(action *feishu.CardAction, sessio
 }
 
 func (s menuActionService) completeHistoryPage(action *feishu.CardAction, sessionKey string, page int) (*callback.CardActionTriggerResponse, error) {
-	card, err := newHistoryService(s.app).RenderHistoryCard(sessionKey, page)
+	card, err := s.app.bindings.History.RenderHistoryCard(sessionKey, page)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -145,7 +144,7 @@ func (s menuActionService) completeHistoryPage(action *feishu.CardAction, sessio
 }
 
 func (s menuActionService) completeHistoryDetail(action *feishu.CardAction, sessionKey string, index int) (*callback.CardActionTriggerResponse, error) {
-	card, err := newHistoryService(s.app).RenderHistoryDetailCard(sessionKey, index)
+	card, err := s.app.bindings.History.RenderHistoryDetailCard(sessionKey, index)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -172,7 +171,7 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	if action != nil && strings.TrimSpace(action.MessageID) != "" {
 		messageID := strings.TrimSpace(action.MessageID)
-		go func() {
+		runAsync(s.app, func() {
 			_, card, err := runCommandFromCardAction(s.app, action, sessionKey, "/upgrade")
 			if err != nil {
 				slog.Warn("upgrade panel render failed",
@@ -181,11 +180,11 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 					"message_id", messageID,
 					"error", err,
 				)
-				card = newUpgradeService(s.app).RenderUpgradeFailedCard(sessionKey, err.Error())
+				card = s.app.bindings.Upgrades.RenderUpgradeFailedCard(sessionKey, err.Error())
 			} else if card == nil {
-				card = newUpgradeService(s.app).RenderUpgradeFailedCard(sessionKey, "升级命令没有返回卡片")
+				card = s.app.bindings.Upgrades.RenderUpgradeFailedCard(sessionKey, "升级命令没有返回卡片")
 			}
-			if err := patchCardEffect(context.Background(), s.app, messageID, card); err != nil {
+			if err := patchCardEffect(s.app.Context(), s.app, messageID, card); err != nil {
 				slog.Warn("upgrade panel patch failed",
 					"session_key", sessionKey,
 					"user_id", action.UserID,
@@ -193,10 +192,10 @@ func (s menuActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 					"error", err,
 				)
 			}
-		}()
+		})
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "正在检查可升级版本"},
-			Card:  rawCard(newUpgradeService(s.app).RenderUpgradePreparingCard(sessionKey)),
+			Card:  rawCard(s.app.bindings.Upgrades.RenderUpgradePreparingCard(sessionKey)),
 		}, nil
 	}
 	return completeMenuCommand(s.app, action, sessionKey, "/upgrade", "menu.group.system")
@@ -210,9 +209,9 @@ func (s menuActionService) completeUpgradeDev(action *feishu.CardAction) (*callb
 		"/upgrade dev",
 		"menu.group.system",
 		"正在检查开发版升级信息",
-		newUpgradeService(s.app).RenderUpgradePreparingCard(sessionKey),
+		s.app.bindings.Upgrades.RenderUpgradePreparingCard(sessionKey),
 		nil,
-		newUpgradeService(s.app).RenderUpgradeFailedCard,
+		s.app.bindings.Upgrades.RenderUpgradeFailedCard,
 		"upgrade dev patch failed",
 	)
 }

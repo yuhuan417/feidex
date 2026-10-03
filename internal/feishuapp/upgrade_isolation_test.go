@@ -1,6 +1,7 @@
 package feishuapp
 
 import (
+	"feidex/internal/runtime/turnbinding"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,7 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 
 	a, ff, _ := newTestApp(t)
 	setCodex(a, nil)
-	a.Trackers().turnBindings = nil
+	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{
@@ -48,7 +49,7 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 	currentGOARCH = func() string { return "amd64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-only", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeService(a).CommandUpgrade(msg, nil); err != nil {
+	if err := a.bindings.Upgrades.CommandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() with nil codex and no session state error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -84,7 +85,7 @@ func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *te
 
 	a, ff, _ := newTestApp(t)
 	setCodex(a, nil)
-	a.Trackers().turnBindings = nil
+	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 
 	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
@@ -126,12 +127,17 @@ func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *te
 }
 
 func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testing.T) {
+	origManager := newDaemonManager
+	defer func() { newDaemonManager = origManager }()
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
 	origUpgrade := startDaemonUpgrade
 	defer func() { startDaemonUpgrade = origUpgrade }()
 
 	a, _, _ := newTestApp(t)
 	setCodex(a, nil)
-	a.Trackers().turnBindings = nil
+	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "upgrade-isolated",
@@ -151,10 +157,10 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 	var started daemon.UpgradeSpec
 	startDaemonUpgrade = func(spec daemon.UpgradeSpec) (string, error) {
 		started = spec
-		return "feidex-upgrade-isolated", nil
+		return spec.UnitName, nil
 	}
 
-	resp, err := newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{
+	resp, err := a.bindings.Upgrades.CompleteUpgradeAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "upgrade-isolated"},
 	}, "upgrade.confirm")
@@ -186,7 +192,7 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 		t.Fatalf("UpsertPending(local) error = %v", err)
 	}
 
-	resp, err = newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{
+	resp, err = a.bindings.Upgrades.CompleteUpgradeAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "upgrade-isolated-local"},
 	}, "upgrade.confirm")

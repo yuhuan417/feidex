@@ -25,7 +25,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.review" {
 				return nil, false
 			}
-			return newReviewFormService(a).RenderReviewMenuCard(sessionKey), true
+			return a.bindings.ReviewCommands.RenderReviewMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
@@ -159,7 +159,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"history": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newHistoryService(a).CommandHistory(msg, args)
+					return a.bindings.History.CommandHistory(msg, args)
 				},
 			},
 		},
@@ -187,7 +187,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"skills": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newSkillsService(a).CommandSkills(msg, args)
+					return a.bindings.SkillCommands.CommandSkills(msg, args)
 				},
 			},
 		},
@@ -196,7 +196,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.skills" {
 				return nil, false
 			}
-			card, err := newSkillsService(a).RenderSkillsCard(sessionKey, false)
+			card, err := a.bindings.SkillCommands.RenderSkillsCard(sessionKey, false)
 			if err != nil {
 				return nil, false
 			}
@@ -209,11 +209,11 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				if !menuActionVisibleForBackend(actionName, configuredBackend(s.app)) {
 					return completeMenuCommand(s.app, action, sessionKey, "/skills", "menu.tools")
 				}
-				return newSkillsService(s.app).CompleteSkillsOpen(action, sessionKey)
+				return s.app.bindings.SkillCommands.CompleteSkillsOpen(action, sessionKey)
 			case "skills.select":
-				return newSkillsService(s.app).CompleteSkillsSelect(action, sessionKey, action.Option)
+				return s.app.bindings.SkillCommands.CompleteSkillsSelect(action, sessionKey, action.Option)
 			case "skills.reload":
-				return newSkillsService(s.app).CompleteSkillsReload(action, sessionKey)
+				return s.app.bindings.SkillCommands.CompleteSkillsReload(action, sessionKey)
 			default:
 				return nil, nil
 			}
@@ -223,7 +223,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"usage": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return newUsageService(a).CommandUsage(msg, args)
+					return a.bindings.Usage.CommandUsage(msg, args)
 				},
 			},
 		},

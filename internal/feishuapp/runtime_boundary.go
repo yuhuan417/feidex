@@ -2,52 +2,26 @@ package feishuapp
 
 import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
-	"feidex/internal/adapter/feishu/finalcardpatch"
-	"feidex/internal/adapter/feishu/turnitem"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
 	"feidex/internal/runtime"
-	skillruntime "feidex/internal/runtime/skill"
-	"feidex/internal/runtime/turnbinding"
 
 	workspacecards "feidex/internal/adapter/feishu/workspace"
 )
 
-// Trackers and BackendRuntimeHandle are opaque runtime parts. Their concrete
-// fields stay private to the Feishu adapter; composition only coordinates
-// their construction and attachment to one frontend.
-type Trackers = appTrackers
-type BackendRuntimeHandle = backendRuntimeHandle
-
-// NewTrackers creates the frontend-scoped Feishu tracker set. It is a boundary
-// factory: the production construction sequence lives in internal/composition.
-func NewTrackers(a *App) *Trackers {
-	if a == nil || a.runtimeOwner == nil {
-		return nil
-	}
-	return &appTrackers{
-		turnStreams:        newTurnStreamTracker(),
-		turnItems:          turnitem.NewTracker(),
-		workspaceCloneOps:  newWorkspaceCloneTracker(),
-		turnBindings:       turnbinding.NewTracker(a.store),
-		finalCardPatches:   finalcardpatch.NewTracker(),
-		pendingSkills:      skillruntime.NewTracker(),
-		groupAnnouncements: newGroupAnnouncementTracker(),
-		submissionStarts:   a.runtimeOwner.SubmissionStarts,
-	}
-}
+type BackendRuntimeHandle = runtime.BackendHandle
 
 // NewEffectRunner creates the frontend effect executor after the shell and its
 // transport have been composed.
-func NewEffectRunner(a *App) runtime.EffectRunner { return newEffectRunner(a) }
+func NewEffectRunner(a *App) runtime.EffectRunner { return buildEffectRunner(a) }
 
 // NewStateView creates the frontend-scoped state projection.
 func NewStateView(a *App) *appstate.Store {
 	if a == nil {
 		return nil
 	}
-	view := appstate.NewScoped(a.store, a.FrontendID(), configuredBackend(a), allowLegacyFrontendFallback(a))
+	view := appstate.NewScoped(a.store, a.FrontendID(), configuredBackend(a))
 	view.RevisionMutex = a.ConfigMu()
 	return view
 }
@@ -72,13 +46,7 @@ func BuildBackendRuntimeHandle(a *App, target string) (*BackendRuntimeHandle, er
 
 func InstallBackendRuntime(a *App, handle *BackendRuntimeHandle) {
 	if handle != nil {
-		handle.install(a)
-	}
-}
-
-func AttachTrackers(a *App, trackers *Trackers) {
-	if a != nil && trackers != nil {
-		a.registry.Set("trackers", trackers)
+		installBackendRuntime(a, handle)
 	}
 }
 
@@ -104,7 +72,7 @@ func AttachStateView(a *App, view *appstate.Store) {
 
 func AttachWorkspacePresentation(a *App, presentation *workspacecards.Presentation) {
 	if a != nil {
-		a.registry.Set("workspaceRender", presentation)
+		a.bindings.WorkspacePresentation = presentation
 	}
 }
 

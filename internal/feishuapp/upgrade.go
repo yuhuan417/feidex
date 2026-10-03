@@ -8,7 +8,6 @@ import (
 
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/config"
-	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 )
 
@@ -27,21 +26,11 @@ func (r upgradeCardRenderer) SimpleStatusCard(title, color, body string, buttons
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
-func newUpgradeService(app *App) appupgradecmd.UpgradeService {
+func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 
 	deps := appupgradecmd.UpgradeServiceDeps{
 		CurrentVersion: func() string { return currentVersion() },
-		CurrentGOOS:    func() string { return currentGOOS() },
 		CurrentGOARCH:  func() string { return currentGOARCH() },
-		NewReleaseClient: func() appupgradecmd.ReleaseClient {
-			return newReleaseClient()
-		},
-		NewDaemonManager: func(serviceName string) (daemon.Manager, error) {
-			return newDaemonManager(serviceName)
-		},
-		StartDaemonUpgrade: func(spec daemon.UpgradeSpec) (string, error) {
-			return startDaemonUpgrade(spec)
-		},
 		NormalizeUpgradeVersion: func(raw string) (string, error) {
 			return appfeatures.NormalizeUpgradeVersion(raw)
 		},
@@ -69,7 +58,7 @@ func newUpgradeService(app *App) appupgradecmd.UpgradeService {
 			return config.FindWorkspace(app.cfg, wsID)
 		},
 		RenderPathPickerCardFunc: func(requestID string, payload appupgradecmd.PathPickerPayload) (map[string]any, error) {
-			return newWorkspaceRenderService(app).RenderPathPickerCard(requestID, payload)
+			return app.bindings.WorkspacePresentation.RenderPathPickerCard(requestID, payload)
 		},
 		DataDirFunc: func() string {
 			return app.cfg.DataDir
@@ -89,5 +78,5 @@ func newUpgradeService(app *App) appupgradecmd.UpgradeService {
 			return menuCardBody(action, body)
 		},
 	}
-	return appupgradecmd.NewUpgradeService(adapter, deps)
+	return appupgradecmd.NewUpgradeService(adapter, deps, app.bindings.UpgradeWorkflow)
 }

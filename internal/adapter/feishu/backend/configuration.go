@@ -62,7 +62,6 @@ type ConfigurationCodexDeps struct {
 	CompleteCodexGlobalReasoningEffortSet func(*feishu.CardAction, string) (*callback.CardActionTriggerResponse, error)
 	FetchModelList                        func(ctx context.Context) (catalog.ModelListResult, error)
 	FetchPlanCollaborationModePreset      func(ctx context.Context) (*catalog.CollaborationModeMask, error)
-	UpdateGlobalModelConfig               func(mutate func(*config.CodexConfig), result catalog.ModelListResult) error
 	RenderModelConfigCard                 func(result catalog.ModelListResult, planPreset *catalog.CollaborationModeMask, sessionKey, menuAction string) map[string]any
 }
 
@@ -153,13 +152,6 @@ func (s ConfigurationService) FetchModelList(ctx context.Context) (catalog.Model
 		return catalog.ModelListResult{}, fmt.Errorf("Codex model list fetcher not configured")
 	}
 	return s.deps.Codex.FetchModelList(ctx)
-}
-
-func (s ConfigurationService) UpdateGlobalModelConfig(mutate func(*config.CodexConfig), result catalog.ModelListResult) error {
-	if s.deps.Codex.UpdateGlobalModelConfig == nil {
-		return fmt.Errorf("Codex model config updater not configured")
-	}
-	return s.deps.Codex.UpdateGlobalModelConfig(mutate, result)
 }
 
 func (s ConfigurationService) RenderModelConfigCard(result catalog.ModelListResult, sessionKey, menuAction string) map[string]any {

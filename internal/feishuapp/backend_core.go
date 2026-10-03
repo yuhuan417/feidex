@@ -27,15 +27,7 @@ func setRuntimeBackend(a *App, backend string) {
 	if a == nil {
 		return
 	}
-	a.configMutex().Lock()
-	defer a.configMutex().Unlock()
-	a.backend = normalizeRuntimeBackend(backend)
-	a.backendDriver = backendDriverForKind(a.backend)
-	a.invalidateThreadMenuService()
-	a.invalidateBackendConfigurationService()
-	if a.stateView != nil {
-		a.stateView.SetBackend(a.backend)
-	}
+	a.SetBackend(backend)
 }
 
 func configuredSessionInflightMode(a *App) sessionInflightMode {

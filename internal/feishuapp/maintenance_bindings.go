@@ -5,52 +5,37 @@ import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	"feidex/internal/config"
-	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 	"feidex/internal/runtime/maintenance"
 	"feidex/internal/state"
 )
 
-func newSubmissionCleanup(a *App) maintenance.SubmissionCleanup {
-	return maintenance.SubmissionCleanup{Repository: a.State(), Runtime: newRuntimeStateService(a)}
-}
-func newStartupRecovery(a *App) maintenance.StartupRecovery {
-	if a == nil {
-		return maintenance.StartupRecovery{}
-	}
-	return maintenance.NewStartupRecovery(maintenance.RecoveryDependencies{
-		Context: a.Context, Repository: a.State(), RecoveryMu: &a.frontendRecoveryMu,
-		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
-		Workspace:          func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
-		ResetLiveThreads:   func() { resetAppLiveThreadTracker(a) },
-		ClearLiveThread:    func(key string) { clearSessionLiveThread(a, key) },
-		BelongsToFrontend:  func(key string) bool { return sessionBelongsToFrontend(a, key) },
-		BackendConfigured:  func() bool { return hasConfiguredBackend(a) },
+func StartupRecoveryPorts(a *App) maintenance.RecoveryDependencies {
+	return maintenance.RecoveryDependencies{
+		Context: a.Context, Repository: a.State(), RecoveryMu: &ensureRuntimeOwner(a).RecoveryMu,
+		ResetLiveThreads:  func() { resetAppLiveThreadTracker(a) },
+		BelongsToFrontend: func(key string) bool { return sessionBelongsToFrontend(a, key) },
+		BackendConfigured: func() bool { return hasConfiguredBackend(a) },
 		BeginRecovery: func() func() {
 			if runtime := backendRuntime(a); runtime != nil {
-				return runtime.beginStartupRecoveryScope(backendRuntimeContextForApp(a))
+				return runtime.BeginStartupRecoveryScope(backendRuntimeContextForApp(a))
 			}
 			return func() {}
 		},
-		EffectiveModel: func(sess *conversation.Session) string {
-			return modelConfigSnapshot(a, sess, configuredBackend(a)).Model
-		},
-		RecoverConversation: func(key, workspaceID string, sess *conversation.Session, ws *config.Workspace, model string) {
-			recoverStartupConversation(a, key, workspaceID, sess, ws, model)
-		},
-		ExpireRequests:     func() { newRuntimeMaintenanceService(a).ExpirePendingRequestsOnStartup() },
-		CleanupAttachments: func() { newRuntimeMaintenanceService(a).CleanupExpiredAttachments() },
+		RestoreState:       func() error { return a.bindings.ConversationRecovery.Restore() },
+		ResetState:         a.bindings.StartupState.Reset,
+		CleanupAttachments: func() { a.bindings.MaintenanceCommands.CleanupExpiredAttachments() },
 		SendText: func(ctx context.Context, id, text string) error {
 			if a.feishu == nil {
 				return nil
 			}
 			return sendTextEffect(ctx, a, id, text)
 		},
-	})
+	}
 }
-func newRuntimeMaintenanceService(a *App) appmaintenance.RuntimeMaintenanceService {
+func BuildMaintenanceCommands(a *App) appmaintenance.RuntimeMaintenanceService {
 	return appmaintenance.NewRuntimeMaintenanceService(appmaintenance.Dependencies{
-		Context: a.Context, Store: a.store, Repository: a.State(),
+		Context: a.Context, Repository: a.State(), Poller: a.bindings.UpgradePoller,
 		ArtifactClient:   a.feishu,
 		Outbound:         maintenanceOutbound{app: a},
 		Renderer:         maintenanceCardRenderer{app: a},
@@ -63,7 +48,7 @@ func newRuntimeMaintenanceService(a *App) appmaintenance.RuntimeMaintenanceServi
 			return a.cfg.Workspaces
 		},
 		QueueNotification: func(note state.FrontendCardNotification) { queueFrontendCardNotification(a, note) },
-		ReadyChatIDs:      newStartupRecovery(a).FrontendStartupReadyChatIDs,
+		ReadyChatIDs:      a.bindings.StartupRecovery.FrontendStartupReadyChatIDs,
 		RunAsync:          func(fn func()) { runAsync(a, fn) },
 	})
 }

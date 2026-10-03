@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"feidex/internal/adapter/backend/codex"
-	"feidex/internal/application"
 	"feidex/internal/application/backendevents"
-	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/turn"
 	"strings"
 	"testing"
@@ -17,11 +15,21 @@ type codexErrorEventSink struct {
 	turnCompleted func(string, string, string)
 }
 
-func (s codexErrorEventSink) ItemStarted(context.Context, string, string, turn.ProtocolItem)   {}
-func (s codexErrorEventSink) ItemCompleted(context.Context, string, string, turn.ProtocolItem) {}
-func (s codexErrorEventSink) ItemProgress(context.Context, string, string, turn.ProtocolItem)  {}
-func (s codexErrorEventSink) PlanUpdated(string, string)                                       {}
-func (s codexErrorEventSink) TurnStarted(string, string)                                       {}
+func (s codexErrorEventSink) BindPendingSubmissionTurn(string, string, bool) bool { return false }
+func (s codexErrorEventSink) OnTurnStartedNotification(string, string)            {}
+func (s codexErrorEventSink) FinishTurn(threadID, turnID, status string) {
+	s.TurnCompleted(threadID, turnID, status)
+}
+func (s codexErrorEventSink) CompleteTurnItem(context.Context, string, string, string, turn.ProtocolItem) {
+}
+func (s codexErrorEventSink) UpdateInFlightTurnItem(context.Context, string, string, string, turn.ProtocolItem) {
+}
+func (s codexErrorEventSink) UpdatePendingPlan(string, string)           {}
+func (s codexErrorEventSink) ShowStartedProgress(turn.ProtocolItem) bool { return false }
+func (s codexErrorEventSink) ProgressEnabled() bool                      { return false }
+func (s codexErrorEventSink) RecordTurnError(threadID, turnID, message string) {
+	s.RecordError(threadID, turnID, message)
+}
 func (s codexErrorEventSink) TurnCompleted(threadID, turnID, status string) {
 	if s.turnCompleted != nil {
 		s.turnCompleted(threadID, turnID, status)
@@ -32,20 +40,10 @@ func (s codexErrorEventSink) RecordError(threadID, turnID, message string) {
 		s.recordError(threadID, turnID, message)
 	}
 }
-func (s codexErrorEventSink) FailCompact(string, string, string) bool            { return false }
-func (s codexErrorEventSink) FailSubmission(string, string)                      {}
-func (s codexErrorEventSink) UsageUpdated(string, string, turn.ThreadTokenUsage) {}
-func (s codexErrorEventSink) GoalUpdated(string, conversation.ThreadGoal)        {}
-func (s codexErrorEventSink) GoalCleared(string)                                 {}
-func (s codexErrorEventSink) RequestResolved(string)                             {}
-func (s codexErrorEventSink) InteractionRequested(context.Context, application.BackendEvent) error {
-	return nil
-}
-
 func TestTurnCompletedRecordsDiagnosticBeforeCompletion(t *testing.T) {
 	var diagnostic string
 	completed := false
-	service := backendevents.Service{Sink: codexErrorEventSink{
+	owner := codexErrorEventSink{
 		recordError: func(threadID, turnID, message string) {
 			if threadID != "thread-1" || turnID != "turn-1" {
 				t.Fatal("incorrect error binding")
@@ -58,7 +56,8 @@ func TestTurnCompletedRecordsDiagnosticBeforeCompletion(t *testing.T) {
 				t.Fatalf("completion lost diagnostic: %q", diagnostic)
 			}
 		},
-	}}
+	}
+	service := backendevents.Service{Deps: backendevents.Dependencies{Lifecycle: owner, Presentation: owner}}
 	event, handled, err := codex.DecodeNotification("turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed","error":{"message":"request failed","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":403}},"additionalDetails":"Forbidden"}}}`))
 	if err != nil || !handled {
 		t.Fatalf("decode: %v", err)

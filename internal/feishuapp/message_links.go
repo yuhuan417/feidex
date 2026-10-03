@@ -29,7 +29,7 @@ func recordMessageLinkForAnchor(a *App, messageID, kind string, anchor pendingCa
 		ThreadID:     anchor.threadID,
 		TurnID:       anchor.turnID,
 	}
-	_ = a.State().SaveMessageLink(link)
+	_ = a.bindings.Continuation.RecordReplyMessageLink(*link)
 }
 
 func sendLocalTurnFollowupCard(ctx context.Context, a *App, parentMessageID string, card map[string]any, replyInThread bool, sub *domainsubmission.Submission, kind string) (string, error) {

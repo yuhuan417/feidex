@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"feidex/internal/adapter/feishu/turnitem"
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
@@ -28,9 +29,9 @@ func seedAsyncUserInput(t *testing.T, a *App) (*domainsubmission.Submission, *st
 	if err != nil {
 		t.Fatal(err)
 	}
-	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
+	a.bindings.TurnPresentation.NoteTurnStarted(sessionKey, sub)
 	handleNotification(a, "item/completed", json.RawMessage(asyncQuestionNotification))
-	pending := a.State().Pending("async_user_input:turn-1:ask-1")
+	pending := a.store.PendingByID("async_user_input:turn-1:ask-1")
 	if pending == nil {
 		t.Fatal("async question did not create a local pending form")
 	}
@@ -52,7 +53,7 @@ func TestAsyncUserInputStaysSeparateFromFinalInEveryQuietMode(t *testing.T) {
 			a.cfg.Feishu.Quiet = mode
 			ff.replyCardIDs = []string{"question-card", "final-card"}
 			sub, pending := seedAsyncUserInput(t, a)
-			if newTurnStreamService(a).turnStreamSawFinal("turn-1") {
+			if a.bindings.TurnPresentation.StreamSawFinal("turn-1") {
 				t.Fatal("async question was treated as final output")
 			}
 			if got := a.State().Submission(sub.ID).Status; got != "running" {
@@ -80,7 +81,7 @@ func TestAsyncUserInputStaysSeparateFromFinalInEveryQuietMode(t *testing.T) {
 			if len(ff.replyCards) != 3 || len(ff.patchedCards) != 0 {
 				t.Fatalf("cards = %d, patches = %d; question must survive final output", len(ff.replyCards), len(ff.patchedCards))
 			}
-			if a.State().Pending(pending.ID).Status != "pending" {
+			if a.store.PendingByID(pending.ID).Status != "pending" {
 				t.Fatal("turn completion discarded an unanswered async question")
 			}
 		})
@@ -93,12 +94,12 @@ func TestAsyncUserInputQuietWorkingCardBoundaries(t *testing.T) {
 			a, ff, _ := newTestApp(t)
 			a.cfg.Feishu.Quiet = config.QuietModeProgress
 			sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-			newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+			a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 			item := map[string]any{"id": "work-1", "type": "reasoning"}
 			if substantive {
 				item = map[string]any{"id": "work-1", "type": "commandExecution", "command": "ls", "status": "completed"}
 			}
-			newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "work-1", item)
+			a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "work-1", turnitem.NewProtocolItemWithID("work-1", item))
 			handleNotification(a, "item/completed", json.RawMessage(asyncQuestionNotification))
 			questionPatches := len(ff.patchedCards)
 			if substantive && questionPatches != 0 || !substantive && questionPatches != 1 {
@@ -121,7 +122,7 @@ func TestAsyncUserInputIsNotPromotedAtTurnCompletion(t *testing.T) {
 	if len(ff.patchedCards) != 0 || len(ff.replyCards) != 2 {
 		t.Fatalf("completion replaced question: cards=%d patches=%d", len(ff.replyCards), len(ff.patchedCards))
 	}
-	if a.State().Pending(pending.ID).Status != "pending" {
+	if a.store.PendingByID(pending.ID).Status != "pending" {
 		t.Fatal("completion resolved local question")
 	}
 }
@@ -156,7 +157,7 @@ func TestAsyncUserInputAnswerAcknowledgesBeforeSteerAndRejectsDuplicates(t *test
 	if err != nil || resp.Toast.Type != "warning" {
 		t.Fatal("duplicate answer was accepted")
 	}
-	if a.State().Pending(pending.ID).Status != "replied" || len(ff.patchedCardsSnapshot()) != 0 {
+	if a.store.PendingByID(pending.ID).Status != "replied" || len(ff.patchedCardsSnapshot()) != 0 {
 		t.Fatal("input resolved before backend accepted the answer")
 	}
 }
@@ -184,7 +185,7 @@ func TestAsyncUserInputAnswerAfterCompletionStartsSameThread(t *testing.T) {
 		t.Fatalf("submit = %+v, %v", resp, err)
 	}
 	a.waitAsync()
-	if starts != 1 || a.State().Session(sub.SessionKey).ActiveTurnID != "turn-2" || a.State().Pending(pending.ID).Status != "resolved" {
+	if starts != 1 || a.State().Session(sub.SessionKey).ActiveTurnID != "turn-2" || a.store.PendingByID(pending.ID).Status != "resolved" {
 		t.Fatal("answer did not start a follow-up on the same thread")
 	}
 	if len(fc.replies) != 0 || len(fc.replyErrors) != 0 {
@@ -198,13 +199,13 @@ func TestAsyncUserInputAnswerFailureCanRetry(t *testing.T) {
 	fc.callErr = errors.New("temporarily unavailable")
 	_, _ = completeAsyncUserInput(a, asyncAnswerAction(pending), false)
 	a.waitAsync()
-	if a.State().Pending(pending.ID).Status != "pending" || !strings.Contains(mustJSON(ff.patchedCardsSnapshot()), "async_user_input.answer") {
+	if a.store.PendingByID(pending.ID).Status != "pending" || !strings.Contains(mustJSON(ff.patchedCardsSnapshot()), "async_user_input.answer") {
 		t.Fatal("failed submission did not preserve retryable question form")
 	}
 	fc.callErr = nil
 	_, _ = completeAsyncUserInput(a, asyncAnswerAction(pending), false)
 	a.waitAsync()
-	if a.State().Pending(pending.ID).Status != "resolved" {
+	if a.store.PendingByID(pending.ID).Status != "resolved" {
 		t.Fatal("retry did not resolve the local form")
 	}
 }
@@ -225,7 +226,7 @@ func TestAsyncUserInputRejectsWrongOwnerAndSwitchedThread(t *testing.T) {
 		t.Fatal("answer crossed thread boundary")
 	}
 	resp, _ = completeAsyncUserInput(a, asyncAnswerAction(pending), true)
-	if resp.Toast.Type != "success" || a.State().Pending(pending.ID).Status != "resolved" || len(fc.replies) != 0 {
+	if resp.Toast.Type != "success" || a.store.PendingByID(pending.ID).Status != "resolved" || len(fc.replies) != 0 {
 		t.Fatal("cancel should only resolve the local question")
 	}
 }

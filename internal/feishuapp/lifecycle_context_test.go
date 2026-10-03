@@ -9,7 +9,7 @@ import (
 func TestStopCancelsAndWaitsForBackgroundWork(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.beginLifecycle(context.Background())
-	ctx := newSubmissionQueueServiceFromApp(a).Deps.Context()
+	ctx := a.bindings.Submissions.Deps.Context()
 	started, finished := make(chan struct{}), make(chan struct{})
 	runAsync(a, func() { close(started); <-ctx.Done(); close(finished) })
 	<-started
@@ -31,7 +31,7 @@ func TestFrontendLifecycleCancellationIsIsolated(t *testing.T) {
 	b, _, _ := newTestApp(t)
 	a.beginLifecycle(context.Background())
 	b.beginLifecycle(context.Background())
-	defer b.frontendRuntime.Cancel()
+	defer ensureRuntimeOwner(b).Lifecycle.Cancel()
 	if err := a.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}

@@ -16,13 +16,7 @@ func (s *Store) Pending(id string) *state.PendingRequest {
 	if id == "" {
 		return nil
 	}
-	if req := s.stateStore().PendingByScopedID(s.scopeFrontendID(), id); req != nil {
-		return req
-	}
-	if s.scopeLegacyFallback() && s.scopeFrontendID() != "" {
-		return s.stateStore().PendingByID(id)
-	}
-	return nil
+	return s.stateStore().PendingByScopedID(s.scopeFrontendID(), id)
 }
 
 // SavePending persists a pending request scoped to the current frontend.
@@ -84,11 +78,7 @@ func (s *Store) UpdatePending(id string, mutate func(*state.PendingRequest)) err
 	if id == "" {
 		return nil
 	}
-	err := s.stateStore().UpdateScopedPending(s.scopeFrontendID(), id, mutate)
-	if err == nil || !s.scopeLegacyFallback() || s.scopeFrontendID() == "" {
-		return err
-	}
-	return s.stateStore().UpdatePending(id, mutate)
+	return s.stateStore().UpdateScopedPending(s.scopeFrontendID(), id, mutate)
 }
 
 // ResolvePending marks a pending request resolved and returns the snapshot.

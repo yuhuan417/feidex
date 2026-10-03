@@ -2,40 +2,26 @@ package feishuapp
 
 import (
 	"context"
+	backendruntime "feidex/internal/runtime"
 	"os/exec"
 
+	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/backend"
+	"feidex/internal/application/backendselection"
 	"feidex/internal/feishu"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 // backendLookPath is testable indirection for exec.LookPath.
 var backendLookPath = exec.LookPath
 
-// backendSelectionService wraps backend.SelectionService to preserve the
-// lowercase method names used throughout app/. Callbacks that need deep
-// app-package knowledge are injected here.
-type backendSelectionService struct {
-	app   *App
-	inner backend.SelectionService
-}
-
-func newBackendSelectionService(app *App) backendSelectionService {
-	return compositionService(app, "backendSelection", func() backendSelectionService {
-		return buildBackendSelectionService(app)
-	})
-}
-
-func buildBackendSelectionService(app *App) backendSelectionService {
+func buildBackendSelectionService(app *App) backend.SelectionService {
 	if app == nil {
-		return backendSelectionService{}
+		return backend.SelectionService{}
 	}
 
-	s := backendSelectionService{app: app}
-	s.inner = backend.NewSelectionService(backend.SelectionDeps{
-		Source: app,
-		Switch: runtimeSwitchState(app),
+	return backend.NewSelectionService(backend.SelectionDeps{
+		Source:  app,
+		UseCase: app.bindings.BackendSwitch,
 		Runtime: backend.SelectionRuntimeDeps{
 			ListAvailableBackends: func() []backend.AvailableBackend {
 				return availableBackendsForApp(app)
@@ -82,11 +68,34 @@ func buildBackendSelectionService(app *App) backendSelectionService {
 		},
 		Commands: backend.SelectionCommandDeps{
 			CommandAutoRetry: func(msg *feishu.InboundMessage, args []string) error {
-				return newAutoRetryService(app).CommandAutoRetry(msg, args)
+				return app.bindings.AutoRetry.CommandAutoRetry(msg, args)
 			},
 		},
 	})
-	return s
+}
+
+type backendSelectionRuntime struct{ app *App }
+
+func (r backendSelectionRuntime) AvailableBackends() []backendselection.AvailableBackend {
+	return availableBackendsForApp(r.app)
+}
+func (r backendSelectionRuntime) Ready(target string) bool {
+	return backendRuntimeReadyForApp(r.app, target)
+}
+func (r backendSelectionRuntime) IdleBlockedReason() string { return frontendIdleBlockedReason(r.app) }
+func (r backendSelectionRuntime) Prepare(ctx context.Context, target string) (*backendselection.RuntimeHandle, error) {
+	return prepareRuntimeForApp(r.app, ctx, target)
+}
+func (r backendSelectionRuntime) Snapshot() *backendselection.RuntimeHandle {
+	return snapshotRuntimeForApp(r.app)
+}
+func (r backendSelectionRuntime) Recover() {
+	recoverFrontendRuntimeState(r.app)
+	scheduleAllGroupAnnouncementStatusRefreshes(r.app, "backend_switched")
+}
+
+func BackendSwitchPorts(a *App) backendselection.Dependencies {
+	return backendselection.Dependencies{Repository: configadapter.BackendSelectionRepository{Source: a, Configured: func() string { return configuredBackend(a) }}, Transition: &a.runtimeOwner.BackendTransition, Runtime: backendSelectionRuntime{app: a}}
 }
 
 func availableBackendsForApp(app *App) []backend.AvailableBackend {
@@ -94,8 +103,8 @@ func availableBackendsForApp(app *App) []backend.AvailableBackend {
 		return nil
 	}
 	out := make([]backend.AvailableBackend, 0, 2)
-	for _, runtime := range backendRuntimeFacades() {
-		command := runtime.configuredCommand(backendRuntimeContextForApp(app))
+	for _, runtime := range backendruntime.Backends() {
+		command := runtime.ConfiguredCommand(backendRuntimeContextForApp(app))
 		if command == "" {
 			continue
 		}
@@ -104,7 +113,7 @@ func availableBackendsForApp(app *App) []backend.AvailableBackend {
 			continue
 		}
 		out = append(out, backend.AvailableBackend{
-			Kind:    runtime.kind(),
+			Kind:    runtime.Kind(),
 			Command: command,
 			Path:    path,
 		})
@@ -118,8 +127,8 @@ func prepareRuntimeForApp(app *App, ctx context.Context, target string) (*backen
 		return nil, err
 	}
 	return &backend.BackendRuntimeHandle{
-		Close:   h.close,
-		Install: func() { h.install(app) },
+		Close:   h.Close,
+		Install: func() { installBackendRuntime(app, h) },
 	}, nil
 }
 
@@ -129,51 +138,14 @@ func snapshotRuntimeForApp(app *App) *backend.BackendRuntimeHandle {
 		return nil
 	}
 	return &backend.BackendRuntimeHandle{
-		Close:   h.close,
-		Install: func() { h.install(app) },
+		Close:   h.Close,
+		Install: func() { installBackendRuntime(app, h) },
 	}
 }
 
 func backendRuntimeReadyForApp(app *App, target string) bool {
-	if runtime := backendRuntimeForKind(target); runtime != nil {
-		return runtime.runtimeReady(backendRuntimeContextForApp(app))
+	if runtime := backendruntime.BackendForKind(target); runtime != nil {
+		return runtime.RuntimeReady(backendRuntimeContextForApp(app))
 	}
 	return false
-}
-
-// --- Delegation methods (lowercase, preserving app package API) ---
-
-func (s backendSelectionService) renderBackendSelectionCard(sessionKey, notice string) map[string]any {
-	return s.inner.RenderBackendSelectionCard(sessionKey, notice)
-}
-
-func (s backendSelectionService) renderBackendSwitchingCard(sessionKey, target string) map[string]any {
-	return s.inner.RenderBackendSwitchingCard(sessionKey, target)
-}
-
-func (s backendSelectionService) replyBackendSelectionCard(msg *feishu.InboundMessage, reason string) error {
-	return s.inner.ReplyBackendSelectionCard(msg, reason)
-}
-
-func (s backendSelectionService) commandBackend(msg *feishu.InboundMessage, args []string) error {
-	return s.inner.CommandBackend(msg, args)
-}
-
-func (s backendSelectionService) completeMenuBackend(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return s.inner.CompleteMenuBackend(action, sessionKey)
-}
-
-func (s backendSelectionService) completeBackendSelect(action *feishu.CardAction, sessionKey, target string) (*callback.CardActionTriggerResponse, error) {
-	return s.inner.CompleteBackendSelect(action, sessionKey, target)
-}
-
-func (s backendSelectionService) backendSwitchBlockedReason() string {
-	return s.inner.BackendSwitchBlockedReason()
-}
-
-func (s backendSelectionService) switchBackend(ctx context.Context, target string) error {
-	if err := s.inner.SwitchBackend(ctx, target); err != nil {
-		return err
-	}
-	return nil
 }

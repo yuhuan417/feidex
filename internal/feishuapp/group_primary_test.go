@@ -10,10 +10,13 @@ import (
 func TestGroupPrimaryStateIsIndependentPerFrontend(t *testing.T) {
 	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ffA.botOpenID = "bot-a-open"
 	b, ffB, _ := newTestApp(t)
 	b.frontendID = "bot-b"
+	recomposeTestApp(b)
 	b.store = a.store
+	recomposeTestApp(b)
 	ffB.botOpenID = "bot-b-open"
 
 	if _, err := setGroupPrimary(a, "group", "chat-primary", true); err != nil {
@@ -36,10 +39,13 @@ func TestGroupPrimaryStateIsIndependentPerFrontend(t *testing.T) {
 func TestGroupPrimaryAssignmentEachFrontendSetsItsOwnState(t *testing.T) {
 	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ffA.botOpenID = "bot-a-open"
 	b, ffB, _ := newTestApp(t)
 	b.frontendID = "bot-b"
+	recomposeTestApp(b)
 	b.store = a.store
+	recomposeTestApp(b)
 	ffB.botOpenID = "bot-b-open"
 
 	if _, err := setGroupPrimary(a, "group", "chat-primary", true); err != nil {
@@ -83,10 +89,13 @@ func TestGroupPrimaryAssignmentEachFrontendSetsItsOwnState(t *testing.T) {
 func TestEmptyBotMentionSetsOnlyTargetFrontendPrimary(t *testing.T) {
 	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ffA.botOpenID = "bot-a-open"
 	b, ffB, _ := newTestApp(t)
 	b.frontendID = "bot-b"
+	recomposeTestApp(b)
 	b.store = a.store
+	recomposeTestApp(b)
 	ffB.botOpenID = "bot-b-open"
 
 	if _, err := setGroupPrimary(a, "group", "chat-empty-primary", true); err != nil {
@@ -118,6 +127,7 @@ func TestEmptyBotMentionSetsOnlyTargetFrontendPrimary(t *testing.T) {
 func TestStaleGroupPrimaryAssignmentDoesNotRevertState(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-a-open"
 
 	newer := &feishu.InboundMessage{
@@ -146,11 +156,14 @@ func TestStaleGroupPrimaryAssignmentDoesNotRevertState(t *testing.T) {
 func TestGroupPrimaryEnsureInitializesOnlyThisFrontend(t *testing.T) {
 	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ffA.botOpenID = "bot-a-open"
 	ffA.groupBotCounts = map[string]int{"chat-primary-init": 1}
 	b, ffB, _ := newTestApp(t)
 	b.frontendID = "bot-b"
+	recomposeTestApp(b)
 	b.store = a.store
+	recomposeTestApp(b)
 	ffB.botOpenID = "bot-b-open"
 	ffB.groupBotCounts = map[string]int{"chat-primary-init": 2}
 
@@ -171,10 +184,13 @@ func TestGroupPrimaryEnsureInitializesOnlyThisFrontend(t *testing.T) {
 func TestAmbiguousPrimaryAssignmentsDoNotChangeLocalState(t *testing.T) {
 	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ffA.botOpenID = "bot-a-open"
 	b, ffB, _ := newTestApp(t)
 	b.frontendID = "bot-b"
+	recomposeTestApp(b)
 	b.store = a.store
+	recomposeTestApp(b)
 	ffB.botOpenID = "bot-b-open"
 
 	if _, err := setGroupPrimary(a, "group", "chat-primary-ambiguous", true); err != nil {

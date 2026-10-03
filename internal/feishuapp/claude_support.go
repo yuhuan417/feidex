@@ -20,7 +20,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func newClaudeSupportService(a *App) *claudesupport.Service {
+func BuildClaudeSupport(a *App) *claudesupport.Service {
 	return &claudesupport.Service{
 		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
 			return deliverPendingCard(a, sub, card, pendingCardDelivery{
@@ -73,7 +73,7 @@ func newClaudeSupportService(a *App) *claudesupport.Service {
 			return currentClaudeCore(a).ResolvePlanFeedback(pendingID, feedback)
 		},
 		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
-			return newRuntimeStateService(a).finalizePendingReply(pending)
+			return a.bindings.PendingReplies.Finalize(pending)
 		},
 		CancelPending: func(pending *state.PendingRequest) error {
 			return a.ServerRequestService().AdapterForPending(pending).CancelPending(pending)
@@ -90,7 +90,7 @@ func claudePlanCancelledBody(pending *state.PendingRequest) string {
 }
 
 func sendClaudeApprovalCardWithPayload(a *App, kind, requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
-	return newClaudeSupportService(a).SendApprovalCardWithPayload(sub, kind, requestID, sessionKey, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
+	return a.bindings.ClaudeSupport.SendApprovalCardWithPayload(sub, kind, requestID, sessionKey, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
 }
 
 func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
@@ -110,15 +110,15 @@ func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *domainsub
 }
 
 func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload) error {
-	return newClaudeSupportService(a).SendUserInputCard(sub, requestID, sessionKey, payload)
+	return a.bindings.ClaudeSupport.SendUserInputCard(sub, requestID, sessionKey, payload)
 }
 
 func sendClaudeUserInputFormCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload) error {
-	return newClaudeSupportService(a).SendUserInputFormCard(sub, requestID, sessionKey, payload)
+	return a.bindings.ClaudeSupport.SendUserInputFormCard(sub, requestID, sessionKey, payload)
 }
 
 func sendClaudePlanModeCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error {
-	return newClaudeSupportService(a).SendPlanModeCard(sub, requestID, sessionKey, threadID, turnID, body)
+	return a.bindings.ClaudeSupport.SendPlanModeCard(sub, requestID, sessionKey, threadID, turnID, body)
 }
 
 func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
@@ -129,12 +129,12 @@ func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessa
 	if feedback == "" {
 		return fmt.Errorf("反馈不能为空")
 	}
-	return newClaudeSupportService(s.app).CompletePlanModeText(feedback, pending)
+	return s.app.bindings.ClaudeSupport.CompletePlanModeText(feedback, pending)
 }
 
 func completePlanApprove(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID, _ := action.ActionValue["request_id"].(string)
-	result, err := newClaudeSupportService(a).CompletePlanApprove(requestID, action.UserID)
+	result, err := a.bindings.ClaudeSupport.CompletePlanApprove(requestID, action.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func completePlanApprove(a *App, action *feishu.CardAction) (*callback.CardActio
 
 func completePlanReject(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID, _ := action.ActionValue["request_id"].(string)
-	svc := newClaudeSupportService(a)
+	svc := a.bindings.ClaudeSupport
 	result, err := svc.CompletePlanReject(requestID, action.UserID, func(pending *state.PendingRequest) error {
 		return a.ServerRequestService().AdapterForPending(pending).CancelPending(pending)
 	})

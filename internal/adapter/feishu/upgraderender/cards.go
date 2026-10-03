@@ -3,7 +3,6 @@ package upgraderender
 import (
 	"feidex/internal/textutil"
 	"strings"
-	"time"
 
 	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/feishu"
@@ -13,12 +12,6 @@ import (
 // card-building functions do not need to import the app package.
 type StatusCardRenderer interface {
 	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
-}
-
-// PendingSaver abstracts the pending-request persistence dependency.
-type PendingSaver interface {
-	NextLocalID(prefix string) (string, error)
-	SavePending(kind, sessionKey, ownerUserID, requestID, payloadJSON string, ttl time.Duration) error
 }
 
 func updateCommandText(spec Spec, command, updateCommand string) string {

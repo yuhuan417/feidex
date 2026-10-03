@@ -5,7 +5,7 @@ package maintenance
 
 import (
 	"context"
-	"encoding/json"
+	"feidex/internal/application/upgrade"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/runtime/maintenance"
 	"log/slog"
@@ -18,7 +18,6 @@ import (
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/config"
-	"feidex/internal/daemon"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
@@ -53,30 +52,6 @@ type PermissionIssueDiagnosticSender interface {
 }
 
 // ---------------------------------------------------------------------------
-// UpgradePendingPayload mirrors the app-local type used by upgrade checks
-// ---------------------------------------------------------------------------
-
-// UpgradePendingPayload is the JSON payload stored in a "upgrading" pending
-// request. It is defined here to avoid importing the parent app package.
-type UpgradePendingPayload struct {
-	CurrentVersion string `json:"current_version"`
-	TargetVersion  string `json:"target_version"`
-	ReleaseTag     string `json:"release_tag"`
-	BinaryPath     string `json:"binary_path"`
-	DownloadURL    string `json:"download_url"`
-	SourcePath     string `json:"source_path"`
-	SourceKind     string `json:"source_kind"`
-	SourceName     string `json:"source_name"`
-	SourceSize     int64  `json:"source_size"`
-	SourceCommit   string `json:"source_commit"`
-	ExpectedSHA256 string `json:"expected_sha256"`
-	ReleaseURL     string `json:"release_url"`
-	UnitName       string `json:"unit_name,omitempty"`
-	ChatID         string `json:"chat_id,omitempty"`
-	FeishuMsgID    string `json:"feishu_msg_id,omitempty"`
-}
-
-// ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
@@ -85,7 +60,7 @@ type UpgradePendingPayload struct {
 type Dependencies struct {
 	Context           func() context.Context
 	Workspaces        func() []config.Workspace
-	Store             *state.Store
+	Poller            upgrade.Poller
 	Repository        maintenance.StateProvider
 	ArtifactClient    ArtifactClient
 	Outbound          Outbound
@@ -115,35 +90,6 @@ func (s RuntimeMaintenanceService) context() context.Context {
 		return s.deps.Context()
 	}
 	return context.Background()
-}
-
-// ---------------------------------------------------------------------------
-// Startup: expire pending requests
-// ---------------------------------------------------------------------------
-
-// ExpirePendingRequestsOnStartup marks all pending/replied requests as expired
-// so that stale state from a previous run does not leak into the new session.
-func (s RuntimeMaintenanceService) ExpirePendingRequestsOnStartup() {
-	store := s.deps.Store
-	if store == nil {
-		return
-	}
-	for _, req := range store.AllPendingRequests() {
-		if req == nil {
-			continue
-		}
-		status := state.NormalizePendingRequestStatus(req.Status)
-		if status != state.PendingRequestStatusPending && status != state.PendingRequestStatusReplied {
-			continue
-		}
-		_ = store.UpdateScopedPending(req.FrontendID, req.ID, func(p *state.PendingRequest) {
-			p.Status = state.PendingRequestStatusExpired.String()
-			if p.ExpiresAt < time.Now().Unix() {
-				return
-			}
-			p.ExpiresAt = time.Now().Unix()
-		})
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -194,25 +140,6 @@ func (s RuntimeMaintenanceService) CleanupAttachmentDir(root string) {
 
 // StartDriveArtifactGCLoop launches a background goroutine that runs drive
 // artifact garbage collection on startup and then every 24 hours.
-func (s RuntimeMaintenanceService) StartDriveArtifactGCLoop(ctx context.Context) {
-	feishuClient := s.deps.ArtifactClient
-	if feishuClient == nil {
-		return
-	}
-	s.deps.RunAsync(func() { s.RunDriveArtifactGC("startup") })
-	s.deps.RunAsync(func() {
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				s.RunDriveArtifactGC("ticker")
-			}
-		}
-	})
-}
 
 // RunDriveArtifactGC performs a single artifact GC pass, deleting drive files
 // older than ArtifactRetention.
@@ -305,35 +232,13 @@ func (s RuntimeMaintenanceService) NotifyDriveArtifactGCPermissionIssue(source s
 
 // StartUpgradeCheckLoop launches a background goroutine that polls for pending
 // upgrades on startup and then every 30 seconds.
-func (s RuntimeMaintenanceService) StartUpgradeCheckLoop(ctx context.Context) {
-	if s.deps.ArtifactClient == nil {
-		return
-	}
-	s.deps.RunAsync(func() { s.CheckPendingUpgrades("startup") })
-	s.deps.RunAsync(func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				s.CheckPendingUpgrades("ticker")
-			}
-		}
-	})
-}
 
 // CheckPendingUpgrades scans all pending requests for "upgrading" status and
 // checks each one.
 func (s RuntimeMaintenanceService) CheckPendingUpgrades(source string) {
-	store := s.deps.Store
-	if store == nil {
-		return
-	}
 	pendings := s.deps.Repository.PendingRequests()
 	for _, pending := range pendings {
-		if pending != nil && state.NormalizePendingRequestStatus(pending.Status) == state.PendingRequestStatusUpgrading {
+		if upgrade.IsRunning(pending) {
 			s.CheckOneUpgrade(source, pending)
 		}
 	}
@@ -342,65 +247,36 @@ func (s RuntimeMaintenanceService) CheckPendingUpgrades(source string) {
 // CheckOneUpgrade inspects a single upgrade request, queries the systemd unit
 // status, and patches the Feishu card accordingly.
 func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state.PendingRequest) {
-	if pending == nil {
-		return
-	}
-	var payload UpgradePendingPayload
-	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
-		slog.Warn("upgrade check: bad payload", "request_id", pending.ID, "error", err)
-		s.deps.Repository.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
-		return
-	}
-	unitName := strings.TrimSpace(payload.UnitName)
-	if unitName == "" {
-		slog.Warn("upgrade check: missing unit name", "request_id", pending.ID)
-		s.deps.Repository.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
-		return
-	}
-
-	st, err := daemon.QueryUpgradeUnitStatus(unitName)
+	ctx, cancel := context.WithTimeout(s.context(), 10*time.Second)
+	defer cancel()
+	outcome, err := s.deps.Poller.Check(ctx, pending)
 	if err != nil {
-		slog.Debug("upgrade check: query failed", "unit", unitName, "error", err)
-		return // transient, retry next tick
-	}
-	if st == nil {
-		// unit not found (collected or never existed)
-		slog.Warn("upgrade check: unit not found, marking resolved", "unit", unitName, "source", source)
-		s.deps.Repository.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
+		slog.Warn("upgrade check failed", "source", source, "error", err)
 		return
 	}
-	if st.ActiveState == "active" || st.ActiveState == "activating" {
-		return // still running
-	}
-
-	// Unit has exited — patch card and clean up
-	s.deps.Repository.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
-	daemon.CleanupUpgradeUnit(unitName)
-
-	sessionKey := strings.TrimSpace(pending.SessionKey)
-	if sessionKey == "" {
-		sessionKey = payload.ChatID
-	}
-	feishuMsgID := strings.TrimSpace(pending.FeishuMsgID)
-	if feishuMsgID == "" {
-		feishuMsgID = payload.FeishuMsgID
-	}
-	if feishuMsgID == "" {
-		slog.Warn("upgrade check: no feishu msg id to patch", "unit", unitName, "request_id", pending.ID)
+	if outcome == nil {
 		return
 	}
-
+	if outcome.UnitName != "" {
+		if err := s.deps.Poller.Units.Cleanup(ctx, outcome.UnitName); err != nil {
+			slog.Warn("upgrade unit cleanup failed", "error", err)
+		}
+	}
+	sessionKey, feishuMsgID, unitName := outcome.SessionKey, outcome.MessageID, outcome.UnitName
+	if feishuMsgID == "" {
+		return
+	}
 	cardRenderer := s.deps.Renderer
 	var card map[string]any
-	if st.Result == "success" {
+	if outcome.Success {
 		slog.Info("upgrade unit succeeded", "unit", unitName, "source", source)
 		body := "升级已完成，服务已重启。"
 		card = cardRenderer.SimpleStatusCard("升级成功", "green", s.deps.MenuBody("menu.upgrade", body), []feishu.Button{
 			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 		})
 	} else {
-		errMsg := ExtractUpgradeErrorFromJournal(st.JournalTail)
-		slog.Warn("upgrade unit failed", "unit", unitName, "result", st.Result, "error", errMsg, "source", source)
+		errMsg := outcome.Error
+		slog.Warn("upgrade unit failed", "unit", unitName, "error", errMsg, "source", source)
 		body := "升级失败。"
 		if errMsg != "" {
 			body += "\n\n错误: " + errMsg
@@ -410,8 +286,6 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 		})
 	}
 
-	ctx, cancel := context.WithTimeout(s.context(), 10*time.Second)
-	defer cancel()
 	if err := s.deps.Outbound.PatchCard(ctx, feishuMsgID, card); err != nil {
 		slog.Error("upgrade check: patch card failed", "unit", unitName, "msg_id", feishuMsgID, "error", err)
 	}
@@ -423,19 +297,4 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 
 // ExtractUpgradeErrorFromJournal scans the journal tail for an error line,
 // falling back to the last non-empty line.
-func ExtractUpgradeErrorFromJournal(journal string) string {
-	lines := strings.Split(journal, "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
-		if strings.Contains(line, "error") || strings.Contains(line, "Error") || strings.Contains(line, "failed") || strings.Contains(line, "mismatch") {
-			return line
-		}
-	}
-	// fallback: last non-empty line
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.TrimSpace(lines[i]) != "" {
-			return strings.TrimSpace(lines[i])
-		}
-	}
-	return ""
-}
+func ExtractUpgradeErrorFromJournal(journal string) string { return upgrade.ExtractError(journal) }

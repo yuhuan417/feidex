@@ -3,14 +3,11 @@ package feishuapp
 import (
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
-	domainbackend "feidex/internal/domain/backend"
 	appruntime "feidex/internal/runtime"
 
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/cards"
@@ -18,8 +15,6 @@ import (
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 )
-
-const ()
 
 func isClaudeBypassPermissionsEnabled(cfg *config.Config) bool {
 	if cfg == nil {
@@ -37,57 +32,6 @@ func claudePermissionModeOptions(includeBypass bool) []appruntime.ClaudePermissi
 		options = append(options, appruntime.ClaudePermissionModeOption{Value: string(appruntime.ClaudePermissionModeBypass), Label: "bypassPermissions"})
 	}
 	return options
-}
-
-func normalizeRequestedClaudePermissionMode(a *App, ctx context.Context, raw string) (string, string, error) {
-	_ = ctx
-	mode := normalizeClaudePermissionModeValue(raw)
-	switch mode {
-	case string(appruntime.ClaudePermissionModeDefault), string(appruntime.ClaudePermissionModeAcceptEdits), string(appruntime.ClaudePermissionModeBypass):
-	default:
-		return "", "", fmt.Errorf("不支持的 Claude 权限模式 `%s`", strings.TrimSpace(raw))
-	}
-	if mode == string(appruntime.ClaudePermissionModeBypass) && !isClaudeBypassPermissionsEnabled(a.cfg) {
-		return "", "", fmt.Errorf("当前未启用 `claude.dangerously_skip_permissions`，不能切到 `bypassPermissions`")
-	}
-	return mode, "", nil
-}
-
-func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
-	if a == nil || currentClaudeCore(a) == nil {
-		return nil
-	}
-	if runtime := backendRuntimeForKind(domainbackend.BackendClaude); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(a)) {
-		return nil
-	}
-	sess := a.State().Session(sessionKey)
-	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return currentClaudeCore(a).SetPermissionMode(ctx, sessionKey, mode)
-}
-
-// applyClaudePermissionModeToRuntimeAsync applies the stored permission mode
-// off the Feishu ack path.
-//
-// Card callbacks must answer within the platform's callback deadline, and this
-// apply is a CLI round-trip (set_permission_mode + its control response). The
-// mode is re-read from the session when the task runs, so two rapid changes
-// converge on the latest stored value instead of racing.
-func applyClaudePermissionModeToRuntimeAsync(a *App, messageID, sessionKey, fallbackMode string) {
-	runAsync(a, func() {
-		mode := strings.TrimSpace(fallbackMode)
-		if cfg := a.Config(); cfg != nil {
-			if sess := a.State().Session(sessionKey); sess != nil {
-				mode = effectiveBindingClaudePermissionMode(a, sess, config.FindWorkspace(cfg, sess.WorkspaceID), cfg.Claude)
-			}
-		}
-		if err := applyClaudePermissionModeToRuntime(a, sessionKey, mode); err != nil {
-			patchClaudePermissionMenuRuntimeFailure(a, messageID, sessionKey, err)
-		}
-	})
 }
 
 // patchClaudePermissionMenuRuntimeFailure re-renders the permission menu with a
@@ -147,7 +91,7 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 }
 
 func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
-	return newWorkspaceRenderService(a).RenderWorkspacePermissionModeMenuCard(sessionKey)
+	return a.bindings.WorkspacePresentation.RenderWorkspacePermissionModeMenuCard(sessionKey)
 }
 
 func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error {

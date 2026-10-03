@@ -1,31 +1,17 @@
 package feishuapp
 
 import (
-	"feidex/internal/adapter/feishu/finalcardpatch"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
-	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/identity"
-	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
 	appstate "feidex/internal/adapter/storage/json/scoped"
-	"feidex/internal/application/backendops"
-	"feidex/internal/domain/conversation"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
-	"feidex/internal/adapter/feishu/backend"
-	"feidex/internal/adapter/feishu/goalcmd"
-
-	"feidex/internal/adapter/feishu/turnitem"
-	skillruntime "feidex/internal/runtime/skill"
-	"feidex/internal/runtime/turnbinding"
-
-	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -36,29 +22,21 @@ import (
 )
 
 type App struct {
-	cfg                    *config.Config
-	cfgPath                string
-	store                  *state.Store
-	frontendID             string
-	frontendConfigIndex    int
-	configMu               sync.RWMutex
-	sharedConfigMu         *sync.RWMutex
-	backend                string
-	backendDriver          backend.Driver
-	feishu                 FeishuClient
-	started                time.Time
-	frontendRuntime        frontendruntime.FrontendRuntime
-	runtimeOwner           *frontendruntime.FrontendOwner
-	stateMu                sync.Mutex
-	stateView              *appstate.Store
-	registry               *frontendruntime.Registry
-	deduper                *frontendruntime.InboundDeduper
-	asyncRunner            func(func())
-	waitAsync              func()
-	frontendRecoveryMu     sync.Mutex
-	frontendTrafficMu      sync.Mutex
-	frontendMessageTraffic int
-	runtimeOwnerMu         sync.Mutex
+	cfg                 *config.Config
+	cfgPath             string
+	store               *state.Store
+	frontendID          string
+	frontendConfigIndex int
+	configMu            sync.RWMutex
+	sharedConfigMu      *sync.RWMutex
+	feishu              FeishuClient
+	started             time.Time
+	runtimeOwner        *frontendruntime.FrontendOwner
+	stateView           *appstate.Store
+	bindings            *Bindings
+	transport           FeishuClient
+	asyncRunner         func(func())
+	waitAsync           func()
 }
 
 func (a *App) configMutex() *sync.RWMutex {
@@ -69,21 +47,6 @@ func (a *App) configMutex() *sync.RWMutex {
 		return a.sharedConfigMu
 	}
 	return &a.configMu
-}
-
-// appTrackers bundles per-service runtime trackers that are lazily initialized
-// on first access. Each tracker is consumed by exactly one service type.
-type appTrackers struct {
-	turnStreams         *turnStreamTracker
-	turnItems           *turnitem.Tracker
-	turnBindings        *turnbinding.Tracker
-	submissionStarts    *frontendruntime.SubmissionStarts
-	workspaceCloneOps   *appworkspacecmd.CloneTracker
-	finalCardPatches    *finalcardpatch.Tracker
-	pendingSkills       *skillruntime.Tracker
-	groupAnnouncements  *groupAnnouncementTracker
-	maintenanceTrackers backend.TrackerMap
-	goals               *goalcmd.Tracker
 }
 
 // NewFeishuShell validates the composition output and creates the thin
@@ -102,10 +65,11 @@ func NewFeishuShell(scope frontendruntime.FrontendScope) (*App, error) {
 	if !ok || feishuTransport == nil {
 		return nil, fmt.Errorf("nil Feishu transport")
 	}
-	if scope.Registry == nil || scope.RuntimeOwner == nil || scope.InboundDeduper == nil {
+	if scope.RuntimeOwner == nil {
 		return nil, fmt.Errorf("frontend composition is incomplete")
 	}
 	owner := scope.RuntimeOwner
+	owner.SetBackend(backend)
 	app := &App{
 		cfg:                 cfg,
 		sharedConfigMu:      scope.ConfigMutex,
@@ -113,12 +77,9 @@ func NewFeishuShell(scope frontendruntime.FrontendScope) (*App, error) {
 		store:               store,
 		frontendID:          strings.TrimSpace(frontend.ID),
 		frontendConfigIndex: frontend.ConfigIndex,
-		backend:             backend,
-		backendDriver:       backendDriverForKind(backend),
-		registry:            scope.Registry,
+		transport:           feishuTransport,
 		feishu:              feishuTransport,
 		started:             time.Now(),
-		deduper:             scope.InboundDeduper,
 		runtimeOwner:        owner,
 	}
 	return app, nil
@@ -132,26 +93,18 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func (a *App) beginLifecycle(ctx context.Context) {
-	a.frontendRuntime.Begin(ctx)
+	ensureRuntimeOwner(a).Lifecycle.Begin(ctx)
 }
 
 func (a *App) Stop(ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	a.frontendRuntime.Cancel()
-	if a.feishu != nil {
-		a.feishu.Stop()
-	}
-	backendErr := currentBackendRuntimeHandle(a).close()
-	mcpErr := stopMCPService(a, ctx)
-	if err := a.frontendRuntime.Wait(ctx); err != nil {
-		return err
-	}
-	if backendErr != nil {
-		return backendErr
-	}
-	return mcpErr
+	return a.runtimeOwner.Shutdown(ctx, func() {
+		if a.feishu != nil {
+			a.feishu.Stop()
+		}
+	})
 }
 
 // Context returns the application lifecycle context for background work.
@@ -160,35 +113,14 @@ func (a *App) Context() context.Context {
 	if a == nil {
 		return context.Background()
 	}
-	return a.frontendRuntime.Context()
+	return ensureRuntimeOwner(a).Lifecycle.Context()
 }
 
-func runAsync(a *App, fn func()) {
+func runAsync(a *App, fn func()) bool {
 	if fn == nil {
-		return
+		return false
 	}
-	if a == nil {
-		go fn()
-		return
-	}
-	a.frontendRuntime.Run(fn, a.asyncRunner)
-}
-
-func buildThreadStartParams(a *App, ws *config.Workspace, sess *conversation.Session, effectiveModel string) backendops.ThreadStartConfig {
-	if strings.TrimSpace(effectiveModel) == "" {
-		effectiveModel = modelConfigSnapshot(a, sess, domainbackend.BackendCodex).Model
-	}
-	return backendops.ThreadStartConfig{
-		Cwd:                    ws.Cwd,
-		ApprovalPolicy:         effectiveBindingApprovalPolicy(a, sess, ws),
-		SandboxMode:            effectiveBindingSandboxMode(a, sess, ws),
-		ServiceName:            a.cfg.Codex.ServiceName,
-		ExperimentalRawEvents:  false,
-		PersistExtendedHistory: true,
-		ServiceTier:            strings.TrimSpace(effectiveBindingServiceTier(a, sess)),
-		Model:                  strings.TrimSpace(effectiveModel),
-		AuxiliaryConfig:        codexAuxiliaryConfig(a, sess),
-	}
+	return ensureRuntimeOwner(a).Lifecycle.Run(fn, a.asyncRunner)
 }
 
 func (a *App) HandleFeishuMessage(msg *feishu.InboundMessage) {
@@ -234,57 +166,14 @@ func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
 }
 
 func enqueueSubmissionWithSessionKey(a *App, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
-	if err := newSubmissionQueueServiceFromApp(a).EnqueueSubmission(msg, sessionKey, bindOnlyCurrentRoot); err != nil {
+	if err := a.bindings.Submissions.EnqueueSubmission(msg, sessionKey, bindOnlyCurrentRoot); err != nil {
 		return err
 	}
-	invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前已有新的提交，旧的计划确认已失效。")
 	return nil
 }
 
 func startNextSubmission(a *App, sessionKey string) error {
-	return newSubmissionQueueServiceFromApp(a).StartNextSubmission(sessionKey)
-}
-
-func startSubmissionTurn(a *App, ctx context.Context, sessionKey, threadID string, sub *domainsubmission.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
-	if sub == nil {
-		return "", fmt.Errorf("nil submission")
-	}
-	request := backendops.StartTurnRequest{ThreadID: threadID, Submission: sub, Cwd: cwd, ApprovalPolicy: approvalPolicy, SandboxMode: sandboxMode, ServiceTier: serviceTier, Model: model, Effort: reasoningEffort, MultiAgentMode: multiAgentMode}
-	if snapshot := sub.ModelConfig; snapshot.Valid {
-		if snapshot.CollaborationMode != "" {
-			selectedModel, selectedEffort := snapshot.Model, snapshot.Effort
-			if snapshot.CollaborationMode == "plan" {
-				selectedModel, selectedEffort = snapshot.PlanModel, snapshot.PlanEffort
-			}
-			if selectedModel != "" {
-				request.Collaboration = &conversation.SessionCollaborationMode{Mode: snapshot.CollaborationMode, Model: selectedModel, ReasoningEffort: selectedEffort}
-			}
-		}
-	} else {
-		request.Collaboration = planModeStateForTurnStart(a, sessionKey, threadID)
-	}
-	slog.Debug("turn start request",
-		"session_key", sessionKey,
-		"submission_id", sub.ID,
-		"thread_id", threadID,
-		"approval_policy", approvalPolicy,
-		"sandbox_mode", sandboxMode,
-		"reasoning_effort", reasoningEffort,
-		"model", model,
-		"multi_agent_mode", multiAgentMode,
-		"collaboration_mode", request.Collaboration,
-	)
-	turnResp, err := newEffectRunner(a).RunStartTurn(ctx, application.StartTurn{Frontend: identity.FrontendID(a.FrontendID()), SessionKey: identity.SessionKey(sessionKey), Request: request})
-	if err != nil {
-		slog.Error("turn/start failed",
-			"session_key", sessionKey,
-			"submission_id", sub.ID,
-			"thread_id", threadID,
-			"error", err,
-		)
-		return "", err
-	}
-	return turnResp.ID, nil
+	return a.bindings.Submissions.StartNextSubmission(sessionKey)
 }
 
 func replyError(a *App, msg *feishu.InboundMessage, err error) error {

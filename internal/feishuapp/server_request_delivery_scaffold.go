@@ -2,8 +2,10 @@ package feishuapp
 
 import (
 	"context"
+	"feidex/internal/application"
+	applicationinteraction "feidex/internal/application/interaction"
+	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
-	"feidex/internal/state"
 	"fmt"
 	"strings"
 	"time"
@@ -93,55 +95,45 @@ func deliverPendingCardWithAnchor(a *App, anchor pendingCardAnchor, card map[str
 	if ttl <= 0 {
 		ttl = 30 * time.Minute
 	}
-	ctx := context.Background()
-	msgID := ""
-	var err error
-	reuseMessageID := strings.TrimSpace(delivery.reuseMessageID)
-	if reuseMessageID == "" {
-		reuseMessageID = newTurnStreamService(a).takeReasoningOnlyWorkingMessageID(delivery.turnID)
+	input := applicationinteraction.DeliveryInput{
+		Request:      interaction.PendingRequest{ID: requestKey, RequestIDRaw: strings.TrimSpace(delivery.requestIDStored), Backend: normalizeRuntimeBackend(delivery.backend), Kind: strings.TrimSpace(delivery.kind), SessionKey: strings.TrimSpace(delivery.sessionKey), ThreadID: strings.TrimSpace(delivery.threadID), TurnID: strings.TrimSpace(delivery.turnID), ItemID: strings.TrimSpace(delivery.itemID), OwnerUserID: strings.TrimSpace(delivery.ownerUserID), PayloadJSON: delivery.payloadJSON},
+		SubmissionID: anchor.submissionID, WaitingStatus: waitingStatus, NonBlocking: delivery.nonBlocking, TTL: ttl,
 	}
-	if reuseMessageID != "" {
-		if patchErr := patchCardEffect(ctx, a, reuseMessageID, card); patchErr == nil {
-			msgID = reuseMessageID
+	return a.bindings.InteractionDelivery.Open(a.Context(), input, pendingCardPresenter{app: a, anchor: anchor, card: card, reuseMessageID: delivery.reuseMessageID})
+}
+
+type pendingCardPresenter struct {
+	app            *App
+	anchor         pendingCardAnchor
+	card           map[string]any
+	reuseMessageID string
+}
+
+func (p pendingCardPresenter) DeliverInteraction(ctx context.Context, input applicationinteraction.DeliveryInput) (string, error) {
+	a := p.app
+	reuse := strings.TrimSpace(p.reuseMessageID)
+	if reuse == "" {
+		reuse = a.bindings.TurnPresentation.TakeReasoningOnlyWorkingMessageID(input.Request.TurnID)
+	}
+	key := application.StableEffectKey("interaction-card", a.FrontendID(), input.Request.ID)
+	messageID, err := a.runtimeOwner.EffectDeduper.Do(ctx, key, func() (any, error) {
+		if reuse != "" {
+			if err := patchCardEffect(ctx, a, reuse, p.card); err == nil {
+				return reuse, nil
+			}
 		}
-	}
-	if msgID == "" {
-		if triggerMessageID := strings.TrimSpace(anchor.triggerMessageID); triggerMessageID != "" {
-			msgID, err = replyCardWithIDEffect(ctx, a, triggerMessageID, card, anchor.replyInThread)
+		if parent := strings.TrimSpace(p.anchor.triggerMessageID); parent != "" {
+			id, err := replyCardWithIDEffect(ctx, a, parent, p.card, p.anchor.replyInThread)
+			if err == nil && strings.TrimSpace(id) != "" {
+				return id, nil
+			}
 		}
+		return sendCardWithIDEffect(ctx, a, p.anchor.chatID, p.card)
+	})
+	if err != nil {
+		return "", err
 	}
-	if err != nil || strings.TrimSpace(msgID) == "" {
-		msgID, err = sendCardWithIDEffect(ctx, a, anchor.chatID, card)
-		if err != nil {
-			return err
-		}
-	}
-	now := time.Now()
-	// The delivered card is the newest card now, so retire the working card:
-	// progress that resumes after this request is answered must start a new card
-	// rather than patch a card the user has already scrolled past.
-	newTurnStreamService(a).discardWorkingCard(delivery.turnID)
-	recordMessageLinkForAnchor(a, msgID, linkKind, anchor, requestKey)
-	if err := a.State().SavePending(&state.PendingRequest{
-		ID:           requestKey,
-		RequestIDRaw: strings.TrimSpace(delivery.requestIDStored),
-		Backend:      normalizeRuntimeBackend(delivery.backend),
-		Kind:         strings.TrimSpace(delivery.kind),
-		SessionKey:   strings.TrimSpace(delivery.sessionKey),
-		ThreadID:     strings.TrimSpace(delivery.threadID),
-		TurnID:       strings.TrimSpace(delivery.turnID),
-		ItemID:       strings.TrimSpace(delivery.itemID),
-		OwnerUserID:  strings.TrimSpace(delivery.ownerUserID),
-		FeishuMsgID:  msgID,
-		PayloadJSON:  delivery.payloadJSON,
-		Status:       state.PendingRequestStatusPending.String(),
-		CreatedAt:    now.Unix(),
-		ExpiresAt:    now.Add(ttl).Unix(),
-	}); err != nil {
-		return err
-	}
-	if waitingStatus != "" && anchor.submissionID != "" {
-		return a.State().SetSubmissionStatus(anchor.submissionID, waitingStatus)
-	}
-	return nil
+	a.bindings.TurnPresentation.DiscardWorkingCard(input.Request.TurnID)
+	id, _ := messageID.(string)
+	return id, nil
 }

@@ -64,7 +64,7 @@ func CompleteRestartRun[S any](
 	if action != nil {
 		messageID = strings.TrimSpace(action.MessageID)
 	}
-	go run(messageID, sessionKey)
+	run(messageID, sessionKey)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: toastText},
 		Card:  &callback.Card{Type: "raw", Data: renderOperationCard(sessionKey, snapshot)},
@@ -93,7 +93,7 @@ func StartRestartFromMessage[S any](
 		finishFailed("启动重启卡片失败: " + err.Error())
 		return err
 	}
-	go run(msgID, sessionKey)
+	run(msgID, sessionKey)
 	return nil
 }
 

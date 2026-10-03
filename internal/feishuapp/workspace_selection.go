@@ -1,7 +1,6 @@
 package feishuapp
 
 import (
-	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
@@ -95,5 +94,7 @@ func (a *App) WorkspaceSelection() workspace.SelectionService {
 	if a == nil {
 		return workspace.SelectionService{}
 	}
-	return workspace.SelectionService{Frontend: identity.FrontendID(a.FrontendID()), DefaultWorkspace: defaultWorkspaceID(a), Repository: appstate.WorkspaceSelections{Store: a.State()}}
+	return a.bindings.WorkspaceSelection
 }
+
+func DefaultWorkspaceID(a *App) func() string { return func() string { return defaultWorkspaceID(a) } }

@@ -30,8 +30,6 @@ type StateProvider interface {
 type RuntimeStateProvider interface {
 	// ClearTurnBinding removes the turn binding for the given turn ID.
 	ClearTurnBinding(turnID string)
-	// ClearTurnItemStates removes all turn item states for the given turn ID.
-	ClearTurnItemStates(turnID string)
 	// ClearPendingTurnBindingForSubmission removes pending turn bindings for the
 	// given thread/submission pair.
 	ClearPendingTurnBindingForSubmission(threadID, submissionID string)
@@ -42,6 +40,7 @@ type RuntimeStateProvider interface {
 type SubmissionCleanup struct {
 	Repository StateProvider
 	Runtime    RuntimeStateProvider
+	Items      interface{ ClearTurn(string) }
 }
 
 func (s SubmissionCleanup) CleanupSubmissionRuntimeState(sub *domainsubmission.Submission) {
@@ -89,7 +88,9 @@ func (s SubmissionCleanup) CleanupSubmissionRuntimeState(sub *domainsubmission.S
 	}
 	if turnID != "" {
 		runtimeProvider.ClearTurnBinding(turnID)
-		runtimeProvider.ClearTurnItemStates(turnID)
+		if s.Items != nil {
+			s.Items.ClearTurn(turnID)
+		}
 	}
 	if submissionID != "" && threadID != "" {
 		runtimeProvider.ClearPendingTurnBindingForSubmission(threadID, submissionID)

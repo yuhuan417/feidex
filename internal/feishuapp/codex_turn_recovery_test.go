@@ -31,8 +31,8 @@ func TestEnqueueSubmissionReconcilesCompletedCodexTurnFromThreadRead(t *testing.
 		t.Fatalf("UpdateSession() error = %v", err)
 	}
 	markSessionThreadLive(a, sessionKey, "thread-1")
-	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
-	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].SentFinal = true
+	a.bindings.TurnPresentation.NoteTurnStarted(sessionKey, sub)
+	a.bindings.TurnPresentation.Tracker().Streams["turn-1"].SentFinal = true
 
 	var methods []string
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
@@ -93,8 +93,8 @@ func TestCommandInterruptClearsQueueAfterReconcilingCompletedCodexTurn(t *testin
 	}
 	sessionKey := makeSessionKey(a, msg)
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
-	newTurnStreamService(a).noteTurnStarted(sessionKey, sub)
-	newTurnStreamService(a).turnStreamTracker().Streams["turn-1"].SentFinal = true
+	a.bindings.TurnPresentation.NoteTurnStarted(sessionKey, sub)
+	a.bindings.TurnPresentation.Tracker().Streams["turn-1"].SentFinal = true
 
 	queuedID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		ID:               "sub-queued",

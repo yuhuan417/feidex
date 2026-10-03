@@ -11,6 +11,7 @@ import (
 func TestEffectiveModelUsesSessionBindingThenBotDefault(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	a.cfg.Codex.Model = "gpt-5-bot"
 	a.cfg.Claude.Model = "sonnet-bot"
 	sess := &conversation.Session{
@@ -32,18 +33,18 @@ func TestEffectiveModelUsesSessionBindingThenBotDefault(t *testing.T) {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
 
-	if got := newModelSnapshotService(a).Desired(domainbackend.BackendCodex, sess).Model; got != "gpt-5-binding" {
+	if got := a.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess).Model; got != "gpt-5-binding" {
 		t.Fatalf("effectiveCodexModel() = %q, want binding override", got)
 	}
-	if got := newModelSnapshotService(a).Desired(domainbackend.BackendClaude, sess).Model; got != "gpt-5-binding" {
+	if got := a.bindings.ModelSnapshots.Desired(domainbackend.BackendClaude, sess).Model; got != "gpt-5-binding" {
 		t.Fatalf("effectiveClaudeModel() = %q, want binding override", got)
 	}
 
 	sess.ModelOverride = "gpt-5-session"
-	if got := newModelSnapshotService(a).Desired(domainbackend.BackendCodex, sess).Model; got != "gpt-5-session" {
+	if got := a.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess).Model; got != "gpt-5-session" {
 		t.Fatalf("effectiveCodexModel() = %q, want session override", got)
 	}
-	if got := newModelSnapshotService(a).Desired(domainbackend.BackendClaude, sess).Model; got != "gpt-5-session" {
+	if got := a.bindings.ModelSnapshots.Desired(domainbackend.BackendClaude, sess).Model; got != "gpt-5-session" {
 		t.Fatalf("effectiveClaudeModel() = %q, want session override", got)
 	}
 
@@ -58,10 +59,10 @@ func TestEffectiveModelUsesSessionBindingThenBotDefault(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding(clear) error = %v", err)
 	}
-	if got := newModelSnapshotService(a).Desired(domainbackend.BackendCodex, sess).Model; got != "gpt-5-bot" {
+	if got := a.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess).Model; got != "gpt-5-bot" {
 		t.Fatalf("effectiveCodexModel() = %q, want bot default", got)
 	}
-	if got := newModelSnapshotService(a).Desired(domainbackend.BackendClaude, sess).Model; got != "sonnet-bot" {
+	if got := a.bindings.ModelSnapshots.Desired(domainbackend.BackendClaude, sess).Model; got != "sonnet-bot" {
 		t.Fatalf("effectiveClaudeModel() = %q, want bot default", got)
 	}
 }

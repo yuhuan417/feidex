@@ -36,7 +36,7 @@ func TestResumeQueuedSessionsUsesSessionActor(t *testing.T) {
 	}
 }
 
-func TestResumeQueuedSessionsRetainsFallbackWithoutActor(t *testing.T) {
+func TestResumeQueuedSessionsRequiresActor(t *testing.T) {
 	started := make(chan string, 1)
 	svc := RecoveryService{
 		SessionKeysForRecovery:                func() []string { return []string{"session-a"} },
@@ -44,7 +44,9 @@ func TestResumeQueuedSessionsRetainsFallbackWithoutActor(t *testing.T) {
 		StartNextSubmissionAsync:              func(sessionKey, _ string) { started <- sessionKey },
 	}
 	svc.ResumeQueuedSessions()
-	if got := <-started; got != "session-a" {
-		t.Fatalf("fallback recovery session = %q", got)
+	select {
+	case got := <-started:
+		t.Fatalf("unowned recovery started session = %q", got)
+	default:
 	}
 }

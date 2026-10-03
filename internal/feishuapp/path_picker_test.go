@@ -173,7 +173,7 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceNewPickDir(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceNewPickDir(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-1"},
 		FormValue:   map[string]any{"workspace_id": "repo", "workspace_name": "Repo"},
@@ -226,7 +226,7 @@ func TestWorkspaceNewPickDirAndSubmit(t *testing.T) {
 		t.Fatalf("workspace_new_submit form_action_type = %q, want submit", got)
 	}
 
-	resp, err = newWorkspaceManagementService(a).CompleteWorkspaceNewSubmit(&feishu.CardAction{
+	resp, err = a.bindings.WorkspaceManagement.CompleteWorkspaceNewSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": "workspace-1"},
@@ -261,7 +261,7 @@ func TestWorkspaceNewPickDirSuggestsWorkspaceIDFromDirectory(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-suggest-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceNewPickDir(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceNewPickDir(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-suggest-1"},
 	})
@@ -316,7 +316,7 @@ func TestWorkspaceNewSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-existing-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceNewSubmit(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceNewSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": "workspace-existing-1"},
@@ -346,7 +346,7 @@ func TestWorkspaceNewSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 func TestWorkspaceFormOrdering(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	newForm := workspaceNewForm(t, newWorkspaceRenderService(a).RenderWorkspaceNewCard("sess-1", "req-new", appworkspacecmd.NewPayload{
+	newForm := workspaceNewForm(t, a.bindings.WorkspacePresentation.RenderWorkspaceNewCard("sess-1", "req-new", appworkspacecmd.NewPayload{
 		RootPath:    "/",
 		SelectedCWD: a.cfg.Workspaces[0].Cwd,
 	}))
@@ -355,7 +355,7 @@ func TestWorkspaceFormOrdering(t *testing.T) {
 		t.Fatalf("workspace new first form element = %q, want column_set", got)
 	}
 
-	cloneForm := workspaceCloneForm(t, newWorkspaceRenderService(a).RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
+	cloneForm := workspaceCloneForm(t, a.bindings.WorkspacePresentation.RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 	}))
@@ -370,7 +370,7 @@ func TestWorkspaceFormOrdering(t *testing.T) {
 
 func TestWorkspaceCloneFormHidesWorktreeFieldsUntilModeSelected(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	card := newWorkspaceRenderService(a).RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
+	card := a.bindings.WorkspacePresentation.RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 		CloneMode:         appworkspacecmd.CloneModeWorkspace,
@@ -398,7 +398,7 @@ func TestWorkspaceCloneFormHidesWorktreeFieldsUntilModeSelected(t *testing.T) {
 
 func TestWorkspaceCloneFormShowsWorktreeFieldsInWorktreeMode(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	card := newWorkspaceRenderService(a).RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
+	card := a.bindings.WorkspacePresentation.RenderWorkspaceCloneCard("sess-1", "req-clone", appworkspacecmd.ClonePayload{
 		RootPath:          "/",
 		SelectedParentDir: filepath.Dir(a.cfg.Workspaces[0].Cwd),
 		CloneMode:         appworkspacecmd.CloneModeWorktree,
@@ -435,7 +435,7 @@ func TestWorkspaceCloneRefreshShowsWorktreeFieldsAndPrefillsDefaults(t *testing.
 		t.Fatalf("UpsertPending(workspace-clone-refresh) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneRefresh(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneRefresh(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-refresh"},
 		FormValue: map[string]any{
@@ -479,7 +479,7 @@ func TestWorkspaceClonePickDirPrefillsWorktreeDefaults(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-prefill) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceClonePickDir(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceClonePickDir(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-prefill"},
 		FormValue: map[string]any{
@@ -550,6 +550,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 		<-release
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a)
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
@@ -582,7 +583,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-1) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceClonePickDir(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceClonePickDir(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-1"},
 		FormValue: map[string]any{
@@ -643,7 +644,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	var submitErr error
 	done := make(chan struct{})
 	go func() {
-		submitResp, submitErr = newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
+		submitResp, submitErr = a.bindings.WorkspaceManagement.CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 			UserID:      "user-1",
 			ChatID:      "chat-1",
 			MessageID:   "msg-1",
@@ -737,6 +738,7 @@ func TestWorkspaceCloneSubmitCanCreateWorktree(t *testing.T) {
 		gotCloneTarget = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a)
 	var gotWorktreeBase string
 	var gotWorktreeBranch string
 	var gotWorktreeTarget string
@@ -778,7 +780,7 @@ func TestWorkspaceCloneSubmitCanCreateWorktree(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-worktree) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -843,7 +845,7 @@ func TestWorkspaceCloneSubmitExistingDirectoryTurnsIntoWorkspaceNew(t *testing.T
 		t.Fatalf("UpsertPending(workspace-clone-existing) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-existing"},
@@ -906,7 +908,7 @@ func TestWorkspaceCloneSubmitExistingWorkspacePromptsSwitch(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-existing-workspace) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"request_id": "workspace-clone-existing-workspace"},
@@ -949,6 +951,7 @@ func TestWorkspaceCloneSubmitFailurePatchesRetryForm(t *testing.T) {
 	workspaceGitClone = func(_ context.Context, _, _ string, _ appworkspacecmd.CloneProgressReporter) error {
 		return context.DeadlineExceeded
 	}
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "workspace-clone-fail",
@@ -965,7 +968,7 @@ func TestWorkspaceCloneSubmitFailurePatchesRetryForm(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-fail) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -1017,6 +1020,7 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 	workspaceGitClone = func(_ context.Context, _, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "workspace-clone-manual",
@@ -1033,7 +1037,7 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 		t.Fatalf("UpsertPending(workspace-clone-manual) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -1095,6 +1099,7 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 		<-ctx.Done()
 		return ctx.Err()
 	}
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "workspace-clone-cancel",
@@ -1111,7 +1116,7 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 		t.Fatalf("UpsertPending(workspace-clone-cancel) error = %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneSubmit(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneSubmit(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",
@@ -1146,7 +1151,7 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 		t.Fatalf("progress body = %q, want streamed git progress", progressBody)
 	}
 
-	cancelResp, err := newWorkspaceManagementService(a).CompleteWorkspaceCloneCancel(&feishu.CardAction{
+	cancelResp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneCancel(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-1",

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
+	domaininteraction "feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/domain/workspace"
 	"fmt"
@@ -39,6 +40,7 @@ type Dependencies struct {
 	LiveThread                 QueueLiveThreadProvider
 	PendingQueue               QueuePendingQueueProvider
 	RuntimeState               QueueRuntimeStateProvider
+	Items                      interface{ ClearTurn(string) }
 	RuntimeMaintenance         QueueRuntimeMaintenanceProvider
 	ReplyContinuation          QueueReplyContinuationProvider
 	TurnStream                 QueueTurnStreamProvider
@@ -53,9 +55,8 @@ type Dependencies struct {
 	ResolveWorkspaceID         func(msg *application.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string
 	ReplyText                  func(ctx context.Context, messageID, text string, inThread bool) error
 	SendQueuedNotice           func(ctx context.Context, sub *domainsubmission.Submission)
-	RunAsync                   func(fn func())
 	// RunSessionAsync serializes asynchronous follow-up work with the session
-	// actor. RunAsync remains a compatibility fallback for frontend-wide jobs.
+	// actor.
 	RunSessionAsync                    func(sessionKey string, fn func())
 	TryBeginStart                      func(sessionKey string) bool
 	FinishStart                        func(sessionKey string) bool
@@ -72,19 +73,17 @@ type Dependencies struct {
 	AgentBindingByID                   func(id string) *routing.AgentBinding
 	ModelSettings                      ModelSettings
 	BotProfile                         func() *routing.BotProfile
+	PlanConfirmation                   interface {
+		Invalidate(string) (*domaininteraction.PendingRequest, error)
+	}
+	PlanExpired func(context.Context, *domaininteraction.PendingRequest)
 }
 
 func runSessionAsync(deps Dependencies, sessionKey string, fn func()) {
 	if fn == nil {
 		return
 	}
-	if deps.RunSessionAsync != nil {
-		deps.RunSessionAsync(strings.TrimSpace(sessionKey), fn)
-		return
-	}
-	if deps.RunAsync != nil {
-		deps.RunAsync(fn)
-	}
+	deps.RunSessionAsync(strings.TrimSpace(sessionKey), fn)
 }
 
 type ModelSettings interface {
@@ -162,7 +161,6 @@ type QueueRuntimeStateProvider interface {
 	BindTurnSubmission(threadID, turnID, sessionKey, submissionID string)
 	MarkTurnStartedAt(turnID string, startedAt time.Time)
 	ClearTurnBinding(turnID string)
-	ClearTurnItemStates(turnID string)
 	BoundSubmissionForTurn(turnID string) (string, *domainsubmission.Submission)
 }
 
@@ -358,6 +356,15 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *application.InboundMessag
 	}
 	if err := appState.QueueSubmission(sessionKey, id); err != nil {
 		return err
+	}
+	if a.PlanConfirmation != nil {
+		pending, err := a.PlanConfirmation.Invalidate(sessionKey)
+		if err != nil {
+			return err
+		}
+		if pending != nil && a.PlanExpired != nil {
+			a.PlanExpired(a.context(), pending)
+		}
 	}
 	sub.ID = id
 	if len(stagedImages) > 0 {

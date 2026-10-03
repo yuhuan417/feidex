@@ -10,6 +10,7 @@ import (
 func TestCanonicalizeStoredSessionKeysMigratesLegacyTypedKeys(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 
 	legacyKey := "feishu:frontend:bot-a:group:chat-1:root:root-1"
 	canonicalKey := "feishu:frontend:bot-a:chat:chat-1"

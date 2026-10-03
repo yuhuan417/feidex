@@ -11,9 +11,8 @@ import (
 // InteractionRepository adapts transient pending-request DTOs in state.Store
 // to the interaction use case. It never modifies answer or protocol payloads.
 type InteractionRepository struct {
-	Store          *state.Store
-	FrontendID     string
-	LegacyFallback bool
+	Store      *state.Store
+	FrontendID string
 }
 
 func (r InteractionRepository) UpdateRequest(id string, transition func(interaction.Request) interaction.Request) (*interaction.Request, error) {
@@ -27,9 +26,6 @@ func (r InteractionRepository) UpdateRequest(id string, transition func(interact
 		req.Status = result.Status
 	}
 	err := r.Store.UpdateScopedPending(r.FrontendID, id, mutate)
-	if err != nil && r.LegacyFallback && r.FrontendID != "" {
-		err = r.Store.UpdatePending(id, mutate)
-	}
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
@@ -49,7 +45,7 @@ func (r InteractionRepository) Requests() []interaction.Request {
 			continue
 		}
 		frontendID := strings.TrimSpace(req.FrontendID)
-		if frontendID == r.FrontendID || (frontendID == "" && r.LegacyFallback) {
+		if frontendID == r.FrontendID {
 			result = append(result, requestFromDTO(req))
 		}
 	}

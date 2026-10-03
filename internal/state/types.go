@@ -36,6 +36,7 @@ const (
 	PendingRequestStatusExpired    PendingRequestStatus = "expired"
 	PendingRequestStatusProcessing PendingRequestStatus = "processing"
 	PendingRequestStatusCancelling PendingRequestStatus = "cancelling"
+	PendingRequestStatusLaunching  PendingRequestStatus = "launching"
 	PendingRequestStatusUpgrading  PendingRequestStatus = "upgrading"
 )
 
@@ -62,6 +63,8 @@ func NormalizePendingRequestStatus(value string) PendingRequestStatus {
 		return PendingRequestStatusCancelling
 	case PendingRequestStatusUpgrading.String():
 		return PendingRequestStatusUpgrading
+	case PendingRequestStatusLaunching.String():
+		return PendingRequestStatusLaunching
 	default:
 		return PendingRequestStatus(trimmed)
 	}

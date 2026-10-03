@@ -32,9 +32,9 @@ func performMCPHTTPRequest(t *testing.T, handler http.Handler, token, sessionKey
 
 func TestFeidexMCPToolsList(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	svc, err := newFeidexMCPService(a)
+	svc, err := BuildMCP(a)
 	if err != nil {
-		t.Fatalf("newFeidexMCPService() error = %v", err)
+		t.Fatalf("BuildMCP() error = %v", err)
 	}
 	rec := performMCPHTTPRequest(t, svc.handler, svc.token, "", `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
 	if rec.Code != http.StatusOK {
@@ -62,7 +62,7 @@ func TestFeidexMCPSendsCodexFileAttachment(t *testing.T) {
 	if err := os.WriteFile(path, []byte("hello"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	newRuntimeStateService(a).noteTurnItemStartedPayload("thread-1", "turn-1", turnitem.NewProtocolItemWithID("item-1", map[string]any{
+	a.bindings.ItemContext.Start("thread-1", "turn-1", turnitem.NewProtocolItemWithID("item-1", map[string]any{
 		"id":        "item-1",
 		"type":      "mcpToolCall",
 		"server":    mcpbridge.ServerID,
@@ -70,9 +70,9 @@ func TestFeidexMCPSendsCodexFileAttachment(t *testing.T) {
 		"status":    "inProgress",
 		"arguments": map[string]any{"path": path},
 	}))
-	svc, err := newFeidexMCPService(a)
+	svc, err := BuildMCP(a)
 	if err != nil {
-		t.Fatalf("newFeidexMCPService() error = %v", err)
+		t.Fatalf("BuildMCP() error = %v", err)
 	}
 	rec := performMCPHTTPRequest(t, svc.handler, svc.token, "", `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"feishu_send_im_file","arguments":{"path":"`+path+`"}}}`)
 	if rec.Code != http.StatusOK {
@@ -94,16 +94,16 @@ func TestFeidexMCPRequiresClaudeSessionKeyForDynamicMCPTools(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	seedActiveSubmission(t, a, sessionKey, "thread-2", "turn-2")
-	newRuntimeStateService(a).noteTurnItemStartedPayload("thread-2", "turn-2", turnitem.NewProtocolItemWithID("item-2", map[string]any{
+	a.bindings.ItemContext.Start("thread-2", "turn-2", turnitem.NewProtocolItemWithID("item-2", map[string]any{
 		"id":     "item-2",
 		"type":   "dynamic_tool_call",
 		"tool":   "mcp__feidex-send__feishu_send_im_image",
 		"status": "in_progress",
 		"input":  map[string]any{"path": path},
 	}))
-	svc, err := newFeidexMCPService(a)
+	svc, err := BuildMCP(a)
 	if err != nil {
-		t.Fatalf("newFeidexMCPService() error = %v", err)
+		t.Fatalf("BuildMCP() error = %v", err)
 	}
 	rec := performMCPHTTPRequest(t, svc.handler, svc.token, "", `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"feishu_send_im_image","arguments":{"path":"`+path+`"}}}`)
 	if !strings.Contains(rec.Body.String(), `"isError":true`) {
@@ -161,7 +161,7 @@ func TestFeidexMCPFailsClosedOnAmbiguousMatch(t *testing.T) {
 		{threadID: "thread-1", turnID: "turn-1", itemID: "item-1"},
 		{threadID: "thread-2", turnID: "turn-2", itemID: "item-2"},
 	} {
-		newRuntimeStateService(a).noteTurnItemStartedPayload(tc.threadID, tc.turnID, turnitem.NewProtocolItemWithID(tc.itemID, map[string]any{
+		a.bindings.ItemContext.Start(tc.threadID, tc.turnID, turnitem.NewProtocolItemWithID(tc.itemID, map[string]any{
 			"id":        tc.itemID,
 			"type":      "mcpToolCall",
 			"server":    mcpbridge.ServerID,
@@ -171,9 +171,9 @@ func TestFeidexMCPFailsClosedOnAmbiguousMatch(t *testing.T) {
 		}))
 	}
 
-	svc, err := newFeidexMCPService(a)
+	svc, err := BuildMCP(a)
 	if err != nil {
-		t.Fatalf("newFeidexMCPService() error = %v", err)
+		t.Fatalf("BuildMCP() error = %v", err)
 	}
 	rec := performMCPHTTPRequest(t, svc.handler, svc.token, "", `{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"feishu_send_im_file","arguments":{"path":"`+path+`"}}}`)
 	if !strings.Contains(rec.Body.String(), `"isError":true`) {
@@ -193,9 +193,9 @@ func TestFeidexMCPFallsBackToSessionActiveSubmission(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	svc, err := newFeidexMCPService(a)
+	svc, err := BuildMCP(a)
 	if err != nil {
-		t.Fatalf("newFeidexMCPService() error = %v", err)
+		t.Fatalf("BuildMCP() error = %v", err)
 	}
 	rec := performMCPHTTPRequest(t, svc.handler, svc.token, sessionKey, `{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"feishu_send_im_file","arguments":{"path":"`+path+`"}}}`)
 	if rec.Code != http.StatusOK {
@@ -217,9 +217,9 @@ func TestFeidexMCPFallsBackToOnlyActiveSubmissionWithoutSessionKey(t *testing.T)
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	svc, err := newFeidexMCPService(a)
+	svc, err := BuildMCP(a)
 	if err != nil {
-		t.Fatalf("newFeidexMCPService() error = %v", err)
+		t.Fatalf("BuildMCP() error = %v", err)
 	}
 	rec := performMCPHTTPRequest(t, svc.handler, svc.token, "", `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"feishu_send_im_file","arguments":{"path":"`+path+`"}}}`)
 	if rec.Code != http.StatusOK {
@@ -267,9 +267,9 @@ func TestFeidexMCPFallbackWithoutSessionKeyFailsClosedWhenMultipleActiveSubmissi
 		t.Fatalf("CreateSubmission(second) error = %v", err)
 	}
 
-	svc, err := newFeidexMCPService(a)
+	svc, err := BuildMCP(a)
 	if err != nil {
-		t.Fatalf("newFeidexMCPService() error = %v", err)
+		t.Fatalf("BuildMCP() error = %v", err)
 	}
 	rec := performMCPHTTPRequest(t, svc.handler, svc.token, "", `{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"feishu_send_im_file","arguments":{"path":"`+path+`"}}}`)
 	if !strings.Contains(rec.Body.String(), `"isError":true`) {

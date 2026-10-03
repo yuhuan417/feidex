@@ -2,11 +2,10 @@ package feishuapp
 
 import (
 	"encoding/json"
-	"feidex/internal/application"
-	"feidex/internal/application/asyncinput"
 	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
+	"strings"
 
 	appcards "feidex/internal/adapter/feishu/cards"
 	"feidex/internal/adapter/feishu/pendingforms"
@@ -19,7 +18,7 @@ import (
 func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload, reuseMessageID string) string {
 	payload.ThreadID, payload.TurnID = sub.ThreadID, sub.TurnID
 	requestID := pendingforms.AsyncUserInputPendingKind + ":" + sub.TurnID + ":" + payload.ItemID
-	if pending := a.State().Pending(requestID); pending != nil {
+	if pending := a.State().Pending(requestID); pending != nil && (strings.TrimSpace(pending.FeishuMsgID) != "" || state.NormalizePendingRequestStatus(pending.Status) != state.PendingRequestStatusPending) {
 		return pending.FeishuMsgID
 	}
 	drafts := pendingforms.FormDrafts{Values: map[string]string{}}
@@ -41,9 +40,6 @@ func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pe
 	return a.State().Pending(requestID).FeishuMsgID
 }
 
-func asyncInputService(a *App) asyncinput.Service {
-	return asyncinput.Service{Deps: asyncinput.Dependencies{Repository: a.State(), Backend: configuredBackend(a)}}
-}
 func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {
 	warning := func(text string) (*callback.CardActionTriggerResponse, error) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: text}}, nil
@@ -53,7 +49,7 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 	}
 	requestID, _ := action.ActionValue["request_id"].(string)
 	pending := a.State().Pending(requestID)
-	if err := asyncInputService(a).Validate(pending, action.UserID, action.MessageID, action.ChatID, cancel); err != nil {
+	if err := a.bindings.AsyncInputs.Validate(pending, action.UserID, action.MessageID, action.ChatID, cancel); err != nil {
 		return warning(err.Error())
 	}
 	var payload pendingforms.ToolUserInputPayload
@@ -72,7 +68,7 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 			}, nil
 		}
 	}
-	if err := asyncInputService(a).Claim(pending, cancel); err != nil {
+	if err := a.bindings.AsyncInputs.Claim(pending, cancel); err != nil {
 		return warning("请求已处理或正在提交")
 	}
 	if cancel {
@@ -83,27 +79,18 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 	}
 	// Only local validation/state changes run in the callback. The backend can
 	// take seconds to steer or start a turn, so acknowledge before doing I/O.
-	runSessionAsync(a, pending.SessionKey, func() {
-		err := submitAsyncUserInput(a, pending, action.UserID, answerText)
+	if err := a.bindings.AsyncInputs.Dispatch(pending, action.UserID, answerText, func(err error) {
 		var card map[string]any
 		if err != nil {
-			_ = asyncInputService(a).Complete(pending, false)
 			card = pendingforms.RenderAsyncUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)
 			appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "提交失败，请重试。\n" + err.Error()})
 			slog.Warn("async user input submission failed", "request_id", requestID, "error", err)
 		} else {
-			_ = asyncInputService(a).Complete(pending, true)
 			card = a.feishu.SimpleStatusCard("输入已提交", "green", answerText, nil)
 		}
 		patchMaintenanceCard(a, pending.FeishuMsgID, card, "async user input patch failed", "request_id", requestID)
-	})
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在提交回答"}}, nil
-}
-
-func submitAsyncUserInput(a *App, pending *state.PendingRequest, userID, text string) error {
-	effect, err := asyncInputService(a).AnswerEffect(pending, userID, text)
-	if err != nil {
-		return err
+	}); err != nil {
+		return warning(err.Error())
 	}
-	return newEffectRunner(a).Run(a.Context(), []application.Effect{effect})
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "正在提交回答"}}, nil
 }

@@ -45,32 +45,26 @@ type Tracker struct {
 
 	// store is used to look up submissions by ID. It is set at construction
 	// time and must not be nil.
-	store SubmissionRepository
+	submissionLookup func(string) *domainsubmission.Submission
 }
 
 // NewTracker creates a new Tracker. The store is used for submission lookups.
-func NewTracker(store SubmissionRepository) *Tracker {
+func NewTracker(submission func(string) *domainsubmission.Submission) *Tracker {
 	return &Tracker{
-		Bindings:    map[string]Binding{},
-		Pending:     map[string][]Binding{},
-		ThreadUsage: map[string]domainturn.ThreadTokenUsage{},
-		ClaudeUsage: map[string]ClaudeThreadUsageSnapshot{},
-		store:       store,
+		Bindings:         map[string]Binding{},
+		Pending:          map[string][]Binding{},
+		ThreadUsage:      map[string]domainturn.ThreadTokenUsage{},
+		ClaudeUsage:      map[string]ClaudeThreadUsageSnapshot{},
+		submissionLookup: submission,
 	}
-}
-
-// SubmissionRepository is owned by the runtime consumer; no concrete storage
-// implementation enters the tracker.
-type SubmissionRepository interface {
-	GetSubmission(id string) *domainsubmission.Submission
 }
 
 // submission looks up a submission by ID from the store.
 func (t *Tracker) submission(id string) *domainsubmission.Submission {
-	if t == nil || t.store == nil {
+	if t == nil || t.submissionLookup == nil {
 		return nil
 	}
-	return t.store.GetSubmission(strings.TrimSpace(id))
+	return t.submissionLookup(strings.TrimSpace(id))
 }
 
 // NotePendingTurnBinding records that a submission is pending for a thread.

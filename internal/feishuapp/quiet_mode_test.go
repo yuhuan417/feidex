@@ -105,7 +105,7 @@ func TestUpdateQuietModePersistsConfig(t *testing.T) {
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := &App{cfg: cfg, cfgPath: cfgPath}
+	a := prepareTestApp(&App{cfg: cfg, cfgPath: cfgPath})
 	if err := updateQuietMode(a, config.QuietModeNormal); err != nil {
 		t.Fatalf("updateQuietMode: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestCommandQuietSupportsConfigCardAndExplicitModes(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 	ff := &fakeFeishuClient{}
-	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: ff}
+	a := prepareTestApp(&App{cfg: cfg, cfgPath: cfgPath, feishu: ff})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p"}
 	if err := commandQuiet(a, msg, nil); err != nil {
 		t.Fatalf("commandQuiet() error = %v", err)

@@ -4,7 +4,7 @@ import (
 	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appautoretry "feidex/internal/runtime/autoretry"
+	appautoretry "feidex/internal/application/autoretry"
 
 	"context"
 	"errors"
@@ -62,15 +62,17 @@ func seedAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string) *co
 
 func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	a, ff, fc := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 4)
-	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
+	a.bindings.AutoRetry.AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := a.bindings.AutoRetry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -88,7 +90,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		Status:               "failed",
 	}
 
-	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "HTTP 403 Forbidden")
+	a.bindings.AutoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "HTTP 403 Forbidden")
 
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
@@ -96,7 +98,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	if scheduled[0].delay != time.Second {
 		t.Fatalf("scheduled delay = %s, want %s", scheduled[0].delay, time.Second)
 	}
-	if snapshot, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); !ok {
+	if snapshot, ok := a.bindings.AutoRetry.CurrentAutoRetryState(sessionKey); !ok {
 		t.Fatal("currentAutoRetryState() missing state")
 	} else if snapshot.RetryCount != 0 {
 		t.Fatalf("retry count = %d, want 0 before timer fires", snapshot.RetryCount)
@@ -132,7 +134,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 		t.Fatalf("turn/start calls = %d, want 1", startCalls)
 	}
 
-	snapshot, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey)
+	snapshot, ok := a.bindings.AutoRetry.CurrentAutoRetryState(sessionKey)
 	if !ok {
 		t.Fatal("currentAutoRetryState() missing state after firing timer")
 	}
@@ -153,15 +155,17 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 
 func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 2)
-	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
+	a.bindings.AutoRetry.AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := a.bindings.AutoRetry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -211,13 +215,13 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 		Status:               domainsubmission.SubmissionStatusFailed.String(),
 	}
 
-	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, failedSub, "", "") {
+	if !a.bindings.AutoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, "failed", updatedSess, failedSub, "", "") {
 		t.Fatal("ObserveAutoRetryTerminal() = false, want pending retry")
 	}
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
 	}
-	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey); next != "" {
+	if next := a.bindings.Submissions.NextQueuedSessionKey(sessionKey); next != "" {
 		t.Fatalf("NextQueuedSessionKey() = %q, want blocked by auto retry", next)
 	}
 
@@ -254,7 +258,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	if len(startInputs) != 1 || startInputs[0] != "继续" {
 		t.Fatalf("turn/start inputs after retry fire = %#v, want [继续]", startInputs)
 	}
-	if snapshot, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); !ok {
+	if snapshot, ok := a.bindings.AutoRetry.CurrentAutoRetryState(sessionKey); !ok {
 		t.Fatal("currentAutoRetryState() missing after queued retry start")
 	} else if snapshot.RetryCount != 1 {
 		t.Fatalf("retry count after queued retry start = %d, want 1", snapshot.RetryCount)
@@ -268,7 +272,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	if len(startInputs) != 2 || startInputs[1] != "later input" {
 		t.Fatalf("turn/start inputs after retry completion = %#v, want queued input to resume", startInputs)
 	}
-	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); ok {
+	if _, ok := a.bindings.AutoRetry.CurrentAutoRetryState(sessionKey); ok {
 		t.Fatal("currentAutoRetryState() still present after successful retry completion")
 	}
 	refreshed = a.State().Session(sessionKey)
@@ -279,15 +283,17 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 
 func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 2)
-	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
+	a.bindings.AutoRetry.AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := a.bindings.AutoRetry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -325,13 +331,13 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	}
 	updatedA := a.State().Session(sessionKey)
 
-	if !newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadA, "failed", updatedA, failedSub, "", "") {
+	if !a.bindings.AutoRetry.ObserveAutoRetryTerminal(sessionKey, threadA, "failed", updatedA, failedSub, "", "") {
 		t.Fatal("ObserveAutoRetryTerminal() = false, want pending retry")
 	}
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1", len(scheduled))
 	}
-	if next := newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey); next != "" {
+	if next := a.bindings.Submissions.NextQueuedSessionKey(sessionKey); next != "" {
 		t.Fatalf("NextQueuedSessionKey(group) = %q, want blocked by auto retry", next)
 	}
 
@@ -393,7 +399,7 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	if len(turnStartThreadIDs) != 2 || turnStartThreadIDs[0] != threadA || turnStartThreadIDs[1] != threadA {
 		t.Fatalf("turn/start thread IDs = %#v, want retry thread reused for queued input", turnStartThreadIDs)
 	}
-	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); ok {
+	if _, ok := a.bindings.AutoRetry.CurrentAutoRetryState(sessionKey); ok {
 		t.Fatal("currentAutoRetryState(root-a) still present after successful retry completion")
 	}
 	if sess := a.State().Session(sessionKey); sess == nil || len(sess.Queue) != 0 || sess.ActiveTurnID != "turn-root-b" {
@@ -403,15 +409,17 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 
 func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 2)
-	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
+	a.bindings.AutoRetry.AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := a.bindings.AutoRetry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -428,7 +436,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 		SourceRootMessageIDs: []string{sess.RootMessageID},
 		Status:               "failed",
 	}
-	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
+	a.bindings.AutoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
 
 	msg := &feishu.InboundMessage{
 		SessionKey: sessionKey,
@@ -443,7 +451,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	if len(scheduled) != 1 || !scheduled[0].task.stopped {
 		t.Fatalf("scheduled retry task stopped = %v, want true", len(scheduled) == 1 && scheduled[0].task.stopped)
 	}
-	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); ok {
+	if _, ok := a.bindings.AutoRetry.CurrentAutoRetryState(sessionKey); ok {
 		t.Fatal("currentAutoRetryState() still present after /stop")
 	}
 	replies := ff.replyTextsSnapshot()
@@ -454,15 +462,17 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 
 func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testing.T) {
 	a, ff, fc := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.asyncRunner = func(fn func()) { fn() }
 
 	scheduled := make([]scheduledRetry, 0, 2)
-	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
+	a.bindings.AutoRetry.AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := a.bindings.AutoRetry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -479,7 +489,7 @@ func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testi
 		SourceRootMessageIDs: []string{sess.RootMessageID},
 		Status:               "failed",
 	}
-	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
+	a.bindings.AutoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1 before /stop", len(scheduled))
 	}
@@ -501,7 +511,7 @@ func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testi
 	if !scheduled[0].task.stopped {
 		t.Fatal("scheduled retry task was not stopped by cross-root /stop")
 	}
-	if _, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey); ok {
+	if _, ok := a.bindings.AutoRetry.CurrentAutoRetryState(sessionKey); ok {
 		t.Fatal("currentAutoRetryState() still present after cross-root /stop")
 	}
 	replies := ff.replyTextsSnapshot()
@@ -512,21 +522,24 @@ func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testi
 
 func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	a, ff, _ := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	a.asyncRunner = func(fn func()) { fn() }
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.registry = testRegistryWithClaude(&fakeClaudeCore{
+	a.runtimeOwner = testOwnerWithClaude(&fakeClaudeCore{
 		ensureSessionSet: true,
 		ensureSessionID:  "claude-session-1",
 		startTurnErr:     errors.New("claude start failed"),
 	})
+	recomposeTestApp(a)
 
 	scheduled := make([]scheduledRetry, 0, 4)
-	newAutoRetryService(a).AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
+	a.bindings.AutoRetry.AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
 		task := &fakeDelayedTask{fn: fn}
 		scheduled = append(scheduled, scheduledRetry{delay: delay, task: task})
 		return task
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := a.bindings.AutoRetry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
@@ -544,7 +557,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 		Status:               "failed",
 	}
 
-	newAutoRetryService(a).ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
+	a.bindings.AutoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, "failed", sess, sub, "", "")
 	if len(scheduled) != 1 {
 		t.Fatalf("scheduled retries = %d, want 1 before timer fires", len(scheduled))
 	}
@@ -557,14 +570,14 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	if scheduled[1].delay != time.Second {
 		t.Fatalf("rescheduled delay = %s, want %s", scheduled[1].delay, time.Second)
 	}
-	snapshot, ok := newAutoRetryService(a).CurrentAutoRetryState(sessionKey)
+	snapshot, ok := a.bindings.AutoRetry.CurrentAutoRetryState(sessionKey)
 	if !ok {
 		t.Fatal("currentAutoRetryState() missing state after Claude start failure")
 	}
 	if snapshot.RetryCount != 0 {
 		t.Fatalf("retry count = %d, want 0 after failed start", snapshot.RetryCount)
 	}
-	if !newAutoRetryService(a).HasPendingAutoRetry(sessionKey) {
+	if !a.bindings.AutoRetry.HasPendingAutoRetry(sessionKey) {
 		t.Fatal("hasPendingAutoRetry(sessionKey) = false, want true")
 	}
 
@@ -633,7 +646,9 @@ func TestStopPreventsLateFailureFromRestartingRetry(t *testing.T) {
 		for _, missingCompletion := range []bool{false, true} {
 			t.Run(fmt.Sprintf("loop_%t_missing_completion_%t", existingLoop, missingCompletion), func(t *testing.T) {
 				a, _, fc := newTestApp(t)
-				retry := newAutoRetryService(a)
+				a.frontendID = "default"
+				recomposeTestApp(a)
+				retry := a.bindings.AutoRetry
 				if err := retry.UpdateAutoRetryEnabled(true); err != nil {
 					t.Fatal(err)
 				}
@@ -693,9 +708,11 @@ func TestStopPreventsLateFailureFromRestartingRetry(t *testing.T) {
 
 func TestStopInvalidatesAlreadyDispatchedRetryCallback(t *testing.T) {
 	a, _, fc := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	var callbacks []func()
 	a.asyncRunner = func(fn func()) { callbacks = append(callbacks, fn) }
-	retry := newAutoRetryService(a)
+	retry := a.bindings.AutoRetry
 	if err := retry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatal(err)
 	}
@@ -735,7 +752,9 @@ func TestStopInvalidatesAlreadyDispatchedRetryCallback(t *testing.T) {
 
 func TestStopWaitsForRetryStartupAndInterruptsStartedTurn(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	retry := newAutoRetryService(a)
+	a.frontendID = "default"
+	recomposeTestApp(a)
+	retry := a.bindings.AutoRetry
 	if err := retry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatal(err)
 	}
@@ -802,6 +821,8 @@ func TestStopWaitsForRetryStartupAndInterruptsStartedTurn(t *testing.T) {
 
 func TestStopDoesNotFinalizeUnconfirmedTurnAfterInterruptError(t *testing.T) {
 	a, _, fc := newTestApp(t)
+	a.frontendID = "default"
+	recomposeTestApp(a)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", MessageID: "stop", UserID: "user-1"}
 	key := makeSessionKey(a, msg)
 	seedActiveSubmission(t, a, key, "thread-1", "turn-1")
@@ -827,17 +848,20 @@ func TestStopDoesNotFinalizeUnconfirmedTurnAfterInterruptError(t *testing.T) {
 
 func TestAutoRetryCardUsesLatestFailureAndExplicitMissingDetails(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	retry := newAutoRetryService(a)
+	a.frontendID = "default"
+	recomposeTestApp(a)
+	retry := a.bindings.AutoRetry
 	retry.AutoRetryTracker().After = func(time.Duration, func()) appautoretry.DelayedTask { return &fakeDelayedTask{} }
 	if err := retry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatal(err)
 	}
-	sess := seedAutoRetrySession(t, a, "sess-1", "thread-1")
+	key := "feishu:frontend:default:chat:chat-1"
+	sess := seedAutoRetrySession(t, a, key, "thread-1")
 	for _, reason := range []string{"HTTP 403 Forbidden", "HTTP 501 Not Implemented", ""} {
-		if !retry.ObserveAutoRetryTerminal("sess-1", "thread-1", "failed", sess, nil, "", reason) {
+		if !retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "", reason) {
 			t.Fatal("retry not scheduled")
 		}
-		snapshot, ok := retry.CurrentAutoRetryState("sess-1")
+		snapshot, ok := retry.CurrentAutoRetryState(key)
 		if !ok || snapshot.LastError != reason {
 			t.Fatalf("last error = %q, want %q", snapshot.LastError, reason)
 		}

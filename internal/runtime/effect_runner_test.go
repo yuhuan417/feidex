@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"feidex/internal/application"
 	"feidex/internal/application/backendops"
+	interactionapp "feidex/internal/application/interaction"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
+	"feidex/internal/domain/interaction"
 	"feidex/internal/domain/submission"
 )
 
@@ -22,6 +26,124 @@ func TestEffectRunnerSaveFailurePreventsBackendStart(t *testing.T) {
 	err := runner.Run(context.TODO(), []application.Effect{application.SaveState{}, application.StartTurn{}})
 	if !errors.Is(err, failure) || started {
 		t.Fatalf("error=%v started=%v", err, started)
+	}
+}
+
+func TestEffectRunnerCardIdentityPreservesResultAndUnkeyedNavigation(t *testing.T) {
+	calls := 0
+	runner := EffectRunner{Deduper: NewMemoryEffectDeduper(), SendCardWithID: func(context.Context, application.SendCard) (string, error) { calls++; return "message", nil }}
+	effect := application.SendCard{IdempotencyKey: "form-1"}
+	first, err := runner.RunSendCard(context.Background(), effect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Run(context.Background(), []application.Effect{effect}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := runner.RunSendCard(context.Background(), effect)
+	if err != nil || first != "message" || second != first || calls != 1 {
+		t.Fatalf("first=%q second=%q calls=%d error=%v", first, second, calls, err)
+	}
+	for range 2 {
+		if _, err := runner.RunSendCard(context.Background(), application.SendCard{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if calls != 3 {
+		t.Fatalf("navigation sends=%d", calls)
+	}
+}
+
+type blockingDeduperContext struct {
+	context.Context
+	registered chan struct{}
+}
+
+func (c blockingDeduperContext) Done() <-chan struct{} {
+	c.registered <- struct{}{}
+	return c.Context.Done()
+}
+
+func TestMemoryEffectDeduperBroadcastsFailureToEveryWaiter(t *testing.T) {
+	d := NewMemoryEffectDeduper()
+	started, release, registered := make(chan struct{}), make(chan struct{}), make(chan struct{}, 8)
+	failure := errors.New("transport failure")
+	var calls atomic.Int32
+	fn := func() (any, error) { calls.Add(1); close(started); <-release; return "result", failure }
+	results := make(chan error, 9)
+	go func() { _, err := d.Do(context.Background(), "key", fn); results <- err }()
+	<-started
+	for range 8 {
+		go func() {
+			value, err := d.Do(blockingDeduperContext{Context: context.Background(), registered: registered}, "key", fn)
+			if value != "result" {
+				t.Errorf("waiter result=%v", value)
+			}
+			results <- err
+		}()
+	}
+	for range 8 {
+		<-registered
+	}
+	close(release)
+	for range 9 {
+		if err := <-results; !errors.Is(err, failure) {
+			t.Errorf("waiter error=%v", err)
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("external calls=%d", calls.Load())
+	}
+}
+
+type retryDeliveryRepository struct {
+	request    *interaction.PendingRequest
+	failUpdate bool
+}
+
+func (r *retryDeliveryRepository) Pending(string) *interaction.PendingRequest {
+	if r.request == nil {
+		return nil
+	}
+	cp := *r.request
+	return &cp
+}
+func (r *retryDeliveryRepository) SavePending(req *interaction.PendingRequest) error {
+	cp := *req
+	r.request = &cp
+	return nil
+}
+func (r *retryDeliveryRepository) UpdatePending(_ string, fn func(*interaction.PendingRequest)) error {
+	if r.failUpdate {
+		return errors.New("disk full")
+	}
+	fn(r.request)
+	return nil
+}
+func (*retryDeliveryRepository) SetSubmissionStatus(string, string) error        { return nil }
+func (*retryDeliveryRepository) SaveMessageLink(*conversation.MessageLink) error { return nil }
+
+type runnerInteractionPresenter struct{ runner EffectRunner }
+
+func (p runnerInteractionPresenter) DeliverInteraction(ctx context.Context, input interactionapp.DeliveryInput) (string, error) {
+	return p.runner.RunSendCard(ctx, application.SendCard{IdempotencyKey: application.StableEffectKey("interaction-card", input.Request.FrontendID, input.Request.ID)})
+}
+
+func TestInteractionDeliverySaveFailureRetriesSameRealEffectResult(t *testing.T) {
+	calls := 0
+	runner := EffectRunner{Deduper: NewMemoryEffectDeduper(), SendCardWithID: func(context.Context, application.SendCard) (string, error) { calls++; return "card-1", nil }}
+	repo := &retryDeliveryRepository{failUpdate: true}
+	service := interactionapp.DeliveryService{Repository: repo}
+	input := interactionapp.DeliveryInput{Request: interaction.PendingRequest{ID: "form-1", FrontendID: "frontend"}, NonBlocking: true}
+	if err := service.Open(context.Background(), input, runnerInteractionPresenter{runner}); err == nil {
+		t.Fatal("expected message association save failure")
+	}
+	repo.failUpdate = false
+	if err := service.Open(context.Background(), input, runnerInteractionPresenter{runner}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || repo.request.FeishuMsgID != "card-1" {
+		t.Fatalf("calls=%d request=%+v", calls, repo.request)
 	}
 }
 

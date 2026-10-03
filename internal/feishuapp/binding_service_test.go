@@ -25,10 +25,11 @@ import (
 func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-a-open"
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-issue-9", MessageID: "msg-workspace", UserID: "user-1"}
 
-	if err := newBindingService(a).commandWorkspace(msg, nil); err != nil {
+	if err := a.bindings.BindingCommands.commandWorkspace(msg, nil); err != nil {
 		t.Fatalf("/workspace status error = %v", err)
 	}
 	binding := agentBindingForChat(a, "group", "chat-issue-9")
@@ -92,6 +93,7 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 func TestWorkspaceUnbindReturnsGroupToOnboarding(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-unbind"
+	recomposeTestApp(a)
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-unbind", MessageID: "msg-unbind", UserID: "user-1"}
 	sessionKey := makeSessionKey(a, msg)
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
@@ -115,7 +117,7 @@ func TestWorkspaceUnbindReturnsGroupToOnboarding(t *testing.T) {
 		t.Fatalf("SaveSession() error = %v", err)
 	}
 
-	if err := newBindingService(a).commandWorkspace(msg, []string{"unbind"}); err != nil {
+	if err := a.bindings.BindingCommands.commandWorkspace(msg, []string{"unbind"}); err != nil {
 		t.Fatalf("commandWorkspace(unbind) error = %v", err)
 	}
 	binding := agentBindingForChat(a, msg.ChatType, msg.ChatID)
@@ -129,7 +131,7 @@ func TestWorkspaceUnbindReturnsGroupToOnboarding(t *testing.T) {
 	if config.FindWorkspace(a.cfg, "default") == nil {
 		t.Fatal("unbind removed the local workspace configuration")
 	}
-	card := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
+	card := a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
 	labels := cardButtonLabelsByAction(card)
 	if labels["workspace.delete.menu"] != "" {
 		t.Fatalf("workspace menu exposed delete after unbind: %q", labels["workspace.delete.menu"])
@@ -139,18 +141,19 @@ func TestWorkspaceUnbindReturnsGroupToOnboarding(t *testing.T) {
 func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) {
 	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ffA.botOpenID = "bot-a-open"
 	ffA.groupBotCounts = map[string]int{"chat-primary": 1}
 	fb := &fakeFeishuClient{botOpenID: "bot-b-open", groupBotCounts: map[string]int{"chat-primary": 2}}
-	b := &App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: appfeishuwrap.WrapFeishuClient(fb)}
+	b := prepareTestApp(&App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: appfeishuwrap.WrapFeishuClient(fb)})
 	configureGroupPrimaryEvents(b)
 
 	msgA := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-a", UserID: "user-1"}
-	if err := newBindingService(a).commandWorkspace(msgA, nil); err != nil {
+	if err := a.bindings.BindingCommands.commandWorkspace(msgA, nil); err != nil {
 		t.Fatalf("bot-a /workspace error = %v", err)
 	}
 	msgB := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-b", UserID: "user-1"}
-	if err := newBindingService(b).commandWorkspace(msgB, nil); err != nil {
+	if err := b.bindings.BindingCommands.commandWorkspace(msgB, nil); err != nil {
 		t.Fatalf("bot-b /workspace error = %v", err)
 	}
 	handleBotGroupAdded(a, &feishu.BotGroupEvent{ChatID: "chat-primary"})
@@ -165,7 +168,7 @@ func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) 
 	}
 
 	msgB.MentionedOpenIDs = []string{"bot-b-open"}
-	if err := newBindingService(b).commandPrimary(msgB, []string{"on"}); err != nil {
+	if err := b.bindings.BindingCommands.commandPrimary(msgB, []string{"on"}); err != nil {
 		t.Fatalf("bot-b /primary on error = %v", err)
 	}
 	primary = groupPrimaryForChat(a, "group", "chat-primary")
@@ -180,12 +183,16 @@ func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) 
 func TestExplicitMentionRoutesGroupConfigToMentionedFrontend(t *testing.T) {
 	a, ffA, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ffA.botOpenID = "bot-a-open"
 
 	b, ffB, _ := newTestApp(t)
 	b.frontendID = "bot-b"
+	recomposeTestApp(b)
 	b.store = a.store
+	recomposeTestApp(b)
 	b.cfg = a.cfg
+	recomposeTestApp(b)
 	ffB.botOpenID = "bot-b-open"
 
 	msg := func(id string) *feishu.InboundMessage {
@@ -223,6 +230,7 @@ func TestExplicitMentionRoutesGroupConfigToMentionedFrontend(t *testing.T) {
 func TestPrimaryCommandDoesNotCreateBinding(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-a-open"
 	msg := &feishu.InboundMessage{
 		ChatType:         "group",
@@ -233,7 +241,7 @@ func TestPrimaryCommandDoesNotCreateBinding(t *testing.T) {
 		MentionedSelf:    true,
 	}
 
-	if err := newBindingService(a).commandPrimary(msg, []string{"on"}); err != nil {
+	if err := a.bindings.BindingCommands.commandPrimary(msg, []string{"on"}); err != nil {
 		t.Fatalf("/primary on error = %v", err)
 	}
 	if binding := agentBindingForChat(a, "group", "chat-primary-only"); binding != nil {
@@ -247,6 +255,7 @@ func TestPrimaryCommandDoesNotCreateBinding(t *testing.T) {
 func TestPrimaryCommandCardsShowLocalStateAndBotName(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-a-open"
 	ff.botName = "Feidex Bot"
 	msg := &feishu.InboundMessage{
@@ -258,7 +267,7 @@ func TestPrimaryCommandCardsShowLocalStateAndBotName(t *testing.T) {
 		MentionedSelf:    true,
 	}
 
-	if err := newBindingService(a).commandPrimary(msg, []string{"on"}); err != nil {
+	if err := a.bindings.BindingCommands.commandPrimary(msg, []string{"on"}); err != nil {
 		t.Fatalf("/primary on error = %v", err)
 	}
 	cards := ff.replyCardsSnapshot()
@@ -274,7 +283,7 @@ func TestPrimaryCommandCardsShowLocalStateAndBotName(t *testing.T) {
 	}
 
 	msg.MessageID = "msg-primary-status"
-	if err := newBindingService(a).commandPrimary(msg, nil); err != nil {
+	if err := a.bindings.BindingCommands.commandPrimary(msg, nil); err != nil {
 		t.Fatalf("/primary status error = %v", err)
 	}
 	cards = ff.replyCardsSnapshot()
@@ -293,13 +302,14 @@ func TestPrimaryCommandCardsShowLocalStateAndBotName(t *testing.T) {
 func TestPrimaryOffRejectedAndKeepsOwner(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-b"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-b-open"
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary-off", MessageID: "msg-primary-off", UserID: "user-1"}
 
 	if _, err := setGroupPrimary(a, "group", "chat-primary-off", false); err != nil {
 		t.Fatalf("seed primary state error = %v", err)
 	}
-	if err := newBindingService(a).commandPrimary(msg, []string{"off"}); err == nil || !strings.Contains(err.Error(), "usage: /primary on") {
+	if err := a.bindings.BindingCommands.commandPrimary(msg, []string{"off"}); err == nil || !strings.Contains(err.Error(), "usage: /primary on") {
 		t.Fatalf("/primary off non-owner error = %v, want usage", err)
 	}
 	if isGroupPrimary(a, "group", "chat-primary-off") {
@@ -310,7 +320,7 @@ func TestPrimaryOffRejectedAndKeepsOwner(t *testing.T) {
 		t.Fatalf("seed current primary state error = %v", err)
 	}
 	msg.MessageID = "msg-primary-off-owner"
-	if err := newBindingService(a).commandPrimary(msg, []string{"off"}); err == nil || !strings.Contains(err.Error(), "usage: /primary on") {
+	if err := a.bindings.BindingCommands.commandPrimary(msg, []string{"off"}); err == nil || !strings.Contains(err.Error(), "usage: /primary on") {
 		t.Fatalf("/primary off owner error = %v, want usage", err)
 	}
 	if !isGroupPrimary(a, "group", "chat-primary-off") {
@@ -321,6 +331,7 @@ func TestPrimaryOffRejectedAndKeepsOwner(t *testing.T) {
 func TestPrimaryMessageBypassesWorkspaceOnboarding(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-a-open"
 	fc.callHook = func(_ context.Context, method string, _ any, _ any) error {
 		t.Fatalf("backend method %s should not run for /primary", method)
@@ -360,6 +371,7 @@ func TestPrimaryMessageBypassesWorkspaceOnboarding(t *testing.T) {
 func TestPrimaryUnmentionedGroupMessageCreatesPendingWorkspaceConfig(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-a-open"
 	if _, err := setGroupPrimary(a, "group", "chat-pending-new", true); err != nil {
 		t.Fatalf("setGroupPrimary() error = %v", err)
@@ -393,6 +405,7 @@ func TestPrimaryUnmentionedGroupMessageCreatesPendingWorkspaceConfig(t *testing.
 func TestPendingBindingStoresAndReplaysOriginalGroupMessage(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-a-open"
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:         "binding-pending",
@@ -465,6 +478,7 @@ func TestPendingBindingStoresAndReplaysOriginalGroupMessage(t *testing.T) {
 		RootMessageID: "bind-1",
 		MentionedSelf: true,
 	})
+	a.waitAsync()
 
 	if len(methods) != 2 || methods[0] != "thread/start" || methods[1] != "turn/start" {
 		t.Fatalf("backend calls after binding = %+v, want replay thread/start then turn/start", methods)
@@ -491,7 +505,7 @@ func TestWorkspaceNewCreatesWorkspaceAndActivatesGroupConfig(t *testing.T) {
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-new", MessageID: "msg-new", UserID: "user-1"}
 	cwd := t.TempDir() + "/client"
 
-	if err := newBindingService(a).commandWorkspace(msg, []string{"new", "client-x", cwd}); err != nil {
+	if err := a.bindings.BindingCommands.commandWorkspace(msg, []string{"new", "client-x", cwd}); err != nil {
 		t.Fatalf("/workspace new error = %v", err)
 	}
 	if ws := findWorkspaceForTest(a, "client-x"); ws == nil || ws.Cwd != cwd {
@@ -505,12 +519,13 @@ func TestWorkspaceNewCreatesWorkspaceAndActivatesGroupConfig(t *testing.T) {
 func TestWorkspaceNewWorktreeDefaultsAreGroupScoped(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botName = "Feidex Bot"
 	initGitRepoForWorktreeTest(t, a.cfg.Workspaces[0].Cwd)
 
 	for _, chatID := range []string{"chat-alpha", "chat-beta"} {
 		msg := &feishu.InboundMessage{ChatType: "group", ChatID: chatID, MessageID: "msg-" + chatID, UserID: "user-1"}
-		if err := newBindingService(a).commandWorkspace(msg, []string{"new", "worktree"}); err != nil {
+		if err := a.bindings.BindingCommands.commandWorkspace(msg, []string{"new", "worktree"}); err != nil {
 			t.Fatalf("/workspace new worktree(%s) error = %v", chatID, err)
 		}
 	}
@@ -533,7 +548,7 @@ func TestWorkspaceNewWorktreeDefaultsAreGroupScoped(t *testing.T) {
 
 func TestWorkspaceWorktreeCardExplainsFormFields(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	card := newWorkspaceRenderService(a).RenderWorkspaceWorktreeCard("feishu:frontend:default:chat:chat-1", "workspace-1", appworkspacecmd.WorktreePayload{
+	card := a.bindings.WorkspacePresentation.RenderWorkspaceWorktreeCard("feishu:chat:chat-1", "workspace-1", appworkspacecmd.WorktreePayload{
 		BaseWorkspaceID: "default",
 		BranchName:      "work/feidex-bot",
 		WorkspaceID:     "feidex-bot",
@@ -550,6 +565,7 @@ func TestWorkspaceWorktreeCardExplainsFormFields(t *testing.T) {
 func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	ff.botName = "Feidex Bot"
 	initGitRepoForWorktreeTest(t, a.cfg.Workspaces[0].Cwd)
 
@@ -581,7 +597,7 @@ func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
 		t.Fatalf("missing p2p worktree pending; pending=%+v", a.State().PendingRequests())
 	}
 	payload := appworkspacecmd.WorktreePayloadFromPending(pending)
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceWorktreeSubmit(&feishu.CardAction{
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceWorktreeSubmit(&feishu.CardAction{
 		ActionValue: map[string]any{"request_id": pending.ID},
 		UserID:      "user-1",
 		ChatID:      "chat-private",
@@ -605,6 +621,7 @@ func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
 func TestWorkspaceNewWorktreeSubmitActivatesOnlyCurrentGroupBinding(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	initGitRepoForWorktreeTest(t, a.cfg.Workspaces[0].Cwd)
 
 	origWorktreeAdd := appworkspacecmd.GitWorktreeAdd
@@ -620,11 +637,11 @@ func TestWorkspaceNewWorktreeSubmitActivatesOnlyCurrentGroupBinding(t *testing.T
 
 	for _, chatID := range []string{"chat-a", "chat-b"} {
 		msg := &feishu.InboundMessage{ChatType: "group", ChatID: chatID, MessageID: "msg-" + chatID, UserID: "user-1"}
-		if err := newBindingService(a).commandWorkspace(msg, []string{"new", "worktree"}); err != nil {
+		if err := a.bindings.BindingCommands.commandWorkspace(msg, []string{"new", "worktree"}); err != nil {
 			t.Fatalf("/workspace new worktree(%s) error = %v", chatID, err)
 		}
 		pending := worktreePendingForChat(t, a, chatID)
-		resp, err := newBindingService(a).completeBindingWorkspaceWorktreeSubmit(&feishu.CardAction{
+		resp, err := a.bindings.BindingCommands.completeBindingWorkspaceWorktreeSubmit(&feishu.CardAction{
 			ActionValue: map[string]any{"request_id": pending.ID},
 			UserID:      "user-1",
 			ChatID:      chatID,
@@ -677,6 +694,7 @@ func worktreePendingPayloadForChat(t *testing.T, a *App, chatID string) appworks
 func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	a.cfg.Codex.Model = "gpt-5-global"
 	a.cfg.Codex.ReasoningEffort = "medium"
 	a.cfg.Workspaces[0].ApprovalPolicy = "on-request"
@@ -786,6 +804,7 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "default"
+	recomposeTestApp(a)
 	p2pRoot := renderCommandMenuCard(a, "feishu:frontend:default:chat:chat-1")
 	p2pLabels := cardButtonLabelsByAction(p2pRoot)
 	if got := p2pLabels["menu.current_bot"]; got != "" {
@@ -804,7 +823,7 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("default", "group", "chat-1"), FrontendID: "default", ChatType: "group", ChatID: "chat-1", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	workspaceMenu := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
+	workspaceMenu := a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
 	menuLabels := cardButtonLabelsByAction(workspaceMenu)
 	for _, wantAction := range []string{"workspace.new", "workspace.clone", "workspace.worktree", "workspace.sandbox.menu", "workspace.policy.menu", "workspace.multiagent.menu", "workspace.binding.unbind"} {
 		if got := menuLabels[wantAction]; got == "" {
@@ -824,7 +843,7 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 		t.Fatalf("workspace menu should not expose bot selector or old binding terms: %q", body)
 	}
 
-	workspaceCard := newBindingService(a).renderBindingStatusCard(sessionKey, agentBindingForChat(a, "group", "chat-1"))
+	workspaceCard := a.bindings.BindingCommands.renderBindingStatusCard(sessionKey, agentBindingForChat(a, "group", "chat-1"))
 	workspaceLabels := cardButtonLabelsByAction(workspaceCard)
 	for _, oldAction := range []string{"menu.current_bot", "menu.binding", "bind.choose", "bind.use", "current_workspace.choose", "current_workspace.use"} {
 		if got := workspaceLabels[oldAction]; got != "" {
@@ -842,6 +861,7 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 func TestGroupModelMenuActionsRenderModelCardsNotWorkspace(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
@@ -915,6 +935,7 @@ func TestGroupModelMenuActionsRenderModelCardsNotWorkspace(t *testing.T) {
 func TestGroupThreadMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	chatID := "chat-thread-menu"
 	bindingID := "binding-thread-menu"
 	menuKey := "feishu:frontend:bot-a:chat:" + chatID
@@ -990,8 +1011,9 @@ func TestGroupThreadMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *test
 func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	setCodex(a, nil)
 	setClaudeCore(a, &fakeClaudeCore{})
 	configDir := t.TempDir()
@@ -1059,6 +1081,7 @@ func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(
 func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	a.cfg.Codex.Model = "gpt-global"
 	a.cfg.Codex.ReasoningEffort = "medium"
 	a.cfg.Workspaces[0].SandboxMode = "workspace-write"
@@ -1110,7 +1133,8 @@ func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
-	a.backend = ""
+	recomposeTestApp(a)
+	a.SetBackend("")
 	a.cfg.Feishu.Backend = ""
 
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-no-backend", MessageID: "msg-workspace", UserID: "user-1", Text: "/workspace"}
@@ -1149,6 +1173,7 @@ func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.
 func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	groupKey := "feishu:frontend:bot-a:chat:chat-help"
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("bot-a", "group", "chat-help"), FrontendID: "bot-a", ChatType: "group", ChatID: "chat-help", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
@@ -1176,6 +1201,7 @@ func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 func TestGroupBindingScopedCardActionsUpdateBindingNotSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "server", Cwd: t.TempDir()})
 	sessionKey := "feishu:frontend:bot-a:chat:chat-card"
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
@@ -1221,6 +1247,7 @@ func TestGroupBindingScopedCardActionsUpdateBindingNotSession(t *testing.T) {
 func TestWorkspaceDeletionBlockedWhenReferencedByLocalBinding(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "bound", Cwd: t.TempDir()})
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          "binding-bound",
@@ -1232,7 +1259,7 @@ func TestWorkspaceDeletionBlockedWhenReferencedByLocalBinding(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	err := newWorkspaceConfigService(a).ValidateWorkspaceDeletion("sess-1", "bound")
+	err := a.bindings.WorkspaceConfiguration.ValidateWorkspaceDeletion("sess-1", "bound")
 	if err == nil || !strings.Contains(err.Error(), "当前 Bot 工作区配置") {
 		t.Fatalf("ValidateWorkspaceDeletion(bound) error = %v, want group workspace guard", err)
 	}
@@ -1244,8 +1271,9 @@ func findWorkspaceForTest(a *App, id string) *config.Workspace {
 
 func TestGroupModelSetSavesClaudeModelForNextTurn(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.frontendID = "claude-test"
+	recomposeTestApp(a)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	claude := &fakeClaudeCore{setModelApplied: true}
@@ -1275,7 +1303,7 @@ func TestGroupModelSetSavesClaudeModelForNextTurn(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := newBindingService(a).completeBindingModelSet(&feishu.CardAction{
+	resp, err := a.bindings.BindingCommands.completeBindingModelSet(&feishu.CardAction{
 		ActionValue: map[string]any{"session_key": sessionKey},
 	}, sessionKey, "claude-fable-5")
 	if err != nil {
@@ -1302,7 +1330,7 @@ func TestGroupModelSetSavesClaudeModelForNextTurn(t *testing.T) {
 		UserID:        "user-1",
 		Text:          "/model set default",
 	}
-	if err := newBindingService(a).commandCurrentBotGroupConfig(msg, []string{"model", "default"}); err != nil {
+	if err := a.bindings.BindingCommands.commandCurrentBotGroupConfig(msg, []string{"model", "default"}); err != nil {
 		t.Fatalf("commandCurrentBotGroupConfig() error = %v", err)
 	}
 	if binding := agentBindingForChat(a, "group", chatID); binding == nil || binding.ModelOverride != "" {

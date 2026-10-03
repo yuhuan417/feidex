@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	domainbackend "feidex/internal/domain/backend"
+	appclauderuntime "feidex/internal/runtime/claude"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 	setCodex(a, nil)
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
-	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
 	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
@@ -36,7 +37,7 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 		t.Fatalf("EnsureSession() took %v, want warm initialize to return quickly", elapsed)
 	}
 
-	state, err := runtime.sessionState("sess-warm")
+	state, err := runtime.SessionState("sess-warm")
 	if err != nil {
 		t.Fatalf("sessionState() error = %v", err)
 	}
@@ -76,7 +77,7 @@ func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing
 	setCodex(a, nil)
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
-	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
+	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
 	setClaudeCore(a, runtime)
 	defer runtime.Close()
 
@@ -96,7 +97,7 @@ func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing
 		t.Fatalf("ForkSession() took %v, want warm initialize to return quickly", elapsed)
 	}
 
-	state, err := runtime.sessionState("sess-fork")
+	state, err := runtime.SessionState("sess-fork")
 	if err != nil {
 		t.Fatalf("sessionState() error = %v", err)
 	}

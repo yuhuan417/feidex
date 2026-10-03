@@ -1,6 +1,9 @@
 package feishuapp
 
 import (
+	"feidex/internal/adapter/feishu/planmode"
+	conversationapp "feidex/internal/application/conversation"
+	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
@@ -81,35 +84,23 @@ func (a sqAttachmentResolverFullAdapter) ResolveInboundAttachments(msg *feishu.I
 	return resolveInboundAttachments(a.app, msg, workspaceID, sessionKey)
 }
 
-type sqPendingQueueFullAdapter struct{ app *App }
-
-func (a sqPendingQueueFullAdapter) PendingInputSessionKey(msg *feishu.InboundMessage) string {
-	return newReplyContinuationService(a.app).PendingInputSessionKey(msg)
-}
-func (a sqPendingQueueFullAdapter) CollectPendingStagedImages(sessionKey, bucketSessionKey string) []conversation.SessionStagedImage {
-	return newReplyContinuationService(a.app).CollectPendingStagedImages(sessionKey, bucketSessionKey)
-}
-func (a sqPendingQueueFullAdapter) ClearPendingStagedImages(sessionKey, bucketSessionKey string) error {
-	return newReplyContinuationService(a.app).ClearPendingStagedImages(sessionKey, bucketSessionKey)
-}
-
 type sqBackendRuntimeFullAdapter struct{ app *App }
 
 func (a sqBackendRuntimeFullAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.reconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app), sessionKey, sess)
+		return runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app), sessionKey, sess)
 	}
 	return sess
 }
 func (a sqBackendRuntimeFullAdapter) DropThreadLineageAfterStartFailure(err error) bool {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.dropThreadLineageAfterStartFailure(backendRuntimeContextForApp(a.app), err)
+		return runtime.DropThreadLineageAfterStartFailure(backendRuntimeContextForApp(a.app), err)
 	}
 	return false
 }
 func (a sqBackendRuntimeFullAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.deferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a.app))
+		return runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a.app))
 	}
 	return false
 }
@@ -122,11 +113,11 @@ func (a sqBackendRuntimeFullAdapter) DeferQueuedSubmissionsDuringRecovery() bool
 // Convenience constructors
 // ---------------------------------------------------------------------------
 
-func newPendingQueueServiceFromApp(a *App) appsubmission.PendingQueueService {
-	return appsubmission.NewPendingQueueService(appsubmission.PendingDependencies{
+func PendingQueuePorts(a *App) appsubmission.PendingDependencies {
+	return appsubmission.PendingDependencies{
 		Context:            a.Context,
 		State:              a.State(),
-		Maintenance:        newSubmissionCleanup(a),
+		Maintenance:        a.bindings.SubmissionCleanup,
 		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
 		AddReaction: func(ctx context.Context, messageID, emoji string) error {
 			if a.feishu == nil {
@@ -141,7 +132,7 @@ func newPendingQueueServiceFromApp(a *App) appsubmission.PendingQueueService {
 			return a.feishu.RemoveReaction(ctx, messageID, emoji)
 		},
 		LogSessionState: logSessionState,
-	})
+	}
 }
 
 func (a claudeClientAdapter) CanRetryFreshSession(sessionKey string) bool {
@@ -151,19 +142,26 @@ func (a claudeClientAdapter) CanRetryFreshSession(sessionKey string) bool {
 	return true
 }
 
-func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueService {
-	return appsubmission.NewSubmissionQueueService(appsubmission.Dependencies{
+func SubmissionPorts(a *App) appsubmission.Dependencies {
+	return appsubmission.Dependencies{
+		PlanConfirmation: a.bindings.Plan,
+		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
+			if pending.FeishuMsgID != "" {
+				_ = patchCardEffect(ctx, a, pending.FeishuMsgID, planmode.ExitExpiredCard(newPlanModeAppAdapter(a), pending.SessionKey, "", "当前已有新的提交，旧的计划确认已失效。"))
+			}
+		},
 		Context:            a.Context,
 		AppState:           a.State(),
-		SkillResolver:      newSkillUseCase(a),
+		SkillResolver:      a.bindings.Skills,
 		AttachmentResolver: sqAttachmentResolverFullAdapter{app: a},
 		LiveThread:         sqLiveThreadAdapter{app: a},
-		PendingQueue:       sqPendingQueueFullAdapter{app: a},
-		RuntimeState:       newRuntimeStateService(a),
-		RuntimeMaintenance: newSubmissionCleanup(a),
-		ReplyContinuation:  newReplyContinuationService(a),
-		TurnStream:         newTurnStreamService(a),
-		AutoRetry:          newAutoRetryService(a),
+		PendingQueue:       a.bindings.Continuation,
+		RuntimeState:       a.runtimeOwner.TurnBindings,
+		Items:              a.bindings.TurnItems,
+		RuntimeMaintenance: a.bindings.SubmissionCleanup,
+		ReplyContinuation:  a.bindings.Continuation,
+		TurnStream:         a.bindings.TurnPresentation,
+		AutoRetry:          a.bindings.AutoRetry,
 
 		BackendRuntime: sqBackendRuntimeFullAdapter{app: a},
 		DefaultWorkspaceID: func() string {
@@ -193,9 +191,6 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 		SendQueuedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
 			sendSubmissionQueuedNotice(a, ctx, sub)
 		},
-		RunAsync: func(fn func()) {
-			runAsync(a, fn)
-		},
 		RunSessionAsync: func(sessionKey string, fn func()) {
 			if fn == nil {
 				return
@@ -212,40 +207,33 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 			logSessionState(event, sessionKey, sess)
 		},
 		MarkSubmissionQueuedReactions: func(sub *domainsubmission.Submission) {
-			newPendingQueueService(a).markSubmissionQueuedReactions(sub)
+			a.bindings.PendingQueue.MarkSubmissionQueuedReactions(sub)
 		},
 		MarkSubmissionRunningReactions: func(sub *domainsubmission.Submission) {
-			newPendingQueueService(a).markSubmissionRunningReactions(sub)
+			a.bindings.PendingQueue.MarkSubmissionRunningReactions(sub)
 		},
 		ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
-			newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
+			a.bindings.PendingQueue.ClearSubmissionProcessingReactions(sub)
 		},
 		IsReviewSubmission: func(sub *domainsubmission.Submission) bool {
 			return appreviewcmd.IsReviewSubmission(sub)
 		},
 		StartSubmissionTurn: func(ctx context.Context, sessionKey, threadID string, sub *domainsubmission.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
-			return startSubmissionTurn(a, ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode)
+			return a.bindings.TurnStarter.Start(ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode)
 		},
 		StartSubmissionReview: func(ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error) {
-			return appreviewcmd.StartSubmissionReview(newReviewAppAdapter(a), ctx, threadID, sub)
+			return a.bindings.Review.StartSubmission(ctx, threadID, sub)
 		},
 		StartConversation: func(ctx context.Context, ws *config.Workspace, sess *conversation.Session, sub *domainsubmission.Submission, model string) (appsubmission.ConversationStarted, error) {
 			client, err := requireCodexClient(a)
 			if err != nil {
 				return appsubmission.ConversationStarted{}, err
 			}
-			return codexadapter.StartConversation(ctx, client, buildThreadStartParams(a, ws, sess, model), sub.ModelConfig)
+			return codexadapter.StartConversation(ctx, client, a.bindings.ConversationConfiguration.ThreadStart(conversationapp.Request{Workspace: ws, Session: sess, Model: model}), sub.ModelConfig)
 		},
-		DeleteTurnArtifacts: func(turnID string) {
-			a.State().DeletePendingRequests(func(req *state.PendingRequest) bool {
-				return req != nil && strings.TrimSpace(req.TurnID) == strings.TrimSpace(turnID)
-			})
-			a.State().DeleteMessageLinks(func(link *state.MessageLink) bool {
-				return link != nil && strings.TrimSpace(link.TurnID) == strings.TrimSpace(turnID)
-			})
-		},
-		ClaudePrompt: claudeadapter.BuildPrompt,
-		Backend:      func() string { return configuredBackend(a) },
+		DeleteTurnArtifacts: a.State().DeleteTurnArtifacts,
+		ClaudePrompt:        claudeadapter.BuildPrompt,
+		Backend:             func() string { return configuredBackend(a) },
 		ClaudeClient: func() appsubmission.QueueClaudeClient {
 			if currentClaudeCore(a) == nil {
 				return nil
@@ -261,13 +249,13 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 		BotProfile: func() *state.BotProfile {
 			return a.State().BotProfile()
 		},
-		ModelSettings: newModelSnapshotService(a),
-	})
+		ModelSettings: a.bindings.ModelSnapshots,
+	}
 }
 
 func findSubmissionByTurn(a *App, threadID, turnID string) (string, *domainsubmission.Submission) {
 	if a == nil {
 		return "", nil
 	}
-	return (appsubmission.SubmissionLookupService{State: a.State(), Runtime: newRuntimeStateService(a)}).FindSubmissionByTurn(threadID, turnID)
+	return a.bindings.SubmissionLookup.FindSubmissionByTurn(threadID, turnID)
 }

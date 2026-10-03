@@ -73,12 +73,7 @@ func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID
 	if a.feishu == nil {
 		return nil, fmt.Errorf("feishu client not initialized")
 	}
-	initializer := approuting.InitializationService{
-		Repository:    statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID()),
-		BotCount:      a.feishu.GetGroupBotCount,
-		LiveBotOpenID: func() string { return currentLiveBotOpenID(a) },
-	}
-	result, err := initializer.Ensure(ctx, a.FrontendID(), chatType, chatID)
+	result, err := a.bindings.PrimaryInitialization.Ensure(ctx, a.FrontendID(), chatType, chatID)
 	if err != nil || result == nil {
 		return nil, err
 	}
@@ -89,7 +84,7 @@ func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
 	if a == nil || a.Store() == nil {
 		return nil
 	}
-	primary, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).Lookup(a.FrontendID(), chatType, chatID)
+	primary, err := a.bindings.Primary.Lookup(a.FrontendID(), chatType, chatID)
 	if err != nil || primary == nil {
 		return nil
 	}
@@ -108,7 +103,7 @@ func hasGroupPrimaryState(a *App, chatType, chatID string) bool {
 	if a == nil || a.Store() == nil {
 		return false
 	}
-	hasState, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).HasState(a.FrontendID(), chatType, chatID)
+	hasState, err := a.bindings.Primary.HasState(a.FrontendID(), chatType, chatID)
 	return err == nil && hasState
 }
 
@@ -116,7 +111,7 @@ func isGroupPrimary(a *App, chatType, chatID string) bool {
 	if a == nil || a.Store() == nil {
 		return false
 	}
-	enabled, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).IsPrimary(a.FrontendID(), chatType, chatID)
+	enabled, err := a.bindings.Primary.IsPrimary(a.FrontendID(), chatType, chatID)
 	return err == nil && enabled
 }
 
@@ -141,6 +136,10 @@ func currentLiveBotOpenID(a *App) string {
 		}
 	}
 	return currentBotOpenID(a)
+}
+
+func LiveBotOpenID(a *App) func() string {
+	return func() string { return currentLiveBotOpenID(a) }
 }
 
 func currentBotName(a *App) string {
@@ -178,7 +177,7 @@ func setGroupPrimaryState(a *App, chatType, chatID string, enabled bool, assignm
 	if assignment != nil {
 		input.Assignment = &domainrouting.AssignmentStamp{MessageID: assignment.MessageID, CreatedAt: assignment.CreatedAt}
 	}
-	if _, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).SetPrimary(input); err != nil {
+	if _, err := a.bindings.Primary.SetPrimary(input); err != nil {
 		return nil, err
 	}
 	updated := groupPrimaryForChat(a, chatType, chatID)
@@ -212,7 +211,7 @@ func syncGroupPrimaryAssignment(a *App, msg *feishu.InboundMessage) (bool, error
 		)
 		return true, nil
 	}
-	stale, err := (approuting.Service{Repository: statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())}).IsStaleAssignment(
+	stale, err := a.bindings.Primary.IsStaleAssignment(
 		a.FrontendID(), msg.ChatType, msg.ChatID, domainrouting.AssignmentStamp{MessageID: msg.MessageID, CreatedAt: msg.CreatedAt},
 	)
 	if err != nil {

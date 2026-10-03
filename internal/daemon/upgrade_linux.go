@@ -19,6 +19,7 @@ import (
 var upgradeHTTPClient = &http.Client{Timeout: 2 * time.Minute}
 
 type UpgradeSpec struct {
+	UnitName       string
 	ServiceName    string
 	Version        string
 	BinaryPath     string
@@ -34,7 +35,10 @@ func StartBackgroundUpgrade(spec UpgradeSpec) (string, error) {
 	if _, err := exec.LookPath("systemd-run"); err != nil {
 		return "", fmt.Errorf("systemd-run not found: %w", err)
 	}
-	unitName := fmt.Sprintf("feidex-upgrade-%d", time.Now().UnixNano())
+	unitName := strings.TrimSpace(spec.UnitName)
+	if unitName == "" {
+		unitName = fmt.Sprintf("feidex-upgrade-%d", time.Now().UnixNano())
+	}
 	args := []string{
 		"--user",
 		"--unit", unitName,

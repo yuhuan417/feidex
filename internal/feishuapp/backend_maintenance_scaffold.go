@@ -76,25 +76,3 @@ func startMaintenanceRestartFromMessage[S any](
 			return replyCardWithIDEffect(ctx, a, parent, card, inThread)
 		}, replyInThreadEnabled(a, msg.ChatType), begin, run, renderOperationCard, finishFailed)
 }
-
-func maintenanceSnapshotLifecycle[S any](
-	a *App,
-	messageID string,
-	sessionKey string,
-	warnMsg string,
-	renderCard func(sessionKey string, snapshot S) map[string]any,
-	updateState func(func(*S)) S,
-	finishState func(result, message string) S,
-	setProgress func(snapshot *S, phase, message string),
-) (func(S), func(string, string) S, func(string, string)) {
-	return appmaintenance.SnapshotLifecycle(
-		func(card map[string]any) {
-			patchMaintenanceCard(a, messageID, card, warnMsg, "message_id", messageID)
-		},
-		sessionKey,
-		renderCard,
-		updateState,
-		finishState,
-		setProgress,
-	)
-}

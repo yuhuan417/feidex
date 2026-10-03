@@ -18,6 +18,7 @@ import (
 func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.frontendID = "bot-menu-parity"
+	recomposeTestApp(a)
 	p2pMsg := &feishu.InboundMessage{ChatID: "p2p-menu-parity", ChatType: "p2p", UserID: "user-1"}
 	groupMsg := &feishu.InboundMessage{ChatID: "group-menu-parity", ChatType: "group", UserID: "user-1", RootMessageID: "root-1"}
 	p2pKey := makeSessionKey(a, p2pMsg)
@@ -49,8 +50,8 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		return fmt.Errorf("unexpected method %q", method)
 	}
 
-	p2pWorkspace := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(p2pKey)
-	groupWorkspace := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(groupKey)
+	p2pWorkspace := a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(p2pKey)
+	groupWorkspace := a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(groupKey)
 	p2pThread, err := renderThreadsCard(a, p2pKey, false)
 	if err != nil {
 		t.Fatalf("render p2p thread menu: %v", err)
@@ -59,8 +60,8 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render group thread menu: %v", err)
 	}
-	p2pModelConfig := newModelConfigService(a).renderModelConfigCard(catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}}, nil, p2pKey, "menu.model")
-	groupModelConfig := newBindingService(a).renderBindingCodexModelConfigCard(groupKey, binding, catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}})
+	p2pModelConfig := a.bindings.ModelCommands.RenderModelConfigCard(catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}}, nil, p2pKey, "menu.model")
+	groupModelConfig := a.bindings.BindingCommands.renderBindingCodexModelConfigCard(groupKey, binding, catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}})
 
 	families := []struct {
 		name  string
@@ -72,8 +73,8 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		{name: "system", p2p: renderSystemMenuCard(a, p2pKey), group: renderSystemMenuCard(a, groupKey)},
 		{name: "backend", p2p: renderBackendMenuCard(a, p2pKey), group: renderBackendMenuCard(a, groupKey)},
 		{name: "workspace", p2p: p2pWorkspace, group: groupWorkspace},
-		{name: "model overview", p2p: newBackendConfigurationService(a).renderModelMenuCard(p2pKey), group: newBindingService(a).renderBindingModelMenuCard(groupKey, binding)},
-		{name: "service tier", p2p: renderServiceTierMenuCard(a, p2pKey), group: newBindingService(a).renderBindingFastCard(groupKey, binding)},
+		{name: "model overview", p2p: a.bindings.BackendConfiguration.RenderModelMenuCard(p2pKey), group: a.bindings.BindingCommands.renderBindingModelMenuCard(groupKey, binding)},
+		{name: "service tier", p2p: renderServiceTierMenuCard(a, p2pKey), group: a.bindings.BindingCommands.renderBindingFastCard(groupKey, binding)},
 		{name: "thread/session", p2p: p2pThread, group: groupThread},
 		{name: "model config", p2p: p2pModelConfig, group: groupModelConfig},
 	}
@@ -100,10 +101,10 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		})
 	}
 
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	p2pClaudeModelConfig := newModelConfigService(a).renderClaudeModelConfigCard(p2pKey, "menu.model")
-	groupClaudeModelConfig := newBindingService(a).renderBindingClaudeModelConfigCard(groupKey, binding)
+	p2pClaudeModelConfig := a.bindings.ModelCommands.RenderClaudeModelConfigCard(p2pKey, "menu.model")
+	groupClaudeModelConfig := a.bindings.BindingCommands.renderBindingClaudeModelConfigCard(groupKey, binding)
 	if p2p := menuCardSignature(t, p2pClaudeModelConfig); !reflect.DeepEqual(p2p, menuCardSignature(t, groupClaudeModelConfig)) {
 		t.Fatalf("p2p/group Claude model configuration differs:\np2p:   %#v\ngroup: %#v", p2p, menuCardSignature(t, groupClaudeModelConfig))
 	}

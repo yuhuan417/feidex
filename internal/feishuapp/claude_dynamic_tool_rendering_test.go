@@ -170,15 +170,15 @@ func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t 
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-read", turnitem.NewProtocolItemWithID("item-read", map[string]any{
 		"id":   "item-read",
 		"type": "dynamic_tool_call",
 		"tool": "Read",
 		"input": map[string]any{
 			"file_path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
 		},
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after dynamic read = %d, want 1", len(ff.replyCards))
 	}
@@ -186,7 +186,7 @@ func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t 
 		t.Fatalf("working card body after dynamic read = %q", body)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-task", turnitem.NewProtocolItemWithID("item-task", map[string]any{
 		"id":   "item-task",
 		"type": "dynamic_tool_call",
 		"tool": "TaskUpdate",
@@ -194,7 +194,7 @@ func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t 
 			"taskId": "7",
 			"status": "in_progress",
 		},
-	})
+	}))
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patched card count after task update = %d, want 1", len(ff.patchedCards))
 	}
@@ -204,14 +204,14 @@ func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t 
 
 	replyCount := len(ff.replyCards)
 	patchCount := len(ff.patchedCards)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-unknown", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-unknown", turnitem.NewProtocolItemWithID("item-unknown", map[string]any{
 		"id":   "item-unknown",
 		"type": "dynamic_tool_call",
 		"tool": "StrangeTool",
 		"input": map[string]any{
 			"foo": "bar",
 		},
-	})
+	}))
 	if len(ff.replyCards) != replyCount || len(ff.patchedCards) != patchCount {
 		t.Fatalf("unknown dynamic tool should not change progress cards, reply=%d patch=%d", len(ff.replyCards), len(ff.patchedCards))
 	}
@@ -223,15 +223,15 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 	workspace := a.cfg.Workspaces[0].Cwd
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-read", turnitem.NewProtocolItemWithID("item-read", map[string]any{
 		"id":   "item-read",
 		"type": "dynamic_tool_call",
 		"tool": "Read",
 		"input": map[string]any{
 			"file_path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
 		},
-	})
+	}))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after initial read = %d, want 1", len(ff.replyCards))
 	}
@@ -239,7 +239,7 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 		t.Fatalf("initial card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-todo", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-todo", turnitem.NewProtocolItemWithID("item-todo", map[string]any{
 		"id":   "item-todo",
 		"type": "dynamic_tool_call",
 		"tool": "TodoWrite",
@@ -249,7 +249,7 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 				map[string]any{"content": "补消息卡片", "status": "pending"},
 			},
 		},
-	})
+	}))
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after TodoWrite = %d, want 2", len(ff.replyCards))
 	}
@@ -260,7 +260,7 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 		t.Fatalf("TodoWrite card body = %q", body)
 	}
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-task", turnitem.NewProtocolItemWithID("item-task", map[string]any{
 		"id":   "item-task",
 		"type": "dynamic_tool_call",
 		"tool": "TaskUpdate",
@@ -268,7 +268,7 @@ func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *test
 			"taskId": "7",
 			"status": "in_progress",
 		},
-	})
+	}))
 	if len(ff.replyCards) != 3 {
 		t.Fatalf("reply card count after TodoWrite-following task update = %d, want 3", len(ff.replyCards))
 	}

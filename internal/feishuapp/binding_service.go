@@ -1,19 +1,15 @@
 package feishuapp
 
 import (
-	configadapter "feidex/internal/adapter/config"
 	applicationrouting "feidex/internal/application/routing"
-	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
 
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
-	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -33,7 +29,7 @@ type bindingCardRenderer interface {
 	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
 }
 
-func newBindingService(a *App) bindingService {
+func BuildBindingCommands(a *App) bindingService {
 	var renderer bindingCardRenderer
 	if a != nil {
 		renderer = a.feishu
@@ -48,7 +44,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 	if strings.TrimSpace(msg.ChatType) != "group" {
 		return fmt.Errorf("该工作区配置只能在群聊中使用；私聊仍用于配置当前 Bot 的默认能力")
 	}
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return err
 	}
@@ -71,40 +67,35 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		if err := s.replyBindingUpdated(msg, "已设置当前工作区 `"+updated.WorkspaceID+"`。"); err != nil {
 			return err
 		}
-		return s.replayPendingBindingMessage(updated)
+		return nil
 	case "new":
 		if len(args) < 3 {
 			return fmt.Errorf("usage: /workspace new WORKSPACE_ID CWD")
 		}
 		workspaceID := strings.TrimSpace(args[1])
 		cwd := strings.TrimSpace(strings.Join(args[2:], " "))
-		if _, err := s.createLocalWorkspace(workspaceID, workspaceID, cwd); err != nil {
-			return err
-		}
-		updated, err := s.activateBindingWorkspace(binding, workspaceID)
+		result, err := s.app.bindings.GroupWorkspaces.New(binding, workspaceID, workspaceID, cwd)
 		if err != nil {
 			return err
 		}
+		updated := result.Effects.Binding
 		if err := s.replyBindingUpdated(msg, "已创建并设置当前工作区 `"+updated.WorkspaceID+"`。"); err != nil {
 			return err
 		}
-		return s.replayPendingBindingMessage(updated)
+		return nil
 	case "clone":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]")
 		}
-		workspaceID, targetDir, err := s.cloneLocalWorkspace(msg, args[1:])
+		result, err := s.app.bindings.GroupWorkspaces.Clone(s.app.Context(), binding, args[1:])
 		if err != nil {
 			return err
 		}
-		updated, err := s.activateBindingWorkspace(binding, workspaceID)
-		if err != nil {
-			return err
-		}
+		updated, targetDir := result.Effects.Binding, result.TargetDir
 		if err := s.replyBindingUpdated(msg, "已 clone 并设置当前工作区 `"+updated.WorkspaceID+"`。\n\ncwd: `"+targetDir+"`"); err != nil {
 			return err
 		}
-		return s.replayPendingBindingMessage(updated)
+		return nil
 	case "primary":
 		return s.commandPrimary(msg, args[1:])
 	case "model":
@@ -112,7 +103,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model set MODEL_ID|default")
 		}
 		value := clearableArg(args[1])
-		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, value)
+		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -123,7 +114,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, value)
+		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -135,7 +126,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		}
 		value := clearableArg(args[1])
 		role := strings.ToLower(strings.TrimSpace(args[0]))
-		_, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
+		_, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
 		if err != nil {
 			return err
 		}
@@ -145,7 +136,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model subagent effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.SubagentEffort, value)
+		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.SubagentEffort, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -156,7 +147,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model plan effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.PlanEffort, value)
+		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.PlanEffort, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -176,7 +167,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 				return fmt.Errorf("unsupported service tier %q", args[1])
 			}
 		}
-		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, value)
+		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -250,7 +241,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 		return nil, nil
 	}
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace use")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -258,32 +249,17 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	s.replayPendingBindingMessageAsync(updated)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已设置当前工作区 " + updated.WorkspaceID},
-		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
 func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
-	if s.app == nil || !groupBindingSessionScopeActive(s.app, sessionKey) {
+	if !groupBindingSessionScopeActive(s.app, sessionKey) {
 		return fmt.Errorf("解除 workspace 绑定只能在群聊中使用")
 	}
-	binding := bindingForSessionKey(s.app, sessionKey)
-	if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
-		return fmt.Errorf("当前群没有已绑定的 workspace")
-	}
-	effects, err := workspaceCommandApp(s.app).Lifecycle.Switch(appworkspace.SwitchRequest{
-		Session: s.app.State().Session(sessionKey), Binding: binding, Unbind: true,
-	})
-	if err != nil {
-		return err
-	}
-	for _, key := range effects.ClearLiveThreads {
-		clearSessionLiveThread(s.app, key)
-	}
-
-	return nil
+	return s.app.bindings.GroupWorkspaces.Unbind(sessionKey, bindingForSessionKey(s.app, sessionKey))
 }
 
 func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -292,7 +268,7 @@ func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已解除本群绑定，请重新选择工作区"},
-		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -301,7 +277,7 @@ func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding
 		return fmt.Errorf("usage: /workspace %s VALUE|default", setting)
 	}
 	value := clearableArg(args[1])
-	_, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, setting, value)
+	_, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, setting, value)
 	if err != nil {
 		return err
 	}
@@ -309,78 +285,7 @@ func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding
 }
 
 func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, workspaceID string) (*state.AgentBinding, error) {
-	if binding == nil {
-		return nil, fmt.Errorf("binding is required")
-	}
-	key := makeSessionKey(s.app, &feishu.InboundMessage{ChatType: binding.ChatType, ChatID: binding.ChatID})
-	effects, err := workspaceCommandApp(s.app).Lifecycle.Switch(appworkspace.SwitchRequest{
-		Session: s.app.State().Session(key), Binding: binding, WorkspaceID: workspaceID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	for _, sessionKey := range effects.ClearLiveThreads {
-		clearSessionLiveThread(s.app, sessionKey)
-	}
-	return effects.Binding, nil
-}
-
-func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Workspace, error) {
-	id = strings.TrimSpace(id)
-	cwd = strings.TrimSpace(cwd)
-	if id == "" {
-		return nil, fmt.Errorf("workspace_id is required")
-	}
-	if cwd == "" {
-		return nil, fmt.Errorf("cwd is required")
-	}
-	absCWD := resolveConfigRelativePath(s.app, cwd)
-	if err := os.MkdirAll(absCWD, 0o755); err != nil {
-		return nil, err
-	}
-	return (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.app)}).Create(config.Workspace{
-		ID:             id,
-		Name:           textutil.FirstNonEmpty(strings.TrimSpace(name), id),
-		Cwd:            absCWD,
-		ApprovalPolicy: "never",
-		SandboxMode:    "danger-full-access",
-		MultiAgentMode: "explicitRequestOnly",
-	})
-}
-
-func (s bindingService) cloneLocalWorkspace(msg *feishu.InboundMessage, args []string) (string, string, error) {
-	cloneArgs := append([]string{"clone"}, args...)
-	repoURL, workspaceID, parentDir, err := appworkspacecmd.ParseCloneArgs(cloneArgs)
-	if err != nil {
-		return "", "", err
-	}
-	mgmt := newWorkspaceManagementService(s.app)
-	if strings.TrimSpace(parentDir) == "" {
-		parentDir = mgmt.DefaultWorkspaceCloneParent(bindingWorkspaceForMessage(s.app, msg))
-	}
-	parentDir = resolveConfigRelativePath(s.app, parentDir)
-	plan, err := mgmt.PrepareWorkspaceClone(repoURL, workspaceID, parentDir)
-	if err != nil {
-		return "", "", err
-	}
-	if err := os.MkdirAll(filepath.Dir(plan.TargetDir), 0o755); err != nil {
-		return "", "", err
-	}
-	if err := mgmt.GitClone(context.Background(), strings.TrimSpace(repoURL), plan.TargetDir, nil); err != nil {
-		return "", "", err
-	}
-	if _, err := s.createLocalWorkspace(plan.WorkspaceID, plan.WorkspaceID, plan.TargetDir); err != nil {
-		return "", "", err
-	}
-	_ = msg
-	return plan.WorkspaceID, plan.TargetDir, nil
-}
-
-func bindingWorkspaceForMessage(a *App, msg *feishu.InboundMessage) *config.Workspace {
-	if a == nil || msg == nil {
-		return nil
-	}
-	return bindingWorkspaceForSessionKey(a, makeSessionKey(a, msg))
+	return s.app.bindings.GroupWorkspaces.Select(binding, workspaceID)
 }
 
 func bindingWorkspaceForSessionKey(a *App, sessionKey string) *config.Workspace {

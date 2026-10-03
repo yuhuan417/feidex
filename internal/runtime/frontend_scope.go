@@ -16,7 +16,5 @@ type FrontendScope struct {
 	ConfigMutex     *sync.RWMutex
 	Frontend        config.ResolvedFrontend
 	FeishuTransport any
-	Registry        *Registry
 	RuntimeOwner    *FrontendOwner
-	InboundDeduper  *InboundDeduper
 }

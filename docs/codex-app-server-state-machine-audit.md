@@ -27,11 +27,23 @@
 - `internal/feishuapp/plan_mode_bindings.go`
 - `internal/adapter/feishu/planmode/service.go`
 - `internal/adapter/feishu/planmode/exit.go`
+- `internal/application/plan/confirmation.go`
+- `internal/application/review/forms.go`
+- `internal/application/interaction/delivery.go`
+- `internal/application/interaction/service.go`
 - `internal/adapter/feishu/skills/service.go`
 - `internal/application/skill/service.go`
 - `internal/codexrpc/goal.go`
 - `internal/codexrpc/skills.go`
 - `tmp/appserver-schema/`
+
+## 本地状态与外部 Effect 边界
+
+- interaction owner 先保存请求及 submission waiting 状态，再由适配层发送卡片。重复请求沿用稳定身份和原始有效期；已 replied、resolved 或 expired 的请求不得重新打开。发送失败保留待发送请求，重试不得重置状态或有效期。
+- Codex reply 成功只推进到 replied；只有 `serverRequest/resolved` 推进 resolved 并恢复 submission。Claude 的本地终态和重复 resolve 也不得重复恢复。
+- Plan 确认是 completed turn 之后的本地表单，TurnID 留空以便保留卡片；其创建、准入、失效与实现指令由 application Plan owner 处理。当前仍有工作或其他待处理交互时不创建确认，也不延后再弹出。
+- Review 表单状态由 application Review owner 处理，处理中的重复提交不得再次创建 submission。Git 查询和 backend 启动继续遵守快速 callback ack 与异步执行契约。
+- transport failure 是失去后端权威终态后的异常收口路径：session、submission、interaction 先原子提交，再刷新卡片与清理 runtime。普通 Codex `error` 通知仍只记录错误上下文，不能提前结束 turn。
 
 ## 审计口径
 
@@ -179,11 +191,11 @@
   - 协议节点: `turn/start -> turn/started -> item/started -> item/.../delta* -> item/completed -> turn/completed`
   - 来源: OpenAI 官方页面 `Lifecycle overview`, `Turn methods`, `Notifications`
 - 我们当前实现:
-  - `internal/feishuapp/app.go` 发送 `turn/start`。
+  - `internal/application/submission/queue.go` 捕获 turn 配置并请求启动；runtime effect runner 通过 Codex adapter 发送 `turn/start`。
   - `internal/application/submission/queue.go` 和 `internal/application/turn/service.go` 会处理返回的 `turn.id` 以及 `turn/started`。
   - `internal/adapter/backend/codex/events.go` 现在同时消费 `item/started` 与 `item/completed`。
   - `internal/application/backendevents/service.go` 额外消费 `item/mcpToolCall/progress`，并把它视为已 started item 的 in-flight 更新，而不是独立终态。
-  - `internal/feishuapp/turn_item_state.go` 为每个 `turnId + itemId` 维护 started/completed 快照，并在 completed 时合并成最终 item 载荷。
+  - `internal/adapter/feishu/turnitem/state.go` 为每个 `turnId + itemId` 维护 started/completed 快照，并在 completed 时合并成最终 item 载荷。
   - `internal/adapter/feishu/turnitem/payload.go` 会把 `item(type=plan)` 当成普通 completed item 渲染成计划文本；这条线属于 plan mode item 生命周期。
   - `internal/adapter/backend/codex/events.go` 消费 `turn/started` 和 `turn/completed`。
   - `internal/adapter/backend/codex/events.go` 单独消费 `turn/plan/updated`，并把 `[{step,status}]` 转成 checklist markdown；这条线只是执行中 checklist 展示，不属于 `item(type=plan)` 生命周期。
@@ -302,7 +314,7 @@
   - 来源: OpenAI 官方页面 `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
   - `internal/adapter/backend/codex/events.go` 会先接 `item/started`，再处理 `item/commandExecution/requestApproval`。
-  - `internal/feishuapp/turn_item_state.go` 会把 started item 和 request payload 合并，审批卡片不再丢失 command item 上的上下文。
+  - `internal/adapter/feishu/approval/context.go` 会把 started item 和 request payload 合并，审批卡片不再丢失 command item 上的上下文。
   - `internal/adapter/feishu/serverrequest/approval.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并且只在 reply 成功后把本地请求推进到 `replied`。
   - `internal/feishuapp/server_request_state.go` 把 `serverRequest/resolved` 作为唯一 `resolved` 边界，并在同 turn 其他 open request 清空后才恢复 submission。
   - `internal/feishuapp/server_request_delivery_scaffold.go` 会优先把审批卡投递到同一 Feishu 回复上下文；如果当前 turn 只有 reasoning-only `工作中` 卡，审批卡可以 patch 复用该占位卡。复用后该消息已经是实质审批内容，后续 final output 不能再 patch 它。
@@ -334,7 +346,7 @@
   - 来源: OpenAI 官方页面 `Tool approvals and requests`，以及 `tmp/appserver-schema/ServerRequest.json`
 - 我们当前实现:
   - `internal/adapter/backend/codex/events.go` 会先接 `item/started(fileChange)`，再处理 `item/fileChange/requestApproval`。
-  - `internal/feishuapp/turn_item_state.go` 会把 started item 上的 `changes` 合并进审批请求，文件审批卡片可从 started item 补齐缺失文件列表。
+  - `internal/adapter/feishu/approval/context.go` 会把 started item 上的 `changes` 合并进审批请求，文件审批卡片可从 started item 补齐缺失文件列表。
   - `internal/adapter/feishu/approval/summary.go` 会显式渲染请求里的 `grantRoot`，避免文件列表存在时该字段被摘要逻辑吞掉。
   - `internal/adapter/feishu/serverrequest/approval.go` 和 `internal/feishuapp/server_request_state.go` 已支持 `accept`、`acceptForSession`、`decline`、`cancel` 四类 decision，并改成 `pending -> replied -> resolved`，等待 `serverRequest/resolved` 再最终收口。
   - `internal/adapter/backend/codex/events.go` 仍会在最终 `item/completed` 时收口 item。

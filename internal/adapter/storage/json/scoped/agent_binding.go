@@ -52,16 +52,7 @@ func (s *Store) AgentBinding(id string) *state.AgentBinding {
 	if id == "" {
 		return nil
 	}
-	if binding := s.stateStore().GetScopedAgentBinding(s.scopeFrontendID(), id); binding != nil {
-		return binding
-	}
-	if s.scopeLegacyFallback() && s.scopeFrontendID() != "" {
-		binding := s.stateStore().GetAgentBinding(id)
-		if binding != nil && strings.TrimSpace(binding.FrontendID) == "" {
-			return binding
-		}
-	}
-	return nil
+	return s.stateStore().GetScopedAgentBinding(s.scopeFrontendID(), id)
 }
 
 // AgentBindings returns all bindings visible to the current frontend.
@@ -115,12 +106,6 @@ func (s *Store) DeleteAgentBinding(id string) error {
 		return nil
 	}
 	id = strings.TrimSpace(id)
-	if s.scopeLegacyFallback() && s.scopeFrontendID() != "" {
-		binding := s.stateStore().GetAgentBinding(id)
-		if binding != nil && strings.TrimSpace(binding.FrontendID) == "" {
-			return s.stateStore().DeleteScopedAgentBinding("", id)
-		}
-	}
 	return s.stateStore().DeleteScopedAgentBinding(s.scopeFrontendID(), id)
 }
 

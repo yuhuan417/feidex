@@ -2,9 +2,9 @@ package feishuapp
 
 import (
 	appbackend "feidex/internal/adapter/feishu/backend"
+	appautoretry "feidex/internal/application/autoretry"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
-	appautoretry "feidex/internal/runtime/autoretry"
 
 	"path/filepath"
 	"testing"
@@ -22,11 +22,11 @@ func TestFrontendIdleState(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Open(store) error = %v", err)
 		}
-		return &App{
+		return prepareTestApp(&App{
 			cfg:        config.Default(),
 			store:      store,
 			frontendID: "frontend-a",
-		}, store
+		}), store
 	}
 
 	currentSessionKey := "feishu:frontend:frontend-a:chat:chat-1"
@@ -70,7 +70,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "backend switching blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
+				a.runtimeOwner.BackendTransition.BeginBackendSwitchState(domainbackend.BackendCodex)
 			},
 			want: "当前正在切换到 Codex backend，请稍后再试",
 		},
@@ -78,7 +78,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "maintenance blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newMaintenanceStateService(a).CodexMaintenanceTracker().Upgrade = appbackend.BackendUpgradeSnapshot{Running: true}
+				a.bindings.Maintenance.BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{Running: true})
 			},
 			want: "当前正在执行 Codex 维护，请稍后再切换 backend",
 		},
@@ -86,8 +86,8 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "in flight message traffic blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newRuntimeStateService(a).beginFrontendMessageTraffic()
-				t.Cleanup(func() { newRuntimeStateService(a).finishFrontendMessageTraffic() })
+				a.runtimeOwner.BeginMessageTraffic()
+				t.Cleanup(func() { a.runtimeOwner.EndMessageTraffic() })
 			},
 			want: "当前仍有消息处理中",
 		},
@@ -95,7 +95,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "claude maintenance blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newMaintenanceStateService(a).ClaudeMaintenanceTracker().Upgrade = appbackend.BackendUpgradeSnapshot{Running: true}
+				a.bindings.Maintenance.BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Running: true})
 			},
 			want: "当前正在执行 Claude 维护，请稍后再切换 backend",
 		},
@@ -219,11 +219,12 @@ func TestFrontendIdleState(t *testing.T) {
 			if tt.seed != nil {
 				tt.seed(t, a, store)
 			}
+			recomposeTestApp(a)
 			got := frontendIdleBlockedReason(a)
 			if got != tt.want {
 				t.Fatalf("frontendIdleBlockedReason() = %q, want %q", got, tt.want)
 			}
-			if got := newBackendSelectionService(a).backendSwitchBlockedReason(); got != tt.want {
+			if got := a.bindings.BackendSelection.BackendSwitchBlockedReason(); got != tt.want {
 				t.Fatalf("backendSwitchBlockedReason() = %q, want %q", got, tt.want)
 			}
 			if got := frontendIsIdle(a); got != tt.wantIdle {
@@ -248,22 +249,21 @@ func TestFrontendIdleIgnoringCurrentMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open(store) error = %v", err)
 	}
-	a := &App{
+	a := prepareTestApp(&App{
 		cfg:        config.Default(),
 		store:      store,
 		frontendID: "frontend-a",
-	}
-	rss := newRuntimeStateService(a)
-
-	rss.beginFrontendMessageTraffic()
+	})
+	a.runtimeOwner.
+		BeginMessageTraffic()
 	if got := frontendIdleBlockedReason(a); got != "当前仍有消息处理中" {
 		t.Fatalf("frontendIdleBlockedReason() = %q, want message traffic block", got)
 	}
 	if got := frontendIdleBlockedReasonIgnoringCurrentMessage(a); got != "" {
 		t.Fatalf("frontendIdleBlockedReasonIgnoringCurrentMessage() = %q, want idle", got)
 	}
-
-	rss.beginFrontendMessageTraffic()
+	a.runtimeOwner.
+		BeginMessageTraffic()
 	if got := frontendIdleBlockedReasonIgnoringCurrentMessage(a); got != "当前仍有消息处理中" {
 		t.Fatalf("frontendIdleBlockedReasonIgnoringCurrentMessage() with concurrent traffic = %q, want message traffic block", got)
 	}

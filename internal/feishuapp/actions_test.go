@@ -4,6 +4,7 @@ import (
 	"context"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
+	"feidex/internal/domain/routing"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +25,7 @@ func TestCompleteMenuInterruptRejectsStaleTurnCard(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := &App{store: store, cfg: testCodexConfig()}
+	a := prepareTestApp(&App{store: store, cfg: testCodexConfig()})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		ActiveThreadID: "thread-new",
@@ -51,7 +52,7 @@ func TestCompleteMenuNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := &App{store: store, cfg: testCodexConfig()}
+	a := prepareTestApp(&App{store: store, cfg: testCodexConfig()})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		ActiveThreadID: "thread-1",
@@ -75,7 +76,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := &App{store: store, cfg: testCodexConfig()}
+	a := prepareTestApp(&App{store: store, cfg: testCodexConfig()})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		WorkspaceID:    "default",
@@ -102,7 +103,7 @@ func TestCompleteWorkspaceUseRejectsRunningTurn(t *testing.T) {
 
 	cfg := testCodexConfig()
 	cfg.Workspaces = append(cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
+	a := prepareTestApp(&App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		OwnerUserID:             "u-1",
@@ -117,7 +118,7 @@ func TestCompleteWorkspaceUseRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -174,7 +175,7 @@ func TestCompleteWorkspaceUseAutoResumesLatestThreadWhenIdle(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -229,7 +230,7 @@ func TestCompleteWorkspaceUseClearsIdleThreadLineageAndPlanMode(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -281,7 +282,7 @@ func TestCompleteWorkspaceUseStartsThreadWhenWorkspaceHasNone(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -328,7 +329,7 @@ func TestCompleteWorkspaceUseFallsBackToStartWhenResumeFails(t *testing.T) {
 		}
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -376,7 +377,7 @@ func TestCompleteWorkspaceUseKeepsNewWorkspaceWhenBindingFails(t *testing.T) {
 		}
 	}
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceUse(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "alt")
 	if err != nil {
 		t.Fatalf("completeWorkspaceUse: %v", err)
 	}
@@ -401,15 +402,19 @@ func TestCompleteWorkspaceUseKeepsNewWorkspaceWhenBindingFails(t *testing.T) {
 }
 
 func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := testCodexConfig()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
+	a := prepareTestApp(&App{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "read-only")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "read-only")
 	if err != nil {
 		t.Fatalf("completeWorkspaceSandboxSet: %v", err)
 	}
@@ -426,7 +431,7 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 	if got := config.FindWorkspace(loaded, "default").SandboxMode; got != "read-only" {
 		t.Fatalf("persisted sandbox mode = %q, want read-only", got)
 	}
-	_, err = newWorkspaceManagementService(a).CompleteWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "")
+	_, err = a.bindings.WorkspaceManagement.CompleteWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "")
 	if err != nil {
 		t.Fatalf("clear workspace sandbox override: %v", err)
 	}
@@ -436,15 +441,19 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 }
 
 func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := testCodexConfig()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
+	a := prepareTestApp(&App{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "never")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "never")
 	if err != nil {
 		t.Fatalf("completeWorkspacePolicySet: %v", err)
 	}
@@ -461,7 +470,7 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 	if got := config.FindWorkspace(loaded, "default").ApprovalPolicy; got != "never" {
 		t.Fatalf("persisted approval policy = %q, want never", got)
 	}
-	_, err = newWorkspaceManagementService(a).CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "")
+	_, err = a.bindings.WorkspaceManagement.CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "")
 	if err != nil {
 		t.Fatalf("clear workspace policy override: %v", err)
 	}
@@ -471,15 +480,19 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 }
 
 func TestCompleteWorkspacePolicySetAcceptsUntrusted(t *testing.T) {
+	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := testCodexConfig()
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := &App{cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)}
+	a := prepareTestApp(&App{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
 
-	resp, err := newWorkspaceManagementService(a).CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "untrusted")
+	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "untrusted")
 	if err != nil {
 		t.Fatalf("completeWorkspacePolicySet: %v", err)
 	}
@@ -497,7 +510,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	cfg := testCodexConfig()
-	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
+	a := prepareTestApp(&App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
@@ -537,7 +550,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	cfg := testCodexConfig()
-	a := &App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)}
+	a := prepareTestApp(&App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
@@ -676,14 +689,14 @@ func TestActionHelperBranches(t *testing.T) {
 	}
 
 	cfgPath := a.cfgPath
-	if _, err := newWorkspaceManagementService(a).UpdateWorkspaceDefaults("default", func(w *config.Workspace) { w.Name = "Renamed" }); err != nil {
-		t.Fatalf("updateWorkspaceDefaults() error = %v", err)
+	if err := a.bindings.WorkspaceSettings.Set("sess-1", "default", routing.Sandbox, "read-only"); err != nil {
+		t.Fatalf("workspace settings error = %v", err)
 	}
 	loaded, err := config.Load(cfgPath)
 	if err != nil {
 		t.Fatalf("Load(config) error = %v", err)
 	}
-	if config.FindWorkspace(loaded, "default").Name != "Renamed" {
-		t.Fatalf("workspace name not persisted: %+v", config.FindWorkspace(loaded, "default"))
+	if config.FindWorkspace(loaded, "default").SandboxMode != "read-only" {
+		t.Fatalf("workspace sandbox not persisted: %+v", config.FindWorkspace(loaded, "default"))
 	}
 }

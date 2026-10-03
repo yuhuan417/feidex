@@ -7,19 +7,20 @@ import (
 
 	"feidex/internal/application/backendops"
 	"feidex/internal/codexrpc"
+	"feidex/internal/domain/modelconfig"
 )
 
 func TestThreadStartParamsEncodeSemanticConfiguration(t *testing.T) {
 	params := ThreadStartParams(backendops.ThreadStartConfig{
 		Cwd: "/repo", ApprovalPolicy: "never", SandboxMode: "workspace-write",
 		ServiceName: "feidex", ExperimentalRawEvents: true, PersistExtendedHistory: true,
-		ServiceTier: "fast", Model: "gpt", AuxiliaryConfig: map[string]any{"x": true},
+		ServiceTier: "fast", Model: "gpt", Initialization: modelconfig.Snapshot{ReviewModel: "review"},
 	})
 	want := map[string]any{
 		"cwd": "/repo", "approvalPolicy": "never", "sandbox": "workspace-write",
 		"serviceName": "feidex", "experimentalRawEvents": true,
 		"persistExtendedHistory": true, "serviceTier": "fast", "model": "gpt",
-		"config": map[string]any{"x": true},
+		"config": map[string]any{"review_model": "review"},
 	}
 	if got := params.Map(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("thread/start params = %#v, want %#v", got, want)

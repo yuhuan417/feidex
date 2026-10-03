@@ -5,6 +5,7 @@ import (
 	"context"
 	domain "feidex/internal/domain/conversation"
 	"feidex/internal/domain/modelconfig"
+	"feidex/internal/domain/submission"
 	"feidex/internal/domain/workspace"
 	"feidex/internal/textutil"
 	"fmt"
@@ -52,27 +53,68 @@ type ModelSettings interface {
 	Desired(string, *domain.Session) modelconfig.Snapshot
 }
 
+type OperationRepository interface {
+	Submission(string) *submission.Submission
+	UpdateSubmission(string, func(*submission.Submission)) error
+	UpdateSession(string, func(*domain.Session)) (*domain.Session, error)
+}
+
 type Dependencies struct {
-	Context       context.Context
-	Backend       string
+	Context       func() context.Context
+	Backend       func() string
 	Gateway       Gateway
 	Repository    Repository
 	Live          LiveThreads
 	ModelSettings ModelSettings
+	Operations    OperationRepository
+	ThreadBinding ThreadBindingDependencies
 }
 
 type Service struct{ Deps Dependencies }
 
+// ClearInterruptedOperations is used by backends whose interrupt response is
+// the local terminal boundary. Codex must continue waiting for turn/completed.
+func (s *Service) ClearInterruptedOperations(key string, sess *domain.Session) *domain.Session {
+	if sess == nil || !domain.HasActiveOperations(sess) || s.Deps.Operations == nil {
+		return sess
+	}
+	for _, op := range sess.ActiveOperations {
+		id := strings.TrimSpace(op.SubmissionID)
+		if id == "" {
+			continue
+		}
+		if sub := s.Deps.Operations.Submission(id); sub != nil && !sub.Finalized {
+			if err := s.Deps.Operations.UpdateSubmission(id, func(value *submission.Submission) {
+				value.Status = submission.SubmissionStatusInterrupted.String()
+				value.Finalized = true
+			}); err != nil {
+				slog.Error("clear active submission after interrupt failed", "submission_id", id, "error", err)
+			}
+		}
+	}
+	// Submission updates precede the atomic session update to avoid nested
+	// repository locks.
+	updated, err := s.Deps.Operations.UpdateSession(key, func(current *domain.Session) {
+		domain.ResetActiveOperations(current)
+		current.Status = domain.SessionStatusIdle.String()
+	})
+	if err != nil {
+		slog.Error("clear active operations after interrupt failed", "session_key", key, "error", err)
+		return sess
+	}
+	return updated
+}
+
 func (s *Service) context() context.Context {
 	if s.Deps.Context != nil {
-		return s.Deps.Context
+		return s.Deps.Context()
 	}
 	return context.Background()
 }
 func (s *Service) request(key string, sess *domain.Session, ws *workspace.Workspace) Request {
 	r := Request{SessionKey: key, Session: sess, Workspace: ws}
 	if s.Deps.ModelSettings != nil {
-		r.Model = strings.TrimSpace(s.Deps.ModelSettings.Desired(s.Deps.Backend, sess).Model)
+		r.Model = strings.TrimSpace(s.Deps.ModelSettings.Desired(s.Deps.Backend(), sess).Model)
 	}
 	return r
 }
@@ -84,7 +126,7 @@ func (s *Service) validate(sess *domain.Session, ws *workspace.Workspace) error 
 		return fmt.Errorf("workspace not found")
 	}
 	if s.Deps.Gateway == nil {
-		return fmt.Errorf("%s backend not initialized", s.Deps.Backend)
+		return fmt.Errorf("%s backend not initialized", s.Deps.Backend())
 	}
 	return nil
 }
@@ -94,7 +136,7 @@ func (s *Service) ListWorkspaceThreads(_ string, ws *workspace.Workspace, all bo
 		return nil, fmt.Errorf("workspace not found")
 	}
 	if s.Deps.Gateway == nil {
-		return nil, fmt.Errorf("%s backend not initialized", s.Deps.Backend)
+		return nil, fmt.Errorf("%s backend not initialized", s.Deps.Backend())
 	}
 	ctx, cancel := context.WithTimeout(s.context(), 20*time.Second)
 	defer cancel()
@@ -163,13 +205,13 @@ func (s *Service) ResumeSelectedThread(key string, sess *domain.Session, ws *wor
 	sess = domain.CloneSession(sess)
 	// Explicit selection clears per-thread permission and collaboration overrides.
 	// Codex's multi-agent and service-tier settings retain their existing scope.
-	if s.Deps.Backend == "codex" {
+	if s.Deps.Backend() == "codex" {
 		sess.ActiveThreadApprovalPolicy = ""
 		sess.ActiveThreadSandboxMode = ""
 		sess.ActiveClaudePermissionMode = ""
 		sess.ActiveThreadCollaborationMode = nil
 	}
-	binding, err := s.bind(key, sess, ws, t, true, s.Deps.Backend == "claude")
+	binding, err := s.bind(key, sess, ws, t, true, s.Deps.Backend() == "claude")
 	if err == nil {
 		*original = *sess
 	}
@@ -180,7 +222,7 @@ func (s *Service) EnsureWorkspaceThreadBinding(key string, sess *domain.Session,
 	if err := s.validate(sess, ws); err != nil {
 		return nil, err
 	}
-	if s.Deps.Backend == "claude" {
+	if s.Deps.Backend() == "claude" {
 		if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(ws.ID) && strings.TrimSpace(sess.ActiveThreadID) != "" {
 			r := s.request(key, sess, ws)
 			r.Selection.ThreadID = sess.ActiveThreadID
@@ -227,10 +269,10 @@ func (s *Service) ForkActiveConversation(key string, sess *domain.Session, ws *w
 		return "", err
 	}
 	// Claude can defer materializing a branch until its next input.
-	if t.ID == "" && s.Deps.Backend != "claude" {
+	if t.ID == "" && s.Deps.Backend() != "claude" {
 		return "", fmt.Errorf("fork thread returned empty thread id")
 	}
-	if s.Deps.Backend == "claude" {
+	if s.Deps.Backend() == "claude" {
 		domain.ClearThreadContext(sess)
 	}
 	domain.SetThreadContext(sess, textutil.FirstNonEmpty(sess.WorkspaceID, ws.ID), t.ID, t.Name, t.Preview)

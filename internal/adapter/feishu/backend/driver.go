@@ -4,6 +4,7 @@ import (
 	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/routing"
 	"strings"
 	"sync"
 
@@ -104,34 +105,39 @@ type ConversationPermissionRenderDeps struct {
 }
 
 type WorkspacePermissionUpdateDeps struct {
-	UpdateWorkspaceDefaults func(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error)
-	RenderSandboxMenu       func(sessionKey string) (map[string]any, error)
-	RenderPolicyMenu        func(sessionKey string) (map[string]any, error)
-	RenderMultiAgentMenu    func(sessionKey string) (map[string]any, error)
+	Settings interface {
+		Set(string, string, routing.Setting, string) error
+	}
+	RenderSandboxMenu    func(sessionKey string) (map[string]any, error)
+	RenderPolicyMenu     func(sessionKey string) (map[string]any, error)
+	RenderMultiAgentMenu func(sessionKey string) (map[string]any, error)
 }
 
 type WorkspacePermissionModeUpdateDeps struct {
-	Permissions             PermissionDependencies
-	Session                 func(sessionKey string) *conversation.Session
-	UpdateWorkspaceDefaults func(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error)
-	ApplyRuntime            func(sessionKey, mode string) error
-	RenderPermissionMenu    func(sessionKey string) (map[string]any, error)
+	Permissions PermissionDependencies
+	Session     func(sessionKey string) *conversation.Session
+	Settings    interface {
+		Set(string, string, routing.Setting, string) error
+	}
+	RenderPermissionMenu func(sessionKey string) (map[string]any, error)
 }
 
 type ConversationPermissionUpdateDeps struct {
-	Session              func(sessionKey string) *conversation.Session
-	SaveSession          func(sess *conversation.Session) error
+	Session  func(sessionKey string) *conversation.Session
+	Settings interface {
+		Set(string, string, routing.Setting, string) (*conversation.Session, error)
+	}
 	RenderSandboxMenu    func(sessionKey string) (map[string]any, error)
 	RenderPolicyMenu     func(sessionKey string) (map[string]any, error)
 	RenderMultiAgentMenu func(sessionKey string) (map[string]any, error)
 }
 
 type ConversationPermissionModeUpdateDeps struct {
-	Permissions          PermissionDependencies
-	Session              func(sessionKey string) *conversation.Session
-	SaveSession          func(sess *conversation.Session) error
-	NormalizeRequested   func(raw string) (mode string, warning string, err error)
-	ApplyRuntime         func(sessionKey, mode string) error
+	Settings interface {
+		Set(string, string, string, string, bool) (*conversation.Session, error)
+	}
+	MessageID            string
+	Async                bool
 	RenderPermissionMenu func(sessionKey string) (map[string]any, error)
 }
 

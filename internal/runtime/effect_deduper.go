@@ -18,7 +18,8 @@ type effectResult struct {
 }
 
 type effectWaiter struct {
-	done chan effectResult
+	done   chan struct{}
+	result effectResult
 }
 
 // MemoryEffectDeduper is frontend scoped and intentionally process-local. The
@@ -28,11 +29,11 @@ type effectWaiter struct {
 type MemoryEffectDeduper struct {
 	mu        sync.Mutex
 	completed map[string]any
-	inflight  map[string]effectWaiter
+	inflight  map[string]*effectWaiter
 }
 
 func NewMemoryEffectDeduper() *MemoryEffectDeduper {
-	return &MemoryEffectDeduper{completed: map[string]any{}, inflight: map[string]effectWaiter{}}
+	return &MemoryEffectDeduper{completed: map[string]any{}, inflight: map[string]*effectWaiter{}}
 }
 
 func (d *MemoryEffectDeduper) Do(ctx context.Context, key string, fn func() (any, error)) (any, error) {
@@ -53,13 +54,13 @@ func (d *MemoryEffectDeduper) Do(ctx context.Context, key string, fn func() (any
 	if waiter, ok := d.inflight[key]; ok {
 		d.mu.Unlock()
 		select {
-		case result := <-waiter.done:
-			return result.value, result.err
+		case <-waiter.done:
+			return waiter.result.value, waiter.result.err
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
 	}
-	waiter := effectWaiter{done: make(chan effectResult, 1)}
+	waiter := &effectWaiter{done: make(chan struct{})}
 	d.inflight[key] = waiter
 	d.mu.Unlock()
 
@@ -69,7 +70,7 @@ func (d *MemoryEffectDeduper) Do(ctx context.Context, key string, fn func() (any
 	if err == nil {
 		d.completed[key] = value
 	}
-	waiter.done <- effectResult{value: value, err: err}
+	waiter.result = effectResult{value: value, err: err}
 	close(waiter.done)
 	d.mu.Unlock()
 	return value, err

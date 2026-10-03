@@ -14,9 +14,6 @@ func getAppLiveThreadTracker(a *App) *frontendruntime.LiveThreads {
 		return nil
 	}
 	owner := ensureRuntimeOwner(a)
-	if owner.LiveThreads == nil {
-		owner.LiveThreads = frontendruntime.NewLiveThreads()
-	}
 	return owner.LiveThreads
 }
 
@@ -25,7 +22,7 @@ func resetAppLiveThreadTracker(a *App) {
 		return
 	}
 	owner := ensureRuntimeOwner(a)
-	owner.LiveThreads = frontendruntime.NewLiveThreads()
+	owner.LiveThreads.Reset()
 }
 
 func markSessionThreadLive(a *App, sessionKey, threadID string) {
@@ -75,39 +72,6 @@ func effectiveThreadSandboxMode(sess *conversation.Session, ws *config.Workspace
 		workspaceValue = ws.SandboxMode
 	}
 	return conversation.EffectiveSandboxMode(sess, workspaceValue)
-}
-
-func effectiveThreadMultiAgentMode(sess *conversation.Session, ws *config.Workspace) string {
-	workspaceValue := ""
-	if ws != nil {
-		workspaceValue = ws.MultiAgentMode
-	}
-	return conversation.EffectiveMultiAgentMode(sess, workspaceValue)
-}
-
-func normalizeClaudePermissionModeValue(value string) string {
-	switch strings.TrimSpace(value) {
-	case "", "default":
-		return string(frontendruntime.ClaudePermissionModeDefault)
-	case string(frontendruntime.ClaudePermissionModeAcceptEdits):
-		return string(frontendruntime.ClaudePermissionModeAcceptEdits)
-	case string(frontendruntime.ClaudePermissionModeBypass):
-		return string(frontendruntime.ClaudePermissionModeBypass)
-	case string(frontendruntime.ClaudePermissionModePlan):
-		return string(frontendruntime.ClaudePermissionModePlan)
-	default:
-		return strings.TrimSpace(value)
-	}
-}
-
-func effectiveClaudePermissionMode(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
-		return normalizeClaudePermissionModeValue(sess.ActiveClaudePermissionMode)
-	}
-	if ws != nil && strings.TrimSpace(ws.ClaudePermissionMode) != "" {
-		return normalizeClaudePermissionModeValue(ws.ClaudePermissionMode)
-	}
-	return normalizeClaudePermissionModeValue(cfg.PermissionMode)
 }
 
 func sessionCanResumeThreadForSubmission(sess *conversation.Session, sub *domainsubmission.Submission) bool {

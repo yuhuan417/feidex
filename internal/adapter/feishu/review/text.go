@@ -1,30 +1,13 @@
 package review
 
 import (
-	"feidex/internal/textutil"
+	reviewapp "feidex/internal/application/review"
 	"strings"
 
 	apputil "feidex/internal/formatutil"
 )
 
-func SubmissionInputText(target TargetSpec) string {
-	switch strings.TrimSpace(target.Type) {
-	case TargetUncommitted:
-		return "Review: uncommitted changes"
-	case TargetBaseBranch:
-		return "Review: base branch " + strings.TrimSpace(target.Branch)
-	case TargetCommit:
-		label := ShortCommitSHA(target.CommitSHA)
-		if strings.TrimSpace(target.CommitTitle) != "" {
-			label += " " + strings.TrimSpace(target.CommitTitle)
-		}
-		return "Review: commit " + strings.TrimSpace(label)
-	case TargetCustom:
-		return "Review: " + textutil.Truncate(strings.TrimSpace(target.Instructions), 80)
-	default:
-		return "Review"
-	}
-}
+func SubmissionInputText(target TargetSpec) string { return reviewapp.SubmissionInputText(target) }
 
 func ConfirmationText(target TargetSpec) string {
 	return "已启动 review，目标：" + TargetSummary(target) + "。"

@@ -21,8 +21,8 @@ func TestModelSourceSnapshotPreservesFrontendScopeAndPlanBoundary(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	frontendA := scoped.NewScoped(store, "a", "codex", false)
-	frontendB := scoped.NewScoped(store, "b", "codex", false)
+	frontendA := scoped.NewScoped(store, "a", "codex")
+	frontendB := scoped.NewScoped(store, "b", "codex")
 	mu := &sync.RWMutex{}
 	frontendA.RevisionMutex, frontendB.RevisionMutex = mu, mu
 	for _, frontend := range []*scoped.Store{frontendA, frontendB} {

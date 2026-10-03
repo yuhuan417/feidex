@@ -18,7 +18,7 @@ func TestHiddenBackendFeaturesDoNotAppearInHelpOrMenus(t *testing.T) {
 	helpBody := renderHelpBodyFromRegistry(domainbackend.BackendClaude)
 	menuButtonsByGroup := map[string]map[string]string{
 		"menu.tools":       cardButtonLabelsByAction(renderToolsMenuCard(a, sessionKey)),
-		"menu.group.model": cardButtonLabelsByAction(newBackendConfigurationService(a).renderModelMenuCard(sessionKey)),
+		"menu.group.model": cardButtonLabelsByAction(a.bindings.BackendConfiguration.RenderModelMenuCard(sessionKey)),
 		"menu.group.system": cardButtonLabelsByAction(
 			renderSystemMenuCard(a, sessionKey),
 		),

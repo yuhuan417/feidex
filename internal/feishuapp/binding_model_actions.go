@@ -57,7 +57,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 	case domainbackend.BackendCodex:
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		result, err := newModelConfigService(s.app).fetchModelList(ctx)
+		result, err := s.app.bindings.ModelCommands.FetchModelList(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +129,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
 	sess := s.app.State().Session(sessionKey)
-	settings := newModelSnapshotService(s.app).Desired(domainbackend.BackendCodex, sess)
+	settings := s.app.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
 	planModelDisplay := renderAuxModelSummary(binding.PlanModelOverride, settings.PlanModel, modelName)
 	reviewModelDisplay := renderAuxModelSummary(binding.ReviewModelOverride, settings.ReviewModel, modelName)
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, modelName)
@@ -254,7 +254,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
 	sess := s.app.State().Session(sessionKey)
-	settings := newModelSnapshotService(s.app).Desired(domainbackend.BackendClaude, sess)
+	settings := s.app.bindings.ModelSnapshots.Desired(domainbackend.BackendClaude, sess)
 	smallModelDisplay := renderAuxModelSummary(binding.SmallModelOverride, settings.SmallModel, "Claude 内置 haiku")
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, currentModel)
 
@@ -354,7 +354,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 	default:
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		result, err := newModelConfigService(s.app).fetchModelList(ctx)
+		result, err := s.app.bindings.ModelCommands.FetchModelList(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -412,11 +412,11 @@ func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardActi
 	}
 	value = clearableArg(value)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
+	result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
 	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
@@ -441,18 +441,12 @@ func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, ses
 	if value == "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请输入或选择 model id"}}, nil
 	}
-	service := newModelConfigService(s.app)
-	if err := service.inner.UpdateClaudeModelOptionsConfig(func(c *config.ClaudeConfig) {
-		if add {
-			c.ModelOptions = appmodelconfig.AddClaudeModelOption(c.ModelOptions, value)
-		} else {
-			c.ModelOptions = appmodelconfig.RemoveClaudeModelOption(c.ModelOptions, value)
-		}
-	}); err != nil {
+	service := s.app.bindings.ModelCommands
+	if err := service.UpdateClaudeModelOptionsConfig(value, add); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -475,17 +469,11 @@ func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, arg
 	if !strings.EqualFold(strings.TrimSpace(args[0]), "add") && !strings.EqualFold(strings.TrimSpace(args[0]), "remove") && !strings.EqualFold(strings.TrimSpace(args[0]), "delete") && !strings.EqualFold(strings.TrimSpace(args[0]), "rm") {
 		return fmt.Errorf("usage: /model option add|remove MODEL_ID")
 	}
-	service := newModelConfigService(s.app)
-	if err := service.inner.UpdateClaudeModelOptionsConfig(func(c *config.ClaudeConfig) {
-		if strings.EqualFold(strings.TrimSpace(args[0]), "add") {
-			c.ModelOptions = appmodelconfig.AddClaudeModelOption(c.ModelOptions, value)
-		} else {
-			c.ModelOptions = appmodelconfig.RemoveClaudeModelOption(c.ModelOptions, value)
-		}
-	}); err != nil {
+	service := s.app.bindings.ModelCommands
+	if err := service.UpdateClaudeModelOptionsConfig(value, strings.EqualFold(strings.TrimSpace(args[0]), "add")); err != nil {
 		return err
 	}
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return err
 	}

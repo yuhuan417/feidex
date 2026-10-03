@@ -23,12 +23,12 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := &App{
+	a := prepareTestApp(&App{
 		cfg:        cfg,
 		store:      store,
 		frontendID: "frontend-a",
 		feishu:     appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-a-open"}),
-	}
+	})
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-primary",
 		ChatID:   "chat-1",
@@ -122,7 +122,7 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := &App{cfg: cfg, store: store, frontendID: "frontend-b", feishu: appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})}
+	a := prepareTestApp(&App{cfg: cfg, store: store, frontendID: "frontend-b", feishu: appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})})
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-client",
 		ChatID:   "chat-1",
@@ -155,6 +155,7 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 func TestGroupMessagePolicyUsesMentionOpenIDForCurrentFrontend(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-b"
+	recomposeTestApp(a)
 	ff.botOpenID = "bot-b-open"
 	msg := feishu.GroupMessagePolicyInput{
 		ChatID:           "chat-mention-identity",
@@ -174,7 +175,7 @@ func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := &App{cfg: cfg, store: store, frontendID: "frontend-auto"}
+	a := prepareTestApp(&App{cfg: cfg, store: store, frontendID: "frontend-auto"})
 
 	if shouldAcceptGroupMessage(a, "chat-new", "", "", false, false) {
 		t.Fatal("app policy accepted unmentioned message before primary init")
@@ -192,6 +193,7 @@ func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.
 		t.Fatal("adapter policy delivered mention event without current bot mention")
 	}
 	a.feishu = appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})
+	recomposeTestApp(a)
 	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-b /primary on", MentionedOpenIDs: []string{"bot-b-open"}}) {
 		t.Fatal("adapter policy rejected primary command addressed to the current bot")
 	}
@@ -226,7 +228,7 @@ func TestBindingUsesChatScopedGroupSessionKey(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := &App{cfg: cfg, store: store, frontendID: "frontend-a"}
+	a := prepareTestApp(&App{cfg: cfg, store: store, frontendID: "frontend-a"})
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-server",
 		ChatID:   "chat-1",
@@ -251,6 +253,7 @@ func TestBindingUsesChatScopedGroupSessionKey(t *testing.T) {
 func TestPrimaryBindingHandlesUnmentionedSlashCommand(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          "binding-primary-slash",
 		FrontendID:  "bot-a",
@@ -287,6 +290,7 @@ func TestPrimaryBindingHandlesUnmentionedSlashCommand(t *testing.T) {
 func TestGroupWorkspaceCloneWithoutURLIsHandledAsLocalCommand(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          "binding-workspace-clone",
 		FrontendID:  "bot-a",
@@ -329,6 +333,7 @@ func TestGroupWorkspaceCloneWithoutURLIsHandledAsLocalCommand(t *testing.T) {
 func TestGroupWorkspaceCloneWithoutURLInNewGroupDoesNotUseDefaultWorkspace(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	defaultParent := filepath.Dir(a.cfg.Workspaces[0].Cwd)
 	configParent := filepath.Dir(a.cfgPath)
 
@@ -383,6 +388,7 @@ func TestGroupWorkspaceCloneWithoutURLInNewGroupDoesNotUseDefaultWorkspace(t *te
 func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	defaultParent := filepath.Dir(a.cfg.Workspaces[0].Cwd)
 	configParent := filepath.Dir(a.cfgPath)
 	repoURL := "git@github.com:example/repo.git"
@@ -394,6 +400,7 @@ func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a)
 
 	msg := &feishu.InboundMessage{
 		MessageID:     "clone-new-group-url-1",
@@ -404,7 +411,7 @@ func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
 		RootMessageID: "clone-new-group-url-1",
 		MentionedSelf: true,
 	}
-	if err := newBindingService(a).commandWorkspace(msg, []string{"clone", repoURL}); err != nil {
+	if err := a.bindings.BindingCommands.commandWorkspace(msg, []string{"clone", repoURL}); err != nil {
 		t.Fatalf("group commandWorkspace(/workspace clone URL) error = %v", err)
 	}
 
@@ -426,6 +433,7 @@ func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
 func TestGroupWorkspaceCloneMenuActionOpensCloneForm(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
+	recomposeTestApp(a)
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          "binding-workspace-clone-menu",
 		FrontendID:  "bot-a",

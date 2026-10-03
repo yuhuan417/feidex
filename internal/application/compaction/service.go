@@ -4,6 +4,7 @@ package compaction
 import (
 	"context"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/turn"
 	apputil "feidex/internal/formatutil"
 	"feidex/internal/textutil"
 	"fmt"
@@ -28,6 +29,10 @@ type Dependencies struct {
 }
 
 type Service struct{ Deps Dependencies }
+
+func (s Service) NoteItemStarted(threadID, turnID string, item turn.ProtocolItem) bool {
+	return s.NoteStandaloneCompactItemStarted(threadID, turnID, item.MergedRaw())
+}
 
 func (s Service) context() context.Context {
 	if s.Deps.Context != nil {

@@ -28,17 +28,19 @@ func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenBackendIsClaude(t *testing
 	claude := &testClaudeCore{ensureSessionID: "claude-thread-new"}
 	liveThreadID := ""
 
-	threadSvc := newTestThreadService(app, session, threadServiceOptions{
+	threadSvc := newTestThreadService(app, &session, threadServiceOptions{
 		claude: claude,
 		markLive: func(_ string, threadID string) {
 			liveThreadID = threadID
 		},
 	})
+	lifecycle := &workspace.Lifecycle{
+		Configuration: workspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(app)},
+		Repository:    testLifecycleRepository{session: &session},
+	}
+	effects := workspace.EffectService{Lifecycle: lifecycle, Conversations: threadSvc, Runtime: testWorkspaceEffects{}, Context: context.Background}
 	mgmt := NewManagementService(ManagementDeps{
-		Dependencies: Dependencies{ConfigProvider: app, Lifecycle: &workspace.Lifecycle{
-			Configuration: workspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(app)},
-			Repository:    testLifecycleRepository{session: &session},
-		}},
+		Dependencies:   Dependencies{ConfigProvider: app, Workflow: &workspace.Workflow{Creation: &workspace.CreationService{Lifecycle: lifecycle, Filesystem: testCreationFilesystem{}}, Effects: effects}},
 		State:          newTestStateDeps(&session),
 		SessionContext: testSessionContextDeps(),
 		Threads: ThreadDeps{
@@ -71,7 +73,7 @@ func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenBackendIsClaude(t *testing
 
 func TestStartWorkspaceThreadReturnsErrorWhenCodexClientMissing(t *testing.T) {
 	app, session, ws := newTestWorkspaceApp(t, domainbackend.BackendCodex)
-	threadSvc := newTestThreadService(app, session, threadServiceOptions{
+	threadSvc := newTestThreadService(app, &session, threadServiceOptions{
 		codexErr: errors.New("codex client not initialized"),
 	})
 
@@ -87,6 +89,17 @@ type testWorkspaceApp struct {
 	backend string
 	mu      sync.RWMutex
 }
+
+type testCreationFilesystem struct{}
+
+type testWorkspaceEffects struct{}
+
+func (testWorkspaceEffects) ClearLive(string)                     {}
+func (testWorkspaceEffects) Run(_ string, fn func()) bool         { fn(); return true }
+func (testWorkspaceEffects) Replay(context.Context, string) error { return nil }
+
+func (testCreationFilesystem) ResolvePath(path string) string  { return path }
+func (testCreationFilesystem) MakeDirectory(path string) error { return os.MkdirAll(path, 0o755) }
 
 func (a *testWorkspaceApp) Config() *config.Config         { return a.cfg }
 func (a *testWorkspaceApp) ConfigMu() *sync.RWMutex        { return &a.mu }
@@ -146,36 +159,25 @@ func newTestStateDeps(session **conversation.Session) StateDeps {
 			}
 			return *session
 		},
-		SaveSession: func(sess *conversation.Session) error {
-			*session = sess
-			return nil
-		},
 	}
 }
 
 func testSessionContextDeps() SessionContextDeps {
 	return SessionContextDeps{
 		SessionHasInFlight: func(*conversation.Session) bool { return false },
-		SetSessionThreadCtx: func(sess *conversation.Session, workspaceID, threadID, name, preview string) {
-			sess.ActiveThreadWorkspaceID = workspaceID
-			sess.ActiveThreadID = threadID
-			sess.ActiveThreadName = name
-			sess.ActiveThreadPreview = preview
-		},
-		SessionResetActiveOps: func(*conversation.Session) {},
 	}
 }
 
-type threadTestRepository struct{ session *conversation.Session }
+type threadTestRepository struct{ session **conversation.Session }
 
 func (r *threadTestRepository) Session(key string) *conversation.Session {
-	if r.session.Key == key {
-		return r.session
+	if (*r.session).Key == key {
+		return *r.session
 	}
 	return nil
 }
 func (r *threadTestRepository) SaveSession(sess *conversation.Session) error {
-	r.session = sess
+	*r.session = sess
 	return nil
 }
 
@@ -187,10 +189,10 @@ func (l threadTestLive) MarkSessionThreadLive(k, id string) {
 	}
 }
 func (l threadTestLive) ClearSessionLiveThread(string) {}
-func newTestThreadService(app *testWorkspaceApp, session *conversation.Session, opts threadServiceOptions) *conversationapp.Service {
-	svc := &conversationapp.Service{Deps: conversationapp.Dependencies{Backend: app.backend, Repository: &threadTestRepository{session: session}, Live: threadTestLive{mark: opts.markLive}, ModelSettings: applicationmodelconfig.SnapshotService{Repository: configadapter.ModelSourceRepository{Config: app.cfg}}}}
+func newTestThreadService(app *testWorkspaceApp, session **conversation.Session, opts threadServiceOptions) *conversationapp.Service {
+	svc := &conversationapp.Service{Deps: conversationapp.Dependencies{Backend: func() string { return app.backend }, Repository: &threadTestRepository{session: session}, Live: threadTestLive{mark: opts.markLive}, ModelSettings: applicationmodelconfig.SnapshotService{Repository: configadapter.ModelSourceRepository{Config: app.cfg}}}}
 	if app.backend == domainbackend.BackendClaude {
-		svc.Deps.Gateway = claudeadapter.ConversationGateway{Client: opts.claude}
+		svc.Deps.Gateway = claudeadapter.ConversationGateway{Client: func() claudeadapter.ConversationClient { return opts.claude }}
 	} else {
 		svc.Deps.Gateway = codexadapter.ConversationGateway{Client: func() (codexadapter.ConversationClient, error) { return nil, opts.codexErr }}
 	}

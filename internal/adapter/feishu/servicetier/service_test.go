@@ -22,11 +22,8 @@ func (p appStateProvider) Session(key string) *conversation.Session {
 	return p.store.GetSession(key)
 }
 
-func (p appStateProvider) SaveSession(sess *conversation.Session) error {
-	if p.store == nil || sess == nil {
-		return nil
-	}
-	return p.store.UpsertSession(sess)
+func (p appStateProvider) UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error) {
+	return p.store.UpdateSession(key, mutate)
 }
 
 func TestServiceTierHelpersAndMenu(t *testing.T) {
@@ -54,7 +51,7 @@ func TestServiceTierHelpersAndMenu(t *testing.T) {
 		t.Fatalf("Open(store) error = %v", err)
 	}
 	cfg := config.Default()
-	svc := Service{Service: threadsettings.Service{Repository: appStateProvider{store: store}}, Client: feishu.New(cfg.Feishu)}
+	svc := Service{Service: threadsettings.Service{Repository: appStateProvider{store: store}}, Outbound: feishu.New(cfg.Feishu)}
 
 	card := svc.RenderMenuCard("sess-1")
 	if body := cardElementsForTest(card)[0]["content"].(string); !strings.Contains(body, "当前没有活动线程") {
@@ -95,7 +92,7 @@ func TestSetThreadServiceTierAndCommandFastValidation(t *testing.T) {
 		t.Fatalf("Open(store) error = %v", err)
 	}
 	cfg := config.Default()
-	svc := Service{Service: threadsettings.Service{Repository: appStateProvider{store: store}}, Client: feishu.New(cfg.Feishu)}
+	svc := Service{Service: threadsettings.Service{Repository: appStateProvider{store: store}}, Outbound: feishu.New(cfg.Feishu)}
 
 	if _, err := svc.SetThreadServiceTier("sess-1", "thread-1", ServiceTierFast); err == nil || !strings.Contains(err.Error(), "没有活动线程") {
 		t.Fatalf("SetThreadServiceTier(no thread) error = %v", err)

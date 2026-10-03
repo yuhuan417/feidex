@@ -20,14 +20,12 @@ func New(cfg *config.Config, path string) (*App, error) {
 
 func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 	scope.FeishuTransport = appfeishuwrap.WrapFeishuClient(newFeishuClient(scope.Frontend.Feishu))
-	scope.Registry = frontendruntime.NewRegistry(scope.FeishuTransport)
 	scope.RuntimeOwner = frontendruntime.NewFrontendOwner()
-	scope.InboundDeduper = frontendruntime.NewInboundDeduper()
 	a, err := NewFeishuShell(scope)
 	if err != nil {
 		return nil, err
 	}
-	AttachTrackers(a, NewTrackers(a))
+	prepareTestApp(a)
 	AttachEffectRunner(a, NewEffectRunner(a))
 	AttachStateView(a, NewStateView(a))
 	AttachWorkspacePresentation(a, NewWorkspacePresentation(a))

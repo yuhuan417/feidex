@@ -473,7 +473,7 @@ func TestStartSubmissionTurnIncludesThreadCollaborationMode(t *testing.T) {
 		return nil
 	}
 
-	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
+	_, err := a.bindings.TurnStarter.Start(context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
 	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
@@ -524,7 +524,7 @@ func TestStartSubmissionTurnIncludesDefaultCollaborationModeAfterPlanDisabled(t 
 		return nil
 	}
 
-	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
+	_, err := a.bindings.TurnStarter.Start(context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
 	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
@@ -576,7 +576,7 @@ func TestStartSubmissionTurnFillsConfiguredEffortForStoredDefaultCollaborationMo
 		return nil
 	}
 
-	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
+	_, err := a.bindings.TurnStarter.Start(context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
 	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
@@ -620,7 +620,7 @@ func TestStartSubmissionTurnOmitsCollaborationModeByDefault(t *testing.T) {
 		return nil
 	}
 
-	_, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
+	_, err := a.bindings.TurnStarter.Start(context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{
 		ID:        "sub-1",
 		InputText: "hello",
 	}, a.cfg.Workspaces[0].Cwd, "never", "read-only", "", "", "", "")
@@ -660,7 +660,7 @@ func TestResumeSelectedThreadClearsThreadCollaborationMode(t *testing.T) {
 	}
 
 	sess := a.State().Session(sessionKey)
-	_, err := newConversationService(a).ResumeSelectedThread(sessionKey, sess, &a.cfg.Workspaces[0], conversation.ThreadSelection{
+	_, err := a.bindings.Conversations.ResumeSelectedThread(sessionKey, sess, &a.cfg.Workspaces[0], conversation.ThreadSelection{
 		ThreadID: "thread-new",
 	})
 	if err != nil {
@@ -706,7 +706,7 @@ func TestForkActiveConversationClearsThreadCollaborationMode(t *testing.T) {
 	}
 
 	sess := a.State().Session(sessionKey)
-	_, err := newConversationService(a).ForkActiveConversation(sessionKey, sess, &a.cfg.Workspaces[0])
+	_, err := a.bindings.Conversations.ForkActiveConversation(sessionKey, sess, &a.cfg.Workspaces[0])
 	if err != nil {
 		t.Fatalf("ForkActiveConversation() error = %v", err)
 	}

@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	"feidex/internal/adapter/feishu/planmode"
+	planapp "feidex/internal/application/plan"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
@@ -35,7 +36,7 @@ func (a *App) PlanModeTitleForSession(sessionKey, title string) string {
 }
 
 func planModeTitleForSession(a *App, sessionKey, title string) string {
-	return planmode.PlanModeTitleForSession(newPlanModeAppAdapter(a), sessionKey, title)
+	return planmode.PlanModeTitleForSession(planPresentationContext(a), sessionKey, title)
 }
 
 func (a *App) ContentCardTitleForSession(sessionKey, workspaceID, title string) string {
@@ -43,27 +44,30 @@ func (a *App) ContentCardTitleForSession(sessionKey, workspaceID, title string) 
 }
 
 func contentCardTitleForSubmission(a *App, sub *domainsubmission.Submission, title string) string {
-	return planmode.ContentCardTitleForSubmission(newPlanModeAppAdapter(a), sub, title)
+	return planmode.ContentCardTitleForSubmission(planPresentationContext(a), sub, title)
 }
 
 func contentCardTitleForSession(a *App, sessionKey, workspaceID, title string) string {
-	return planmode.ContentCardTitleForSession(newPlanModeAppAdapter(a), sessionKey, workspaceID, title)
+	return planmode.ContentCardTitleForSession(planPresentationContext(a), sessionKey, workspaceID, title)
+}
+
+func planPresentationContext(a *App) planmode.Dependencies {
+	if a == nil {
+		return planmode.Dependencies{}
+	}
+	return planmode.Dependencies{ConfigProvider: a, StateProvider: a.State()}
 }
 
 func planModeStateForTurnStart(a *App, sessionKey, threadID string) *conversation.SessionCollaborationMode {
-	return planmode.StateForTurnStart(newPlanModeAppAdapter(a), sessionKey, threadID)
+	return a.bindings.Plan.ModeForTurnStart(sessionKey, threadID)
 }
 
 func normalizeThreadCollaborationMode(mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
-	return planmode.NormalizeThreadCollaborationMode(mode)
+	return conversation.NormalizeCollaborationMode(mode)
 }
 
 func codexPlanModeExitPendingRequest(a *App, sessionKey string) *state.PendingRequest {
 	return planmode.ExitPendingRequest(newPlanModeAppAdapter(a), sessionKey)
-}
-
-func invalidateCodexPlanModeExitArtifactsForSession(a *App, sessionKey, reason string) {
-	planmode.InvalidateCodexPlanModeExitArtifactsForSession(newPlanModeAppAdapter(a), sessionKey, reason)
 }
 
 func processCodexPlanModeExitOnTurnCompleted(a *App, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush turnStreamFlushResult) bool {
@@ -132,6 +136,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		return planmode.Dependencies{}
 	}
 	return planmode.Dependencies{
+		UseCase:                a.bindings.Plan,
 		ConfigProvider:         a,
 		ContextProvider:        a,
 		StateProvider:          a.State(),
@@ -142,7 +147,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		ReplyInThreadEnabledFn: func(chatType string) bool { return replyInThreadEnabled(a, chatType) },
 		SessionHasActiveWorkFn: sessionHasActiveWork,
 		EffectivePlanSettingsFn: func(sess *conversation.Session) (string, string) {
-			settings := newModelSnapshotService(a).Desired(domainbackend.BackendCodex, sess)
+			settings := a.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
 			return settings.PlanModel, settings.PlanEffort
 		},
 		ActionStringValueFn:          actionStringValue,
@@ -153,12 +158,16 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		},
 		StartNextSubmissionFn: func(key string) error { return startNextSubmission(a, key) },
 		StartWorkspaceThreadFn: func(key string, sess *conversation.Session, ws *config.Workspace) (*conversation.ThreadBinding, error) {
-			return newConversationService(a).StartWorkspaceThread(key, sess, ws)
+			return a.bindings.Conversations.StartWorkspaceThread(key, sess, ws)
 		},
 	}
 }
 
 type planModeOutbound struct{ app *App }
+
+func (o planModeOutbound) ReplyInteractionCard(ctx context.Context, requestID, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyInteractionCardEffect(ctx, o.app, requestID, messageID, card, inThread)
+}
 
 func (o planModeOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
 	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
@@ -179,4 +188,19 @@ func (r planModeCardRenderer) SimpleStatusCard(title, color, body string, button
 		return nil
 	}
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
+}
+
+type planSettingsSource struct{ app *App }
+
+func (s planSettingsSource) Values(sess *conversation.Session) planapp.SettingsValues {
+	settings := s.app.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
+	return planapp.SettingsValues{Experimental: s.app.cfg != nil && s.app.cfg.Codex.ExperimentalAPI, Model: settings.Model, Effort: settings.Effort, PlanModel: settings.PlanModel, PlanEffort: settings.PlanEffort}
+}
+
+type planWorkspaces struct{ app *App }
+
+func (w planWorkspaces) Get(id string) *config.Workspace { return config.FindWorkspace(w.app.cfg, id) }
+func (w planWorkspaces) DefaultID() string               { return defaultWorkspaceID(w.app) }
+func PlanPorts(a *App) (planapp.SettingsSource, func() (planapp.Catalog, error), planapp.Workspaces) {
+	return planSettingsSource{app: a}, func() (planapp.Catalog, error) { return requireCodexGateway(a) }, planWorkspaces{app: a}
 }

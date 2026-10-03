@@ -100,13 +100,42 @@ var GitClone = func(ctx context.Context, repoURL, targetDir string, report Clone
 
 // CloneTracker tracks clone operations by request ID.
 type CloneTracker struct {
-	Mu  sync.Mutex
-	Ops map[string]*CloneOperation
+	mu  sync.Mutex
+	ops map[string]*CloneOperation
 }
 
 // NewCloneTracker creates a new clone tracker.
 func NewCloneTracker() *CloneTracker {
-	return &CloneTracker{Ops: map[string]*CloneOperation{}}
+	return &CloneTracker{ops: map[string]*CloneOperation{}}
+}
+
+func (t *CloneTracker) Set(id string, op *CloneOperation) {
+	id = strings.TrimSpace(id)
+	if id == "" || op == nil {
+		return
+	}
+	t.mu.Lock()
+	previous := t.ops[id]
+	if t.ops == nil {
+		t.ops = map[string]*CloneOperation{}
+	}
+	t.ops[id] = op
+	t.mu.Unlock()
+	if previous != nil && previous != op && previous.Cancel != nil {
+		previous.Cancel()
+	}
+}
+
+func (t *CloneTracker) Get(id string) *CloneOperation {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.ops[strings.TrimSpace(id)]
+}
+
+func (t *CloneTracker) Clear(id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.ops, strings.TrimSpace(id))
 }
 
 // CloneOperation tracks a single clone operation's state.

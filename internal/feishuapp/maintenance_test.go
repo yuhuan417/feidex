@@ -19,7 +19,7 @@ import (
 func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg, cfgPath: filepath.Join(t.TempDir(), "config.toml"), feishu: feishu.New(cfg.Feishu)}
+	a := prepareTestApp(&App{cfg: cfg, cfgPath: filepath.Join(t.TempDir(), "config.toml"), feishu: feishu.New(cfg.Feishu)})
 
 	card := renderQuietModeCard(a)
 	title, preview, buttonCount := feishu.New(cfg.Feishu).SimpleStatusCard("tmp", "blue", "tmp", nil)["header"], cardElementsForTest(card), 0
@@ -64,13 +64,15 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = workspace
-	a := &App{cfg: cfg, store: store}
-	newRuntimeMaintenanceService(a).ExpirePendingRequestsOnStartup()
+	a := prepareTestApp(&App{cfg: cfg, store: store})
+	if err := a.bindings.StartupState.ExpireInteractions(); err != nil {
+		t.Fatal(err)
+	}
 	if got := a.store.PendingByID("pending"); got == nil || got.Status != "expired" {
 		t.Fatalf("expirePendingRequestsOnStartup() = %+v, want expired request", got)
 	}
 
-	newRuntimeMaintenanceService(a).CleanupExpiredAttachments()
+	a.bindings.MaintenanceCommands.CleanupExpiredAttachments()
 	if _, err := os.Stat(oldDir); !os.IsNotExist(err) {
 		t.Fatalf("expected old attachment dir to be removed, stat err = %v", err)
 	}
@@ -84,7 +86,7 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 	if err := os.Chtimes(oldDir, oldTime, oldTime); err != nil {
 		t.Fatalf("Chtimes(oldDir second) error = %v", err)
 	}
-	newRuntimeMaintenanceService(a).CleanupAttachmentDir(attachmentsRoot)
+	a.bindings.MaintenanceCommands.CleanupAttachmentDir(attachmentsRoot)
 	if _, err := os.Stat(oldDir); !os.IsNotExist(err) {
 		t.Fatalf("cleanupAttachmentDir() should remove old dir, stat err = %v", err)
 	}
@@ -95,7 +97,7 @@ func TestMiscAppFunctions(t *testing.T) {
 	logSessionState("test", "sess", &conversation.Session{WorkspaceID: "ws", Queue: []string{"a"}})
 
 	started := time.Now()
-	app := &App{started: started}
+	app := prepareTestApp(&App{started: started})
 	if !isStaleInboundMessage(app.started, &feishu.InboundMessage{CreatedAt: started.Add(-31 * time.Second).Unix()}) {
 		t.Fatal("expected old inbound message to be stale")
 	}
@@ -114,7 +116,7 @@ func TestMiscAppFunctions(t *testing.T) {
 }
 
 func TestReplyAndStartupHelpersReturnEarly(t *testing.T) {
-	if err := replyError(&App{}, nil, nil); err != nil {
+	if err := replyError(prepareTestApp(&App{}), nil, nil); err != nil {
 		t.Fatalf("replyError(nil, nil) error = %v", err)
 	}
 	var a *App

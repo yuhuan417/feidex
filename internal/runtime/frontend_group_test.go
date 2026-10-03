@@ -16,8 +16,8 @@ type groupTestFrontend struct {
 func (f *groupTestFrontend) note(phase string)             { *f.events = append(*f.events, f.name+":"+phase) }
 func (f *groupTestFrontend) Prepare(context.Context) error { f.note("prepare"); return f.prepareErr }
 func (f *groupTestFrontend) StartInboundGC()               { f.note("gc") }
-func (f *groupTestFrontend) RecoverShared()                { f.note("shared") }
-func (f *groupTestFrontend) RecoverFrontend()              { f.note("recover") }
+func (f *groupTestFrontend) ResetStartupState() error      { f.note("reset"); return nil }
+func (f *groupTestFrontend) RecoverFrontend() error        { f.note("recover"); return nil }
 func (f *groupTestFrontend) Serve() error                  { f.note("serve"); return f.serveErr }
 func (f *groupTestFrontend) StartBackground()              { f.note("background") }
 func (f *groupTestFrontend) Stop(context.Context) error    { f.note("stop"); return f.stopErr }
@@ -33,7 +33,7 @@ func TestFrontendGroupRecoversBeforeServingAndStopsInReverse(t *testing.T) {
 	if err := g.Stop(context.Background()); !errors.Is(err, failure) {
 		t.Fatalf("stop error = %v", err)
 	}
-	want := []string{"a:prepare", "b:prepare", "a:gc", "b:gc", "a:shared", "a:recover", "b:recover", "a:serve", "b:serve", "a:background", "b:background", "b:stop", "a:stop"}
+	want := []string{"a:prepare", "b:prepare", "a:gc", "b:gc", "a:reset", "b:reset", "a:recover", "b:recover", "a:serve", "b:serve", "a:background", "b:background", "b:stop", "a:stop"}
 	if !reflect.DeepEqual(events, want) {
 		t.Fatalf("phases = %v", events)
 	}

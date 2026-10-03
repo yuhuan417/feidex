@@ -39,6 +39,10 @@ func (s SnapshotService) Desired(backend string, sess *conversation.Session) dom
 	return domain.Resolve(backend, sources(s.Repository.ModelSourceRevision(sess), false))
 }
 
+func (s SnapshotService) Auxiliary(sess *conversation.Session) domain.GlobalValues {
+	return domain.ResolveAuxiliary(sources(s.Repository.ModelSourceRevision(sess), false))
+}
+
 func (s SnapshotService) TurnSnapshot(backend string, sess *conversation.Session) domain.Snapshot {
 	return domain.Resolve(backend, sources(s.Repository.ModelSourceRevision(sess), true))
 }

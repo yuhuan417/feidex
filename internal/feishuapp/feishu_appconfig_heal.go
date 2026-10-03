@@ -64,7 +64,7 @@ func runFeishuAppConfigHeal(a *App) {
 	if cfg == nil || strings.TrimSpace(cfg.AppID) == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), feishuAppConfigHealTimeout)
+	ctx, cancel := context.WithTimeout(a.Context(), feishuAppConfigHealTimeout)
 	defer cancel()
 	client := newAppConfigHealClient(cfg)
 	current, err := client.FetchState(ctx)
@@ -149,7 +149,7 @@ func runFeishuAppConfigHeal(a *App) {
 	)
 	switch outcome.kind {
 	case appConfigHealVerified:
-		_ = a.State().DeleteFrontendCardNotificationsByCollapseKey(feishuAppConfigHealKind)
+		_ = a.bindings.Notifications.Clear(feishuAppConfigHealKind)
 		notifyFeishuAppConfigHeal(a, "green", "飞书配置已自动修复",
 			feishuAppConfigHealSuccessBody(plan, version))
 	case appConfigHealUnderAudit:

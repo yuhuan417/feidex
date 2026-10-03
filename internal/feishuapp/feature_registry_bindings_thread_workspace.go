@@ -16,7 +16,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"interrupt": {
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-					return threadMenuService(a).CommandInterrupt(msg)
+					return a.bindings.ThreadMenu.CommandInterrupt(msg)
 				},
 			},
 		},
@@ -24,7 +24,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			if actionName != "menu.interrupt" {
 				return nil, nil
 			}
-			return threadMenuService(s.app).CompleteMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
+			return s.app.bindings.ThreadMenu.CompleteMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
 		},
 	}
 	bindings["menu.thread"] = featureBinding{
@@ -36,17 +36,17 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			},
 			"new": {
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
-					return threadMenuService(a).CommandThreadsNew(msg)
+					return a.bindings.ThreadMenu.CommandThreadsNew(msg)
 				},
 			},
 			"thread": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return threadMenuService(a).CommandThread(msg, args)
+					return a.bindings.ThreadMenu.CommandThread(msg, args)
 				},
 			},
 			"session": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return threadMenuService(a).CommandSession(msg, args)
+					return a.bindings.ThreadMenu.CommandSession(msg, args)
 				},
 			},
 			"threads": {
@@ -54,7 +54,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if len(args) > 0 {
 						return fmt.Errorf("usage: /threads")
 					}
-					return threadMenuService(a).CommandThread(msg, []string{"list"})
+					return a.bindings.ThreadMenu.CommandThread(msg, []string{"list"})
 				},
 			},
 		},
@@ -74,9 +74,9 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.thread":
-				return threadMenuService(s.app).CompleteMenuThread(action, sessionKey)
+				return s.app.bindings.ThreadMenu.CompleteMenuThread(action, sessionKey)
 			case "menu.new":
-				return threadMenuService(s.app).CompleteMenuNew(action, sessionKey)
+				return s.app.bindings.ThreadMenu.CompleteMenuNew(action, sessionKey)
 			case "menu.fork":
 				return completeMenuFork(s.app, action, sessionKey)
 			default:
@@ -89,7 +89,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			"workspace": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
-						return newBindingService(a).commandWorkspace(msg, args)
+						return a.bindings.BindingCommands.commandWorkspace(msg, args)
 					}
 					return commandWorkspaceProfileAware(a, msg, args)
 				},
@@ -100,7 +100,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			if actionName != "menu.workspace" {
 				return nil, false
 			}
-			return newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey), true
+			return a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.workspace" {
@@ -114,7 +114,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			"model": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
-						return newBindingService(a).commandModel(msg, args)
+						return a.bindings.BindingCommands.commandModel(msg, args)
 					}
 					return commandModelProfileAware(a, msg, args)
 				},
@@ -122,7 +122,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			"effort": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
-						return newBindingService(a).commandEffort(msg, args)
+						return a.bindings.BindingCommands.commandEffort(msg, args)
 					}
 					return commandEffortProfileAware(a, msg, args)
 				},
@@ -131,11 +131,11 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
 			if groupBindingSessionScopeActive(s.app, sessionKey) {
-				svc := newBindingService(s.app)
+				svc := s.app.bindings.BindingCommands
 				switch actionName {
 				case "menu.model_auxiliary":
 					msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-					binding, err := newRoutingConfiguration(svc.app).EnsureBinding(msg.ChatType, msg.ChatID)
+					binding, err := svc.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 					}
@@ -160,7 +160,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return svc.completeBindingAuxiliaryModelSet(action, sessionKey, role, value)
 				case "menu.model":
 					msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-					binding, err := newRoutingConfiguration(svc.app).EnsureBinding(msg.ChatType, msg.ChatID)
+					binding, err := svc.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 					}
@@ -231,9 +231,9 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			}
 			if actionName == "menu.model_auxiliary" {
 				if configuredBackend(s.app) == domainbackend.BackendClaude {
-					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开 Claude 辅助模型配置"}, Card: rawCard(newModelConfigService(s.app).renderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
+					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开 Claude 辅助模型配置"}, Card: rawCard(s.app.bindings.ModelCommands.RenderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
 				}
-				card, err := newModelConfigService(s.app).renderCodexAuxiliaryModelConfigCardForSession(sessionKey, "menu.model_auxiliary")
+				card, err := s.app.bindings.ModelCommands.RenderCodexAuxiliaryModelConfigCardForSession(sessionKey, "menu.model_auxiliary")
 				if err != nil {
 					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 				}
@@ -245,66 +245,66 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
-				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "review", value)
+				return s.app.bindings.ModelCommands.CompleteCodexAuxiliaryModelSet(action, "review", value)
 			case "model.aux_config.select_subagent_model":
 				value := strings.TrimSpace(action.Option)
 				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
 				if configuredBackend(s.app) == domainbackend.BackendClaude {
-					return newModelConfigService(s.app).completeClaudeAuxiliaryModelSet(action, "subagent", value)
+					return s.app.bindings.ModelCommands.CompleteClaudeAuxiliaryModelSet(action, "subagent", value)
 				}
-				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "subagent", value)
+				return s.app.bindings.ModelCommands.CompleteCodexAuxiliaryModelSet(action, "subagent", value)
 			case "model.aux_config.select_subagent_effort":
 				value := strings.TrimSpace(action.Option)
 				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
-				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "subagent_effort", value)
+				return s.app.bindings.ModelCommands.CompleteCodexAuxiliaryModelSet(action, "subagent_effort", value)
 			case "model.aux_config.select_small_model":
 				value := strings.TrimSpace(action.Option)
 				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
-				return newModelConfigService(s.app).completeClaudeAuxiliaryModelSet(action, "small", value)
+				return s.app.bindings.ModelCommands.CompleteClaudeAuxiliaryModelSet(action, "small", value)
 			case "menu.model":
 				return newMenuActionService(s.app).completeMenuModel(action, sessionKey)
 			case "model.config.set_model":
-				return newBackendConfigurationService(s.app).completeGlobalModelSet(action, actionStringValue(action, "model_id"))
+				return s.app.bindings.BackendConfiguration.CompleteGlobalModelSet(action, actionStringValue(action, "model_id"))
 			case "model.config.select_model":
 				modelID := strings.TrimSpace(action.Option)
 				if modelID == modelconfig.DefaultOptionValue {
 					modelID = ""
 				}
-				return newBackendConfigurationService(s.app).completeGlobalModelSet(action, modelID)
+				return s.app.bindings.BackendConfiguration.CompleteGlobalModelSet(action, modelID)
 			case "model.config.add_option":
-				return newBackendConfigurationService(s.app).completeClaudeModelOptionAdd(action)
+				return s.app.bindings.BackendConfiguration.CompleteClaudeModelOptionAdd(action)
 			case "model.config.remove_option":
-				return newBackendConfigurationService(s.app).completeClaudeModelOptionRemove(action)
+				return s.app.bindings.BackendConfiguration.CompleteClaudeModelOptionRemove(action)
 			case "model.config.set_effort":
-				return newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
+				return s.app.bindings.BackendConfiguration.CompleteGlobalReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
 			case "model.config.select_effort":
 				reasoningEffort := strings.TrimSpace(action.Option)
 				if reasoningEffort == modelconfig.DefaultOptionValue {
 					reasoningEffort = ""
 				}
-				return newBackendConfigurationService(s.app).completeGlobalReasoningEffortSet(action, reasoningEffort)
+				return s.app.bindings.BackendConfiguration.CompleteGlobalReasoningEffortSet(action, reasoningEffort)
 			case "model.plan_config.set_model":
-				return newModelConfigService(s.app).completeCodexPlanModelSet(action, actionStringValue(action, "model_id"))
+				return s.app.bindings.ModelCommands.CompleteCodexPlanModelSet(action, actionStringValue(action, "model_id"))
 			case "model.plan_config.select_model":
 				modelID := strings.TrimSpace(action.Option)
 				if modelID == modelconfig.DefaultOptionValue {
 					modelID = ""
 				}
-				return newModelConfigService(s.app).completeCodexPlanModelSet(action, modelID)
+				return s.app.bindings.ModelCommands.CompleteCodexPlanModelSet(action, modelID)
 			case "model.plan_config.set_effort":
-				return newModelConfigService(s.app).completeCodexPlanReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
+				return s.app.bindings.ModelCommands.CompleteCodexPlanReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
 			case "model.plan_config.select_effort":
 				reasoningEffort := strings.TrimSpace(action.Option)
 				if reasoningEffort == modelconfig.DefaultOptionValue {
 					reasoningEffort = ""
 				}
-				return newModelConfigService(s.app).completeCodexPlanReasoningEffortSet(action, reasoningEffort)
+				return s.app.bindings.ModelCommands.CompleteCodexPlanReasoningEffortSet(action, reasoningEffort)
 			default:
 				return nil, nil
 			}
@@ -315,7 +315,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			"fast": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
-						return newBindingService(a).commandFast(msg, args)
+						return a.bindings.BindingCommands.commandFast(msg, args)
 					}
 					return commandFastProfileAware(a, msg, args)
 				},
@@ -324,11 +324,11 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
 			if groupBindingSessionScopeActive(s.app, sessionKey) {
-				svc := newBindingService(s.app)
+				svc := s.app.bindings.BindingCommands
 				switch actionName {
 				case "menu.fast":
 					msg := commandMessageFromAction(s.app, action, sessionKey, "/fast config")
-					binding, err := newRoutingConfiguration(svc.app).EnsureBinding(msg.ChatType, msg.ChatID)
+					binding, err := svc.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 					}

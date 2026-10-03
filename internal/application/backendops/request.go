@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/history"
+	"feidex/internal/domain/modelconfig"
 	"feidex/internal/domain/review"
 	"feidex/internal/domain/submission"
 )
@@ -20,7 +21,7 @@ type ThreadStartConfig struct {
 	PersistExtendedHistory bool
 	ServiceTier            string
 	Model                  string
-	AuxiliaryConfig        map[string]any
+	Initialization         modelconfig.Snapshot
 }
 
 // ThreadForkRequest contains semantic fork inputs. Backend adapters own the

@@ -19,6 +19,10 @@ type cardActionService struct {
 }
 
 func newCardActionService(app *App) cardActionService {
+	return cardActionService{app: app, handlers: cardActionHandlers(), inner: app.bindings.CardActions}
+}
+
+func CardActionPorts(app *App) appcardaction.Dependencies {
 	handlers := cardActionHandlers()
 	bound := make(map[string]appcardaction.Handler, len(handlers))
 	for name, handler := range handlers {
@@ -28,8 +32,7 @@ func newCardActionService(app *App) cardActionService {
 			return response, err
 		}
 	}
-	service := cardActionService{app: app, handlers: handlers}
-	service.inner = appcardaction.NewService(appcardaction.Dependencies{
+	return appcardaction.Dependencies{
 		NormalizeSessionKey: func(action *application.CardAction) {
 			if action == nil {
 				return
@@ -44,11 +47,10 @@ func newCardActionService(app *App) cardActionService {
 		},
 		ResolveActionName: resolvedApplicationCardActionName,
 		BlockedReason: func(name string) string {
-			return newRuntimeStateService(app).backendSwitchBlocksCardAction(name)
+			return app.runtimeOwner.BackendTransition.BackendSwitchBlocksCardAction(name)
 		},
 		Handlers: bound,
-	})
-	return service
+	}
 }
 
 func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

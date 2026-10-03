@@ -3,21 +3,14 @@ package feishuapp
 import (
 	"encoding/json"
 	"feidex/internal/codexrpc"
-	"feidex/internal/domain/conversation"
-	domainsubmission "feidex/internal/domain/submission"
-	"strings"
 )
 
 func handleNotification(a *App, method string, params json.RawMessage) {
 	dispatchCodexNotification(a, method, params)
 }
 
-func onThreadTokenUsageUpdated(a *App, threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
-	newRuntimeStateService(a).recordTurnTokenUsage(threadID, turnID, usage)
-}
-
 func onTurnStartedNotification(a *App, threadID, turnID string) {
-	newTurnLifecycleService(a).OnTurnStartedNotification(threadID, turnID)
+	a.bindings.Turns.OnTurnStartedNotification(threadID, turnID)
 }
 
 func handleServerRequest(a *App, req codexrpc.RequestEnvelope) {
@@ -55,47 +48,9 @@ func finishTurn(a *App, threadID, turnID, status string) {
 	// before the async StartNextSubmissionAsync is launched.  This
 	// prevents a race where the newly started submission (same thread)
 	// was incorrectly finalized by a post-hoc steer scan.
-	newTurnLifecycleService(a).FinishTurn(threadID, turnID, status)
-}
-
-// finishSteerSubmission finalizes a steer submission that was processed as
-// part of the current conversation round. It finalizes the submission and
-// removes its ActiveOperation from the session.
-func finishSteerSubmission(a *App, submissionID, status string) {
-	st := a.State()
-	submissionID = strings.TrimSpace(submissionID)
-	if submissionID == "" {
-		return
-	}
-	sub := st.Submission(submissionID)
-	if sub == nil || sub.Finalized {
-		return
-	}
-	switch status {
-	case domainsubmission.SubmissionStatusCompleted.String():
-		_ = st.FinalizeSubmission(submissionID, domainsubmission.SubmissionStatusCompleted.String())
-	case domainsubmission.SubmissionStatusInterrupted.String():
-		_ = st.FinalizeSubmission(submissionID, domainsubmission.SubmissionStatusInterrupted.String())
-	default:
-		_ = st.FinalizeSubmission(submissionID, domainsubmission.SubmissionStatusFailed.String())
-	}
-	newPendingQueueService(a).clearSubmissionProcessingReactions(sub)
-	// Remove the steer submission's ActiveOperation from the session.
-	sessionKey := strings.TrimSpace(sub.SessionKey)
-	if sessionKey != "" {
-		turnID := strings.TrimSpace(sub.TurnID)
-		st.UpdateSession(sessionKey, func(sess *conversation.Session) {
-			if sess == nil {
-				return
-			}
-			conversation.RemoveActiveOperation(sess, submissionID, turnID)
-			if !conversation.HasActiveOperations(sess) {
-				sess.Status = conversation.SessionStatusIdle.String()
-			}
-		})
-	}
+	a.bindings.Turns.FinishTurn(threadID, turnID, status)
 }
 
 func startNextSubmissionAsync(a *App, sessionKey, source string) {
-	newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, source)
+	a.bindings.Submissions.StartNextSubmissionAsync(sessionKey, source)
 }

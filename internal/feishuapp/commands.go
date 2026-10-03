@@ -23,14 +23,14 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 		return fmt.Errorf("unknown command: %s", fields[0])
 	}
 	if !hasConfiguredBackend(a) && !commandAllowedWithoutBackend(msg, fields[0]) {
-		return newBackendSelectionService(a).replyBackendSelectionCard(msg, "")
+		return a.bindings.BackendSelection.ReplyBackendSelectionCard(msg, "")
 	}
 	backend := configuredBackend(a)
-	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
+	if reason := a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic(); reason != "" {
 		return conversation.NewWarning(reason)
 	}
 	if runtime := backendRuntime(a); runtime != nil {
-		if err := runtime.maintenanceBlocksCommand(backendRuntimeContextForApp(a), raw); err != nil {
+		if err := runtime.MaintenanceBlocksCommand(backendRuntimeContextForApp(a), raw); err != nil {
 			return err
 		}
 	}

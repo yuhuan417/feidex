@@ -5,6 +5,8 @@ package debugviewcmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"feidex/internal/application/fileshare"
 	"feidex/internal/application/runtimeconfig"
 	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
@@ -15,10 +17,8 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
-	"time"
 
 	appcards "feidex/internal/adapter/feishu/cards"
 	appdebugview "feidex/internal/adapter/feishu/debugview"
@@ -58,9 +58,6 @@ type CardRenderer interface {
 // request operations used by these services.
 type StateProvider interface {
 	Session(sessionKey string) *conversation.Session
-	NextLocalID(prefix string) (string, error)
-	SavePending(req *state.PendingRequest) error
-	UpdatePending(id string, mutate func(*state.PendingRequest)) error
 }
 
 // RuntimeStateProvider narrows runtime state access to the turn binding
@@ -116,7 +113,7 @@ type Dependencies struct {
 		WorkspaceSelection() workspace.SelectionService
 	}
 	Outbound                          Outbound
-	ArtifactSharer                    ArtifactSharer
+	FileSharing                       *fileshare.Service
 	CardRenderer                      CardRenderer
 	StateProvider                     StateProvider
 	RuntimeStateProvider              RuntimeStateProvider
@@ -182,7 +179,6 @@ func (d Dependencies) Context() context.Context {
 	return context.Background()
 }
 func (d Dependencies) DebugOutbound() Outbound                      { return d.Outbound }
-func (d Dependencies) DebugArtifacts() ArtifactSharer               { return d.ArtifactSharer }
 func (d Dependencies) DebugRenderer() CardRenderer                  { return d.CardRenderer }
 func (d Dependencies) DebugAppState() StateProvider                 { return d.StateProvider }
 func (d Dependencies) DebugRuntimeState() RuntimeStateProvider      { return d.RuntimeStateProvider }
@@ -592,7 +588,7 @@ func RenderClaudeThreadUsageCardBody(threadLabel, threadID string, usage turnbin
 }
 
 // RecordClaudeThreadUsage records Claude thread usage from a turn.
-func (s UsageService) RecordClaudeThreadUsage(threadID string, rawUsage any) {
+func (s UsageService) RecordClaudeThreadUsage(threadID string, usage domainturn.ClaudeThreadUsage) {
 	if s.app.ConfigProvider == nil {
 		return
 	}
@@ -600,7 +596,6 @@ func (s UsageService) RecordClaudeThreadUsage(threadID string, rawUsage any) {
 	if threadID == "" {
 		return
 	}
-	usage := normalizeClaudeUsage(rawUsage)
 	snapshot := turnbindingClaudeSnapshot{
 		TotalCostUSD:  usage.CostUSD,
 		ContextWindow: int64(usage.ContextWindow),
@@ -623,50 +618,6 @@ func (s UsageService) RecordClaudeThreadUsage(threadID string, rawUsage any) {
 
 	tracker := s.app.DebugRuntimeState().TurnBindingTracker()
 	tracker.SetClaudeThreadUsage(threadID, snapshot)
-}
-
-// normalizeClaudeUsage keeps this Feishu command boundary independent of the
-// Claude CLI package while allowing older host fixtures to pass their event
-// value during the migration.
-func normalizeClaudeUsage(raw any) domainturn.ClaudeThreadUsage {
-	if usage, ok := raw.(domainturn.ClaudeThreadUsage); ok {
-		return usage
-	}
-	v := reflect.ValueOf(raw)
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return domainturn.ClaudeThreadUsage{}
-		}
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return domainturn.ClaudeThreadUsage{}
-	}
-	intField := func(name string) int {
-		f := v.FieldByName(name)
-		if f.IsValid() && f.Kind() >= reflect.Int && f.Kind() <= reflect.Int64 {
-			return int(f.Int())
-		}
-		return 0
-	}
-	boolField := func(name string) bool {
-		f := v.FieldByName(name)
-		return f.IsValid() && f.Kind() == reflect.Bool && f.Bool()
-	}
-	floatField := func(name string) float64 {
-		f := v.FieldByName(name)
-		if f.IsValid() && f.Kind() == reflect.Float64 {
-			return f.Float()
-		}
-		return 0
-	}
-	return domainturn.ClaudeThreadUsage{
-		InputTokens: intField("InputTokens"), OutputTokens: intField("OutputTokens"),
-		CacheReadTokens: intField("CacheReadTokens"), CacheCreationTokens: intField("CacheCreationTokens"),
-		CumulativeInputTokens: intField("CumulativeInputTokens"), CumulativeOutputTokens: intField("CumulativeOutputTokens"),
-		CumulativeCacheReadTokens: intField("CumulativeCacheReadTokens"), CumulativeCacheCreationTokens: intField("CumulativeCacheCreationTokens"),
-		HasCumulativeUsage: boolField("HasCumulativeUsage"), ContextWindow: intField("ContextWindow"), CostUSD: floatField("CostUSD"),
-	}
 }
 
 func claudeContextUsagePercent(usage domainturn.ClaudeThreadUsage) (float64, bool) {
@@ -760,16 +711,15 @@ func CommandDownload(a Dependencies, msg *feishu.InboundMessage, args []string) 
 		return nil
 	}
 	sessionKey, _, ws := a.DebugWorkspaceConfig().CurrentWorkspaceForMessage(msg)
-	appState := a.DebugAppState()
 	payload, err := NewDownloadPathPickerPayload(ws)
 	if err != nil {
 		return err
 	}
-	requestID, err := appState.NextLocalID("download")
+	pending, err := a.FileSharing.Open(sessionKey, msg.UserID, payload)
 	if err != nil {
 		return err
 	}
-	card, err := a.DebugWorkspaceRender().RenderPathPickerCard(requestID, payload)
+	card, err := a.DebugWorkspaceRender().RenderPathPickerCard(pending.ID, payload)
 	if err != nil {
 		return err
 	}
@@ -777,17 +727,7 @@ func CommandDownload(a Dependencies, msg *feishu.InboundMessage, args []string) 
 	if err != nil {
 		return err
 	}
-	return appState.SavePending(&state.PendingRequest{
-		ID:          requestID,
-		Kind:        downloadFilePendingKind,
-		SessionKey:  sessionKey,
-		OwnerUserID: msg.UserID,
-		FeishuMsgID: msgID,
-		PayloadJSON: MustJSON(payload),
-		Status:      state.PendingRequestStatusPending.String(),
-		CreatedAt:   time.Now().Unix(),
-		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
-	})
+	return a.FileSharing.Forms.SaveDraft(pending.ID, nil, "", 0, msgID)
 }
 
 // CompleteMenuDownload handles the download menu card action.
@@ -820,89 +760,40 @@ func CompleteDownloadFileConfirm(a Dependencies, action *feishu.CardAction, pend
 			Card:  RawCard(RenderDownloadPreparingCard(a, selectedPath, payload.RootPath)),
 		}, nil
 	}
-	appState := a.DebugAppState()
-	sess := appState.Session(pending.SessionKey)
-	chatID := strings.TrimSpace(action.ChatID)
-	userID := strings.TrimSpace(action.UserID)
-	messageID := FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
-	workspaceCWD := strings.TrimSpace(payload.RootPath)
-	if sess != nil {
-		chatID = FirstNonEmpty(chatID, sess.ChatID)
-		workspaceID := FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), a.DebugDefaultWorkspaceID())
-		if ws := config.FindWorkspace(a.Config(), workspaceID); ws != nil {
-			workspaceCWD = FirstNonEmpty(workspaceCWD, strings.TrimSpace(ws.Cwd))
+	execution, err := a.FileSharing.Confirm(pending.ID, action.UserID, action.ChatID, action.MessageID, selectedPath, payload)
+	if err != nil {
+		kind := "warning"
+		if errors.Is(err, fileshare.ErrProcessing) {
+			kind = "info"
 		}
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: kind, Content: err.Error()}}, nil
 	}
-	_ = appState.UpdatePending(pending.ID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusProcessing.String()
-		req.PayloadJSON = MustJSON(payload)
-		if strings.TrimSpace(req.FeishuMsgID) == "" {
-			req.FeishuMsgID = messageID
-		}
-	})
-	go FinishDownloadFileShare(a, pending.ID, messageID, payload, selectedPath, workspaceCWD, feishu.SharedFileRequest{
-		LocalPath: selectedPath,
-		ChatID:    chatID,
-		UserID:    FirstNonEmpty(userID, pending.OwnerUserID),
-	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "正在生成下载链接"},
-		Card:  RawCard(RenderDownloadPreparingCard(a, selectedPath, workspaceCWD)),
+		Card:  RawCard(RenderDownloadPreparingCard(a, selectedPath, execution.WorkspaceCWD)),
 	}, nil
 }
 
-// FinishDownloadFileShare completes the download file sharing workflow.
-func FinishDownloadFileShare(a Dependencies, requestID, messageID string, payload PathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
-	appState := a.DebugAppState()
-	ctx, cancel := context.WithTimeout(a.Context(), 30*time.Second)
-	defer cancel()
-	slog.Debug("download share started",
-		"request_id", requestID,
-		"message_id", messageID,
-		"path", selectedPath,
-	)
-	result, err := a.DebugArtifacts().ShareLocalFile(ctx, req)
-	if err != nil {
-		slog.Warn("download share failed",
-			"request_id", requestID,
-			"message_id", messageID,
-			"path", selectedPath,
-			"error", err,
-		)
-		_ = appState.UpdatePending(requestID, func(p *state.PendingRequest) {
-			p.Status = state.PendingRequestStatusPending.String()
-			p.PayloadJSON = MustJSON(payload)
-		})
-		if strings.TrimSpace(messageID) == "" {
-			return
-		}
-		card, renderErr := a.DebugWorkspaceRender().RenderPathPickerCard(requestID, payload)
-		if renderErr != nil {
-			slog.Error("download failure card render failed",
-				"request_id", requestID,
-				"message_id", messageID,
-				"error", renderErr,
-			)
-			_ = a.DebugOutbound().PatchCard(a.Context(), messageID, RenderDownloadFailedCard(a, selectedPath, workspaceCWD, err.Error()))
-			return
-		}
-		_ = a.DebugOutbound().PatchCard(a.Context(), messageID, card)
+// DownloadPresentation renders the persisted application outcome.
+type DownloadPresentation struct{ Dependencies Dependencies }
+
+func (p DownloadPresentation) Completed(input fileshare.Execution, result fileshare.Result, cause error) {
+	a := p.Dependencies
+	if strings.TrimSpace(input.MessageID) == "" {
 		return
 	}
-	slog.Debug("download share completed",
-		"request_id", requestID,
-		"message_id", messageID,
-		"path", selectedPath,
-		"url", result.URL,
-	)
-	_ = appState.UpdatePending(requestID, func(p *state.PendingRequest) {
-		p.Status = state.PendingRequestStatusResolved.String()
-		p.PayloadJSON = MustJSON(payload)
-	})
-	if strings.TrimSpace(messageID) == "" {
-		return
+	var card map[string]any
+	if cause != nil {
+		slog.Warn("download share failed", "request_id", input.ID, "error", cause)
+		var err error
+		card, err = a.DebugWorkspaceRender().RenderPathPickerCard(input.ID, input.Payload)
+		if err != nil {
+			card = RenderDownloadFailedCard(a, input.Request.LocalPath, input.WorkspaceCWD, cause.Error())
+		}
+	} else {
+		card = RenderDownloadReadyCard(a, input.Request.LocalPath, input.WorkspaceCWD, feishu.SharedFileResult{FileName: result.FileName, URL: result.URL, SizeBytes: result.SizeBytes})
 	}
-	_ = a.DebugOutbound().PatchCard(a.Context(), messageID, RenderDownloadReadyCard(a, selectedPath, workspaceCWD, result))
+	_ = a.DebugOutbound().PatchCard(a.Context(), input.MessageID, card)
 }
 
 // RenderDownloadPreparingCard renders the download preparing card.

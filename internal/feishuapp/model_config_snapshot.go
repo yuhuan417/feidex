@@ -17,11 +17,11 @@ func modelConfigSnapshot(a *App, sess *conversation.Session, backend string) dom
 	if a == nil {
 		return domainmodelconfig.Snapshot{}
 	}
-	return newModelSnapshotService(a).TurnSnapshot(backend, sess)
+	return a.bindings.ModelSnapshots.TurnSnapshot(backend, sess)
 }
 
-func newModelSnapshotService(a *App) applicationmodelconfig.SnapshotService {
-	return applicationmodelconfig.SnapshotService{Repository: configadapter.ModelSourceRepository{Config: a.cfg, Mutex: a.ConfigMu(), Scopes: a.State()}}
+func ModelSnapshotRepository(a *App) applicationmodelconfig.SourceRepository {
+	return configadapter.ModelSourceRepository{Config: a.cfg, Mutex: a.ConfigMu(), Scopes: a.State()}
 }
 
 func modelConfigStatus(a *App, sessionKey string) string {
@@ -30,7 +30,7 @@ func modelConfigStatus(a *App, sessionKey string) string {
 	if store := a.State(); store != nil {
 		sess = store.Session(normalizeSessionKey(a, sessionKey))
 	}
-	view := newModelSnapshotService(a).SessionView(backend, sess)
+	view := a.bindings.ModelSnapshots.SessionView(backend, sess)
 	return modelsettings.RenderStatus(view)
 }
 
@@ -38,4 +38,8 @@ func modelConfigReadCopy(a *App) *config.Config {
 	a.ConfigMu().RLock()
 	defer a.ConfigMu().RUnlock()
 	return config.Clone(a.cfg)
+}
+
+func CodexServiceName(a *App) func() string {
+	return func() string { return modelConfigReadCopy(a).Codex.ServiceName }
 }

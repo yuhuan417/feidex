@@ -80,7 +80,7 @@ func TestSessionCanResumeThreadForSubmissionRequiresMatchingWorkspace(t *testing
 }
 
 func TestSessionLiveThreadMarkers(t *testing.T) {
-	a := &App{}
+	a := prepareTestApp(&App{})
 	if sessionHasLiveThread(a, "sess-1", "thread-1") {
 		t.Fatal("expected empty live-thread map to return false")
 	}

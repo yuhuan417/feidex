@@ -26,22 +26,15 @@ type Outbound interface {
 	ReplyText(context.Context, string, string, bool) error
 }
 
-// Client is retained as a source-compatible alias for package-local callers;
-// it is already a semantic outbound port and carries no transport type.
-type Client = Outbound
 type Service struct {
 	threadsettings.Service
 	Context    func() context.Context
 	Outbound   Outbound
-	Client     Outbound
 	SessionKey func(*application.InboundMessage) string
 }
 
 func (s Service) outbound() Outbound {
-	if s.Outbound != nil {
-		return s.Outbound
-	}
-	return s.Client
+	return s.Outbound
 }
 
 func (s Service) context() context.Context {

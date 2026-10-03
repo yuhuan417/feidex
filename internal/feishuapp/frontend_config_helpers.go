@@ -84,7 +84,7 @@ func sessionBelongsToFrontend(a *App, sessionKey string) bool {
 	if a == nil {
 		return false
 	}
-	return strings.TrimSpace(frontendID) == strings.TrimSpace(a.FrontendID()) || (frontendID == "" && allowLegacyFrontendFallback(a))
+	return strings.TrimSpace(frontendID) == strings.TrimSpace(a.FrontendID())
 }
 
 func makeSessionKey(a *App, msg *feishu.InboundMessage) string {

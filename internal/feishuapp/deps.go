@@ -48,7 +48,6 @@ var (
 	}
 	newCodexInstallManager  = func(command string) codexInstallManager { return install.New(install.Codex(), command) }
 	newClaudeInstallManager = func(command string) claudeInstallManager { return install.New(install.Claude(), command) }
-	runClaudeSmokeTest      func(*App, context.Context) error
 	startDaemonUpgrade      = daemon.StartBackgroundUpgrade
 	currentVersion          = buildinfo.CurrentVersion
 	currentGOOS             = func() string { return runtime.GOOS }
@@ -59,6 +58,5 @@ var (
 // now share one dispatch graph, so eagerly binding these mutable test seams
 // would create a Go global-initialization cycle through command handlers.
 func init() {
-	newClaudeCore = func(a *App, cfg config.ClaudeConfig) ClaudeCore { return newClaudeRuntime(a, cfg) }
-	runClaudeSmokeTest = func(a *App, ctx context.Context) error { return newBackendUpgradeService(a).claudeSmokeTest(ctx) }
+	newClaudeCore = func(a *App, cfg config.ClaudeConfig) ClaudeCore { return a.bindings.ClaudeFactory(cfg) }
 }

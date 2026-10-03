@@ -2,15 +2,14 @@ package feishuapp
 
 import (
 	"context"
-	"errors"
 	"feidex/internal/textutil"
 	"fmt"
-	"os"
-	"path/filepath"
+	"log/slog"
 	"strings"
 	"time"
 
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
+	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -34,7 +33,7 @@ func (s bindingService) isGroupWorkspacePending(action *feishu.CardAction, kind 
 
 func (s bindingService) completeBindingWorkspaceSettingMenu(action *feishu.CardAction, sessionKey, fieldName string) (*callback.CardActionTriggerResponse, error) {
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace "+fieldName)
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -188,63 +187,24 @@ func normalizeBindingWorkspaceSettingName(value string) string {
 func (s bindingService) completeBindingWorkspaceNewSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID := actionStringValue(action, "request_id")
 	pending := s.app.State().Pending(requestID)
-	if pending == nil || pending.Kind != "workspace_new" || !groupBindingSessionScopeActive(s.app, pending.SessionKey) {
+	if pending == nil || !groupBindingSessionScopeActive(s.app, pending.SessionKey) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
 	}
-	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个工作区请求"}}, nil
-	}
 	payload := appworkspacecmd.MergeNewFormValues(appworkspacecmd.NewPayloadFromPending(pending), action.FormValue)
-	id := strings.TrimSpace(payload.DraftID)
-	if id == "" {
-		return s.renderBindingWorkspaceNewFormWarning(requestID, pending, payload, "请填写 workspace_id")
-	}
-	cwd := strings.TrimSpace(payload.SelectedCWD)
-	if cwd == "" {
-		return s.renderBindingWorkspaceNewFormWarning(requestID, pending, payload, "请先选择目录")
-	}
-	name := strings.TrimSpace(payload.DraftName)
-	if name == "" {
-		name = id
-	}
 	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace new")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+		return nil, err
 	}
-	mgmt := newWorkspaceManagementService(s.app)
-	if existingWS := mgmt.WorkspaceByIDAndCWD(id, cwd); existingWS != nil {
-		return s.finishBindingWorkspaceCreated(requestID, pending.SessionKey, pending, payload, binding, existingWS.ID, "已设置当前工作区")
-	}
-	if _, err := s.createLocalWorkspace(id, name, cwd); err != nil {
-		return s.renderBindingWorkspaceNewFormWarning(requestID, pending, payload, err.Error())
-	}
-	return s.finishBindingWorkspaceCreated(requestID, pending.SessionKey, pending, payload, binding, id, "已创建工作区")
-}
-
-func (s bindingService) renderBindingWorkspaceNewFormWarning(requestID string, pending *state.PendingRequest, payload appworkspacecmd.NewPayload, warning string) (*callback.CardActionTriggerResponse, error) {
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) { req.PayloadJSON = mustJSON(payload) })
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "warning", Content: warning},
-		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceNewCard(pending.SessionKey, requestID, payload)),
-	}, nil
-}
-
-func (s bindingService) finishBindingWorkspaceCreated(requestID, sessionKey string, pending *state.PendingRequest, payload appworkspacecmd.NewPayload, binding *state.AgentBinding, workspaceID, toast string) (*callback.CardActionTriggerResponse, error) {
-	updated, err := s.activateBindingWorkspace(binding, workspaceID)
+	out, err := s.app.bindings.WorkspaceWorkflow.SubmitNew(requestID, action.UserID, payload, workspaceapp.SwitchRequest{Session: s.app.State().Session(pending.SessionKey), Binding: binding})
 	if err != nil {
-		return s.renderBindingWorkspaceNewFormWarning(requestID, pending, payload, err.Error())
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}, Card: rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceNewCard(pending.SessionKey, requestID, out.Payload))}, nil
 	}
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusResolved.String()
-		req.PayloadJSON = mustJSON(payload)
-		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-	})
-	s.replayPendingBindingMessageAsync(updated)
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: toast},
-		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)),
-	}, nil
+	toast := "已创建工作区"
+	if out.Existing {
+		toast = "已设置当前工作区"
+	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: toast}, Card: rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(pending.SessionKey))}, nil
 }
 
 func (s bindingService) completeBindingWorkspaceCloneSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -261,192 +221,78 @@ func (s bindingService) completeBindingWorkspaceCloneSubmit(action *feishu.CardA
 	if strings.TrimSpace(payload.RepoURL) == "" {
 		return s.renderBindingWorkspaceCloneFormWarning(requestID, pending, payload, "请填写 git 地址")
 	}
-	mgmt := newWorkspaceManagementService(s.app)
+	mgmt := s.app.bindings.WorkspaceManagement
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
-		parentDir = mgmt.DefaultWorkspaceCloneParent(nil)
+		parentDir = mgmt.Deps.Planning.DefaultWorkspaceCloneParent(nil)
 	}
 	payload.SelectedParentDir = parentDir
-	plan, err := mgmt.PrepareWorkspaceClonePayload(payload, parentDir)
-	if err != nil {
-		return s.handleBindingWorkspaceClonePrepareError(action, requestID, pending, payload, err)
-	}
-	payload = mgmt.ClonePayloadWithPlan(payload, plan)
 	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace clone")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+		return nil, err
+	}
+	payload, plan, preparation, err := s.app.bindings.WorkspaceWorkflow.PrepareClone(requestID, action.UserID, payload, nil, workspaceapp.SwitchRequest{Session: s.app.State().Session(pending.SessionKey), Binding: binding})
+	if err != nil {
+		return nil, err
+	}
+	if plan == nil {
+		return s.renderBindingWorkspacePreparation(action, pending, payload, preparation, false)
 	}
 	ctx, cancel := context.WithCancel(s.app.Context())
 	op := appworkspacecmd.NewCloneOperation(cancel)
-	mgmt.SetWorkspaceCloneOperation(requestID, op)
 	messageID := textutil.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusProcessing.String()
-		req.PayloadJSON = mustJSON(payload)
-		req.FeishuMsgID = textutil.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
-		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-	})
+	if err := s.app.bindings.WorkspaceWorkflow.Start(requestID, pending.Kind, action.UserID, messageID, payload); err != nil {
+		cancel()
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	mgmt.SetWorkspaceCloneOperation(requestID, op)
 	runAsync(s.app, func() {
 		s.finishBindingWorkspaceClone(ctx, mgmt, op, requestID, messageID, pending.SessionKey, parentDir, payload, plan, binding)
 	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已开始从仓库创建工作区"},
-		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, op.Snapshot())),
+		Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, op.Snapshot())),
 	}, nil
-}
-
-func (s bindingService) handleBindingWorkspaceClonePrepareError(action *feishu.CardAction, requestID string, pending *state.PendingRequest, payload appworkspacecmd.ClonePayload, err error) (*callback.CardActionTriggerResponse, error) {
-	var existingWorkspaceErr *appworkspacecmd.CloneExistingWorkspaceError
-	if errors.As(err, &existingWorkspaceErr) {
-		msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace clone")
-		binding, bindErr := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
-		if bindErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: bindErr.Error()}}, nil
-		}
-		updated, bindErr := s.activateBindingWorkspace(binding, existingWorkspaceErr.WorkspaceID)
-		if bindErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: bindErr.Error()}}, nil
-		}
-		_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = mustJSON(payload)
-			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-		})
-		s.replayPendingBindingMessageAsync(updated)
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已设置当前工作区"}, Card: rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(pending.SessionKey))}, nil
-	}
-	var existingDirErr *appworkspacecmd.CloneExistingDirError
-	if errors.As(err, &existingDirErr) {
-		_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = mustJSON(payload)
-			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-		})
-		mgmt := newWorkspaceManagementService(s.app)
-		takeoverPayload := appworkspacecmd.NewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, appworkspacecmd.NewTakeoverNotice(existingDirErr.TargetDir))
-		newRequestID, createErr := mgmt.CreateWorkspaceNewPending(pending.SessionKey, action.UserID, "", takeoverPayload)
-		if createErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: createErr.Error()}}, nil
-		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "info", Content: "clone 目标目录已存在，已打开预填好的新建工作区"},
-			Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceNewCard(pending.SessionKey, newRequestID, takeoverPayload)),
-		}, nil
-	}
-	return s.renderBindingWorkspaceCloneFormWarning(requestID, pending, payload, err.Error())
 }
 
 func (s bindingService) renderBindingWorkspaceCloneFormWarning(requestID string, pending *state.PendingRequest, payload appworkspacecmd.ClonePayload, warning string) (*callback.CardActionTriggerResponse, error) {
 	payload.ErrorMessage = warning
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusPending.String()
-		req.PayloadJSON = mustJSON(payload)
-		req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
-	})
+	if err := s.app.bindings.Forms.SaveDraft(requestID, payload, state.PendingRequestStatusPending.String(), 10*time.Minute, ""); err != nil {
+		return nil, err
+	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "warning", Content: warning},
-		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
+		Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceCloneCard(pending.SessionKey, requestID, payload)),
 	}, nil
 }
 
 func (s bindingService) finishBindingWorkspaceClone(ctx context.Context, mgmt *appworkspacecmd.ManagementService, op *appworkspacecmd.CloneOperation, requestID, messageID, sessionKey, parentDir string, payload appworkspacecmd.ClonePayload, plan *appworkspacecmd.ClonePlan, binding *state.AgentBinding) {
+
 	defer mgmt.ClearWorkspaceCloneOperation(requestID)
-	if err := os.MkdirAll(filepath.Dir(plan.TargetDir), 0o755); err != nil {
-		s.patchBindingWorkspaceCloneFailure(requestID, messageID, sessionKey, payload, err.Error())
-		return
-	}
-	err := mgmt.GitClone(ctx, strings.TrimSpace(payload.RepoURL), plan.TargetDir, func(line string) {
+	out, err := s.app.bindings.WorkspaceWorkflow.FinishClone(ctx, requestID, workspaceapp.SwitchRequest{Session: s.app.State().Session(sessionKey), Binding: binding}, payload, plan, func(line string) {
 		snapshot, shouldPatch := op.RecordProgress(line)
 		if shouldPatch && strings.TrimSpace(messageID) != "" {
-			_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot))
+			_ = patchCardEffect(s.app.Context(), s.app, messageID, s.app.bindings.WorkspacePresentation.RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot))
 		}
 	})
-	if err != nil || ctx.Err() != nil {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-		}
-		if errors.Is(err, context.Canceled) {
-			_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-				req.Status = state.PendingRequestStatusResolved.String()
-				req.PayloadJSON = mustJSON(payload)
-				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
-			})
-			if strings.TrimSpace(messageID) != "" {
-				_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, op.Snapshot()))
-			}
-			return
-		}
-		s.patchBindingWorkspaceCloneFailure(requestID, messageID, sessionKey, payload, err.Error())
-		return
-	}
-	finalWorkspaceID := plan.WorkspaceID
-	finalTargetDir := plan.TargetDir
-	if plan.Worktree != nil {
-		err := mgmt.GitWorktreeAdd(ctx, plan.Worktree.BaseRepoRoot, plan.Worktree.BranchName, plan.Worktree.TargetDir)
-		if err != nil || ctx.Err() != nil {
-			if ctx.Err() != nil {
-				err = ctx.Err()
-			}
-			if errors.Is(err, context.Canceled) {
-				_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-					req.Status = state.PendingRequestStatusResolved.String()
-					req.PayloadJSON = mustJSON(payload)
-					req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
-				})
-				if strings.TrimSpace(messageID) != "" {
-					_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, op.Snapshot()))
-				}
-				return
-			}
-			s.patchBindingWorkspaceCloneFailure(requestID, messageID, sessionKey, payload, err.Error())
-			return
-		}
-		finalWorkspaceID = plan.Worktree.WorkspaceID
-		finalTargetDir = plan.Worktree.TargetDir
-	}
-	if _, err := s.createLocalWorkspace(finalWorkspaceID, finalWorkspaceID, finalTargetDir); err != nil {
-		_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = mustJSON(payload)
-			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-		})
-		if strings.TrimSpace(messageID) != "" {
-			_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceCloneManualHintCard(sessionKey, finalWorkspaceID, finalTargetDir, err.Error()))
-		}
-		return
-	}
-	updated, err := s.activateBindingWorkspace(binding, finalWorkspaceID)
 	if err != nil {
-		_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = mustJSON(payload)
-			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-		})
-		if strings.TrimSpace(messageID) != "" {
-			_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceCloneManualHintCard(sessionKey, finalWorkspaceID, finalTargetDir, err.Error()))
-		}
+		slog.Warn("workspace clone result save failed", "error", err)
 		return
 	}
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusResolved.String()
-		req.PayloadJSON = mustJSON(payload)
-	})
-	if strings.TrimSpace(messageID) != "" {
-		_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceCloneSuccessCard(sessionKey, finalWorkspaceID, finalTargetDir))
+	var card map[string]any
+	switch out.Outcome {
+	case workspaceapp.CreationCancelled:
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceCloneCanceledCard(sessionKey, out.Payload, parentDir, op.Snapshot())
+	case workspaceapp.CreationTakeover:
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceCloneManualHintCard(sessionKey, out.WorkspaceID, out.TargetDir, out.Error)
+	case workspaceapp.CreationFailed:
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceCloneCard(sessionKey, requestID, out.Payload)
+	default:
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceCloneSuccessCard(sessionKey, out.WorkspaceID, out.TargetDir)
 	}
-	s.replayPendingBindingMessageAsync(updated)
-}
-
-func (s bindingService) patchBindingWorkspaceCloneFailure(requestID, messageID, sessionKey string, payload appworkspacecmd.ClonePayload, errorMessage string) {
-	payload.ErrorMessage = errorMessage
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusPending.String()
-		req.PayloadJSON = mustJSON(payload)
-		req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
-	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceCloneCard(sessionKey, requestID, payload))
+		_ = patchCardEffect(s.app.Context(), s.app, messageID, card)
 	}
 }
 
@@ -461,26 +307,29 @@ func (s bindingService) completeBindingWorkspaceWorktreeSubmit(action *feishu.Ca
 	}
 	payload := appworkspacecmd.MergeWorktreeFormValues(appworkspacecmd.WorktreePayloadFromPending(pending), action.FormValue)
 	payload.ErrorMessage = ""
-	mgmt := newWorkspaceManagementService(s.app)
+	mgmt := s.app.bindings.WorkspaceManagement
 	if status := state.NormalizePendingRequestStatus(pending.Status); status == state.PendingRequestStatusProcessing || status == state.PendingRequestStatusCancelling {
 		snapshot := appworkspacecmd.CloneProgressSnapshot{State: status.String()}
 		if op := mgmt.GetWorkspaceCloneOperation(requestID); op != nil {
 			snapshot = op.Snapshot()
 		}
-		plan, _ := mgmt.PrepareWorkspaceWorktree(payload)
+		plan, _ := mgmt.Deps.Planning.PrepareWorkspaceWorktree(payload)
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "info", Content: "正在创建 Worktree 工作区"},
-			Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, snapshot)),
+			Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, snapshot)),
 		}, nil
 	}
-	plan, err := mgmt.PrepareWorkspaceWorktree(payload)
-	if err != nil {
-		return s.handleBindingWorkspaceWorktreePrepareError(action, requestID, pending, payload, err)
-	}
 	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace new worktree")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+		return nil, err
+	}
+	payload, plan, preparation, err := s.app.bindings.WorkspaceWorkflow.PrepareWorktree(requestID, action.UserID, payload, workspaceapp.SwitchRequest{Session: s.app.State().Session(pending.SessionKey), Binding: binding})
+	if err != nil {
+		return nil, err
+	}
+	if plan == nil {
+		return s.renderBindingWorkspacePreparation(action, pending, payload, preparation, true)
 	}
 	payload.BaseWorkspaceID = plan.BaseWorkspaceID
 	payload.BranchName = plan.BranchName
@@ -489,148 +338,64 @@ func (s bindingService) completeBindingWorkspaceWorktreeSubmit(action *feishu.Ca
 	payload.TargetDir = plan.TargetDir
 	ctx, cancel := context.WithCancel(s.app.Context())
 	op := appworkspacecmd.NewCloneOperation(cancel)
-	mgmt.SetWorkspaceCloneOperation(requestID, op)
 	messageID := textutil.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusProcessing.String()
-		req.PayloadJSON = mustJSON(payload)
-		req.FeishuMsgID = textutil.FirstNonEmpty(strings.TrimSpace(req.FeishuMsgID), messageID)
-		req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-	})
+	if err := s.app.bindings.WorkspaceWorkflow.Start(requestID, pending.Kind, action.UserID, messageID, payload); err != nil {
+		cancel()
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	mgmt.SetWorkspaceCloneOperation(requestID, op)
 	runAsync(s.app, func() {
 		s.finishBindingWorkspaceWorktree(ctx, mgmt, op, requestID, messageID, pending.SessionKey, payload, plan, binding)
 	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已开始创建 Worktree 工作区"},
-		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, op.Snapshot())),
-	}, nil
-}
-
-func (s bindingService) handleBindingWorkspaceWorktreePrepareError(action *feishu.CardAction, requestID string, pending *state.PendingRequest, payload appworkspacecmd.WorktreePayload, err error) (*callback.CardActionTriggerResponse, error) {
-	var existingWorkspaceErr *appworkspacecmd.CloneExistingWorkspaceError
-	if errors.As(err, &existingWorkspaceErr) {
-		msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace new worktree")
-		binding, bindErr := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
-		if bindErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: bindErr.Error()}}, nil
-		}
-		updated, bindErr := s.activateBindingWorkspace(binding, existingWorkspaceErr.WorkspaceID)
-		if bindErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: bindErr.Error()}}, nil
-		}
-		_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = mustJSON(payload)
-			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-		})
-		s.replayPendingBindingMessageAsync(updated)
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已设置当前工作区"}, Card: rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(pending.SessionKey))}, nil
-	}
-	var existingDirErr *appworkspacecmd.CloneExistingDirError
-	if errors.As(err, &existingDirErr) {
-		_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = mustJSON(payload)
-			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-		})
-		mgmt := newWorkspaceManagementService(s.app)
-		notice := "worktree 目标目录已存在，可直接新建工作区接管。\n\n目录已预填为 `" + existingDirErr.TargetDir + "`，并已带上建议的 `workspace_id`。"
-		takeoverPayload := appworkspacecmd.NewTakeoverPayloadWithNotice(existingDirErr.WorkspaceID, existingDirErr.TargetDir, notice)
-		newRequestID, createErr := mgmt.CreateWorkspaceNewPending(pending.SessionKey, action.UserID, "", takeoverPayload)
-		if createErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: createErr.Error()}}, nil
-		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "info", Content: "worktree 目标目录已存在，已打开预填好的新建工作区"},
-			Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceNewCard(pending.SessionKey, newRequestID, takeoverPayload)),
-		}, nil
-	}
-	return s.renderBindingWorkspaceWorktreeFormWarning(requestID, pending, payload, err.Error())
-}
-
-func (s bindingService) renderBindingWorkspaceWorktreeFormWarning(requestID string, pending *state.PendingRequest, payload appworkspacecmd.WorktreePayload, warning string) (*callback.CardActionTriggerResponse, error) {
-	payload.ErrorMessage = warning
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusPending.String()
-		req.PayloadJSON = mustJSON(payload)
-		req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
-	})
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "warning", Content: warning},
-		Card:  rawCard(newWorkspaceRenderService(s.app).RenderWorkspaceWorktreeCard(pending.SessionKey, requestID, payload)),
+		Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, op.Snapshot())),
 	}, nil
 }
 
 func (s bindingService) finishBindingWorkspaceWorktree(ctx context.Context, mgmt *appworkspacecmd.ManagementService, op *appworkspacecmd.CloneOperation, requestID, messageID, sessionKey string, payload appworkspacecmd.WorktreePayload, plan *appworkspacecmd.WorktreePlan, binding *state.AgentBinding) {
+
 	defer mgmt.ClearWorkspaceCloneOperation(requestID)
-	if plan == nil {
-		s.patchBindingWorkspaceWorktreeFailure(requestID, messageID, sessionKey, payload, "worktree 创建参数无效，请重新发起。")
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(plan.TargetDir), 0o755); err != nil {
-		s.patchBindingWorkspaceWorktreeFailure(requestID, messageID, sessionKey, payload, err.Error())
-		return
-	}
-	err := mgmt.GitWorktreeAdd(ctx, plan.BaseRepoRoot, plan.BranchName, plan.TargetDir)
-	if err != nil || ctx.Err() != nil {
-		if ctx.Err() != nil {
-			err = ctx.Err()
-		}
-		if errors.Is(err, context.Canceled) {
-			_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-				req.Status = state.PendingRequestStatusResolved.String()
-				req.PayloadJSON = mustJSON(payload)
-				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
-			})
-			if strings.TrimSpace(messageID) != "" {
-				_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceWorktreeCanceledCard(sessionKey, payload, plan, op.Snapshot()))
-			}
-			return
-		}
-		s.patchBindingWorkspaceWorktreeFailure(requestID, messageID, sessionKey, payload, err.Error())
-		return
-	}
-	if _, err := s.createLocalWorkspace(plan.WorkspaceID, plan.WorkspaceID, plan.TargetDir); err != nil {
-		_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = mustJSON(payload)
-			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-		})
-		if strings.TrimSpace(messageID) != "" {
-			_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
-		}
-		return
-	}
-	updated, err := s.activateBindingWorkspace(binding, plan.WorkspaceID)
+	out, err := s.app.bindings.WorkspaceWorkflow.FinishWorktree(ctx, requestID, workspaceapp.SwitchRequest{Session: s.app.State().Session(sessionKey), Binding: binding}, payload, plan)
 	if err != nil {
-		_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-			req.Status = state.PendingRequestStatusResolved.String()
-			req.PayloadJSON = mustJSON(payload)
-			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
-		})
-		if strings.TrimSpace(messageID) != "" {
-			_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
-		}
+		slog.Warn("workspace worktree result save failed", "error", err)
 		return
 	}
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusResolved.String()
-		req.PayloadJSON = mustJSON(payload)
-	})
-	if strings.TrimSpace(messageID) != "" {
-		_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceWorktreeSuccessCard(sessionKey, plan.WorkspaceID, plan.TargetDir))
+	var card map[string]any
+	switch out.Outcome {
+	case workspaceapp.CreationCancelled:
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceWorktreeCanceledCard(sessionKey, out.Payload, plan, op.Snapshot())
+	case workspaceapp.CreationTakeover:
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceWorktreeManualHintCard(sessionKey, out.WorkspaceID, out.TargetDir, out.Error)
+	case workspaceapp.CreationFailed:
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceWorktreeCard(sessionKey, requestID, out.Payload)
+	default:
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceWorktreeSuccessCard(sessionKey, out.WorkspaceID, out.TargetDir)
 	}
-	s.replayPendingBindingMessageAsync(updated)
+	if strings.TrimSpace(messageID) != "" {
+		_ = patchCardEffect(s.app.Context(), s.app, messageID, card)
+	}
 }
 
-func (s bindingService) patchBindingWorkspaceWorktreeFailure(requestID, messageID, sessionKey string, payload appworkspacecmd.WorktreePayload, errorMessage string) {
-	payload.ErrorMessage = errorMessage
-	_ = s.app.State().UpdatePending(requestID, func(req *state.PendingRequest) {
-		req.Status = state.PendingRequestStatusPending.String()
-		req.PayloadJSON = mustJSON(payload)
-		req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
-	})
-	if strings.TrimSpace(messageID) != "" {
-		_ = patchCardEffect(s.app.Context(), s.app, messageID, newWorkspaceRenderService(s.app).RenderWorkspaceWorktreeCard(sessionKey, requestID, payload))
+func (s bindingService) renderBindingWorkspacePreparation(action *feishu.CardAction, pending *state.PendingRequest, payload any, preparation workspaceapp.Preparation, worktree bool) (*callback.CardActionTriggerResponse, error) {
+	kind, toast := "warning", preparation.Error
+	var card map[string]any
+	switch preparation.Outcome {
+	case workspaceapp.CreationCompleted:
+		kind, toast = "success", "已设置当前工作区"
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(pending.SessionKey)
+	case workspaceapp.CreationTakeover:
+		kind, toast = "info", "clone 目标目录已存在，已打开预填好的新建工作区"
+		if worktree {
+			toast = "worktree 目标目录已存在，已打开预填好的新建工作区"
+		}
+		card = s.app.bindings.WorkspacePresentation.RenderWorkspaceNewCard(pending.SessionKey, preparation.Takeover.ID, preparation.NewPayload)
+	default:
+		if worktree {
+			card = s.app.bindings.WorkspacePresentation.RenderWorkspaceWorktreeCard(pending.SessionKey, pending.ID, payload.(appworkspacecmd.WorktreePayload))
+		} else {
+			card = s.app.bindings.WorkspacePresentation.RenderWorkspaceCloneCard(pending.SessionKey, pending.ID, payload.(appworkspacecmd.ClonePayload))
+		}
 	}
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: kind, Content: toast}, Card: rawCard(card)}, nil
 }

@@ -1,5 +1,34 @@
 package routing
 
+import "strings"
+
+type GroupDeliveryInput struct {
+	GroupMessageInput
+	Text             string
+	MentionedOpenIDs []string
+}
+
+func DeliverGroupMessage(input GroupDeliveryInput) bool {
+	_, assignment := ParseGroupPrimaryAssignment(input.Text, input.MentionedOpenIDs)
+	if !input.MentionAll && (ParsePrimaryOnCommand(input.Text) || ParseEmptyBotMention(input.Text)) {
+		return assignment
+	}
+	return AcceptGroupMessage(input.GroupMessageInput) || assignment || ProbeGroupPrimary(input.GroupMessageInput)
+}
+
+func MentionsSelf(self string, mentioned []string, fallback bool) bool {
+	self = strings.TrimSpace(self)
+	if self == "" || len(mentioned) == 0 {
+		return fallback
+	}
+	for _, id := range mentioned {
+		if strings.TrimSpace(id) == self {
+			return true
+		}
+	}
+	return false
+}
+
 // GroupMessageInput contains the transport-independent facts needed to
 // decide whether a group message belongs to this frontend. The caller resolves
 // frontend-scoped state such as primary assignment and local message links.

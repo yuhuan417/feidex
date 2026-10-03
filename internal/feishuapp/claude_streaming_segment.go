@@ -38,11 +38,11 @@ func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, b
 	}
 
 	if final {
-		results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, body, newRuntimeStateService(a).turnFinalFooterLines(turnID, time.Now()), replyInThreadForSubmission(a, sub), nil)
+		results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, body, a.bindings.TurnMetadata.TurnFinalFooterLines(turnID, time.Now()), replyInThreadForSubmission(a, sub), nil)
 		if len(results) == 0 {
 			return nil, false
 		}
-		newTurnStreamService(a).markTurnStreamFinal(turnID)
+		a.bindings.TurnPresentation.MarkStreamFinal(turnID)
 		return results, true
 	}
 

@@ -2,45 +2,35 @@ package feishuapp
 
 import (
 	"context"
+	backendadapter "feidex/internal/adapter/backend"
 	claudeadapter "feidex/internal/adapter/backend/claude"
 	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/adapter/feishu/threadview"
-	"feidex/internal/application/backendops"
 	"feidex/internal/application/conversation"
+	"feidex/internal/application/submission"
 	"feidex/internal/compositionkit"
 	"feidex/internal/config"
 	domainbackend "feidex/internal/domain/backend"
 	domain "feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
-	codexruntime "feidex/internal/runtime/codex"
 	"strings"
 )
 
-func newConversationService(a *App) *conversation.Service {
-	s := &conversation.Service{Deps: conversation.Dependencies{Context: a.Context(), Backend: configuredBackend(a), Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context()}, Live: sqLiveThreadAdapter{app: a}}}
-	s.Deps.ModelSettings = newModelSnapshotService(a)
-	if s.Deps.Backend == domainbackend.BackendClaude {
-		s.Deps.Gateway = claudeadapter.ConversationGateway{Client: currentClaudeCore(a), Continue: newReplyContinuationService(a).ContinueClaudeSessionWithText}
-	} else {
-		s.Deps.Gateway = codexadapter.ConversationGateway{
-			Client: func() (codexadapter.ConversationClient, error) { return requireCodexClient(a) },
-			StartParams: func(r conversation.Request) backendops.ThreadStartConfig {
-				return buildThreadStartParams(a, r.Workspace, r.Session, r.Model)
-			},
-			ResumeConfig: func(sess *domain.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
-			ForkParams: func(r conversation.Request) backendops.ThreadForkRequest {
-				return backendops.ThreadForkRequest{
-					ThreadID:       strings.TrimSpace(r.Session.ActiveThreadID),
-					Cwd:            r.Workspace.Cwd,
-					ApprovalPolicy: effectiveBindingApprovalPolicy(a, r.Session, r.Workspace),
-					SandboxMode:    effectiveBindingSandboxMode(a, r.Session, r.Workspace),
-					ServiceTier:    effectiveBindingServiceTier(a, r.Session),
-					Model:          r.Model,
-					MultiAgentMode: effectiveBindingMultiAgentMode(a, r.Session, r.Workspace),
-				}
-			},
-		}
+func ConversationPorts(a *App) conversation.Dependencies {
+	s := conversation.Dependencies{Context: a.Context, Backend: func() string { return configuredBackend(a) }, Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context}, Live: sqLiveThreadAdapter{app: a}}
+	s.ModelSettings = a.bindings.ModelSnapshots
+	s.Operations = a.State()
+	s.ThreadBinding = conversation.ThreadBindingDependencies{
+		Lookup:   submission.SubmissionLookupService{State: a.State(), Runtime: a.runtimeOwner.TurnBindings},
+		Bindings: a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
 	}
+	s.Gateway = backendadapter.ConversationGateway{Selected: s.Backend, Gateways: map[string]conversation.Gateway{
+		domainbackend.BackendClaude: claudeadapter.ConversationGateway{Client: func() claudeadapter.ConversationClient { return currentClaudeCore(a) }, Continue: a.bindings.Continuation.ContinueClaudeSessionWithText},
+		domainbackend.BackendCodex: codexadapter.ConversationGateway{
+			Client:        func() (codexadapter.ConversationClient, error) { return requireCodexClient(a) },
+			Configuration: a.bindings.ConversationConfiguration,
+		},
+	}}
 	return s
 }
 func renderThreadsCard(a *App, key string, all bool) (map[string]any, error) {
@@ -51,7 +41,7 @@ func renderThreadsCard(a *App, key string, all bool) (map[string]any, error) {
 			ws = selected
 		}
 	}
-	items, err := newConversationService(a).ListWorkspaceThreads(key, ws, all)
+	items, err := a.bindings.Conversations.ListWorkspaceThreads(key, ws, all)
 	if err != nil {
 		return nil, err
 	}
@@ -71,12 +61,12 @@ func forkReplyMessage(a *App, id string) string {
 }
 func renderConversationUsage(a *App, sess *domain.Session) string {
 	if configuredBackend(a) == domainbackend.BackendClaude {
-		return newUsageService(a).RenderClaudeUsageBody(sess)
+		return a.bindings.Usage.RenderClaudeUsageBody(sess)
 	}
-	return newUsageService(a).RenderCodexUsageBody(sess)
+	return a.bindings.Usage.RenderCodexUsageBody(sess)
 }
 func interruptConversation(a *App, ctx context.Context, key string, sess *domain.Session) error {
-	err := newConversationService(a).InterruptActiveTurn(ctx, key, sess)
+	err := a.bindings.Conversations.InterruptActiveTurn(ctx, key, sess)
 	if err != nil && sess != nil && configuredBackend(a) == domainbackend.BackendCodex {
 		updated := reconcileCompletedCodexTurn(a, sess.Key, sess)
 		if updated == nil || updated.ActiveTurnID != sess.ActiveTurnID {
@@ -85,22 +75,19 @@ func interruptConversation(a *App, ctx context.Context, key string, sess *domain
 	}
 	return err
 }
-func startupRecoveryDependencies(a *App) codexruntime.StartupRecoveryDeps {
-	return codexruntime.StartupRecoveryDeps{
-		Context: a.Context, CurrentClient: func() codexruntime.CodexRPCClient { return currentCodexClient(a) },
-		RuntimeRecovering: func() bool { return codexRuntimeRecovering(a) },
-		BuildThreadStartParams: func(ws *config.Workspace, sess *domain.Session, model string) backendops.ThreadStartConfig {
-			return buildThreadStartParams(a, ws, sess, model)
-		},
-		BuildThreadConfig: func(sess *domain.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
-		SaveSession:       a.State().SaveSession, SetThreadContext: domain.SetThreadContext, ClearThreadContext: domain.ClearThreadContext,
-		MarkThreadLive: func(key, id string) { markSessionThreadLive(a, key, id) }, ClearSessionLiveThread: func(key string) { clearSessionLiveThread(a, key) },
-	}
-}
-func recoverStartupConversation(a *App, key, workspaceID string, sess *domain.Session, ws *config.Workspace, model string) {
-	if configuredBackend(a) == domainbackend.BackendClaude {
-		codexruntime.RecoverClaudeStartupConversation(codexruntime.ClaudeStartupRecoveryDeps{Context: a.Context, MarkThreadLive: func(key, id string) { markSessionThreadLive(a, key, id) }}, key, workspaceID, sess)
-		return
-	}
-	codexruntime.RecoverStartupConversation(startupRecoveryDependencies(a), key, workspaceID, sess, ws, model)
+func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
+	return conversation.RecoveryDependencies{Repository: a.State(), Conversations: a.bindings.Conversations, Workspaces: planWorkspaces{app: a}, Capture: func() (conversation.RecoveryEndpoint, error) {
+		if configuredBackend(a) == domainbackend.BackendClaude {
+			return conversation.RecoveryEndpoint{LazyResume: true}, nil
+		}
+		client, err := requireCodexClient(a)
+		if err != nil {
+			return conversation.RecoveryEndpoint{}, err
+		}
+		gateway := codexadapter.ConversationGateway{
+			Client:        func() (codexadapter.ConversationClient, error) { return client, nil },
+			Configuration: a.bindings.ConversationConfiguration,
+		}
+		return conversation.RecoveryEndpoint{Gateway: gateway, Current: func() bool { return !codexRuntimeRecovering(a) && currentCodexClient(a) == client }}, nil
+	}}
 }

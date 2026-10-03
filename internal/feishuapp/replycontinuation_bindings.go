@@ -11,70 +11,69 @@ import (
 	"feidex/internal/state"
 )
 
-func newReplyContinuationService(a *App) *continuation.Service {
-	svc := &continuation.Service{Deps: continuation.Dependencies{
+func ContinuationPorts(a *App) continuation.Dependencies {
+	deps := continuation.Dependencies{
 		Backend:    func() string { return configuredBackend(a) },
 		FrontendID: a.FrontendID(), DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
 		Workspace:      func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
 		MakeSessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
-	}}
+	}
 
 	// Wire the consumer-owned ports that need *App internals.
-	svc.Deps.GetSession = func(key string) *conversation.Session {
+	deps.GetSession = func(key string) *conversation.Session {
 		st := a.State()
 		if st == nil {
 			return nil
 		}
 		return st.Session(key)
 	}
-	svc.Deps.SaveSession = func(sess *conversation.Session) error {
+	deps.SaveSession = func(sess *conversation.Session) error {
 		st := a.State()
 		if st == nil {
 			return nil
 		}
 		return st.SaveSession(sess)
 	}
-	svc.Deps.GetMessageLink = func(messageID string) *state.MessageLink {
+	deps.GetMessageLink = func(messageID string) *state.MessageLink {
 		st := a.State()
 		if st == nil {
 			return nil
 		}
 		return st.MessageLink(messageID)
 	}
-	svc.Deps.SaveMessageLink = func(link *state.MessageLink) error {
+	deps.SaveMessageLink = func(link *state.MessageLink) error {
 		st := a.State()
 		if st == nil {
 			return nil
 		}
 		return st.SaveMessageLink(link)
 	}
-	svc.Deps.CreateSubmission = func(sub *domainsubmission.Submission) (string, error) {
+	deps.CreateSubmission = func(sub *domainsubmission.Submission) (string, error) {
 		st := a.State()
 		if st == nil {
 			return "", nil
 		}
 		return st.CreateSubmission(sub)
 	}
-	svc.Deps.HasInFlightSubmission = func(sess *conversation.Session) bool {
+	deps.HasInFlightSubmission = func(sess *conversation.Session) bool {
 		return conversation.HasInFlightSubmission(sess)
 	}
-	svc.Deps.Context = a.Context
-	svc.Deps.Steer = func(ctx context.Context, threadID, turnID string, sub *domainsubmission.Submission) error {
+	deps.Context = a.Context
+	deps.Steer = func(ctx context.Context, threadID, turnID string, sub *domainsubmission.Submission) error {
 		client, err := requireCodexClient(a)
 		if err != nil {
 			return err
 		}
 		return (codexadapter.Gateway{Client: client}).SteerTurn(ctx, threadID, turnID, sub)
 	}
-	svc.Deps.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
-		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
+	queue := a.bindings.Submissions
+	deps.StartSubmission = queue.StartNextClaudeSubmissionWithFailureNotice
+	deps.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
+		return queue.StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
 	}
-	svc.Deps.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
-		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
-	}
-	svc.Deps.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
+	deps.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 		return resolveInboundAttachments(a, msg, workspaceID, sessionKey)
 	}
 
-	return svc
+	return deps
 }

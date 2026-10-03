@@ -15,6 +15,7 @@ type UpgradeUnitStatus struct {
 }
 
 type UpgradeSpec struct {
+	UnitName       string
 	ServiceName    string
 	Version        string
 	BinaryPath     string

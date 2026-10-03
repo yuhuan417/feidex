@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/adapter/feishu/turnitem"
-	"feidex/internal/application/runtimeconfig"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
@@ -73,7 +71,7 @@ func updateQuietMode(a *App, mode config.QuietMode) error {
 	if err != nil {
 		return err
 	}
-	return (runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(a)}).SetQuietMode(normalized.String())
+	return a.bindings.RuntimeSettings.SetQuietMode(normalized.String())
 }
 
 func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {

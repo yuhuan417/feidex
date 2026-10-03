@@ -274,6 +274,7 @@ func TestDispatchCardActionRoutesCommonBranches(t *testing.T) {
 func TestDispatchCardActionCanonicalizesLegacyRootSessionKey(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "frontend-a"
+	recomposeTestApp(a)
 	action := &feishu.CardAction{ActionValue: map[string]any{
 		"action":      "menu.root",
 		"session_key": "feishu:frontend:frontend-a:group:chat-1:root:root-1",

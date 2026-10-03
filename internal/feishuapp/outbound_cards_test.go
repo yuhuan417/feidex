@@ -14,7 +14,7 @@ import (
 func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	reply := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.TODO(), sub, "Reply", "green", true, "", nil, false)
@@ -86,7 +86,7 @@ func TestPlanModeSessionCardsPrefixWorkspaceAndPlan(t *testing.T) {
 func TestPrepareReplyCardMarkdownKeepsPreviewLinksWithLineNumbers(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	body := prepareReplyCardMarkdown(a, nil, sub, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)", true)
@@ -101,7 +101,7 @@ func TestPrepareReplyCardMarkdownKeepsPreviewLinksWithLineNumbers(t *testing.T) 
 func TestPrepareReplyCardMarkdownLinkifiesInlineCodeURLsImmediatelyForPreview(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	body := prepareReplyCardMarkdown(a, nil, sub, "卡片链接：`https://github.com/yuhuan417/feidex`", true)
@@ -116,7 +116,7 @@ func TestPrepareReplyCardMarkdownLinkifiesInlineCodeURLsImmediatelyForPreview(t 
 func TestPrepareSubmissionCardMarkdownLinkifiesInlineCodeURLsForContentCards(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	body := prepareSubmissionCardMarkdown(a, sub, "授权链接：`https://accounts.feishu.cn/oauth/v1/device/verify?x=1`")
@@ -131,7 +131,7 @@ func TestPrepareSubmissionCardMarkdownLinkifiesInlineCodeURLsForContentCards(t *
 func TestRenderContentCardsLinkifyInlineCodeURLs(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := &App{cfg: cfg}
+	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
 	replyCard := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, "反馈中", "blue", true, "打开：`https://example.test/reply`", nil, false)

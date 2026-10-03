@@ -9,7 +9,7 @@ func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	svc := newFinalCardPatchService(a)
+	svc := a.bindings.FinalCardPatch
 	svc.RegisterFinalCardPatchState("card-1", sub, "最终答复", "green", true, "original body", []string{"elapsed: 1s"})
 	if !svc.MarkFinalCardPreviewPending("card-1") {
 		t.Fatal("expected preview patch state to exist")

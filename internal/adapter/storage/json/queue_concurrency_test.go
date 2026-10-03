@@ -48,7 +48,7 @@ func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
 			return "turn-1", app.backend.StartQueuedSubmission(key, nil, sub, nil, false)
 		},
 		ModelSettings: applicationmodelconfig.SnapshotService{Repository: configadapter.ModelSourceRepository{Config: config.Default()}},
-		LiveThread:    concurrencyLive{}, RuntimeState: concurrencyRuntime{Tracker: turnbinding.NewTracker(store)},
+		LiveThread:    concurrencyLive{}, RuntimeState: concurrencyRuntime{Tracker: turnbinding.NewTracker(store.GetSubmission)},
 		MarkSubmissionRunningReactions: func(*domainsubmission.Submission) {}, IsReviewSubmission: func(*domainsubmission.Submission) bool { return false },
 		ReplyContinuation: concurrencyLinks{}, TurnStream: concurrencyStream{},
 
@@ -58,7 +58,7 @@ func TestStartNextSubmissionAsyncCoalescesConcurrentStarts(t *testing.T) {
 		InflightAllowsAdditional: app.SubmissionQueueInflightAllowsAdditional,
 		TryBeginStart:            app.SubmissionQueueTryBeginStart,
 		FinishStart:              app.SubmissionQueueFinishStart,
-		RunAsync:                 app.SubmissionQueueRunAsync,
+		RunSessionAsync:          func(_ string, fn func()) { fn() },
 		LogSessionState:          app.SubmissionQueueLogSessionState,
 		AutoRetry:                concurrentStartNoopAutoRetry{},
 	})

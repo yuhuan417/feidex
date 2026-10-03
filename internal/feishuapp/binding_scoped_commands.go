@@ -3,7 +3,6 @@ package feishuapp
 import (
 	applicationrouting "feidex/internal/application/routing"
 	domainbackend "feidex/internal/domain/backend"
-	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
 
@@ -85,47 +84,12 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return sessionKey
 	}
-	st := a.State()
-	if st == nil {
-		return sessionKey
-	}
-	if sess := st.Session(sessionKey); sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
-		return sessionKey
-	}
 	binding := bindingForSessionKey(a, sessionKey)
 	bindingID := ""
 	if binding != nil {
 		bindingID = strings.TrimSpace(binding.ID)
 	}
-	var best *conversation.Session
-	for _, sess := range st.Sessions() {
-		if sess == nil || strings.TrimSpace(sess.Key) == "" || strings.TrimSpace(sess.ActiveThreadID) == "" {
-			continue
-		}
-		if !sessionBelongsToFrontend(a, sess.Key) {
-			continue
-		}
-		candidateChatType := strings.TrimSpace(sess.ChatType)
-		candidateChatID := strings.TrimSpace(sess.ChatID)
-		if candidateChatType == "" || candidateChatID == "" {
-			candidateChatType, candidateChatID = sessionKeyChatForApp(a, sess.Key)
-		}
-		if candidateChatType != "group" || candidateChatID != chatID {
-			continue
-		}
-		if bindingID != "" {
-			if strings.TrimSpace(sess.BindingID) != bindingID {
-				continue
-			}
-		}
-		if best == nil || sess.UpdatedAt > best.UpdatedAt || (sess.UpdatedAt == best.UpdatedAt && strings.TrimSpace(sess.Key) > strings.TrimSpace(best.Key)) {
-			best = sess
-		}
-	}
-	if best != nil {
-		return strings.TrimSpace(best.Key)
-	}
-	return sessionKey
+	return a.bindings.ConversationQuery.EffectiveGroupSessionKey(sessionKey, chatID, bindingID)
 }
 
 func groupBindingBackButton(sessionKey string) feishu.Button {
@@ -136,22 +100,22 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 	if !isGroupMessage(msg) {
 		return commandWorkspace(s.app, msg, args)
 	}
-	if _, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID); err != nil {
+	if _, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID); err != nil {
 		return err
 	}
 	sessionKey := makeSessionKey(s.app, msg)
 	if len(args) == 0 {
-		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
+		card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
 		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
-		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
+		card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
 		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case "choose":
-		card := newWorkspaceRenderService(s.app).RenderWorkspaceChooseCard(sessionKey)
+		card := s.app.bindings.WorkspacePresentation.RenderWorkspaceChooseCard(sessionKey)
 		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case "use":
@@ -162,10 +126,10 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 			if err != nil {
 				return err
 			}
-			return newWorkspaceManagementService(s.app).BeginWorkspaceWorktree(msg, branchName, workspaceID)
+			return s.app.bindings.WorkspaceManagement.BeginWorkspaceWorktree(msg, branchName, workspaceID)
 		}
 		if len(args) == 1 {
-			return newWorkspaceManagementService(s.app).BeginWorkspaceNew(msg)
+			return s.app.bindings.WorkspaceManagement.BeginWorkspaceNew(msg)
 		}
 		if len(args) < 3 {
 			return fmt.Errorf("usage: /workspace new WORKSPACE_ID CWD")
@@ -202,7 +166,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 		if err := s.unbindGroupWorkspace(sessionKey); err != nil {
 			return err
 		}
-		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
+		card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
 		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	default:
@@ -211,43 +175,35 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 }
 
 func (s bindingService) beginBindingWorkspaceClone(msg *feishu.InboundMessage, sessionKey string) error {
-	mgmt := newWorkspaceManagementService(s.app)
-	requestID, err := mgmt.NextLocalID("workspace")
-	if err != nil {
-		return err
-	}
+	mgmt := s.app.bindings.WorkspaceManagement
 	ws := bindingWorkspaceForSessionKey(s.app, sessionKey)
-	rootPath := mgmt.DefaultWorkspaceCloneRoot(ws)
-	parentDir := strings.TrimSpace(mgmt.DefaultWorkspaceCloneParent(ws))
+	rootPath := mgmt.Deps.Planning.DefaultWorkspaceCloneRoot(ws)
+	parentDir := strings.TrimSpace(mgmt.Deps.Planning.DefaultWorkspaceCloneParent(ws))
 	payload := appworkspacecmd.ClonePayload{
 		RootPath:          rootPath,
 		SelectedParentDir: parentDir,
 		CloneMode:         appworkspacecmd.CloneModeWorkspace,
 	}
-	if err := s.app.State().SavePending(&state.PendingRequest{
-		ID:          requestID,
+	request, err := s.app.bindings.Forms.Open("workspace", state.PendingRequest{
 		Kind:        "workspace_clone",
 		SessionKey:  sessionKey,
 		OwnerUserID: strings.TrimSpace(msg.UserID),
 		FeishuMsgID: strings.TrimSpace(msg.MessageID),
-		PayloadJSON: mustJSON(payload),
-		Status:      state.PendingRequestStatusPending.String(),
-		CreatedAt:   time.Now().Unix(),
-		ExpiresAt:   time.Now().Add(10 * time.Minute).Unix(),
-	}); err != nil {
+	}, payload, 10*time.Minute)
+	if err != nil {
 		return err
 	}
-	card := newWorkspaceRenderService(s.app).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
+	card := s.app.bindings.WorkspacePresentation.RenderWorkspaceCloneCard(sessionKey, request.ID, payload)
 	_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
 func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) error {
 	if !isGroupMessage(msg) {
-		return newBackendConfigurationService(s.app).handleBackendModelCommand(msg, args)
+		return s.app.bindings.BackendConfiguration.HandleBackendModelCommand(msg, args)
 	}
 	if len(args) == 0 {
-		binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+		binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 		if err != nil {
 			return err
 		}
@@ -299,11 +255,11 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 
 func (s bindingService) commandEffort(msg *feishu.InboundMessage, args []string) error {
 	if !isGroupMessage(msg) {
-		return newModelConfigService(s.app).commandEffort(msg, args)
+		return s.app.bindings.ModelCommands.CommandEffort(msg, args)
 	}
 	switch len(args) {
 	case 0:
-		binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+		binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 		if err != nil {
 			return err
 		}
@@ -332,7 +288,7 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "config":
-		binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+		binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 		if err != nil {
 			return err
 		}
@@ -341,12 +297,12 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 	case "fast", "default", "off":
 		return s.commandCurrentBotGroupConfig(msg, []string{"fast", args[0]})
 	case "toggle":
-		binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+		binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 		if err != nil {
 			return err
 		}
 		next := applicationrouting.ToggleServiceTier(binding.ServiceTierOverride)
-		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, next)
+		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, next)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -363,11 +319,11 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 	}
 	modelID = clearableArg(modelID)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, modelID)
+	result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, modelID)
 	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
@@ -384,11 +340,11 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 	}
 	effort = clearableArg(effort)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model effort")
-	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, effort)
+	result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, effort)
 	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
@@ -408,11 +364,11 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 		}
 	}
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/fast")
-	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, serviceTier)
+	result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, serviceTier)
 	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
@@ -425,12 +381,12 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 
 func (s bindingService) completeBindingSimpleOverride(action *feishu.CardAction, sessionKey, fieldName, value string) (*callback.CardActionTriggerResponse, error) {
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace "+fieldName)
-	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)
-	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(fieldName), value)
+	result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(fieldName), value)
 	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil

@@ -13,20 +13,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"feidex/internal/domain/backend"
 	"feidex/internal/npmregistry"
 )
 
 // Probe describes the self-upgrade capability of one installed CLI.
-type Probe struct {
-	Command         string
-	CommandPath     string
-	RealCommandPath string
-	PackagePath     string
-	CurrentVersion  string
-	UpdateCommand   string
-	Supported       bool
-	Reason          string
-}
+type Probe = backend.InstallProbe
 
 // Manager probes and upgrades a single CLI backend.
 type Manager struct {

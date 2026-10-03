@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	"errors"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -81,7 +82,7 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 		t.Fatal("submission missing after queue flag update")
 	}
 	before = len(ff.replyCards)
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 	if len(ff.replyCards) != before+1 {
 		t.Fatalf("noteTurnStarted(waited in queue) replyCards = %d, want %d", len(ff.replyCards), before+1)
 	}
@@ -92,7 +93,7 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	if updatedSub == nil || !updatedSub.StartNoticeSent {
 		t.Fatalf("submission after started notice = %+v, want StartNoticeSent", updatedSub)
 	}
-	newTurnStreamService(a).noteTurnStarted("sess-1", updatedSub)
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", updatedSub)
 	if len(ff.replyCards) != before+1 {
 		t.Fatalf("noteTurnStarted() should not duplicate started notice, replyCards = %d, want %d", len(ff.replyCards), before+1)
 	}
@@ -175,7 +176,7 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 		t.Fatalf("sendTurnEventCardWithReuse(reuse fallback) = %q", got)
 	}
 
-	if got := replyInThreadForSubmission(&App{}, nil); got {
+	if got := replyInThreadForSubmission(prepareTestApp(&App{}), nil); got {
 		t.Fatal("replyInThreadForSubmission(nil) should be false")
 	}
 }
@@ -212,15 +213,15 @@ func TestTurnItemFinalAnswerFooterStaysOnLastSplitCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	ff.replyCardIDs = []string{"card-1", "card-2", "card-3"}
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	modelContextWindow := int64(1000)
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
-	newRuntimeStateService(a).recordTurnTokenUsage("thread-1", "turn-1", codexrpc.ThreadTokenUsage{
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now().Add(-3*time.Second))
+	a.runtimeOwner.TurnBindings.RecordTurnTokenUsage("thread-1", "turn-1", codexadapter.ThreadUsage(codexrpc.ThreadTokenUsage{
 		Last: codexrpc.TokenUsageBreakdown{
 			InputTokens: 150,
 		},
 		ModelContextWindow: &modelContextWindow,
-	})
+	}))
 
 	longParagraph := strings.Repeat("payload-limit-text ", 1400)
 	got := newOutboundCardService(a).sendTurnItemCardWithReuse(context.Background(), sub, turnitem.CardPayload{

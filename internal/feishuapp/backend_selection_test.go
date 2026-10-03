@@ -5,7 +5,6 @@ import (
 	"errors"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
-	frontendruntime "feidex/internal/runtime"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -22,12 +21,12 @@ func TestHandleFeishuMessageWithoutConfiguredBackendPromptsSelection(t *testing.
 		t.Fatalf("Open(store) error = %v", err)
 	}
 	ff := &fakeFeishuClient{}
-	a := &App{
+	a := prepareTestApp(&App{
 		cfg:     config.Default(),
 		store:   store,
 		feishu:  ff,
 		started: time.Now(),
-	}
+	})
 
 	origLookPath := backendLookPath
 	backendLookPath = func(file string) (string, error) {
@@ -57,7 +56,7 @@ func TestHandleFeishuMessageWithoutConfiguredBackendPromptsSelection(t *testing.
 
 func TestCommandBackendShowsOnlyAvailableBackends(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := &App{cfg: config.Default(), feishu: ff}
+	a := prepareTestApp(&App{cfg: config.Default(), feishu: ff})
 
 	origLookPath := backendLookPath
 	backendLookPath = func(file string) (string, error) {
@@ -71,7 +70,7 @@ func TestCommandBackendShowsOnlyAvailableBackends(t *testing.T) {
 	}()
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "/backend"}
-	if err := newBackendSelectionService(a).commandBackend(msg, nil); err != nil {
+	if err := a.bindings.BackendSelection.CommandBackend(msg, nil); err != nil {
 		t.Fatalf("commandBackend() error = %v", err)
 	}
 
@@ -112,7 +111,7 @@ func TestHandleCardActionMenuGroupBackendOpensBackendMenuCard(t *testing.T) {
 func TestBackendSelectionCardsUseBackendSwitchPath(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	selection := newBackendSelectionService(a).renderBackendSelectionCard("sess-1", "")
+	selection := a.bindings.BackendSelection.RenderBackendSelectionCard("sess-1", "")
 	if body := cardMarkdownContent(t, selection); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端管理 / 切换后端") {
 		t.Fatalf("backend selection body = %q", body)
 	}
@@ -134,7 +133,7 @@ func TestBackendSelectionCardsUseBackendSwitchPath(t *testing.T) {
 		t.Fatalf("backend selection buttons = %#v, want return to menu.group.backend", cardButtonsForTest(selection))
 	}
 
-	switching := newBackendSelectionService(a).renderBackendSwitchingCard("sess-1", domainbackend.BackendClaude)
+	switching := a.bindings.BackendSelection.RenderBackendSwitchingCard("sess-1", domainbackend.BackendClaude)
 	if body := cardMarkdownContent(t, switching); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 后端管理 / 切换后端") {
 		t.Fatalf("backend switching body = %q", body)
 	}
@@ -201,15 +200,13 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		return client
 	}
 
-	a := &App{
+	a := prepareTestApp(&App{
 		cfg:          cfg,
 		cfgPath:      cfgPath,
 		store:        store,
-		backend:      domainbackend.BackendCodex,
 		feishu:       &fakeFeishuClient{},
-		registry:     testRegistryWithCodex(&fakeCodexClient{}),
-		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
-	}
+		runtimeOwner: testSelectedBackendOwner(testOwnerWithCodex(&fakeCodexClient{}), domainbackend.BackendCodex),
+	})
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := store.UpsertSession(&conversation.Session{
@@ -224,7 +221,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		t.Fatalf("UpsertSession(codex) error = %v", err)
 	}
 
-	if err := newBackendSelectionService(a).switchBackend(context.Background(), domainbackend.BackendClaude); err != nil {
+	if err := a.bindings.BackendSelection.SwitchBackend(context.Background(), domainbackend.BackendClaude); err != nil {
 		t.Fatalf("switchBackend(codex->claude) error = %v", err)
 	}
 	if len(createdClaude) != 1 {
@@ -249,7 +246,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		t.Fatalf("saveSession(claude lineage) error = %v", err)
 	}
 
-	if err := newBackendSelectionService(a).switchBackend(context.Background(), domainbackend.BackendCodex); err != nil {
+	if err := a.bindings.BackendSelection.SwitchBackend(context.Background(), domainbackend.BackendCodex); err != nil {
 		t.Fatalf("switchBackend(claude->codex) error = %v", err)
 	}
 	if len(createdCodex) != 1 {
@@ -312,7 +309,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 			codexCalls = append(codexCalls, method)
 			switch method {
 			case "thread/resume":
-				if !beginCodexTransportRecovery(app, client) {
+				if !app.bindings.CodexRecovery.BeginRecovery(client) {
 					t.Fatal("expected beginCodexTransportRecovery() to start recovery")
 				}
 				return errors.New("codex app-server read failed: read |0: file already closed")
@@ -329,15 +326,13 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		return &fakeClaudeCore{}
 	}
 
-	app = &App{
+	app = prepareTestApp(&App{
 		cfg:          cfg,
 		cfgPath:      cfgPath,
 		store:        store,
-		backend:      domainbackend.BackendClaude,
 		feishu:       &fakeFeishuClient{},
-		registry:     testRegistryWithClaude(&fakeClaudeCore{}),
-		runtimeOwner: testOwnerWithLiveThreads(frontendruntime.NewLiveThreads()),
-	}
+		runtimeOwner: testSelectedBackendOwner(testOwnerWithClaude(&fakeClaudeCore{}), domainbackend.BackendClaude),
+	})
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := store.UpsertSession(&conversation.Session{
@@ -360,7 +355,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := newBackendSelectionService(app).switchBackend(context.Background(), domainbackend.BackendCodex); err != nil {
+	if err := app.bindings.BackendSelection.SwitchBackend(context.Background(), domainbackend.BackendCodex); err != nil {
 		t.Fatalf("switchBackend(claude->codex) error = %v", err)
 	}
 
@@ -389,7 +384,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 		t.Fatalf("Open(store) error = %v", err)
 	}
 	cfg := testCodexConfig()
-	a := &App{cfg: cfg, store: store, backend: domainbackend.BackendClaude}
+	a := prepareTestApp(&App{cfg: cfg, store: store, runtimeOwner: testSelectedBackendOwner(nil, domainbackend.BackendClaude)})
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := store.UpsertSession(&conversation.Session{
@@ -411,11 +406,11 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "child-1", ParentMessageID: "parent-1", RootMessageID: "root-1"}
-	if link := newReplyContinuationService(a).ReplyRootTurnLink(msg); link != nil {
+	if link := a.bindings.Continuation.ReplyRootTurnLink(msg); link != nil {
 		t.Fatalf("replyRootTurnLink(claude current) = %+v, want nil", link)
 	}
 
-	a.backend = domainbackend.BackendCodex
+	a.SetBackend(domainbackend.BackendCodex)
 	if err := store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",
@@ -424,7 +419,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(codex) error = %v", err)
 	}
-	if link := newReplyContinuationService(a).ReplyRootTurnLink(msg); link == nil || link.ThreadID != "codex-thread-1" {
+	if link := a.bindings.Continuation.ReplyRootTurnLink(msg); link == nil || link.ThreadID != "codex-thread-1" {
 		t.Fatalf("replyRootTurnLink(codex current) = %+v, want codex link", link)
 	}
 }

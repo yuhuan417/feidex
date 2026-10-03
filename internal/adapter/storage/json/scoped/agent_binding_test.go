@@ -8,8 +8,8 @@ import (
 
 func TestAgentBindingFrontendScope(t *testing.T) {
 	store := newTestStateStore(t)
-	frontendA := NewScoped(store, "frontend-a", "", false)
-	frontendB := NewScoped(store, "frontend-b", "", false)
+	frontendA := NewScoped(store, "frontend-a", "")
+	frontendB := NewScoped(store, "frontend-b", "")
 
 	if err := frontendA.SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-a",
@@ -39,12 +39,11 @@ func TestAgentBindingFrontendScope(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertAgentBinding(legacy) error = %v", err)
 	}
-	legacyFrontend := NewScoped(store, "frontend-a", "", true)
-	if got := legacyFrontend.AgentBinding("binding-b"); got == nil || got.FrontendID != "" {
-		t.Fatalf("legacy fallback binding = %+v", got)
+	if got := frontendA.AgentBinding("binding-b"); got != nil {
+		t.Fatalf("frontend-a saw an unscoped binding = %+v", got)
 	}
-	if got := legacyFrontend.AgentBindingsForChat("group", "chat-1"); len(got) != 2 {
-		t.Fatalf("frontend-a chat bindings with legacy fallback = %+v", got)
+	if got := frontendA.AgentBindingsForChat("group", "chat-1"); len(got) != 1 {
+		t.Fatalf("frontend-a chat bindings = %+v", got)
 	}
 
 	if err := frontendA.DeleteAgentBinding("binding-b"); err != nil {
@@ -52,12 +51,6 @@ func TestAgentBindingFrontendScope(t *testing.T) {
 	}
 	if store.GetAgentBinding("binding-b") == nil {
 		t.Fatal("non-legacy frontend unexpectedly deleted blank binding")
-	}
-	if err := legacyFrontend.DeleteAgentBinding("binding-b"); err != nil {
-		t.Fatalf("DeleteAgentBinding(legacy fallback) error = %v", err)
-	}
-	if store.GetAgentBinding("binding-b") != nil {
-		t.Fatal("legacy fallback did not delete blank binding")
 	}
 }
 

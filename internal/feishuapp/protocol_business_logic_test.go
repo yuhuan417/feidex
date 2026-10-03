@@ -23,16 +23,16 @@ func TestItemStartedBindsPendingSubmissionBeforeTurnStarted(t *testing.T) {
 	if updated == nil || updated.ThreadID != "thread-1" || updated.TurnID != "turn-early" || updated.Status != "running" {
 		t.Fatalf("submission after early item/started = %+v, want running bound submission", updated)
 	}
-	if _, pending := newRuntimeStateService(a).pendingSubmissionForThread("thread-1"); pending != nil {
+	if _, pending := a.runtimeOwner.TurnBindings.PendingSubmissionForThread("thread-1"); pending != nil {
 		t.Fatalf("pending turn binding should be cleared after early bind, got %+v", pending)
 	}
-	if boundSessionKey, boundSub := newRuntimeStateService(a).boundSubmissionForTurn("turn-early"); boundSessionKey != "sess-1" || boundSub == nil || boundSub.ID != sub.ID {
+	if boundSessionKey, boundSub := a.runtimeOwner.TurnBindings.BoundSubmissionForTurn("turn-early"); boundSessionKey != "sess-1" || boundSub == nil || boundSub.ID != sub.ID {
 		t.Fatalf("turn binding after early item/started = %q / %+v, want sess-1 / %s", boundSessionKey, boundSub, sub.ID)
 	}
 	if !sessionHasLiveThread(a, "sess-1", "thread-1") {
 		t.Fatal("early item/started should mark thread live for the session")
 	}
-	if newTurnStreamService(a).turnStreamTracker().Streams["turn-early"] == nil {
+	if a.bindings.TurnPresentation.Tracker().Streams["turn-early"] == nil {
 		t.Fatal("early item/started should initialize turn stream state")
 	}
 }
@@ -75,7 +75,7 @@ func TestReviewLifecycleBindsAndDeliversWithoutTurnStarted(t *testing.T) {
 func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	newRuntimeStateService(a).noteTurnItemStarted("thread-1", "turn-1", map[string]any{
+	a.bindings.ItemContext.StartRaw("thread-1", "turn-1", map[string]any{
 		"id":     "item-1",
 		"type":   "fileChange",
 		"status": "inProgress",
@@ -90,7 +90,7 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 		},
 	})
 
-	mergedRequest := newRuntimeStateService(a).mergeRequestPayloadWithTurnItem("thread-1", "turn-1", "item-1", map[string]any{
+	mergedRequest := a.bindings.ItemContext.MergeRequest("thread-1", "turn-1", "item-1", map[string]any{
 		"reason": "need review",
 		"context": map[string]any{
 			"decision": "pending",
@@ -117,12 +117,12 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 		t.Fatalf("merged request nested context = %+v, want both started and request keys", nested)
 	}
 
-	mismatchedThread := newRuntimeStateService(a).mergeRequestPayloadWithTurnItem("thread-2", "turn-1", "item-1", map[string]any{"reason": "other"})
+	mismatchedThread := a.bindings.ItemContext.MergeRequest("thread-2", "turn-1", "item-1", map[string]any{"reason": "other"})
 	if _, ok := mismatchedThread["changes"]; ok {
 		t.Fatalf("mismatched thread merge should not hydrate started state, got %+v", mismatchedThread)
 	}
 
-	completed := newRuntimeStateService(a).completeTurnItemState("thread-1", "turn-1", "item-1", map[string]any{
+	completed := a.bindings.ItemContext.CompleteRaw("thread-1", "turn-1", "item-1", map[string]any{
 		"id":      "item-1",
 		"type":    "fileChange",
 		"status":  "completed",
@@ -148,7 +148,7 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 	if turnitem.StringValue(completedNested["a"]) != "1" || turnitem.StringValue(completedNested["c"]) != "3" {
 		t.Fatalf("completed nested context = %+v, want merged nested state", completedNested)
 	}
-	if snapshot := newRuntimeStateService(a).turnItemSnapshot("thread-1", "turn-1", "item-1"); snapshot != nil {
+	if snapshot := a.bindings.ItemContext.SnapshotRaw("thread-1", "turn-1", "item-1"); snapshot != nil {
 		t.Fatalf("turn item snapshot after completion = %+v, want cleared state", snapshot)
 	}
 }
@@ -182,6 +182,6 @@ func seedStartingSubmission(t *testing.T, a *App, sessionKey, submissionID, thre
 	}); err != nil {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
-	newRuntimeStateService(a).notePendingTurnBinding(threadID, sessionKey, submissionID)
+	a.runtimeOwner.TurnBindings.NotePendingTurnBinding(threadID, sessionKey, submissionID)
 	return a.store.GetSubmission(submissionID)
 }

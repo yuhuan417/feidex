@@ -47,7 +47,7 @@ func TestCommandSkillsRendersCardFromAppServer(t *testing.T) {
 		return nil
 	}
 
-	if err := newSkillsService(a).CommandSkills(msg, nil); err != nil {
+	if err := a.bindings.SkillCommands.CommandSkills(msg, nil); err != nil {
 		t.Fatalf("commandSkills() error = %v", err)
 	}
 	if callCount != 1 {
@@ -100,7 +100,7 @@ func TestCommandSkillsReloadForcesReload(t *testing.T) {
 		return nil
 	}
 
-	if err := newSkillsService(a).CommandSkills(msg, []string{"reload"}); err != nil {
+	if err := a.bindings.SkillCommands.CommandSkills(msg, []string{"reload"}); err != nil {
 		t.Fatalf("commandSkills(reload) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -122,14 +122,14 @@ func TestCompleteSkillsSelectStoresPendingSkill(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newSkillsService(a).CompleteSkillsSelect(&feishu.CardAction{Option: wantSkill.Path}, sessionKey, wantSkill.Path)
+	resp, err := a.bindings.SkillCommands.CompleteSkillsSelect(&feishu.CardAction{Option: wantSkill.Path}, sessionKey, wantSkill.Path)
 	if err != nil {
 		t.Fatalf("completeSkillsSelect() error = %v", err)
 	}
 	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeSkillsSelect() = %#v, want success toast", resp)
 	}
-	if got, ok := newSkillsService(a).SessionPendingSkill(sessionKey); !ok || got.Name != wantSkill.Name || got.Path != wantSkill.Path {
+	if got, ok := a.bindings.SkillCommands.SessionPendingSkill(sessionKey); !ok || got.Name != wantSkill.Name || got.Path != wantSkill.Path {
 		t.Fatalf("pending skill = %+v, %v, want selected skill", got, ok)
 	}
 	if resp.Card == nil {
@@ -156,7 +156,7 @@ func TestCompleteSkillsSelectRejectsDisabledSkill(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newSkillsService(a).CompleteSkillsSelect(&feishu.CardAction{Option: disabled.Path}, sessionKey, disabled.Path)
+	resp, err := a.bindings.SkillCommands.CompleteSkillsSelect(&feishu.CardAction{Option: disabled.Path}, sessionKey, disabled.Path)
 	if err != nil {
 		t.Fatalf("completeSkillsSelect(disabled) error = %v", err)
 	}
@@ -166,7 +166,7 @@ func TestCompleteSkillsSelectRejectsDisabledSkill(t *testing.T) {
 	if !strings.Contains(resp.Toast.Content, "disabled") {
 		t.Fatalf("disabled select toast = %#v, want disabled hint", resp.Toast)
 	}
-	if _, ok := newSkillsService(a).SessionPendingSkill(sessionKey); ok {
+	if _, ok := a.bindings.SkillCommands.SessionPendingSkill(sessionKey); ok {
 		t.Fatal("disabled skill should not become pending")
 	}
 }
@@ -175,7 +175,7 @@ func TestEnqueueSubmissionUsesPendingSkillWithoutListingSkills(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-pending", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "summarize this"}
 	sessionKey := makeSessionKey(a, msg)
-	newSkillsService(a).SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
+	a.bindings.SkillCommands.SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
 
 	var seenInputs []map[string]any
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -207,7 +207,7 @@ func TestEnqueueSubmissionUsesPendingSkillWithoutListingSkills(t *testing.T) {
 	if seenInputs[0]["name"] != "openai-docs" || seenInputs[1]["text"] != "summarize this" {
 		t.Fatalf("turn/start inputs = %+v, want pending skill then original text", seenInputs)
 	}
-	if _, ok := newSkillsService(a).SessionPendingSkill(sessionKey); ok {
+	if _, ok := a.bindings.SkillCommands.SessionPendingSkill(sessionKey); ok {
 		t.Fatal("pending skill should be consumed after submission is created")
 	}
 }
@@ -216,7 +216,7 @@ func TestEnqueueSubmissionExplicitSkillPrefixOverridesPending(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-explicit", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "$openai-docs summarize this"}
 	sessionKey := makeSessionKey(a, msg)
-	newSkillsService(a).SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "old-skill", Path: "/skills/old"})
+	a.bindings.SkillCommands.SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "old-skill", Path: "/skills/old"})
 
 	var skillsListCalls int
 	var seenInputs []map[string]any
@@ -266,7 +266,7 @@ func TestEnqueueSubmissionExplicitSkillPrefixOverridesPending(t *testing.T) {
 	if seenInputs[1]["text"] != "summarize this" {
 		t.Fatalf("turn/start text input = %+v, want prefix stripped body", seenInputs[1])
 	}
-	if _, ok := newSkillsService(a).SessionPendingSkill(sessionKey); ok {
+	if _, ok := a.bindings.SkillCommands.SessionPendingSkill(sessionKey); ok {
 		t.Fatal("explicit skill should consume previous pending skill")
 	}
 }
@@ -275,7 +275,7 @@ func TestEnqueueSubmissionInvalidSkillPrefixFallsBackToTextAndConsumesPending(t 
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-invalid", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "$bad/name keep raw"}
 	sessionKey := makeSessionKey(a, msg)
-	newSkillsService(a).SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
+	a.bindings.SkillCommands.SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
 
 	var seenInputs []map[string]any
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -304,7 +304,7 @@ func TestEnqueueSubmissionInvalidSkillPrefixFallsBackToTextAndConsumesPending(t 
 	if len(seenInputs) != 1 || seenInputs[0]["type"] != "text" || seenInputs[0]["text"] != "$bad/name keep raw" {
 		t.Fatalf("turn/start inputs = %+v, want raw text only", seenInputs)
 	}
-	if _, ok := newSkillsService(a).SessionPendingSkill(sessionKey); ok {
+	if _, ok := a.bindings.SkillCommands.SessionPendingSkill(sessionKey); ok {
 		t.Fatal("invalid explicit prefix should still consume pending skill")
 	}
 }
@@ -343,7 +343,7 @@ func TestEnqueueSubmissionSkillOnlySetsPendingSkill(t *testing.T) {
 	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "openai-docs") {
 		t.Fatalf("replyTexts = %+v, want pending skill confirmation", ff.replyTexts)
 	}
-	if got, ok := newSkillsService(a).SessionPendingSkill(sessionKey); !ok || got.Name != "openai-docs" || got.Path != "/skills/openai-docs" {
+	if got, ok := a.bindings.SkillCommands.SessionPendingSkill(sessionKey); !ok || got.Name != "openai-docs" || got.Path != "/skills/openai-docs" {
 		t.Fatalf("pending skill = %+v, %v, want stored openai-docs", got, ok)
 	}
 	if sess := a.store.GetSession(sessionKey); sess != nil {
@@ -408,7 +408,7 @@ func TestEnqueueSubmissionSkillOnlyWithAttachmentStartsTurn(t *testing.T) {
 func TestTrySteerInboundReplyIgnoresSkillSemantics(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-steer-skill"
-	newSkillsService(a).SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
+	a.bindings.SkillCommands.SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
 
 	skillsListCalls := 0
 	var seenInputs []map[string]any
@@ -426,7 +426,7 @@ func TestTrySteerInboundReplyIgnoresSkillSemantics(t *testing.T) {
 		}
 	}
 
-	got, err := newReplyContinuationService(a).TrySteerInboundReply(&feishu.InboundMessage{
+	got, err := a.bindings.Continuation.TrySteerInboundReply(&feishu.InboundMessage{
 		MessageID: "m-steer",
 		ChatID:    "chat-1",
 		ChatType:  "p2p",
@@ -446,7 +446,7 @@ func TestTrySteerInboundReplyIgnoresSkillSemantics(t *testing.T) {
 	if len(seenInputs) != 1 || seenInputs[0]["type"] != "text" || seenInputs[0]["text"] != "$openai-docs help" {
 		t.Fatalf("turn/steer inputs = %+v, want raw text only", seenInputs)
 	}
-	if pending, ok := newSkillsService(a).SessionPendingSkill(sessionKey); !ok || pending.Name != "openai-docs" {
+	if pending, ok := a.bindings.SkillCommands.SessionPendingSkill(sessionKey); !ok || pending.Name != "openai-docs" {
 		t.Fatalf("pending skill after steer = %+v, %v, want untouched", pending, ok)
 	}
 }

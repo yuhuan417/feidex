@@ -5,9 +5,11 @@ import (
 
 	"context"
 	"encoding/json"
+	codexadapter "feidex/internal/adapter/backend/codex"
+	"feidex/internal/adapter/feishu/turnitem"
+	appautoretry "feidex/internal/application/autoretry"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
-	appautoretry "feidex/internal/runtime/autoretry"
 	"strings"
 	"testing"
 	"time"
@@ -30,9 +32,9 @@ func TestFindSubmissionByTurnPrefersExplicitTurnBinding(t *testing.T) {
 	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{ID: "sub-new", SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", Status: "running"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-new) error = %v", err)
 	}
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-old", "sess-1", "sub-old")
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-old", "sess-1", "sub-old")
 
-	sessionKey, sub := newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn("thread-1", "turn-old")
+	sessionKey, sub := a.bindings.Submissions.FindSubmissionByTurn("thread-1", "turn-old")
 	if sessionKey != "sess-1" || sub == nil || sub.ID != "sub-old" {
 		t.Fatalf("findSubmissionByTurn() = %q %+v, want sub-old", sessionKey, sub)
 	}
@@ -47,7 +49,7 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 		t.Fatalf("UpdateSubmission() error = %v", err)
 	}
 
-	newTurnStreamService(a).noteTurnStarted("sess-1", &domainsubmission.Submission{ID: sub.ID, SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-1"})
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", &domainsubmission.Submission{ID: sub.ID, SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-1"})
 	finishTurn(a, "thread-1", "turn-1", "completed")
 
 	if len(ff.replyCards) == 0 {
@@ -66,20 +68,20 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now())
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now())
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-1", turnitem.NewProtocolItemWithID("item-1", map[string]any{
 		"type":  "agent_message",
 		"text":  "first final",
 		"phase": "final_answer",
-	})
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-2", map[string]any{
+	}))
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-2", turnitem.NewProtocolItemWithID("item-2", map[string]any{
 		"type":  "agent_message",
 		"text":  "second final",
 		"phase": "final_answer",
-	})
+	}))
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("expected first final card to be sent immediately, got %d", len(ff.replyCards))
@@ -99,14 +101,14 @@ func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) 
 func TestLegacyAgentMessageWithoutPhaseIsFinalAndNotReplayedOnCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now())
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now())
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-1", turnitem.NewProtocolItemWithID("item-1", map[string]any{
 		"type": "agent_message",
 		"text": "legacy final",
-	})
+	}))
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply cards after phase-less agent message = %d, want 1", len(ff.replyCards))
@@ -136,20 +138,20 @@ func TestLegacyAgentMessageWithoutPhaseIsFinalAndNotReplayedOnCompletion(t *test
 func TestCommentaryOnlyTurnPromotesLastAgentMessageToFinalOnCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
-	newRuntimeStateService(a).bindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now())
-	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now())
+	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", sub)
 
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-1", map[string]any{
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-1", turnitem.NewProtocolItemWithID("item-1", map[string]any{
 		"type":  "agent_message",
 		"text":  "visible commentary",
 		"phase": "commentary",
-	})
-	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-2", map[string]any{
+	}))
+	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "item-2", turnitem.NewProtocolItemWithID("item-2", map[string]any{
 		"type":  "agent_message",
 		"text":  "",
 		"phase": "final_answer",
-	})
+	}))
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply cards after commentary = %d, want 1", len(ff.replyCards))
@@ -172,10 +174,10 @@ func TestCommentaryOnlyTurnPromotesLastAgentMessageToFinalOnCompletion(t *testin
 func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
-	newAutoRetryService(a).AutoRetryTracker().After = func(time.Duration, func()) appautoretry.DelayedTask {
+	a.bindings.AutoRetry.AutoRetryTracker().After = func(time.Duration, func()) appautoretry.DelayedTask {
 		return &fakeDelayedTask{}
 	}
-	if err := newAutoRetryService(a).UpdateAutoRetryEnabled(true); err != nil {
+	if err := a.bindings.AutoRetry.UpdateAutoRetryEnabled(true); err != nil {
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
@@ -205,17 +207,17 @@ func TestBindTurnSubmissionRebindClearsMetadataState(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	startedAt := time.Now().Add(-2 * time.Second)
 
-	newRuntimeStateService(a).bindTurnSubmission("thread-old", "turn-1", "sess-old", "sub-old")
-	newRuntimeStateService(a).markTurnStartedAt("turn-1", startedAt)
-	newRuntimeStateService(a).recordTurnTokenUsage("thread-old", "turn-1", codexrpc.ThreadTokenUsage{
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-old", "turn-1", "sess-old", "sub-old")
+	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", startedAt)
+	a.runtimeOwner.TurnBindings.RecordTurnTokenUsage("thread-old", "turn-1", codexadapter.ThreadUsage(codexrpc.ThreadTokenUsage{
 		Last: codexrpc.TokenUsageBreakdown{
 			InputTokens: 42,
 		},
-	})
+	}))
 
-	newRuntimeStateService(a).bindTurnSubmission("thread-new", "turn-1", "sess-new", "sub-new")
+	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-new", "turn-1", "sess-new", "sub-new")
 
-	if usageLine, contextLine, elapsedLine := newRuntimeStateService(a).turnFinalMetadata("turn-1", time.Now()); usageLine != "" || contextLine != "" || elapsedLine != "" {
+	if usageLine, contextLine, elapsedLine := a.bindings.TurnMetadata.Metadata("turn-1", time.Now()); usageLine != "" || contextLine != "" || elapsedLine != "" {
 		t.Fatalf("turnFinalMetadata() after rebind = %q, %q, %q, want all empty", usageLine, contextLine, elapsedLine)
 	}
 }

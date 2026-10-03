@@ -12,7 +12,42 @@ import (
 // coordinator just to inspect state.
 type SubmissionLookupService struct {
 	State   QueueStateProvider
-	Runtime QueueRuntimeStateProvider
+	Runtime interface {
+		BoundSubmissionForTurn(string) (string, *domainsubmission.Submission)
+	}
+}
+
+type StatusRepository interface {
+	UpdateSubmission(string, func(*domainsubmission.Submission)) error
+}
+
+// ClaimStartNotice atomically claims the queued-input notice before presentation.
+func (s StatusService) ClaimStartNotice(id string) (bool, error) {
+	claimed := false
+	err := s.Repository.UpdateSubmission(id, func(current *domainsubmission.Submission) {
+		if current != nil && current.WaitedInQueue && !current.StartNoticeSent {
+			current.StartNoticeSent = true
+			claimed = true
+		}
+	})
+	return claimed, err
+}
+
+type StatusService struct {
+	Lookup     SubmissionLookupService
+	Repository StatusRepository
+}
+
+// RecordTurnFailure records diagnostics without finalizing the turn. The
+// turn lifecycle owner still waits for the backend's completion notification.
+func (s StatusService) RecordTurnFailure(threadID, turnID string) error {
+	_, sub := s.Lookup.FindSubmissionByTurn(threadID, turnID)
+	if sub == nil {
+		return nil
+	}
+	return s.Repository.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) {
+		current.Status = domainsubmission.SubmissionStatusFailed.String()
+	})
 }
 
 func (s SubmissionLookupService) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {

@@ -94,7 +94,7 @@ func TestTurnStartedNotificationRebindsPendingSubmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	a := &App{store: store, registry: testRegistryWithTrackers(&appTrackers{turnStreams: newTurnStreamTracker()})}
+	a := prepareTestApp(&App{store: store})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
@@ -138,7 +138,7 @@ func TestFindSubmissionByTurnFallsBackToActiveSubmissionOnThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	a := &App{store: store}
+	a := prepareTestApp(&App{store: store})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                "sess-1",
 		WorkspaceID:        "default",
@@ -157,7 +157,7 @@ func TestFindSubmissionByTurnFallsBackToActiveSubmissionOnThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create submission: %v", err)
 	}
-	sessionKey, sub := newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn("thread-1", "")
+	sessionKey, sub := a.bindings.Submissions.FindSubmissionByTurn("thread-1", "")
 	if sessionKey != "sess-1" || sub == nil || sub.ID != "sub-1" {
 		t.Fatalf("unexpected fallback result: session=%q sub=%#v", sessionKey, sub)
 	}
@@ -335,7 +335,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 		t.Fatalf("user-input pending = %+v, want stored request", pending)
 	}
 
-	empty := &App{store: a.store, feishu: ff, registry: testRegistryWithCodex(fc)}
+	empty := prepareTestApp(&App{store: a.store, feishu: ff, runtimeOwner: testOwnerWithCodex(fc)})
 	empty.ServerRequestService().SendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
 	empty.ServerRequestService().SendUserInputCard(json.RawMessage(`"missing-input"`), pendingforms.ToolUserInputPayload{})
 	handleServerRequest(empty, codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})

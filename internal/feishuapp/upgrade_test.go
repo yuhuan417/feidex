@@ -5,6 +5,7 @@ import (
 	appbackend "feidex/internal/adapter/feishu/backend"
 	apppathpick "feidex/internal/adapter/feishu/pathpicker"
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
+	"feidex/internal/application/backendmaintenance"
 	"feidex/internal/daemon"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
@@ -74,7 +75,7 @@ func TestCommandCodexRendersStatusCard(t *testing.T) {
 	defer func() { newCodexInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newBackendUpgradeService(a).commandCodex(msg, nil); err != nil {
+	if err := a.bindings.BackendUpgrades.commandCodex(msg, nil); err != nil {
 		t.Fatalf("commandCodex() error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -105,7 +106,7 @@ func TestCommandCodexRendersUnsupportedReason(t *testing.T) {
 	defer func() { newCodexInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newBackendUpgradeService(a).commandCodex(msg, nil); err != nil {
+	if err := a.bindings.BackendUpgrades.commandCodex(msg, nil); err != nil {
 		t.Fatalf("commandCodex() error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -137,7 +138,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 	defer func() { newCodexInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newBackendUpgradeService(a).commandCodex(msg, []string{"upgrade"}); err != nil {
+	if err := a.bindings.BackendUpgrades.commandCodex(msg, []string{"upgrade"}); err != nil {
 		t.Fatalf("commandCodex(upgrade) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -161,7 +162,7 @@ func TestCommandCodexUpgradeCreatesPendingRequest(t *testing.T) {
 
 func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	newMaintenanceStateService(a).BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
+	a.bindings.Maintenance.BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := handleCommand(a, msg, "/status"); err != nil {
@@ -216,7 +217,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	if !newMaintenanceStateService(a).BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{
+	if !a.bindings.Maintenance.BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -224,11 +225,11 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
-	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", appruntime.BackendUpgradePendingPayload{
+	a.bindings.BackendMaintenance["codex"].Run(a.Context(), backendmaintenance.Operation{MessageID: "msg-1", SessionKey: "sess-1", Payload: appruntime.BackendUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "1.1.0",
 		UpdateCommand:  "update",
-	})
+	}})
 
 	if got := manager.installs; len(got) != 1 || got[0] != "latest" {
 		t.Fatalf("install versions = %#v", got)
@@ -248,7 +249,7 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
-	snapshot := newMaintenanceStateService(a).CodexUpgradeState()
+	snapshot := a.bindings.Maintenance.CodexUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -295,7 +296,7 @@ func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testin
 		newCodexClient = origClient
 	}()
 
-	if !newMaintenanceStateService(a).BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{
+	if !a.bindings.Maintenance.BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -303,11 +304,11 @@ func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testin
 	}) {
 		t.Fatal("beginCodexUpgrade() should succeed")
 	}
-	newBackendUpgradeService(a).runCodexUpgradeOperation("msg-1", "sess-1", appruntime.BackendUpgradePendingPayload{
+	a.bindings.BackendMaintenance["codex"].Run(a.Context(), backendmaintenance.Operation{MessageID: "msg-1", SessionKey: "sess-1", Payload: appruntime.BackendUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "1.1.0",
 		UpdateCommand:  "update",
-	})
+	}})
 
 	if got := manager.installs; len(got) != 1 || got[0] != "latest" {
 		t.Fatalf("install versions = %#v", got)
@@ -327,7 +328,7 @@ func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testin
 	if !ok || current != fc {
 		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
 	}
-	snapshot := newMaintenanceStateService(a).CodexUpgradeState()
+	snapshot := a.bindings.Maintenance.CodexUpgradeState()
 	if snapshot.Running || snapshot.Result != "failed" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -374,7 +375,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	}()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newBackendUpgradeService(a).commandCodex(msg, []string{"restart"}); err != nil {
+	if err := a.bindings.BackendUpgrades.commandCodex(msg, []string{"restart"}); err != nil {
 		t.Fatalf("commandCodex(restart) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -383,7 +384,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if !newMaintenanceStateService(a).CodexRestartState().Running {
+		if !a.bindings.Maintenance.CodexRestartState().Running {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -403,7 +404,7 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
-	snapshot := newMaintenanceStateService(a).CodexRestartState()
+	snapshot := a.bindings.Maintenance.CodexRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
 	}
@@ -448,14 +449,14 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	snapshot, err := newBackendUpgradeService(a).beginCodexRestartOperation()
+	snapshot, err := a.bindings.BackendMaintenance["codex"].BeginRestart()
 	if err != nil {
 		t.Fatalf("beginCodexRestartOperation() error = %v", err)
 	}
 	if !snapshot.Running {
 		t.Fatalf("beginCodexRestartOperation() = %+v", snapshot)
 	}
-	newBackendUpgradeService(a).runCodexRestartOperation("msg-1", "sess-1")
+	a.bindings.BackendMaintenance["codex"].Run(a.Context(), backendmaintenance.Operation{MessageID: "msg-1", SessionKey: "sess-1", Restart: true})
 	_, liveClosed := fc.statusSnapshot()
 	if liveClosed {
 		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
@@ -471,7 +472,7 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	if !ok || current != fc {
 		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
 	}
-	state := newMaintenanceStateService(a).CodexRestartState()
+	state := a.bindings.Maintenance.CodexRestartState()
 	if state.Running || state.Result != "failed" {
 		t.Fatalf("restart state = %+v", state)
 	}
@@ -518,14 +519,14 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 		newCodexClient = origClient
 	}()
 
-	snapshot, err := newBackendUpgradeService(a).beginCodexRestartOperation()
+	snapshot, err := a.bindings.BackendMaintenance["codex"].BeginRestart()
 	if err != nil {
 		t.Fatalf("beginCodexRestartOperation() error = %v", err)
 	}
 	if !snapshot.Running {
 		t.Fatalf("beginCodexRestartOperation() = %+v", snapshot)
 	}
-	newBackendUpgradeService(a).runCodexRestartOperation("msg-1", "sess-1")
+	a.bindings.BackendMaintenance["codex"].Run(a.Context(), backendmaintenance.Operation{MessageID: "msg-1", SessionKey: "sess-1", Restart: true})
 
 	_, liveClosed := fc.statusSnapshot()
 	if !liveClosed {
@@ -542,7 +543,7 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 	if !ok || current != promoted {
 		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
 	}
-	state := newMaintenanceStateService(a).CodexRestartState()
+	state := a.bindings.Maintenance.CodexRestartState()
 	if state.Running || state.Result != "success" {
 		t.Fatalf("restart state = %+v", state)
 	}
@@ -554,7 +555,7 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 
 func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
 	origClient := newCodexClient
@@ -573,7 +574,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing
 	}
 	defer func() { newCodexClient = origClient }()
 
-	switched, err := newBackendUpgradeService(a).refreshCodexRuntimeAfterMaintenance(context.Background())
+	switched, err := a.bindings.BackendUpgrades.refreshCodexRuntimeAfterMaintenance(context.Background())
 	if err != nil {
 		t.Fatalf("refreshCodexRuntimeAfterMaintenance() error = %v", err)
 	}
@@ -617,7 +618,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 	}
 	defer func() { newCodexClient = origClient }()
 
-	switched, err := newBackendUpgradeService(a).refreshCodexRuntimeAfterMaintenance(context.Background())
+	switched, err := a.bindings.BackendUpgrades.refreshCodexRuntimeAfterMaintenance(context.Background())
 	if err != nil {
 		t.Fatalf("refreshCodexRuntimeAfterMaintenance() error = %v", err)
 	}
@@ -690,7 +691,7 @@ func TestRefreshCodexRuntimeAfterMaintenanceRecoversFrontendThreadBindings(t *te
 	}
 	defer func() { newCodexClient = origClient }()
 
-	switched, err := newBackendUpgradeService(a).refreshCodexRuntimeAfterMaintenance(context.Background())
+	switched, err := a.bindings.BackendUpgrades.refreshCodexRuntimeAfterMaintenance(context.Background())
 	if err != nil {
 		t.Fatalf("refreshCodexRuntimeAfterMaintenance() error = %v", err)
 	}
@@ -768,7 +769,7 @@ func TestCommandClaudeRendersStatusCard(t *testing.T) {
 	defer func() { newClaudeInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newBackendUpgradeService(a).commandClaude(msg, nil); err != nil {
+	if err := a.bindings.BackendUpgrades.commandClaude(msg, nil); err != nil {
 		t.Fatalf("commandClaude() error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -799,7 +800,7 @@ func TestCommandClaudeRendersUnsupportedReason(t *testing.T) {
 	defer func() { newClaudeInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newBackendUpgradeService(a).commandClaude(msg, nil); err != nil {
+	if err := a.bindings.BackendUpgrades.commandClaude(msg, nil); err != nil {
 		t.Fatalf("commandClaude() error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -831,7 +832,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 	defer func() { newClaudeInstallManager = origManager }()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newBackendUpgradeService(a).commandClaude(msg, []string{"upgrade"}); err != nil {
+	if err := a.bindings.BackendUpgrades.commandClaude(msg, []string{"upgrade"}); err != nil {
 		t.Fatalf("commandClaude(upgrade) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -855,9 +856,9 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 
 func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	setClaudeCore(a, &fakeClaudeCore{})
-	newMaintenanceStateService(a).BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
+	a.bindings.Maintenance.BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	if err := handleCommand(a, msg, "/status"); err != nil {
@@ -880,7 +881,7 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 
 func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
@@ -895,15 +896,15 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 		postInstallVersion: "1.1.0",
 	}
 	origManager := newClaudeInstallManager
-	origSmoke := runClaudeSmokeTest
+	origSmoke := a.bindings.ClaudeMaintenance.Smoke
 	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
-	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }
+	a.bindings.ClaudeMaintenance.Smoke = func(_ context.Context) error { return nil }
 	defer func() {
 		newClaudeInstallManager = origManager
-		runClaudeSmokeTest = origSmoke
+		a.bindings.ClaudeMaintenance.Smoke = origSmoke
 	}()
 
-	if !newMaintenanceStateService(a).BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{
+	if !a.bindings.Maintenance.BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -911,11 +912,11 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
-	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", appruntime.BackendUpgradePendingPayload{
+	a.bindings.BackendMaintenance["claude"].Run(a.Context(), backendmaintenance.Operation{MessageID: "msg-1", SessionKey: "sess-1", Payload: appruntime.BackendUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "2.1.139",
 		UpdateCommand:  "update",
-	})
+	}})
 
 	if got := manager.installs; len(got) != 1 || got[0] != "latest" {
 		t.Fatalf("install versions = %#v", got)
@@ -923,7 +924,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	if !claude.closed {
 		t.Fatal("expected live Claude runtime to be closed after successful promotion")
 	}
-	snapshot := newMaintenanceStateService(a).ClaudeUpgradeState()
+	snapshot := a.bindings.Maintenance.ClaudeUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -939,7 +940,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 
 func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
@@ -954,17 +955,17 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 		postInstallVersion: "1.1.0",
 	}
 	origManager := newClaudeInstallManager
-	origSmoke := runClaudeSmokeTest
+	origSmoke := a.bindings.ClaudeMaintenance.Smoke
 	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
-	runClaudeSmokeTest = func(_ *App, _ context.Context) error {
+	a.bindings.ClaudeMaintenance.Smoke = func(_ context.Context) error {
 		return appbackend.ErrString("boom")
 	}
 	defer func() {
 		newClaudeInstallManager = origManager
-		runClaudeSmokeTest = origSmoke
+		a.bindings.ClaudeMaintenance.Smoke = origSmoke
 	}()
 
-	if !newMaintenanceStateService(a).BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{
+	if !a.bindings.Maintenance.BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{
 		Phase:           "preflight",
 		CurrentVersion:  "1.0.0",
 		PreviousVersion: "1.0.0",
@@ -972,11 +973,11 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 	}) {
 		t.Fatal("beginClaudeUpgrade() should succeed")
 	}
-	newBackendUpgradeService(a).runClaudeUpgradeOperation("msg-1", "sess-1", appruntime.BackendUpgradePendingPayload{
+	a.bindings.BackendMaintenance["claude"].Run(a.Context(), backendmaintenance.Operation{MessageID: "msg-1", SessionKey: "sess-1", Payload: appruntime.BackendUpgradePendingPayload{
 		CurrentVersion: "1.0.0",
 		TargetVersion:  "2.1.139",
 		UpdateCommand:  "update",
-	})
+	}})
 
 	if got := manager.installs; len(got) != 1 || got[0] != "latest" {
 		t.Fatalf("install versions = %#v", got)
@@ -984,7 +985,7 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 	if claude.closed {
 		t.Fatal("live Claude runtime should not be closed when self-upgrade validation fails")
 	}
-	snapshot := newMaintenanceStateService(a).ClaudeUpgradeState()
+	snapshot := a.bindings.Maintenance.ClaudeUpgradeState()
 	if snapshot.Running || snapshot.Result != "failed" || snapshot.CurrentVersion != "1.0.0" {
 		t.Fatalf("final snapshot = %+v", snapshot)
 	}
@@ -1000,7 +1001,7 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 
 func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
@@ -1014,16 +1015,16 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 		},
 	}
 	origManager := newClaudeInstallManager
-	origSmoke := runClaudeSmokeTest
+	origSmoke := a.bindings.ClaudeMaintenance.Smoke
 	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
-	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }
+	a.bindings.ClaudeMaintenance.Smoke = func(_ context.Context) error { return nil }
 	defer func() {
 		newClaudeInstallManager = origManager
-		runClaudeSmokeTest = origSmoke
+		a.bindings.ClaudeMaintenance.Smoke = origSmoke
 	}()
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newBackendUpgradeService(a).commandClaude(msg, []string{"restart"}); err != nil {
+	if err := a.bindings.BackendUpgrades.commandClaude(msg, []string{"restart"}); err != nil {
 		t.Fatalf("commandClaude(restart) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
@@ -1032,7 +1033,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if !newMaintenanceStateService(a).ClaudeRestartState().Running {
+		if !a.bindings.Maintenance.ClaudeRestartState().Running {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -1040,7 +1041,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	if !claude.closed {
 		t.Fatal("expected live runtime to be closed during restart")
 	}
-	snapshot := newMaintenanceStateService(a).ClaudeRestartState()
+	snapshot := a.bindings.Maintenance.ClaudeRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
 		t.Fatalf("restart snapshot = %+v", snapshot)
 	}
@@ -1056,7 +1057,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 
 func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = domainbackend.BackendClaude
+	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
@@ -1070,26 +1071,26 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 		},
 	}
 	origManager := newClaudeInstallManager
-	origSmoke := runClaudeSmokeTest
+	origSmoke := a.bindings.ClaudeMaintenance.Smoke
 	newClaudeInstallManager = func(string) claudeInstallManager { return manager }
-	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return appbackend.ErrString("restart-boom") }
+	a.bindings.ClaudeMaintenance.Smoke = func(_ context.Context) error { return appbackend.ErrString("restart-boom") }
 	defer func() {
 		newClaudeInstallManager = origManager
-		runClaudeSmokeTest = origSmoke
+		a.bindings.ClaudeMaintenance.Smoke = origSmoke
 	}()
 
-	snapshot, err := newBackendUpgradeService(a).beginClaudeRestartOperation()
+	snapshot, err := a.bindings.BackendMaintenance["claude"].BeginRestart()
 	if err != nil {
 		t.Fatalf("beginClaudeRestartOperation() error = %v", err)
 	}
 	if !snapshot.Running {
 		t.Fatalf("beginClaudeRestartOperation() = %+v", snapshot)
 	}
-	newBackendUpgradeService(a).runClaudeRestartOperation("msg-1", "sess-1")
+	a.bindings.BackendMaintenance["claude"].Run(a.Context(), backendmaintenance.Operation{MessageID: "msg-1", SessionKey: "sess-1", Restart: true})
 	if claude.closed {
 		t.Fatal("restart should keep old runtime alive when new runtime validation fails")
 	}
-	state := newMaintenanceStateService(a).ClaudeRestartState()
+	state := a.bindings.Maintenance.ClaudeRestartState()
 	if state.Running || state.Result != "failed" {
 		t.Fatalf("restart state = %+v", state)
 	}
@@ -1108,11 +1109,11 @@ func TestRefreshClaudeRuntimeAfterMaintenanceOnlySmokesOnCodexBackend(t *testing
 	claude := &fakeClaudeCore{}
 	setClaudeCore(a, claude)
 
-	origSmoke := runClaudeSmokeTest
-	runClaudeSmokeTest = func(_ *App, _ context.Context) error { return nil }
-	defer func() { runClaudeSmokeTest = origSmoke }()
+	origSmoke := a.bindings.ClaudeMaintenance.Smoke
+	a.bindings.ClaudeMaintenance.Smoke = func(_ context.Context) error { return nil }
+	defer func() { a.bindings.ClaudeMaintenance.Smoke = origSmoke }()
 
-	switched, err := newBackendUpgradeService(a).refreshClaudeRuntimeAfterMaintenance(context.Background())
+	switched, err := a.bindings.ClaudeMaintenance.Refresh(context.Background())
 	if err != nil {
 		t.Fatalf("refreshClaudeRuntimeAfterMaintenance() error = %v", err)
 	}
@@ -1141,7 +1142,7 @@ done
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := newBackendUpgradeService(a).claudeSmokeTest(ctx); err != nil {
+	if err := a.bindings.ClaudeMaintenance.Smoke(ctx); err != nil {
 		t.Fatalf("claudeSmokeTest() error = %v", err)
 	}
 }
@@ -1163,7 +1164,7 @@ done
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := newBackendUpgradeService(a).claudeSmokeTest(ctx)
+	err := a.bindings.ClaudeMaintenance.Smoke(ctx)
 	if err == nil || !strings.Contains(err.Error(), "exited after initialize") {
 		t.Fatalf("claudeSmokeTest() error = %v, want exited after initialize", err)
 	}
@@ -1206,7 +1207,7 @@ func TestUpgradeBranches(t *testing.T) {
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{Version: "v9.9.9", BinaryURL: "https://download.test/bin", ExpectedSHA256: "abc"}}
 	}
-	card, err := newUpgradeService(a).RenderUpgradeCardForTarget("sess-1", "user-1", "", false)
+	card, err := a.bindings.Upgrades.RenderUpgradeCardForTarget("sess-1", "user-1", "", false)
 	if err != nil || card == nil {
 		t.Fatalf("renderUpgradeCard(latest) = %#v, %v", card, err)
 	}
@@ -1219,7 +1220,7 @@ func TestUpgradeBranches(t *testing.T) {
 			},
 		}
 	}
-	card, err = newUpgradeService(a).RenderUpgradeCardForVersion("sess-1", "user-1", "v1.0.0")
+	card, err = a.bindings.Upgrades.RenderUpgradeCardForVersion("sess-1", "user-1", "v1.0.0")
 	if err != nil || card == nil {
 		t.Fatalf("renderUpgradeCardForVersion() = %#v, %v", card, err)
 	}
@@ -1227,7 +1228,7 @@ func TestUpgradeBranches(t *testing.T) {
 	newDaemonManager = func(string) (daemon.Manager, error) {
 		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: false}}, nil
 	}
-	if _, err := newUpgradeService(a).RenderUpgradeCardForTarget("sess-1", "user-1", "", false); err == nil {
+	if _, err := a.bindings.Upgrades.RenderUpgradeCardForTarget("sess-1", "user-1", "", false); err == nil {
 		t.Fatal("expected renderUpgradeCard() to reject uninstalled daemon")
 	}
 
@@ -1237,19 +1238,19 @@ func TestUpgradeBranches(t *testing.T) {
 	newReleaseClient = func() releaseClient {
 		return &fakeReleaseClient{info: &release.ReleaseInfo{Version: "v10.0.0", BinaryURL: "https://download.test/bin", ExpectedSHA256: "abc"}}
 	}
-	if resp, err := newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "missing"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := a.bindings.Upgrades.CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "missing"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(missing) = %#v, %v", resp, err)
 	}
 	if err := a.store.UpsertPending(&appstate.PendingRequest{ID: "upgrade-bad", Kind: "upgrade_release", OwnerUserID: "other", Status: "pending"}); err != nil {
 		t.Fatalf("UpsertPending(upgrade-bad) error = %v", err)
 	}
-	if resp, err := newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-bad"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := a.bindings.Upgrades.CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-bad"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(wrong owner) = %#v, %v", resp, err)
 	}
 	if err := a.store.UpsertPending(&appstate.PendingRequest{ID: "upgrade-json", Kind: "upgrade_release", OwnerUserID: "user-1", Status: "pending", PayloadJSON: "{"}); err != nil {
 		t.Fatalf("UpsertPending(upgrade-json) error = %v", err)
 	}
-	if resp, err := newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-json"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := a.bindings.Upgrades.CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-json"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(bad json) = %#v, %v", resp, err)
 	}
 
@@ -1264,7 +1265,7 @@ func TestUpgradeBranches(t *testing.T) {
 		t.Fatalf("UpsertPending(upgrade-start) error = %v", err)
 	}
 	startDaemonUpgrade = func(daemon.UpgradeSpec) (string, error) { return "", errors.New("boom") }
-	if resp, err := newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-start"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+	if resp, err := a.bindings.Upgrades.CompleteUpgradeAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "upgrade-start"}}, "upgrade.confirm"); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("completeUpgradeAction(start fail) = %#v, %v", resp, err)
 	}
 
@@ -1275,7 +1276,7 @@ func TestUpgradeBranches(t *testing.T) {
 	if err := os.WriteFile(localArtifact, []byte("local-binary"), 0o755); err != nil {
 		t.Fatalf("WriteFile(localArtifact) error = %v", err)
 	}
-	resp, err := newUpgradeService(a).CompleteUpgradeLocalPick(&feishu.CardAction{
+	resp, err := a.bindings.Upgrades.CompleteUpgradeLocalPick(&feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-1",
 		ActionValue: map[string]any{"session_key": "sess-1"},
@@ -1369,7 +1370,7 @@ func TestUpgradeCommandReturnsCheckOnlyCardOnDarwin(t *testing.T) {
 	currentGOARCH = func() string { return "arm64" }
 
 	msg := &feishu.InboundMessage{MessageID: "m-darwin", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := newUpgradeService(a).CommandUpgrade(msg, nil); err != nil {
+	if err := a.bindings.Upgrades.CommandUpgrade(msg, nil); err != nil {
 		t.Fatalf("commandUpgrade() error = %v", err)
 	}
 	if daemonCalled {

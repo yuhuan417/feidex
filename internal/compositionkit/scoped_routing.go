@@ -31,3 +31,11 @@ func (s ScopedRoutingConfiguration) Set(scope applicationrouting.Scope, setting 
 func (s ScopedRoutingConfiguration) Ensure(scope applicationrouting.Scope) (*domainrouting.AgentBinding, *domainrouting.BotProfile, error) {
 	return s.Service.Ensure(scope)
 }
+
+func (s ScopedRoutingConfiguration) ChangeServiceTier(scope applicationrouting.Scope, value string, toggle bool) (applicationrouting.ScopedConfigurationResult, error) {
+	result, err := s.Service.ChangeServiceTier(scope, value, toggle)
+	if err != nil {
+		return result, err
+	}
+	return result, s.Runner.Run(s.Context, result.Effects)
+}

@@ -19,7 +19,7 @@ func TestWorkspaceViewsRejectOtherFrontendAndKeepDetachedRevision(t *testing.T) 
 		t.Fatal(err)
 	}
 	mu := &sync.RWMutex{}
-	scope := scoped.NewScoped(store, "bot-a", "codex", false)
+	scope := scoped.NewScoped(store, "bot-a", "codex")
 	scope.RevisionMutex = mu
 	if err := scope.SaveSession(&conversation.Session{Key: "feishu:frontend:bot-a:chat:group", ChatType: "group", ChatID: "group"}); err != nil {
 		t.Fatal(err)

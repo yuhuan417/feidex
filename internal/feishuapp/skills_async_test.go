@@ -33,7 +33,7 @@ func TestSkillsCallbacksAckBeforeReadingCatalog(t *testing.T) {
 				t.Fatalf("async completion: reads=%d patches=%d", reads, len(ff.patchedCards))
 			}
 			if name == "skills.select" {
-				if selected, ok := newSkillUseCase(a).SessionPendingSkill("session"); !ok || selected.Name != "selected" {
+				if selected, ok := a.bindings.Skills.SessionPendingSkill("session"); !ok || selected.Name != "selected" {
 					t.Fatalf("async selection was not stored: %+v %v", selected, ok)
 				}
 			}
@@ -43,7 +43,7 @@ func TestSkillsCallbacksAckBeforeReadingCatalog(t *testing.T) {
 
 func TestSkillsCallbackRejectedAfterShutdown(t *testing.T) {
 	a, ff, fc := newTestApp(t)
-	a.frontendRuntime.Cancel()
+	ensureRuntimeOwner(a).Lifecycle.Cancel()
 	fc.callHook = func(context.Context, string, any, any) error {
 		t.Fatal("stopping frontend must not read catalog")
 		return nil

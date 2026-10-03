@@ -128,13 +128,13 @@ func TestMenuBackControlIsTheFinalAction(t *testing.T) {
 		Status:      state.AgentBindingStatusActive.String(),
 	}
 
-	workspaceCard := newWorkspaceRenderService(a).RenderWorkspaceCloneSuccessCard(sessionKey, "ws-1", "/tmp/ws-1")
+	workspaceCard := a.bindings.WorkspacePresentation.RenderWorkspaceCloneSuccessCard(sessionKey, "ws-1", "/tmp/ws-1")
 	assertBackControlIsFinal(t, "workspace clone success", buttonLabelsForTest(workspaceCard))
 
 	quietCard := renderQuietModeMenuCard(a, sessionKey)
 	assertBackControlIsFinal(t, "quiet mode", buttonLabelsForTest(quietCard))
 
-	auxCard, err := newBindingService(a).renderBindingAuxiliaryModelConfigCard(sessionKey, binding)
+	auxCard, err := a.bindings.BindingCommands.renderBindingAuxiliaryModelConfigCard(sessionKey, binding)
 	if err != nil {
 		t.Fatalf("renderBindingAuxiliaryModelConfigCard() error = %v", err)
 	}
