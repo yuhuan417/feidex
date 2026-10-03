@@ -90,8 +90,8 @@ func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {
 		return mcpbridge.Dependencies{}
 	}
 	return mcpbridge.Dependencies{
-		FeishuClient:  a.feishu,
-		StateProvider: a.store,
+		AttachmentSender: a.feishu,
+		StateProvider:    a.store,
 		StartedTurnItemsFn: func() []mcpbridge.StartedTurnItem {
 			tracker := newRuntimeStateService(a).turnItemTracker()
 			if tracker == nil {

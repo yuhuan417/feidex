@@ -38,7 +38,7 @@ type Publication struct {
 	Token string
 }
 
-type FeishuClient interface {
+type AttachmentSender interface {
 	ReplyLocalAttachment(context.Context, string, string, bool) error
 	ReplyLocalImage(context.Context, string, string, bool) error
 	ReplyLocalVideo(context.Context, string, string, bool) error
@@ -62,15 +62,15 @@ type StartedTurnItem struct {
 // Dependencies is the explicit MCP capability set assembled by the runtime
 // composition root.
 type Dependencies struct {
-	FeishuClient                 FeishuClient
+	AttachmentSender             AttachmentSender
 	StateProvider                StateProvider
 	StartedTurnItemsFn           func() []StartedTurnItem
 	FindSubmissionByTurnFn       func(string, string) (string, *domainsubmission.Submission)
 	ReplyInThreadForSubmissionFn func(*domainsubmission.Submission) bool
 }
 
-func (d Dependencies) Feishu() FeishuClient { return d.FeishuClient }
-func (d Dependencies) State() StateProvider { return d.StateProvider }
+func (d Dependencies) Attachments() AttachmentSender { return d.AttachmentSender }
+func (d Dependencies) State() StateProvider          { return d.StateProvider }
 func (d Dependencies) StartedTurnItems() []StartedTurnItem {
 	if d.StartedTurnItemsFn == nil {
 		return nil
@@ -315,21 +315,21 @@ func (s *Service) handleToolsCall(raw json.RawMessage, sessionKey string) (map[s
 	if _, err := validateToolLocalFile(path); err != nil {
 		return nil, err
 	}
-	if s == nil || s.app.FeishuClient == nil {
+	if s == nil || s.app.AttachmentSender == nil {
 		return nil, &toolError{Code: "send_failed", Message: "Feishu sender unavailable", Retryable: true}
 	}
 	inThread := s.app.ReplyInThreadForSubmission(ctx.Submission)
 	switch toolName {
 	case SendIMFileToolName:
-		if err := s.app.Feishu().ReplyLocalAttachment(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
+		if err := s.app.Attachments().ReplyLocalAttachment(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
 			return nil, &toolError{Code: "send_failed", Message: err.Error(), Retryable: true}
 		}
 	case SendIMImageToolName:
-		if err := s.app.Feishu().ReplyLocalImage(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
+		if err := s.app.Attachments().ReplyLocalImage(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
 			return nil, &toolError{Code: "send_failed", Message: err.Error(), Retryable: true}
 		}
 	case SendIMVideoToolName:
-		if err := s.app.Feishu().ReplyLocalVideo(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
+		if err := s.app.Attachments().ReplyLocalVideo(context.Background(), ctx.Submission.TriggerMessageID, path, inThread); err != nil {
 			return nil, &toolError{Code: "send_failed", Message: err.Error(), Retryable: true}
 		}
 	default:
