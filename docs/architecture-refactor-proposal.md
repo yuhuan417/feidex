@@ -577,3 +577,4 @@ Codex server request
 - backend reply effect 与 interaction approval port 改用 `json.RawMessage`；Codex adapter 在协议边界解码并保留字符串数组语义，application 不再接受任意 Go reply value。
 - `presentation.Action` 的 action value 改用 `json.RawMessage`，Feishu map 只在 outbound adapter 还原；goal command 的消息发送统一使用已注入的 semantic outbound capability。
 - workspace renderer 已移除对 `appcore` helper 的依赖，workspace selection key 和文本 fallback 直接使用 application/domain 值；新增守卫防止 renderer 重新依赖 transitional host helper。
+- 模型目录的默认项解析、ID/name 查找和 reasoning effort 能力判断已迁入 `internal/application/modelconfig`；`internal/app/modelconfig` 只保留兼容别名和 backend/config/Feishu 编排。

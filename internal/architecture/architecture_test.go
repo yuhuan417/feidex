@@ -200,6 +200,25 @@ func TestWorkspaceRendererDoesNotDependOnAppCoreHelpers(t *testing.T) {
 	}
 }
 
+func TestModelCatalogPolicyLivesInApplication(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "modelconfig", "modelconfig.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, signature := range []string{
+		"func DefaultModelEntry(",
+		"func LookupModelEntry(",
+		"func FindModelEntry(",
+		"func ModelSupportsEffort(",
+	} {
+		if strings.Contains(source, signature) {
+			t.Fatalf("transitional modelconfig package reintroduced catalog policy %s", signature)
+		}
+	}
+}
+
 func TestApplicationDoesNotCallSynchronousOutboundPorts(t *testing.T) {
 	root := repositoryRoot(t)
 	base := filepath.Join(root, "internal", "application")

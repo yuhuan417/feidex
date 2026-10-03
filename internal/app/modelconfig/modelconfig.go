@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"feidex/internal/adapter/feishu/cards"
+	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/runtime"
@@ -268,54 +269,14 @@ func ConfiguredPlanReasoningEffort(cfg *config.Config) string {
 	return strings.TrimSpace(cfg.Codex.PlanReasoningEffort)
 }
 
-// DefaultModelEntry returns the default model from the result, or the first entry if none is marked default.
-func DefaultModelEntry(result catalog.ModelListResult) *catalog.ModelListEntry {
-	for i := range result.Data {
-		if result.Data[i].IsDefault {
-			return &result.Data[i]
-		}
-	}
-	if len(result.Data) == 0 {
-		return nil
-	}
-	return &result.Data[0]
-}
-
-// LookupModelEntry finds a model by ID or Model field; returns nil if not found.
-func LookupModelEntry(result catalog.ModelListResult, modelID string) *catalog.ModelListEntry {
-	modelID = strings.TrimSpace(modelID)
-	if modelID == "" {
-		return DefaultModelEntry(result)
-	}
-	for i := range result.Data {
-		if result.Data[i].ID == modelID || result.Data[i].Model == modelID {
-			return &result.Data[i]
-		}
-	}
-	return nil
-}
-
-// FindModelEntry finds a model by ID, falling back to the default entry.
-func FindModelEntry(result catalog.ModelListResult, modelID string) *catalog.ModelListEntry {
-	if found := LookupModelEntry(result, modelID); found != nil {
-		return found
-	}
-	return DefaultModelEntry(result)
-}
-
-// ModelSupportsEffort reports whether the model supports the given reasoning effort.
-func ModelSupportsEffort(model *catalog.ModelListEntry, effort string) bool {
-	effort = strings.TrimSpace(effort)
-	if model == nil || effort == "" {
-		return true
-	}
-	for _, item := range model.SupportedReasoningEfforts {
-		if strings.TrimSpace(item.ReasoningEffort) == effort {
-			return true
-		}
-	}
-	return false
-}
+// Catalog policy lives in application/modelconfig. These aliases preserve the
+// transitional package API while keeping the owner out of internal/app.
+var (
+	DefaultModelEntry   = applicationmodelconfig.DefaultModelEntry
+	LookupModelEntry    = applicationmodelconfig.LookupModelEntry
+	FindModelEntry      = applicationmodelconfig.FindModelEntry
+	ModelSupportsEffort = applicationmodelconfig.ModelSupportsEffort
+)
 
 // EffectiveConfiguredModelAndEffort resolves the effective model and effort from config and model catalog.
 func EffectiveConfiguredModelAndEffort(cfg *config.Config, result catalog.ModelListResult) (model *catalog.ModelListEntry, effort string) {
