@@ -23,7 +23,29 @@ type Service[T runtime.ManagedFrontend] struct {
 }
 
 func NewFrontend(scope FrontendScope) (*app.App, error) {
-	return app.NewFeishuEntrypoint(scope)
+	frontend, err := app.NewFeishuShell(scope)
+	if err != nil {
+		return nil, err
+	}
+	// All production objects are assembled here. internal/app only exposes
+	// boundary factories and attaches the resulting parts to its Feishu shell.
+	app.AttachTrackers(frontend, app.NewTrackers(frontend))
+	app.AttachEffectRunner(frontend, app.NewEffectRunner(frontend))
+	app.AttachStateView(frontend, app.NewStateView(frontend))
+	app.AttachWorkspacePresentation(frontend, app.NewWorkspacePresentation(frontend))
+	app.AttachDispatcher(frontend, app.NewDispatcher(frontend))
+	if err := app.CanonicalizeStoredSessionKeys(frontend); err != nil {
+		return nil, err
+	}
+	if backend := app.BackendKind(frontend); backend != "" {
+		handle, err := app.BuildBackendRuntimeHandle(frontend, backend)
+		if err != nil {
+			return nil, err
+		}
+		app.InstallBackendRuntime(frontend, handle)
+	}
+	app.InstallFeishuHandlers(frontend)
+	return frontend, nil
 }
 
 func scopes(cfg *config.Config, cfgPath string) ([]FrontendScope, error) {
@@ -47,6 +69,7 @@ func scopes(cfg *config.Config, cfgPath string) ([]FrontendScope, error) {
 			FeishuTransport: transport,
 			Registry:        runtime.NewRegistry(transport),
 			RuntimeOwner:    runtime.NewFrontendOwner(),
+			InboundDeduper:  runtime.NewInboundDeduper(),
 		})
 	}
 	return result, nil

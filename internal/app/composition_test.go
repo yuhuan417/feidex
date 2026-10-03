@@ -22,7 +22,28 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 	scope.FeishuTransport = appfeishuwrap.WrapFeishuClient(newFeishuClient(scope.Frontend.Feishu))
 	scope.Registry = frontendruntime.NewRegistry(scope.FeishuTransport)
 	scope.RuntimeOwner = frontendruntime.NewFrontendOwner()
-	return NewFeishuEntrypoint(scope)
+	scope.InboundDeduper = frontendruntime.NewInboundDeduper()
+	a, err := NewFeishuShell(scope)
+	if err != nil {
+		return nil, err
+	}
+	AttachTrackers(a, NewTrackers(a))
+	AttachEffectRunner(a, NewEffectRunner(a))
+	AttachStateView(a, NewStateView(a))
+	AttachWorkspacePresentation(a, NewWorkspacePresentation(a))
+	AttachDispatcher(a, NewDispatcher(a))
+	if err := CanonicalizeStoredSessionKeys(a); err != nil {
+		return nil, err
+	}
+	if backend := BackendKind(a); backend != "" {
+		handle, err := BuildBackendRuntimeHandle(a, backend)
+		if err != nil {
+			return nil, err
+		}
+		InstallBackendRuntime(a, handle)
+	}
+	InstallFeishuHandlers(a)
+	return a, nil
 }
 
 func newTestService(cfg *config.Config, path string) ([]*App, error) {

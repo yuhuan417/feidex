@@ -18,4 +18,5 @@ type FrontendScope struct {
 	FeishuTransport any
 	Registry        *Registry
 	RuntimeOwner    *FrontendOwner
+	InboundDeduper  *InboundDeduper
 }

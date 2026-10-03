@@ -9,7 +9,6 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
-	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/backendops"
 	"feidex/internal/domain/conversation"
@@ -87,7 +86,10 @@ type appTrackers struct {
 	goals               *goalcmd.Tracker
 }
 
-func NewFeishuEntrypoint(scope frontendruntime.FrontendScope) (*App, error) {
+// NewFeishuShell validates the composition output and creates the thin
+// frontend entrypoint object. Runtime parts are attached by
+// internal/composition after the shell is created.
+func NewFeishuShell(scope frontendruntime.FrontendScope) (*App, error) {
 	cfg, cfgPath, store, frontend := scope.Config, scope.ConfigPath, scope.Store, scope.Frontend
 	if cfg == nil {
 		return nil, fmt.Errorf("nil config")
@@ -100,7 +102,7 @@ func NewFeishuEntrypoint(scope frontendruntime.FrontendScope) (*App, error) {
 	if !ok || feishuTransport == nil {
 		return nil, fmt.Errorf("nil Feishu transport")
 	}
-	if scope.Registry == nil || scope.RuntimeOwner == nil {
+	if scope.Registry == nil || scope.RuntimeOwner == nil || scope.InboundDeduper == nil {
 		return nil, fmt.Errorf("frontend composition is incomplete")
 	}
 	owner := scope.RuntimeOwner
@@ -116,46 +118,9 @@ func NewFeishuEntrypoint(scope frontendruntime.FrontendScope) (*App, error) {
 		registry:            scope.Registry,
 		feishu:              feishuTransport,
 		started:             time.Now(),
-		deduper:             frontendruntime.NewInboundDeduper(),
+		deduper:             scope.InboundDeduper,
 		runtimeOwner:        owner,
 	}
-	app.registry.Set("trackers", &appTrackers{
-		turnStreams:        newTurnStreamTracker(),
-		turnItems:          turnitem.NewTracker(),
-		workspaceCloneOps:  newWorkspaceCloneTracker(),
-		turnBindings:       turnbinding.NewTracker(store),
-		finalCardPatches:   finalcardpatch.NewTracker(),
-		pendingSkills:      skillruntime.NewTracker(),
-		groupAnnouncements: newGroupAnnouncementTracker(),
-		submissionStarts:   owner.SubmissionStarts,
-	})
-	effectRunner := newEffectRunner(app)
-	owner.EffectRunner = &effectRunner
-	if notifying, ok := app.feishu.(*appfeishuwrap.NotifyingFeishuClient); ok {
-		app.feishu = &appfeishuwrap.EffectClient{NotifyingFeishuClient: notifying, Frontend: identity.FrontendID(app.frontendID), Runner: effectRunner}
-	}
-	app.stateView = appstate.NewScoped(app.store, app.FrontendID(), configuredBackend(app), allowLegacyFrontendFallback(app))
-	app.stateView.RevisionMutex = app.ConfigMu()
-	// Workspace presentation is a composition concern. Build it once after the
-	// scoped state repository exists; its query reads detached snapshots and
-	// follows runtime backend changes through the injected capability.
-	app.registry.Set("workspaceRender", buildWorkspaceRenderService(app))
-	dispatcher := newInputDispatcher(app)
-	owner.Dispatcher = &dispatcher
-	if err := canonicalizeStoredSessionKeys(app); err != nil {
-		return nil, err
-	}
-	if backend != "" {
-		handle, err := buildBackendRuntimeHandle(app, backend)
-		if err != nil {
-			return nil, err
-		}
-		handle.install(app)
-	}
-	app.feishu.SetHandlers(app.HandleFeishuMessage, app.HandleCardAction, app.HandleFeishuRecall, app.HandleFeishuReaction)
-	configureGroupMessagePolicy(app)
-	configureGroupPrimaryEvents(app)
-	app.feishu.ConfigureLocalFileLinks("", "")
 	return app, nil
 }
 
