@@ -7,12 +7,10 @@ import (
 )
 
 func TestRenderGroupMenuButtonsPutsBackActionsLast(t *testing.T) {
-	buttons := RenderGroupMenuButtons("menu.example", "session-1", func(string) []menutypes.MenuItemSpec {
-		return []menutypes.MenuItemSpec{
-			{GroupAction: "menu.example", Action: "menu.root", Label: "返回上一级", Kind: menutypes.MenuItemBack},
-			{GroupAction: "menu.example", Action: "menu.first", Label: "First", Kind: menutypes.MenuItemDirect, Slash: "/first"},
-			{GroupAction: "menu.example", Action: "menu.second", Label: "Second", Kind: menutypes.MenuItemSubmenu},
-		}
+	buttons := RenderGroupMenuButtons("session-1", []menutypes.MenuItemSpec{
+		{GroupAction: "menu.example", Action: "menu.root", Label: "返回上一级", Kind: menutypes.MenuItemBack},
+		{GroupAction: "menu.example", Action: "menu.first", Label: "First", Kind: menutypes.MenuItemDirect, Slash: "/first"},
+		{GroupAction: "menu.example", Action: "menu.second", Label: "Second", Kind: menutypes.MenuItemSubmenu},
 	})
 
 	if len(buttons) != 3 {

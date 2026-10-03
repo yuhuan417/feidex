@@ -2,10 +2,13 @@ package app
 
 import (
 	"context"
-	appskillscmd "feidex/internal/app/skillscmd"
-	"feidex/internal/config"
-	"feidex/internal/domain/conversation"
+	skillsadapter "feidex/internal/adapter/feishu/skills"
+	skillapp "feidex/internal/application/skill"
+	"feidex/internal/composition"
+	"feidex/internal/domain/identity"
+	skillcatalog "feidex/internal/domain/skill"
 	"feidex/internal/feishu"
+	skillruntime "feidex/internal/runtime/skill"
 )
 
 type skillsOutbound struct{ app *App }
@@ -14,46 +17,48 @@ func (o skillsOutbound) ReplyCard(ctx context.Context, messageID string, card ma
 	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
 }
 
-func (o skillsOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
-	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
+func (o skillsOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
+	return patchCardEffect(ctx, o.app, messageID, card)
 }
 
-// newSkillsService creates a skillscmd.Service with callbacks wired to *App.
-func newSkillsService(a *App) *appskillscmd.Service {
+// This capability follows the frontend's client replacements without exposing
+// a raw protocol client or its lifetime to the use case.
+type skillsCatalog struct{ app *App }
 
-	s := appskillscmd.NewService()
-	s.Outbound = func() appskillscmd.Outbound { return skillsOutbound{app: a} }
-	s.RequireCodexClient = func() (appskillscmd.CodexClient, error) {
-		return requireCodexGateway(a)
+func (c skillsCatalog) ListSkills(ctx context.Context, cwd string, reload bool) (skillcatalog.SkillsListEntry, error) {
+	gateway, err := requireCodexGateway(c.app)
+	if err != nil {
+		return skillcatalog.SkillsListEntry{}, err
 	}
-	s.AppStateSession = func(sessionKey string) *conversation.Session {
-		return a.State().Session(sessionKey)
-	}
-	s.DefaultWorkspaceID = func() string {
-		return defaultWorkspaceID(a)
-	}
-	s.FindWorkspace = func(workspaceID string) *config.Workspace {
-		return config.FindWorkspace(a.cfg, workspaceID)
-	}
-	s.FormatMenuBody = menuCardBody
-	s.CommandLabel = commandLabel
-	s.GetPendingSkillTracker = func() *appskillscmd.PendingSkillTracker {
-		if a == nil {
-			return nil
-		}
-		trackers := a.Trackers()
-		if trackers.pendingSkills == nil {
-			trackers.pendingSkills = appskillscmd.NewPendingSkillTracker()
-		}
-		return trackers.pendingSkills
-	}
-	s.MakeSessionKey = func(msg *feishu.InboundMessage) string {
-		return makeSessionKey(a, msg)
-	}
-	s.ReplyInThreadEnabled = func(chatType string) bool {
-		return replyInThreadEnabled(a, chatType)
-	}
-	return s
+	return gateway.ListSkills(ctx, cwd, reload)
 }
 
-// appskillscmd.MatchSkillsCommand is the alias for the exported command matcher.
+func newSkillUseCase(a *App) *skillapp.Service {
+	trackers := a.Trackers()
+	a.composition.mu.Lock()
+	if trackers.pendingSkills == nil {
+		trackers.pendingSkills = skillruntime.NewTracker()
+	}
+	pending := trackers.pendingSkills
+	a.composition.mu.Unlock()
+	return composition.NewSkillService(composition.SkillDependencies{
+		Frontend: identity.FrontendID(a.FrontendID()),
+		Context:  a.Context, Config: a.cfg, Mutex: a.ConfigMu(),
+		Sessions: a.State(), Pending: pending,
+		Catalog: skillsCatalog{app: a},
+	})
+}
+
+func newSkillsService(a *App) *skillsadapter.Service {
+	return &skillsadapter.Service{
+		Service: newSkillUseCase(a), Outbound: skillsOutbound{app: a},
+		MakeSessionKey:       func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
+		ReplyInThreadEnabled: func(chatType string) bool { return replyInThreadEnabled(a, chatType) },
+		FormatMenuBody:       menuCardBody, CommandLabel: commandLabel,
+		RunAsync: func(key string, work func()) bool {
+			return a.frontendRuntime.Run(func() {
+				a.sessionActorRuntime().Run("session:"+key, work)
+			}, a.asyncRunner)
+		},
+	}
+}

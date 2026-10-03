@@ -17,7 +17,7 @@ const modulePath = "feidex"
 
 func TestDeletedHostBridgesCannotReturn(t *testing.T) {
 	root := repositoryRoot(t)
-	for _, relative := range []string{"internal/app/appcore", "internal/app/workspace"} {
+	for _, relative := range []string{"internal/app/appcore", "internal/app/workspace", "internal/app/commandmatch", "internal/app/skillscmd"} {
 		if _, err := os.Stat(filepath.Join(root, relative)); !os.IsNotExist(err) {
 			t.Fatalf("deleted host bridge must remain absent: %s", relative)
 		}
@@ -366,7 +366,7 @@ func TestMigratedCommandPackagesDoNotImportFeishuTransport(t *testing.T) {
 	root := repositoryRoot(t)
 	packages := []string{
 		"internal/app/goalcmd",
-		"internal/app/skillscmd",
+		"internal/adapter/feishu/skills",
 		"internal/app/reviewcmd",
 		"internal/app/planmode",
 		"internal/app/upgradecmd",

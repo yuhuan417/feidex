@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	appcommandmatch "feidex/internal/app/commandmatch"
+	appfeatures "feidex/internal/application/features"
 
 	"strings"
 
@@ -43,7 +43,7 @@ func newUpgradeService(app *App) appupgradecmd.UpgradeService {
 			return startDaemonUpgrade(spec)
 		},
 		NormalizeUpgradeVersion: func(raw string) (string, error) {
-			return appcommandmatch.NormalizeUpgradeVersion(raw)
+			return appfeatures.NormalizeUpgradeVersion(raw)
 		},
 		RenderSystemMenuCard: func(sessionKey string) map[string]any {
 			return renderSystemMenuCard(app, sessionKey)

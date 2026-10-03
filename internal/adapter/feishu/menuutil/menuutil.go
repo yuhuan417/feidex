@@ -93,55 +93,30 @@ func MenuGroupSpec(action string) (menutypes.MenuGroupSpec, bool) {
 
 // MenuGroupSpecForBackend returns the menu group spec for the given action and backend.
 func MenuGroupSpecForBackend(action, backend string) (menutypes.MenuGroupSpec, bool) {
-	action = strings.TrimSpace(action)
-	for _, spec := range menutypes.MenuGroupSpecs() {
-		if spec.Action == action {
-			return backendcaps.ForKind(backend).MenuGroupSpec(action, spec), true
-		}
+	spec, ok := menutypes.FindMenuGroup(action)
+	if !ok {
+		return spec, false
 	}
-	return menutypes.MenuGroupSpec{}, false
+	return backendcaps.ForKind(backend).MenuGroupSpec(strings.TrimSpace(action), spec), true
 }
 
 // MenuItemSpecForAction returns the menu item spec for the given action.
 func MenuItemSpecForAction(action string) (menutypes.MenuItemSpec, bool) {
-	action = strings.TrimSpace(action)
-	for _, spec := range menutypes.MenuItemSpecs() {
-		if spec.Action == action {
-			return spec, true
-		}
-	}
-	return menutypes.MenuItemSpec{}, false
+	return menutypes.FindMenuItem(action)
 }
 
-// RenderRootMenuButtons renders the top-level menu buttons.
-// The isItemVisible callback determines whether a menu item is visible for the backend.
-func RenderRootMenuButtons(backend, sessionKey string, isItemVisible func(spec menutypes.MenuItemSpec, backend string) bool, groupHasItems func(action, backend string) bool) []feishu.Button {
-	visible := make([]menutypes.MenuGroupSpec, 0, len(menutypes.MenuGroupSpecs()))
-	for _, spec := range menutypes.MenuGroupSpecs() {
-		if !spec.ShowInRoot {
-			continue
-		}
-		if groupHasItems != nil && !groupHasItems(spec.Action, backend) {
-			continue
-		}
-		spec, _ = MenuGroupSpecForBackend(spec.Action, backend)
-		visible = append(visible, spec)
-	}
-	buttons := make([]feishu.Button, 0, len(visible))
-	for _, spec := range visible {
-		buttons = append(buttons, feishu.Button{
-			Text:  SubmenuLabel(spec.Label),
-			Type:  "default",
-			Value: map[string]any{"action": spec.Action, "session_key": sessionKey},
-		})
+// RenderRootMenuButtons consumes the application-selected group snapshot.
+func RenderRootMenuButtons(backend, sessionKey string, groups []menutypes.MenuGroupSpec) []feishu.Button {
+	buttons := make([]feishu.Button, 0, len(groups))
+	for _, spec := range groups {
+		spec = backendcaps.ForKind(backend).MenuGroupSpec(spec.Action, spec)
+		buttons = append(buttons, feishu.Button{Text: SubmenuLabel(spec.Label), Type: "default", Value: map[string]any{"action": spec.Action, "session_key": sessionKey}})
 	}
 	return buttons
 }
 
-// RenderGroupMenuButtons renders menu buttons for a group.
-// The getItems callback returns visible items for the group.
-func RenderGroupMenuButtons(groupAction, sessionKey string, getItems func(action string) []menutypes.MenuItemSpec) []feishu.Button {
-	items := getItems(groupAction)
+// RenderGroupMenuButtons consumes selected items without querying policy.
+func RenderGroupMenuButtons(sessionKey string, items []menutypes.MenuItemSpec) []feishu.Button {
 	buttons := make([]feishu.Button, 0, len(items))
 	backButtons := make([]feishu.Button, 0, 1)
 	for _, spec := range items {
@@ -189,13 +164,4 @@ func AppendHelpCommands(lines []string, specs []menutypes.HelpCommandSpec) []str
 		lines = append(lines, command, spec.Summary)
 	}
 	return lines
-}
-
-// HelpGroupOrder defines the order of help groups in the help output.
-var HelpGroupOrder = []string{
-	"常用工具",
-	"model",
-	"thread",
-	"workspace",
-	"system",
 }

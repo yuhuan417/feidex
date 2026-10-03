@@ -48,17 +48,6 @@ func OptionText(skill skillcatalog.SkillMetadata) string {
 	return label
 }
 
-// FindByPath finds a skill by path or name in the given list.
-func FindByPath(skills []skillcatalog.SkillMetadata, selectedValue string) (skillcatalog.SkillMetadata, bool) {
-	selectedValue = strings.TrimSpace(selectedValue)
-	for _, skill := range skills {
-		if strings.TrimSpace(skill.Path) == selectedValue || strings.TrimSpace(skill.Name) == selectedValue {
-			return skill, true
-		}
-	}
-	return skillcatalog.SkillMetadata{}, false
-}
-
 // PendingConfirmationText returns the confirmation text when a skill is selected.
 func PendingConfirmationText(name string) string {
 	name = strings.TrimSpace(name)
@@ -75,7 +64,6 @@ type BuildCardParams struct {
 	SessionKey  string
 	FormatBody  func(string) string
 	ReloadLabel string
-	BackLabel   string
 }
 
 // BuildCard builds the skills list card from the given data.
@@ -152,10 +140,6 @@ func BuildCard(p BuildCardParams) map[string]any {
 	if reloadLabel == "" {
 		reloadLabel = "刷新 /skills reload"
 	}
-	backLabel := p.BackLabel
-	if backLabel == "" {
-		backLabel = feishu.MenuBackButtonText
-	}
 
 	for _, row := range appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
@@ -167,7 +151,7 @@ func BuildCard(p BuildCardParams) map[string]any {
 			},
 		},
 		{
-			Text: backLabel,
+			Text: feishu.MenuBackButtonText,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "menu.tools",

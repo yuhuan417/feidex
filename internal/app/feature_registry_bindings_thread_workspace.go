@@ -1,8 +1,6 @@
 package app
 
 import (
-	appcommandmatch "feidex/internal/app/commandmatch"
-
 	"fmt"
 	"strings"
 
@@ -16,7 +14,6 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.interrupt"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"interrupt": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 					return threadMenuService(a).CommandInterrupt(msg)
 				},
@@ -32,45 +29,31 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.thread"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"fork": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandFork(a, msg, args)
 				},
 			},
 			"new": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 					return threadMenuService(a).CommandThreadsNew(msg)
 				},
 			},
 			"thread": {
-				Match: appcommandmatch.MatchThreadCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return threadMenuService(a).CommandThread(msg, args)
 				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: nil,
-				},
 			},
 			"session": {
-				Match: appcommandmatch.MatchSessionCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return threadMenuService(a).CommandSession(msg, args)
 				},
-				Backends: map[string]func(fields []string) bool{
-					backendCodex: nil,
-				},
 			},
 			"threads": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if len(args) > 0 {
 						return fmt.Errorf("usage: /threads")
 					}
 					return threadMenuService(a).CommandThread(msg, []string{"list"})
-				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: nil,
 				},
 			},
 		},
@@ -103,15 +86,11 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.workspace"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"workspace": {
-				Match: appcommandmatch.MatchWorkspaceCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandWorkspace(msg, args)
 					}
 					return commandWorkspaceProfileAware(a, msg, args)
-				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: appcommandmatch.MatchClaudeWorkspaceCommand,
 				},
 			},
 		},
@@ -132,21 +111,14 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.model"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"model": {
-				Match: appcommandmatch.MatchModelCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandModel(msg, args)
 					}
 					return commandModelProfileAware(a, msg, args)
 				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: func(fields []string) bool {
-						return appcommandmatch.MatchModelCommand(fields) && !(len(fields) >= 2 && strings.TrimSpace(fields[1]) == "plan")
-					},
-				},
 			},
 			"effort": {
-				Match: appcommandmatch.MatchEffortCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandEffort(msg, args)
@@ -340,17 +312,11 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 	bindings["menu.fast"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"fast": {
-				Match: func(fields []string) bool {
-					return appcommandmatch.ExactOrSingleArgCommand(fields, "config", "fast", "default", "off", "toggle")
-				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					if groupBindingScopeActive(a, msg) {
 						return newBindingService(a).commandFast(msg, args)
 					}
 					return commandFastProfileAware(a, msg, args)
-				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: nil,
 				},
 			},
 		},

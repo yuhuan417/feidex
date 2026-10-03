@@ -93,5 +93,3 @@ func ValidPrefixName(name string) bool {
 	}
 	return hasAlphaNum
 }
-
-// BuildCardParams contains the parameters for BuildCard.

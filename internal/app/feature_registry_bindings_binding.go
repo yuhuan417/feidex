@@ -1,8 +1,6 @@
 package app
 
 import (
-	"strings"
-
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -12,9 +10,6 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 	bindings["menu.current_bot"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"primary": {
-				Match: func(fields []string) bool {
-					return len(fields) > 0 && strings.TrimSpace(fields[0]) == "/primary" && len(fields) <= 2
-				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newBindingService(a).commandPrimary(msg, args)
 				},

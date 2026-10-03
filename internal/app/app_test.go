@@ -949,7 +949,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuHistory(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.skills": func() (*callback.CardActionTriggerResponse, error) {
-			return newMenuActionService(a).completeMenuSkills(action, action.ActionValue["session_key"].(string))
+			return newSkillsService(a).CompleteSkillsOpen(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
 			return newWorkspaceConfigService(a).CompleteMenuWorkspace(action, action.ActionValue["session_key"].(string))

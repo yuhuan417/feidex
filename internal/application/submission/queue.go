@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"feidex/internal/application"
+	skillapp "feidex/internal/application/skill"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"feidex/internal/domain/routing"
 )
@@ -118,12 +119,7 @@ type QueueSkillResolver interface {
 }
 
 // QueueSkillResolution describes how a submission's skill was resolved.
-type QueueSkillResolution struct {
-	InputText          string
-	Skills             []domainsubmission.SubmissionSkill
-	ConsumePending     bool
-	PendingReplacement *domainsubmission.SubmissionSkill
-}
+type QueueSkillResolution = skillapp.SubmissionSkillResolution
 
 // QueueAttachmentResolver narrows inbound attachment resolution.
 type QueueAttachmentResolver interface {

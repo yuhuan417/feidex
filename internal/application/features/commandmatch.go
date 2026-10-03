@@ -1,7 +1,5 @@
-// Package commandmatch provides pure command-matching functions extracted
-// from the app package. These functions operate on string slices and have
-// no dependency on *App.
-package commandmatch
+// Command matchers define the supported local syntax for each capability.
+package features
 
 import (
 	"fmt"

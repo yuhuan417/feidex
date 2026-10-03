@@ -27,7 +27,7 @@ import (
 	"feidex/internal/app/serverrequest"
 
 	"feidex/internal/adapter/feishu/turnitem"
-	appskillscmd "feidex/internal/app/skillscmd"
+	skillruntime "feidex/internal/runtime/skill"
 	"feidex/internal/runtime/turnbinding"
 
 	appthreadmenu "feidex/internal/app/threadmenu"
@@ -118,7 +118,7 @@ type appTrackers struct {
 	submissionStarts    frontendruntime.SubmissionStarts
 	workspaceCloneOps   *appworkspacecmd.CloneTracker
 	finalCardPatches    *finalCardPatchTracker
-	pendingSkills       *appskillscmd.PendingSkillTracker
+	pendingSkills       *skillruntime.Tracker
 	groupAnnouncements  *groupAnnouncementTracker
 	maintenanceTrackers backend.TrackerMap
 	goals               *goalcmd.Tracker
@@ -157,7 +157,7 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		workspaceCloneOps:  newWorkspaceCloneTracker(),
 		turnBindings:       turnbinding.NewTracker(store),
 		finalCardPatches:   newFinalCardPatchTracker(),
-		pendingSkills:      appskillscmd.NewPendingSkillTracker(),
+		pendingSkills:      skillruntime.NewTracker(),
 		groupAnnouncements: newGroupAnnouncementTracker(),
 	}
 	effectRunner := newEffectRunner(app)

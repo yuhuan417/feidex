@@ -1,8 +1,6 @@
 package app
 
 import (
-	"strings"
-
 	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	menutypes "feidex/internal/application/features"
 )
@@ -30,17 +28,7 @@ func menuCardBodyForBackendForSession(a *App, sessionKey, backend, action, body 
 // menuBackAction returns the action a card rendered for the given menu action
 // returns to when the user taps the back control: the node's parent, falling
 // back to the root menu.
-func menuBackAction(action string) string {
-	action = strings.TrimSpace(action)
-	if action != "" {
-		if node, ok := menutypes.MenuNodes()[action]; ok {
-			if parent := strings.TrimSpace(node.Parent); parent != "" {
-				return parent
-			}
-		}
-	}
-	return "menu.root"
-}
+func menuBackAction(action string) string { return menutypes.MenuBackAction(action) }
 
 func commandLabel(label, slash string) string {
 	return appmenuutil.CommandLabel(label, slash)

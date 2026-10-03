@@ -611,3 +611,4 @@ Codex server request
 - `/workspace clone`、`/workspace new worktree` 参数解析以及目录选择后的 workspace ID 推导迁入 `internal/application/workspace`；command matcher、path picker、plan mode 和 upgrade local picker 不再依赖旧 `internal/app/workspace` 包。
 - 旧 `internal/app/workspace` 包已删除。clone/worktree 的 Git process supervision 已迁入 `internal/runtime/workspace`，workspace payload、表单合并、命名和 takeover policy 已迁入 `internal/application/workspace`；pending payload decoding 仅保留在 `workspacecmd` 的 state adapter 中，未改变工作区创建、clone、worktree 或路径选择行为。
 - workspace application 的表单更新仅消费字符串字段；Feishu SDK 值的 coercion、缺字段与显式空值区别留在 command adapter。命令错误继续显示原完整 usage。architecture guard 同时禁止旧 appcore/workspace 目录和 import 恢复。
+- 纯 command matcher 已迁入 `internal/application/features`，命令是否由本地处理、backend capability gate、菜单可见性和 passthrough 判定共用同一 application policy；`internal/app/commandmatch` 已删除。

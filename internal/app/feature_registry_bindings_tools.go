@@ -1,9 +1,6 @@
 package app
 
 import (
-	appcommandmatch "feidex/internal/app/commandmatch"
-	appskillscmd "feidex/internal/app/skillscmd"
-
 	"feidex/internal/app/debugviewcmd"
 	"feidex/internal/app/goalcmd"
 	appreviewcmd "feidex/internal/app/reviewcmd"
@@ -18,12 +15,8 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.review"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"review": {
-				Match: appcommandmatch.MatchReviewCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, args)
-				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: nil,
 				},
 			},
 		},
@@ -55,9 +48,6 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.quiet"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"quiet": {
-				Match: func(fields []string) bool {
-					return appcommandmatch.ExactOrSingleArgCommand(fields, "config", "verbose", "progress", "normal", "final")
-				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandQuiet(a, msg, args)
 				},
@@ -77,14 +67,8 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["plan"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"plan": {
-				Match: func(fields []string) bool {
-					return appcommandmatch.ExactOrSingleArgCommand(fields, "on", "off")
-				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandPlan(a, msg, args)
-				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: nil,
 				},
 			},
 		},
@@ -98,12 +82,8 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["goal"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"goal": {
-				Match: appcommandmatch.MatchGoalCommand,
 				HandleRaw: func(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
 					return commandGoalRaw(a, msg, raw, args)
-				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: nil,
 				},
 			},
 		},
@@ -148,7 +128,6 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.compact"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"compact": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandCompact(a, msg, args)
 				},
@@ -164,7 +143,6 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.download"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"download": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return debugviewcmd.CommandDownload(newDebugViewAppAdapter(a), msg, args)
 				},
@@ -180,7 +158,6 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.history"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"history": {
-				Match: appcommandmatch.MatchHistoryCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newHistoryService(a).CommandHistory(msg, args)
 				},
@@ -209,12 +186,8 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.skills"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"skills": {
-				Match: appskillscmd.MatchSkillsCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newSkillsService(a).CommandSkills(msg, args)
-				},
-				Backends: map[string]func(fields []string) bool{
-					backendClaude: nil,
 				},
 			},
 		},
@@ -233,7 +206,10 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.skills":
-				return newMenuActionService(s.app).completeMenuSkills(action, sessionKey)
+				if !menuActionVisibleForBackend(actionName, configuredBackend(s.app)) {
+					return completeMenuCommand(s.app, action, sessionKey, "/skills", "menu.tools")
+				}
+				return newSkillsService(s.app).CompleteSkillsOpen(action, sessionKey)
 			case "skills.select":
 				return newSkillsService(s.app).CompleteSkillsSelect(action, sessionKey, action.Option)
 			case "skills.reload":
@@ -246,7 +222,6 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 	bindings["menu.usage"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"usage": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newUsageService(a).CommandUsage(msg, args)
 				},

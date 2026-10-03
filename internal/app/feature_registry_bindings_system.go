@@ -1,7 +1,6 @@
 package app
 
 import (
-	appcommandmatch "feidex/internal/app/commandmatch"
 	"feidex/internal/app/upgraderender"
 
 	"context"
@@ -16,9 +15,6 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 	bindings["menu.debug"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"debug": {
-				Match: func(fields []string) bool {
-					return appcommandmatch.ExactOrSingleArgCommand(fields, "on", "off", "logs")
-				},
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newDebugService(a).CommandDebug(msg, args)
 				},
@@ -46,7 +42,6 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 	bindings["menu.status"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"status": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 					return commandStatus(a, msg)
 				},
@@ -62,7 +57,6 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 	bindings["menu.help"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"help": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return commandHelp(a, msg, args)
 				},
@@ -78,7 +72,6 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 	bindings["menu.codex_upgrade"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"codex": {
-				Match: appcommandmatch.MatchCodexCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newBackendUpgradeService(a).commandCodex(msg, args)
 				},
@@ -107,7 +100,6 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 	bindings["menu.claude_upgrade"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"claude": {
-				Match: appcommandmatch.MatchClaudeCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newBackendUpgradeService(a).commandClaude(msg, args)
 				},
@@ -136,7 +128,6 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 	bindings["menu.upgrade"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"upgrade": {
-				Match: appcommandmatch.MatchUpgradeCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newUpgradeService(a).CommandUpgrade(msg, args)
 				},

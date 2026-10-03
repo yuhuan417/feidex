@@ -11,10 +11,8 @@ import (
 )
 
 type featureCommandBinding struct {
-	Match     func(fields []string) bool
 	Handle    func(a *App, msg *feishu.InboundMessage, args []string) error
 	HandleRaw func(a *App, msg *feishu.InboundMessage, raw string, args []string) error
-	Backends  map[string]func(fields []string) bool
 }
 
 type featureBinding struct {
@@ -23,8 +21,6 @@ type featureBinding struct {
 	Render        func(actionName string, a *App, sessionKey string) (map[string]any, bool)
 	HandleAction  func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
 }
-
-var registryBackends = []string{backendCodex, backendClaude}
 
 func buildFeatureBindings() map[string]featureBinding {
 	bindings := map[string]featureBinding{}
@@ -96,51 +92,14 @@ func buildLocalCommandSpecs() []localCommandSpec {
 				panic("missing command binding for feature " + feature.ID + " command " + command.ID)
 			}
 			spec := localCommandSpec{
-				Names:       append([]string(nil), command.Names...),
-				IsLocal:     commandBinding.Match,
+				CommandSpec: command,
 				Handle:      commandBinding.Handle,
 				HandleRaw:   commandBinding.HandleRaw,
-				HelpGroup:   strings.TrimSpace(command.HelpGroup),
-				HelpEntries: append([]appfeatures.HelpCommandSpec(nil), command.HelpEntries...),
-				Backends:    buildLocalCommandBackendPolicies(feature, command, commandBinding),
 			}
 			specs = append(specs, spec)
 		}
 	}
 	return specs
-}
-
-func buildLocalCommandBackendPolicies(feature appfeatures.Spec, command appfeatures.CommandSpec, binding featureCommandBinding) map[string]localCommandBackendSpec {
-	policies := map[string]localCommandBackendSpec{}
-	for _, backend := range registryBackends {
-		metaPolicy, hasMetaPolicy := command.Backends[backend]
-		match := binding.Match
-		hasBindingPolicy := false
-		if binding.Backends != nil {
-			if backendMatch, ok := binding.Backends[backend]; ok {
-				match = backendMatch
-				hasBindingPolicy = true
-			}
-		}
-		if !feature.SupportsBackend(backend) {
-			match = nil
-			metaPolicy.HideInHelp = true
-			hasMetaPolicy = true
-			hasBindingPolicy = true
-		}
-		if !hasMetaPolicy && !hasBindingPolicy {
-			continue
-		}
-		policies[backend] = localCommandBackendSpec{
-			Match:       match,
-			HideInHelp:  metaPolicy.HideInHelp,
-			HelpEntries: append([]appfeatures.HelpCommandSpec(nil), metaPolicy.HelpEntries...),
-		}
-	}
-	if len(policies) == 0 {
-		return nil
-	}
-	return policies
 }
 
 func buildMenuNodeRenderers() map[string]menuNodeRenderer {

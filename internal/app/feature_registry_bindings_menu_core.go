@@ -1,8 +1,6 @@
 package app
 
 import (
-	appcommandmatch "feidex/internal/app/commandmatch"
-
 	"strings"
 
 	"feidex/internal/feishu"
@@ -14,7 +12,6 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 	bindings["menu.root"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"menu": {
-				Match: appcommandmatch.ExactCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, _ []string) error {
 					return sendCommandMenu(a, msg)
 				},
@@ -82,7 +79,6 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 	bindings["menu.group.backend"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
 			"backend": {
-				Match: appcommandmatch.MatchBackendCommand,
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
 					return newBackendSelectionService(a).commandBackend(msg, args)
 				},

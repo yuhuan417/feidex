@@ -1,6 +1,7 @@
 package app
 
 import (
+	appfeatures "feidex/internal/application/features"
 	"feidex/internal/textutil"
 	"fmt"
 	"strings"
@@ -41,14 +42,11 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 }
 
 func commandAllowedWithoutBackend(msg *feishu.InboundMessage, name string) bool {
-	switch strings.TrimSpace(name) {
-	case "/backend":
-		return true
-	case "/workspace", "/primary":
-		return isGroupMessage(msg)
-	default:
-		return false
+	chatType := ""
+	if msg != nil {
+		chatType = msg.ChatType
 	}
+	return appfeatures.CommandAllowedWithoutBackend(chatType, name)
 }
 
 func enqueuePassthroughCommand(a *App, msg *feishu.InboundMessage, raw string) error {
@@ -65,28 +63,14 @@ func enqueuePassthroughCommand(a *App, msg *feishu.InboundMessage, raw string) e
 }
 
 func isLocalCommandForBackend(backend, raw string) bool {
-	raw = strings.TrimSpace(raw)
-	fields := strings.Fields(raw)
-	if len(fields) == 0 {
-		return false
-	}
-	spec := findLocalCommandSpec(fields[0])
-	if spec == nil {
-		return false
-	}
-	return commandHandlesLocallyForBackend(spec, backend, fields)
+	return appfeatures.HandlesCommand(backend, raw)
 }
-
 func isLocalCommandForMessage(backend string, msg *feishu.InboundMessage, raw string) bool {
-	raw = strings.TrimSpace(raw)
-	fields := strings.Fields(raw)
-	if len(fields) == 0 {
-		return false
+	chatType := ""
+	if msg != nil {
+		chatType = msg.ChatType
 	}
-	if fields[0] == "/primary" && (msg == nil || strings.TrimSpace(msg.ChatType) != "group") {
-		return false
-	}
-	return isLocalCommandForBackend(backend, raw)
+	return appfeatures.HandlesMessageCommand(backend, chatType, raw)
 }
 
 func isLocalCommand(raw string) bool {

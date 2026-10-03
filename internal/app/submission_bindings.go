@@ -75,24 +75,6 @@ func (a claudeClientAdapter) StartSteerTurn(ctx context.Context, sessionKey, thr
 // Full adapter types for providers that need app access
 // ---------------------------------------------------------------------------
 
-type sqSkillResolverAdapter struct{ app *App }
-
-func (a sqSkillResolverAdapter) ResolveSubmissionSkill(sessionKey, workspaceID, inputText string, attachments []domainsubmission.SubmissionAttachment) appsubmission.QueueSkillResolution {
-	resolution := newSkillsService(a.app).ResolveSubmissionSkill(sessionKey, workspaceID, inputText, attachments)
-	return appsubmission.QueueSkillResolution{
-		InputText:          resolution.InputText,
-		Skills:             resolution.Skills,
-		ConsumePending:     resolution.ConsumePending,
-		PendingReplacement: resolution.PendingReplacement,
-	}
-}
-func (a sqSkillResolverAdapter) SetSessionPendingSkill(sessionKey string, skill domainsubmission.SubmissionSkill) {
-	newSkillsService(a.app).SetSessionPendingSkill(sessionKey, skill)
-}
-func (a sqSkillResolverAdapter) ClearSessionPendingSkill(sessionKey string) {
-	newSkillsService(a.app).ClearSessionPendingSkill(sessionKey)
-}
-
 type sqAttachmentResolverFullAdapter struct{ app *App }
 
 func (a sqAttachmentResolverFullAdapter) ResolveInboundAttachments(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
@@ -173,7 +155,7 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 	return appsubmission.NewSubmissionQueueService(appsubmission.Dependencies{
 		Context:            a.Context,
 		AppState:           a.State(),
-		SkillResolver:      sqSkillResolverAdapter{app: a},
+		SkillResolver:      newSkillUseCase(a),
 		AttachmentResolver: sqAttachmentResolverFullAdapter{app: a},
 		LiveThread:         sqLiveThreadAdapter{app: a},
 		PendingQueue:       sqPendingQueueFullAdapter{app: a},
