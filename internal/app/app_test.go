@@ -9,23 +9,23 @@ import (
 	"feidex/internal/textutil"
 
 	appapprovalview "feidex/internal/adapter/feishu/approvalview"
-	"feidex/internal/app/attachments"
+	"feidex/internal/adapter/feishu/attachments"
 
-	appdebugviewcmd "feidex/internal/app/debugviewcmd"
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 
+	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	"feidex/internal/adapter/feishu/pendingforms"
-	appmaintenance "feidex/internal/app/maintenance"
 
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 
 	appthreadview "feidex/internal/adapter/feishu/threadview"
 	"feidex/internal/adapter/feishu/turnitem"
 
-	appupgradecmd "feidex/internal/app/upgradecmd"
+	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"

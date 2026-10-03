@@ -2,8 +2,8 @@ package app
 
 import (
 	"context"
+	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
-	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
 	"log/slog"

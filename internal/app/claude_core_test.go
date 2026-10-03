@@ -7,10 +7,10 @@ import (
 
 	appclauderuntime "feidex/internal/runtime/claude"
 
-	appreviewcmd "feidex/internal/app/reviewcmd"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 
 	"feidex/internal/adapter/feishu/pendingforms"
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"

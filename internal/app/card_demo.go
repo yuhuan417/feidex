@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	appcarddemo "feidex/internal/app/carddemo"
+	appcarddemo "feidex/internal/adapter/feishu/carddemo"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )

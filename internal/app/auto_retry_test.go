@@ -7,7 +7,7 @@ import (
 
 	"context"
 	"errors"
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"

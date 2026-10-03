@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"strings"
 
-	appbackend "feidex/internal/app/backend"
+	appbackend "feidex/internal/adapter/feishu/backend"
 
 	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/codexrpc"

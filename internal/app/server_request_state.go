@@ -2,7 +2,6 @@ package app
 
 import (
 	storagejson "feidex/internal/adapter/storage/json"
-	applifecycle "feidex/internal/app/lifecycle"
 	applicationinteraction "feidex/internal/application/interaction"
 	"feidex/internal/domain/interaction"
 	"feidex/internal/state"
@@ -13,7 +12,7 @@ func isServerResolvedPendingKind(kind string) bool {
 }
 
 func isPendingRequestOpen(req *state.PendingRequest) bool {
-	return applifecycle.IsPendingRequestOpen(req)
+	return storagejson.IsPendingRequestOpen(req)
 }
 
 func (s runtimeStateService) interactionService() applicationinteraction.Service {

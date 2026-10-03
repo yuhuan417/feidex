@@ -1,9 +1,9 @@
 package app
 
 import (
-	"feidex/internal/app/debugviewcmd"
-	"feidex/internal/app/goalcmd"
-	appreviewcmd "feidex/internal/app/reviewcmd"
+	"feidex/internal/adapter/feishu/debugviewcmd"
+	"feidex/internal/adapter/feishu/goalcmd"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

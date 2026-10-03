@@ -20,18 +20,18 @@ import (
 	"sync"
 	"time"
 
-	"feidex/internal/app/backend"
-	"feidex/internal/app/goalcmd"
+	"feidex/internal/adapter/feishu/backend"
+	"feidex/internal/adapter/feishu/goalcmd"
 	appautoretry "feidex/internal/runtime/autoretry"
 
-	"feidex/internal/app/serverrequest"
+	"feidex/internal/adapter/feishu/serverrequest"
 
 	"feidex/internal/adapter/feishu/turnitem"
 	skillruntime "feidex/internal/runtime/skill"
 	"feidex/internal/runtime/turnbinding"
 
-	appthreadmenu "feidex/internal/app/threadmenu"
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

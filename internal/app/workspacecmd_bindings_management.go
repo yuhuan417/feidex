@@ -4,7 +4,7 @@ import (
 	"feidex/internal/domain/conversation"
 	"strings"
 
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

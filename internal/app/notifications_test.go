@@ -12,8 +12,8 @@ import (
 
 	appapproval "feidex/internal/adapter/feishu/approval"
 
+	applinkutil "feidex/internal/adapter/feishu/linkutil"
 	"feidex/internal/adapter/feishu/turnitem"
-	applinkutil "feidex/internal/app/linkutil"
 	"feidex/internal/state"
 	"strings"
 	"testing"

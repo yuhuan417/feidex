@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"

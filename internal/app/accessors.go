@@ -3,8 +3,8 @@ package app
 import (
 	"sync"
 
+	appbackend "feidex/internal/adapter/feishu/backend"
 	appstate "feidex/internal/adapter/storage/json/scoped"
-	appbackend "feidex/internal/app/backend"
 	frontendruntime "feidex/internal/runtime"
 
 	"feidex/internal/config"

@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/attachments"
+	"feidex/internal/adapter/feishu/attachments"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appdelivery "feidex/internal/adapter/feishu/delivery"

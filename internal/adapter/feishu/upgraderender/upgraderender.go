@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/app/backend"
+	"feidex/internal/adapter/feishu/backend"
 	"feidex/internal/feishu"
 	"feidex/internal/install"
 )

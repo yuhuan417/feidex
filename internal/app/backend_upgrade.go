@@ -7,7 +7,7 @@ import (
 	"time"
 
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
-	"feidex/internal/app/upgraderender"
+	"feidex/internal/adapter/feishu/upgraderender"
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"

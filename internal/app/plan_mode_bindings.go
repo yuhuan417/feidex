@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/planmode"
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"

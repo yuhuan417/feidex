@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 

@@ -2,7 +2,7 @@ package planmode
 
 import (
 	"encoding/json"
-	"feidex/internal/app/lifecycle"
+	storagejson "feidex/internal/adapter/storage/json"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
@@ -122,7 +122,7 @@ func ExitPendingRequest(a Dependencies, sessionKey string) *state.PendingRequest
 	}
 	var latest *state.PendingRequest
 	for _, req := range a.State().PendingRequests() {
-		if req == nil || req.Kind != ExitPendingKind || !lifecycle.IsPendingRequestOpen(req) {
+		if req == nil || req.Kind != ExitPendingKind || !storagejson.IsPendingRequestOpen(req) {
 			continue
 		}
 		if strings.TrimSpace(req.SessionKey) != sessionKey {
@@ -145,7 +145,7 @@ func ExitOtherOpenPendingExists(a Dependencies, sessionKey, excludeID string) bo
 		return false
 	}
 	for _, req := range a.State().PendingRequests() {
-		if req == nil || !lifecycle.IsPendingRequestOpen(req) {
+		if req == nil || !storagejson.IsPendingRequestOpen(req) {
 			continue
 		}
 		if strings.TrimSpace(req.SessionKey) != sessionKey {

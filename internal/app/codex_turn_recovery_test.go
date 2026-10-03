@@ -4,7 +4,7 @@ import (
 	"context"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"

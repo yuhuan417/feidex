@@ -5,9 +5,9 @@ import (
 
 	"context"
 
-	appbackend "feidex/internal/app/backend"
+	appbackend "feidex/internal/adapter/feishu/backend"
 
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 

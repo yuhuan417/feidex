@@ -1,8 +1,8 @@
 package app
 
 import (
-	appbackend "feidex/internal/app/backend"
-	"feidex/internal/app/upgraderender"
+	appbackend "feidex/internal/adapter/feishu/backend"
+	"feidex/internal/adapter/feishu/upgraderender"
 	appruntime "feidex/internal/runtime"
 	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/textutil"

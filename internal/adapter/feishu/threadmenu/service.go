@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
+	appbackend "feidex/internal/adapter/feishu/backend"
 	appthreadview "feidex/internal/adapter/feishu/threadview"
-	appbackend "feidex/internal/app/backend"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"

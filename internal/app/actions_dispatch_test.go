@@ -11,9 +11,9 @@ import (
 	"os"
 	"testing"
 
-	appupgradecmd "feidex/internal/app/upgradecmd"
+	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"

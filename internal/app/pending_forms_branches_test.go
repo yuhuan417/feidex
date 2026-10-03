@@ -6,7 +6,7 @@ import (
 
 	"feidex/internal/adapter/feishu/pendingforms"
 	appreview "feidex/internal/adapter/feishu/review"
-	appreviewcmd "feidex/internal/app/reviewcmd"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )

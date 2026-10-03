@@ -1,7 +1,7 @@
 package app
 
 import (
-	appbackend "feidex/internal/app/backend"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/domain/conversation"
 	appautoretry "feidex/internal/runtime/autoretry"
 

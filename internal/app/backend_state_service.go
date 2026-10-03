@@ -1,7 +1,7 @@
 package app
 
 import (
-	"feidex/internal/app/backend"
+	"feidex/internal/adapter/feishu/backend"
 )
 
 // runtimeStateService wraps backend.RuntimeStateService to preserve the

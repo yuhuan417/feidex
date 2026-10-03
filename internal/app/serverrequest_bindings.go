@@ -15,7 +15,7 @@ import (
 	appreview "feidex/internal/adapter/feishu/review"
 
 	"feidex/internal/adapter/backend/interactionreply"
-	"feidex/internal/app/serverrequest"
+	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/feishu"
 	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"

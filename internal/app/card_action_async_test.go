@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	appreviewcmd "feidex/internal/app/reviewcmd"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	"os"
@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/adapter/feishu/goalcmd"
 	appreview "feidex/internal/adapter/feishu/review"
-	"feidex/internal/app/goalcmd"
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"

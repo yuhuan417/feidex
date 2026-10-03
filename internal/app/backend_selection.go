@@ -4,7 +4,7 @@ import (
 	"context"
 	"os/exec"
 
-	"feidex/internal/app/backend"
+	"feidex/internal/adapter/feishu/backend"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"

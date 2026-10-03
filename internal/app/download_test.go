@@ -2,14 +2,14 @@ package app
 
 import (
 	"errors"
-	appdebugviewcmd "feidex/internal/app/debugviewcmd"
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	"feidex/internal/domain/conversation"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )

@@ -7,8 +7,8 @@ import (
 
 	"context"
 	"errors"
-	"feidex/internal/app/attachments"
-	appmaintenance "feidex/internal/app/maintenance"
+	"feidex/internal/adapter/feishu/attachments"
+	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

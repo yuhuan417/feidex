@@ -1,7 +1,7 @@
 package app
 
 import (
-	"feidex/internal/app/upgraderender"
+	"feidex/internal/adapter/feishu/upgraderender"
 
 	"context"
 	"time"

@@ -1,11 +1,11 @@
 package app
 
 import (
-	"feidex/internal/app/attachments"
+	"feidex/internal/adapter/feishu/attachments"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 
-	applinkutil "feidex/internal/app/linkutil"
+	applinkutil "feidex/internal/adapter/feishu/linkutil"
 	"feidex/internal/config"
 )
 

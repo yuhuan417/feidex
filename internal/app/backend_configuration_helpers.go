@@ -1,8 +1,8 @@
 package app
 
 import (
-	appbackend "feidex/internal/app/backend"
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appbackend "feidex/internal/adapter/feishu/backend"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"

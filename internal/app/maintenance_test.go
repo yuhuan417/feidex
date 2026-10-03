@@ -1,7 +1,7 @@
 package app
 
 import (
-	appmaintenance "feidex/internal/app/maintenance"
+	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	"feidex/internal/domain/conversation"
 
 	"os"
@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"feidex/internal/adapter/feishu/attachments"
 	"feidex/internal/adapter/feishu/quietmode"
-	"feidex/internal/app/attachments"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"

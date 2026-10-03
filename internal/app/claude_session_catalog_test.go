@@ -9,7 +9,7 @@ import (
 	"time"
 
 	claudesession "feidex/internal/adapter/backend/claude/catalog"
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )

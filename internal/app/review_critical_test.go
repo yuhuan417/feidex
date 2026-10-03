@@ -6,7 +6,7 @@ import (
 
 	appreview "feidex/internal/adapter/feishu/review"
 
-	appreviewcmd "feidex/internal/app/reviewcmd"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 	"testing"

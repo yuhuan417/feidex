@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
-	applifecycle "feidex/internal/app/lifecycle"
+	storagejson "feidex/internal/adapter/storage/json"
 	"feidex/internal/domain/identity"
 	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/state"
@@ -49,7 +49,7 @@ func ExpireClaudeInteractionCards(a *App, sessionKey string, requestIDs []string
 		if pending == nil || normalizeRuntimeBackend(pending.Backend) != backendClaude {
 			continue
 		}
-		if !applifecycle.IsPendingRequestOpen(pending) {
+		if !storagejson.IsPendingRequestOpen(pending) {
 			continue
 		}
 		if sessionKey != "" && !sessionKeysEqual(a, pending.SessionKey, sessionKey) {

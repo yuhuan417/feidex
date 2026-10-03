@@ -7,7 +7,7 @@ import (
 	"feidex/internal/domain/conversation"
 	"strings"
 
-	appreviewcmd "feidex/internal/app/reviewcmd"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 
 	claudeadapter "feidex/internal/adapter/backend/claude"
 	codexadapter "feidex/internal/adapter/backend/codex"

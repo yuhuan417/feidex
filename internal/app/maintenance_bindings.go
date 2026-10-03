@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
-	appmaintenance "feidex/internal/app/maintenance"
+	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"

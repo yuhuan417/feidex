@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/feishu"
 )
 

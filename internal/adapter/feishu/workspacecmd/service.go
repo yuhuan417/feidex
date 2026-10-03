@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	appbackend "feidex/internal/app/backend"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"

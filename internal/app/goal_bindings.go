@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/goalcmd"
+	"feidex/internal/adapter/feishu/goalcmd"
 	"feidex/internal/codexrpc"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"

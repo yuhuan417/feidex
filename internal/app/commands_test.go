@@ -3,7 +3,7 @@ package app
 import (
 	domainsubmission "feidex/internal/domain/submission"
 
-	appdebugviewcmd "feidex/internal/app/debugviewcmd"
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

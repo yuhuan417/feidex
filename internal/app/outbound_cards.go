@@ -7,7 +7,7 @@ import (
 
 	appcards "feidex/internal/adapter/feishu/cards"
 
-	applinkutil "feidex/internal/app/linkutil"
+	applinkutil "feidex/internal/adapter/feishu/linkutil"
 	"feidex/internal/feishu"
 )
 

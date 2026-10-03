@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/cards"
-	appbackend "feidex/internal/app/backend"
 	"feidex/internal/config"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"

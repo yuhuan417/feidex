@@ -3,9 +3,9 @@ package app
 import (
 	"context"
 	"encoding/json"
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	apppathpick "feidex/internal/adapter/feishu/pathpicker"
-	appdebugviewcmd "feidex/internal/app/debugviewcmd"
-	appupgradecmd "feidex/internal/app/upgradecmd"
+	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"

@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	appbackend "feidex/internal/app/backend"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"

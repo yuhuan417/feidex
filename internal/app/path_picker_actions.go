@@ -1,16 +1,16 @@
 package app
 
 import (
-	appupgradecmd "feidex/internal/app/upgradecmd"
+	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 
 	"encoding/json"
 	"os"
 	"strings"
 
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	pickercards "feidex/internal/adapter/feishu/pathpicker"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	apppathpick "feidex/internal/adapter/filesystem/pathpicker"
-	appdebugviewcmd "feidex/internal/app/debugviewcmd"
-	appworkspacecmd "feidex/internal/app/workspacecmd"
 	pickerapp "feidex/internal/application/pathpicker"
 	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/feishu"

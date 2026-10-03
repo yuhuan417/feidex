@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	appattachments "feidex/internal/app/attachments"
+	appattachments "feidex/internal/adapter/feishu/attachments"
 )
 
 const (

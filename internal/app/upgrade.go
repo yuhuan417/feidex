@@ -6,7 +6,7 @@ import (
 
 	"strings"
 
-	appupgradecmd "feidex/internal/app/upgradecmd"
+	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"

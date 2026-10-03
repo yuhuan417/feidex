@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	appworkspacecmd "feidex/internal/app/workspacecmd"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 

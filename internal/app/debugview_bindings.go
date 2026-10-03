@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	configadapter "feidex/internal/adapter/config"
-	appdebugviewcmd "feidex/internal/app/debugviewcmd"
-	appthreadmenu "feidex/internal/app/threadmenu"
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"

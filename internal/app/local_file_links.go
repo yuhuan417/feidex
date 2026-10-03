@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
-	"feidex/internal/app/attachments"
+	"feidex/internal/adapter/feishu/attachments"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"
 	"time"
 
-	applinkutil "feidex/internal/app/linkutil"
+	applinkutil "feidex/internal/adapter/feishu/linkutil"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )

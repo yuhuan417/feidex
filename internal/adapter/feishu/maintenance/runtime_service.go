@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	appattachments "feidex/internal/app/attachments"
+	appattachments "feidex/internal/adapter/feishu/attachments"
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/config"

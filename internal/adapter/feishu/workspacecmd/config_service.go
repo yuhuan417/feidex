@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	appbackend "feidex/internal/app/backend"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 

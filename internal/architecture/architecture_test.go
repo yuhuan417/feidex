@@ -90,7 +90,7 @@ func TestHistoryBindingsDoNotReintroduceRecursiveRenderCallbacks(t *testing.T) {
 
 func TestBackendConfigurationDoesNotDependOnTransitionalConfigurationHelpers(t *testing.T) {
 	root := repositoryRoot(t)
-	violations, err := importsUnder(root, "internal/app/backend", []string{modulePath + "/internal/app/"})
+	violations, err := importsUnder(root, "internal/adapter/feishu/backend", []string{modulePath + "/internal/app/"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestBackendConfigurationDoesNotDependOnTransitionalConfigurationHelpers(t *
 
 func TestPlanModeDoesNotDependOnAppCoreOrAppWorkspace(t *testing.T) {
 	root := repositoryRoot(t)
-	violations, err := importsUnder(root, "internal/app/planmode", []string{
+	violations, err := importsUnder(root, "internal/adapter/feishu/planmode", []string{
 		modulePath + "/internal/app/appcore",
 		modulePath + "/internal/app/workspace",
 	})
@@ -115,7 +115,7 @@ func TestPlanModeDoesNotDependOnAppCoreOrAppWorkspace(t *testing.T) {
 
 func TestReviewCommandUsesExplicitContextAndConfigurationCapabilities(t *testing.T) {
 	root := repositoryRoot(t)
-	violations, err := importsUnder(root, "internal/app/reviewcmd", []string{modulePath + "/internal/app/appcore"})
+	violations, err := importsUnder(root, "internal/adapter/feishu/reviewcmd", []string{modulePath + "/internal/app/appcore"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestReviewCommandUsesExplicitContextAndConfigurationCapabilities(t *testing
 
 func TestGoalCommandDoesNotDependOnAppCore(t *testing.T) {
 	root := repositoryRoot(t)
-	violations, err := importsUnder(root, "internal/app/goalcmd", []string{modulePath + "/internal/app/appcore"})
+	violations, err := importsUnder(root, "internal/adapter/feishu/goalcmd", []string{modulePath + "/internal/app/appcore"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestGoalCommandDoesNotDependOnAppCore(t *testing.T) {
 
 func TestThreadMenuDoesNotDependOnLegacyWorkspaceOrAppCoreHelpers(t *testing.T) {
 	root := repositoryRoot(t)
-	violations, err := importsUnder(root, "internal/app/threadmenu", []string{
+	violations, err := importsUnder(root, "internal/adapter/feishu/threadmenu", []string{
 		modulePath + "/internal/app/appcore",
 		modulePath + "/internal/app/workspace",
 	})
@@ -151,7 +151,7 @@ func TestThreadMenuDoesNotDependOnLegacyWorkspaceOrAppCoreHelpers(t *testing.T) 
 
 func TestWorkspaceCommandDoesNotDependOnAppCore(t *testing.T) {
 	root := repositoryRoot(t)
-	violations, err := importsUnder(root, "internal/app/workspacecmd", []string{modulePath + "/internal/app/appcore"})
+	violations, err := importsUnder(root, "internal/adapter/feishu/workspacecmd", []string{modulePath + "/internal/app/appcore"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,9 +162,9 @@ func TestWorkspaceCommandDoesNotDependOnAppCore(t *testing.T) {
 
 func TestDebugCommandDoesNotDependOnLegacyAppHelpers(t *testing.T) {
 	root := repositoryRoot(t)
-	violations, err := importsUnder(root, "internal/app/debugviewcmd", []string{
+	violations, err := importsUnder(root, "internal/adapter/feishu/debugviewcmd", []string{
 		modulePath + "/internal/app/appcore",
-		modulePath + "/internal/app/threadmenu",
+		modulePath + "/internal/adapter/feishu/threadmenu",
 		modulePath + "/internal/app/workspace",
 	})
 	if err != nil {
@@ -365,14 +365,14 @@ func TestLayerImportRules(t *testing.T) {
 func TestMigratedCommandPackagesDoNotImportFeishuTransport(t *testing.T) {
 	root := repositoryRoot(t)
 	packages := []string{
-		"internal/app/goalcmd",
+		"internal/adapter/feishu/goalcmd",
 		"internal/adapter/feishu/skills",
-		"internal/app/reviewcmd",
-		"internal/app/planmode",
-		"internal/app/upgradecmd",
-		"internal/app/debugviewcmd",
-		"internal/app/threadmenu",
-		"internal/app/workspacecmd",
+		"internal/adapter/feishu/reviewcmd",
+		"internal/adapter/feishu/planmode",
+		"internal/adapter/feishu/upgradecmd",
+		"internal/adapter/feishu/debugviewcmd",
+		"internal/adapter/feishu/threadmenu",
+		"internal/adapter/feishu/workspacecmd",
 	}
 	for _, relative := range packages {
 		base := filepath.Join(root, relative)
@@ -416,7 +416,7 @@ func TestWorkspaceRendererDoesNotDependOnAppCoreHelpers(t *testing.T) {
 	if len(violations) != 0 {
 		t.Fatalf("workspace renderer must consume application views: %v", violations)
 	}
-	if _, err := os.Stat(filepath.Join(root, "internal/app/workspacecmd/render.go")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(root, "internal/adapter/feishu/workspacecmd/render.go")); !os.IsNotExist(err) {
 		t.Fatal("legacy workspace renderer must not be reintroduced")
 	}
 	if _, err := os.Stat(filepath.Join(root, "internal/app/appcore/workspace_selection.go")); !os.IsNotExist(err) {
