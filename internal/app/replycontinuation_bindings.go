@@ -58,22 +58,13 @@ func newReplyContinuationService(a *App) *continuation.Service {
 	svc.Deps.HasInFlightSubmission = func(sess *conversation.Session) bool {
 		return conversation.HasInFlightSubmission(sess)
 	}
-	svc.Deps.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
-		if configuredBackend(a) == backendClaude {
-			return svc.TryClaudeReplyContinuation(msg, link, sessionKey, sess)
+	svc.Deps.Context = a.Context
+	svc.Deps.Steer = func(ctx context.Context, threadID, turnID string, sub *domainsubmission.Submission) error {
+		client, err := requireCodexClient(a)
+		if err != nil {
+			return err
 		}
-		return continuation.TryCodexReplyContinuation(continuation.CodexReplyContinuationDeps{
-			Context: a.Context, Steer: func(ctx context.Context, threadID, turnID string, sub *domainsubmission.Submission) error {
-				client, err := requireCodexClient(a)
-				if err != nil {
-					return err
-				}
-				return (codexadapter.Gateway{Client: client}).SteerTurn(ctx, threadID, turnID, sub)
-			},
-			ResolveInboundAttachments: svc.Deps.ResolveInboundAttachments,
-			PendingInputSessionKey:    svc.PendingInputSessionKey, CollectPendingStagedImages: svc.CollectPendingStagedImages,
-			ClearPendingStagedImages: svc.ClearPendingStagedImages, SaveSession: svc.Deps.SaveSession, DefaultWorkspaceID: svc.Deps.DefaultWorkspaceID,
-		}, msg, link, sessionKey, sess)
+		return (codexadapter.Gateway{Client: client}).SteerTurn(ctx, threadID, turnID, sub)
 	}
 	svc.Deps.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)

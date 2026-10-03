@@ -121,61 +121,6 @@ func (claudePermissionDriver) WorkspaceCommandUsage() string {
 	return ClaudeWorkspaceCommandUsage
 }
 
-func (codexPermissionDriver) AppendWorkspaceSummaryLines(_ PermissionDependencies, lines []string, currentWS *config.Workspace) []string {
-	if currentWS == nil {
-		return lines
-	}
-	return append(lines,
-		"默认 sandbox: `"+currentWS.SandboxMode+"`",
-		"默认 policy: `"+currentWS.ApprovalPolicy+"`",
-		"默认 multi-agent: `"+currentWS.MultiAgentMode+"`",
-	)
-}
-
-func (claudePermissionDriver) AppendWorkspaceSummaryLines(app PermissionDependencies, lines []string, currentWS *config.Workspace) []string {
-	if currentWS == nil || app == nil || app.Config() == nil {
-		return lines
-	}
-	effectiveMode := effectiveClaudePermissionMode(nil, currentWS, app.Config().Claude)
-	override := strings.TrimSpace(currentWS.ClaudePermissionMode)
-	overrideLabel := "跟随全局"
-	if override != "" {
-		overrideLabel = claudePermissionModeLabel(override)
-	}
-	return append(lines,
-		"默认 Claude 权限: "+claudePermissionModeLabel(effectiveMode),
-		"工作区覆盖: "+overrideLabel,
-	)
-}
-
-func (codexPermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return []feishu.Button{
-		{
-			Text:  submenuCommandLabel("配置默认沙箱", "/workspace sandbox"),
-			Type:  "default",
-			Value: cardactions.MenuActionValue{Action: "workspace.sandbox.menu", SessionKey: sessionKey}.Map(),
-		},
-		{
-			Text:  submenuCommandLabel("配置默认策略", "/workspace policy"),
-			Type:  "default",
-			Value: cardactions.MenuActionValue{Action: "workspace.policy.menu", SessionKey: sessionKey}.Map(),
-		},
-		{
-			Text:  submenuCommandLabel("配置多智能体模式", "/workspace multiagent"),
-			Type:  "default",
-			Value: cardactions.MenuActionValue{Action: "workspace.multiagent.menu", SessionKey: sessionKey}.Map(),
-		},
-	}
-}
-
-func (claudePermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return []feishu.Button{{
-		Text:  submenuCommandLabel("默认权限", "/workspace permissions"),
-		Type:  "default",
-		Value: cardactions.MenuActionValue{Action: "workspace.permission_mode.menu", SessionKey: sessionKey}.Map(),
-	}}
-}
-
 func (codexPermissionDriver) AppendStatusLines(_ PermissionDependencies, lines []string, sess *conversation.Session, ws *config.Workspace) []string {
 	workspaceSandbox := "-"
 	workspacePolicy := "-"

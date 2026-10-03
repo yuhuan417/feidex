@@ -3,6 +3,7 @@
 package continuation
 
 import (
+	"context"
 	"feidex/internal/application"
 	"feidex/internal/application/submission"
 	"feidex/internal/domain/backend"
@@ -14,10 +15,6 @@ import (
 	"sort"
 	"strings"
 )
-
-// TrySteerFunc is called to attempt steering a reply into an existing
-// conversation thread via the active backend.
-type TrySteerFunc func(msg *application.InboundMessage, link *conversation.MessageLink, sessionKey string, sess *conversation.Session) (bool, error)
 
 // StartSubmissionFunc starts a Claude submission for a given session.
 type StartSubmissionFunc func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace, notifyFailure bool) error
@@ -36,8 +33,9 @@ type Dependencies struct {
 	Workspace          func(string) *workspace.Workspace
 	MakeSessionKey     func(*application.InboundMessage) string
 
-	// TrySteer attempts to steer a reply into an active conversation thread.
-	TrySteer TrySteerFunc
+	// Steer sends input to the existing Codex turn; backend routing stays here.
+	Context func() context.Context
+	Steer   func(context.Context, string, string, *domainsubmission.Submission) error
 
 	// StartSubmission starts a Claude submission for a session.
 	StartSubmission StartSubmissionFunc
@@ -222,7 +220,17 @@ func (s *Service) TrySteerInboundReply(msg *application.InboundMessage, link *co
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
 		sess.WorkspaceID = s.Deps.DefaultWorkspaceID()
 	}
-	return s.Deps.TrySteer(msg, link, sessionKey, sess)
+	if s.Deps.Backend() == backend.BackendClaude {
+		return s.TryClaudeReplyContinuation(msg, link, sessionKey, sess)
+	}
+	return TryCodexReplyContinuation(CodexReplyContinuationDeps{
+		Context: s.Deps.Context, Steer: s.Deps.Steer,
+		ResolveInboundAttachments:  s.Deps.ResolveInboundAttachments,
+		PendingInputSessionKey:     s.PendingInputSessionKey,
+		CollectPendingStagedImages: s.CollectPendingStagedImages,
+		ClearPendingStagedImages:   s.ClearPendingStagedImages,
+		SaveSession:                s.Deps.SaveSession, DefaultWorkspaceID: s.Deps.DefaultWorkspaceID,
+	}, msg, link, sessionKey, sess)
 }
 
 // TryClaudeReplyContinuation attempts to continue an active Claude session

@@ -25,16 +25,7 @@ const CloneModeWorktree = domain.CloneModeWorktree
 var NormalizeCloneMode = domain.NormalizeCloneMode
 var submenuCommandLabel = menuutil.SubmenuCommandLabel
 
-type RenderService struct {
-	PathPicker func(string, PathPickerPayload) (map[string]any, error)
-}
-
-func (s *RenderService) RenderPathPickerCard(id string, payload PathPickerPayload) (map[string]any, error) {
-	if s.PathPicker == nil {
-		return nil, fmt.Errorf("path picker renderer is unavailable")
-	}
-	return s.PathPicker(id, payload)
-}
+type RenderService struct{}
 
 func (s *RenderService) FormatMenuBody(action, body string) string {
 	return menuutil.MenuCardBody(action, body)

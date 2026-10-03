@@ -11,12 +11,14 @@ import (
 	"feidex/internal/domain/identity"
 	"feidex/internal/domain/routing"
 	domain "feidex/internal/domain/workspace"
+	"feidex/internal/state"
 )
 
 type WorkspaceViewScopes interface {
 	Session(string) *conversation.Session
 	BotProfile() *routing.BotProfile
 	AgentBindingsForChat(string, string) []*routing.AgentBinding
+	GroupPrimary(string, string) *state.GroupPrimary
 }
 
 type WorkspaceViewRepository struct {
@@ -64,12 +66,17 @@ func (r WorkspaceViewRepository) WorkspaceViewSource(frontend identity.FrontendI
 		}
 	}
 	bindings := r.Scopes.AgentBindingsForChat("group", chatID)
-	if chatType == "" && chatID != "" && len(bindings) > 0 {
+	if chatType == "" && chatID != "" && (len(bindings) > 0 || r.Scopes.GroupPrimary("group", chatID) != nil) {
 		chatType = "group"
 	}
 	result.Group = chatType == "group" && chatID != ""
-	if result.Group && len(bindings) > 0 {
-		result.Binding = bindings[0]
+	if result.Group {
+		for _, binding := range bindings {
+			if binding != nil {
+				result.Binding = binding
+				break
+			}
+		}
 	}
 	result.Profile = r.Scopes.BotProfile()
 	return result

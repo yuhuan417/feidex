@@ -33,7 +33,7 @@ func (s ViewService) Settings(key string, setting Setting) (SettingsView, error)
 
 func (v View) Settings(setting Setting) (SettingsView, error) {
 	claude := v.Backend == backend.BackendClaude
-	if claude != (setting == SettingPermission) {
+	if (v.Backend != backend.BackendCodex && !claude) || claude != (setting == SettingPermission) {
 		command := string(setting)
 		if setting == SettingPermission {
 			command = "permissions"

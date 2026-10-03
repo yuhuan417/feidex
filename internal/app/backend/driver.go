@@ -137,8 +137,6 @@ type ConversationPermissionModeUpdateDeps struct {
 type PermissionDriver interface {
 	SupportedScopes() []PermissionScope
 	WorkspaceCommandUsage() string
-	AppendWorkspaceSummaryLines(app PermissionDependencies, lines []string, currentWS *config.Workspace) []string
-	WorkspaceConfigButtons(sessionKey string) []feishu.Button
 	AppendStatusLines(app PermissionDependencies, lines []string, sess *conversation.Session, ws *config.Workspace) []string
 	HandleWorkspaceCommand(req WorkspacePermissionCommandRequest) error
 	CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)

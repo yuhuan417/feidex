@@ -1,31 +1,13 @@
-package pathpick
+package pathpicker
 
 import (
-	"os"
-	"path/filepath"
+	pickerapp "feidex/internal/application/pathpicker"
 	"strings"
 	"testing"
 )
 
 func TestRenderCardShowsDropdownAndShortButtons(t *testing.T) {
-	root := t.TempDir()
-	current := filepath.Join(root, "work")
-	if err := os.MkdirAll(filepath.Join(current, "dir-a"), 0o755); err != nil {
-		t.Fatalf("Mkdir(dir-a) error = %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(current, "file-a.txt"), []byte("a"), 0o644); err != nil {
-		t.Fatalf("WriteFile(file-a.txt) error = %v", err)
-	}
-
-	card, err := RenderCard("path-1", Payload{
-		Mode:        ModeDirectory,
-		Style:       StyleDropdown,
-		RootPath:    root,
-		CurrentPath: current,
-	})
-	if err != nil {
-		t.Fatalf("RenderCard() error = %v", err)
-	}
+	card := RenderCard("path-1", pickerapp.View{Payload: Payload{Mode: ModeDirectory, Style: StyleDropdown, RootPath: "/repo", CurrentPath: "/repo/work"}, Entries: []Entry{{Name: "dir-a", Path: "/repo/work/dir-a", IsDir: true}}, Total: 1, HiddenFiles: 1})
 	if !testCardHasTag(card, "select_static") {
 		t.Fatalf("path picker card missing select_static: %#v", card)
 	}

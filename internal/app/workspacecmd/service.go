@@ -250,8 +250,6 @@ type (
 
 // Backend configuration callbacks.
 type (
-	BackendWorkspaceSummaryLinesFn               func(lines []string, currentWS *config.Workspace) []string
-	BackendWorkspaceConfigButtonsFn              func(sessionKey string) []feishu.Button
 	BackendWorkspaceSwitchBindingNoticeFn        func(binding *ThreadBinding) string
 	BackendWorkspaceSwitchBindingFailureNoticeFn func() string
 	BackendWorkspaceSwitchInFlightNoticeFn       func() string
@@ -335,8 +333,6 @@ type CodexDeps struct {
 }
 
 type BackendConfigDeps struct {
-	BackendWorkspaceSummaryLines               BackendWorkspaceSummaryLinesFn
-	BackendWorkspaceConfigButtons              BackendWorkspaceConfigButtonsFn
 	BackendWorkspaceSwitchBindingNotice        BackendWorkspaceSwitchBindingNoticeFn
 	BackendWorkspaceSwitchBindingFailureNotice BackendWorkspaceSwitchBindingFailureNoticeFn
 	BackendWorkspaceSwitchInFlightNotice       BackendWorkspaceSwitchInFlightNoticeFn
@@ -505,18 +501,6 @@ func (s ConfigService) EnsureWorkspaceThreadBinding(sessionKey string, sess *con
 		return nil, nil
 	}
 	return s.deps.Threads.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
-}
-func (s ConfigService) BackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	if s.deps.Backend.BackendWorkspaceSummaryLines == nil {
-		return lines
-	}
-	return s.deps.Backend.BackendWorkspaceSummaryLines(lines, currentWS)
-}
-func (s ConfigService) BackendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	if s.deps.Backend.BackendWorkspaceConfigButtons == nil {
-		return nil
-	}
-	return s.deps.Backend.BackendWorkspaceConfigButtons(sessionKey)
 }
 func (s ConfigService) BackendWorkspaceSwitchBindingNotice(binding *ThreadBinding) string {
 	if s.deps.Backend.BackendWorkspaceSwitchBindingNotice == nil {

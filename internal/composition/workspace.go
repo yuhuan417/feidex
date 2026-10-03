@@ -4,11 +4,13 @@ import (
 	"sync"
 
 	configadapter "feidex/internal/adapter/config"
+	pickercards "feidex/internal/adapter/feishu/pathpicker"
 	workspacecards "feidex/internal/adapter/feishu/workspace"
+	pickerfs "feidex/internal/adapter/filesystem/pathpicker"
+	pickerapp "feidex/internal/application/pathpicker"
 	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/config"
 	"feidex/internal/domain/identity"
-	domain "feidex/internal/domain/workspace"
 )
 
 type WorkspacePresentationDependencies struct {
@@ -18,12 +20,12 @@ type WorkspacePresentationDependencies struct {
 	Mutex      *sync.RWMutex
 	Scopes     configadapter.WorkspaceViewScopes
 	Backend    func() string
-	PathPicker func(string, domain.PathPickerPayload) (map[string]any, error)
 }
 
 func NewWorkspacePresentation(deps WorkspacePresentationDependencies) *workspacecards.Presentation {
 	return &workspacecards.Presentation{
-		RenderService: &workspacecards.RenderService{PathPicker: deps.PathPicker},
+		RenderService: &workspacecards.RenderService{},
+		Picker:        pickercards.Presentation{Views: pickerapp.Service{Filesystem: pickerfs.Filesystem{}}},
 		Views: workspaceapp.ViewService{Frontend: deps.Frontend, Repository: configadapter.WorkspaceViewRepository{
 			Config: deps.Config, ConfigPath: deps.ConfigPath, Mutex: deps.Mutex, Scopes: deps.Scopes, Backend: deps.Backend,
 		}},

@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	apppathpick "feidex/internal/adapter/feishu/pathpicker"
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
-	apppathpick "feidex/internal/app/pathpick"
 	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/domain/conversation"
 	"os"

@@ -130,14 +130,6 @@ func (s backendConfigurationService) handleBackendWorkspacePermissionCommand(msg
 	return s.inner.HandleBackendWorkspacePermissionCommand(msg, args, sessionKey)
 }
 
-func (s backendConfigurationService) appendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	return s.inner.AppendBackendWorkspaceSummaryLines(lines, currentWS)
-}
-
-func (s backendConfigurationService) backendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return s.inner.BackendWorkspaceConfigButtons(sessionKey)
-}
-
 func (s backendConfigurationService) backendWorkspaceSwitchInFlightNotice() string {
 	return s.inner.BackendWorkspaceSwitchInFlightNotice()
 }

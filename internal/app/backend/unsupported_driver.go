@@ -7,7 +7,6 @@ import (
 
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
-	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -93,10 +92,6 @@ func (d unsupportedPermissionDriver) WorkspaceCommandUsage() string { return "/b
 
 func (d unsupportedPermissionDriver) AppendWorkspaceSummaryLines(app PermissionDependencies, lines []string, currentWS *config.Workspace) []string {
 	return lines
-}
-
-func (d unsupportedPermissionDriver) WorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return nil
 }
 
 func (d unsupportedPermissionDriver) AppendStatusLines(app PermissionDependencies, lines []string, sess *conversation.Session, ws *config.Workspace) []string {

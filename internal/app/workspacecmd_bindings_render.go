@@ -2,7 +2,6 @@ package app
 
 import (
 	workspacecards "feidex/internal/adapter/feishu/workspace"
-	"feidex/internal/app/pathpick"
 	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/composition"
 	"feidex/internal/domain/identity"
@@ -24,7 +23,7 @@ func newWorkspaceRenderService(a *App) *workspacecards.Presentation {
 }
 
 func buildWorkspaceRenderService(a *App) *workspacecards.Presentation {
-	deps := composition.WorkspacePresentationDependencies{PathPicker: pathpick.RenderCard}
+	deps := composition.WorkspacePresentationDependencies{}
 	if a != nil {
 		deps.Frontend = identity.FrontendID(a.FrontendID())
 		deps.Config, deps.ConfigPath, deps.Mutex, deps.Scopes = a.cfg, a.cfgPath, a.ConfigMu(), a.State()

@@ -274,6 +274,22 @@ func TestWorkspaceRendererDoesNotDependOnAppCoreHelpers(t *testing.T) {
 	}
 }
 
+func TestPureCardRenderersDoNotImportFilesystemOrHostState(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, pkg := range []string{"internal/adapter/feishu/pathpicker", "internal/adapter/feishu/workspace"} {
+		violations, err := importsUnder(root, pkg, []string{
+			modulePath + "/internal/adapter/filesystem", modulePath + "/internal/config",
+			modulePath + "/internal/state", modulePath + "/internal/app",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(violations) != 0 {
+			t.Fatalf("%s imports filesystem or host state: %v", pkg, violations)
+		}
+	}
+}
+
 func TestModelCatalogPolicyLivesInApplication(t *testing.T) {
 	root := repositoryRoot(t)
 	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "modelconfig", "modelconfig.go"))

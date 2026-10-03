@@ -22,13 +22,6 @@ func firstNonEmpty(values ...string) string {
 
 // RenderWorkspaceNewCard renders the "new workspace" card.
 func (s *RenderService) RenderWorkspaceNewCard(sessionKey, requestID string, payload NewPayload) map[string]any {
-	if payload.Picker != nil {
-		card, err := s.RenderPathPickerCard(requestID, *payload.Picker)
-		if err == nil {
-			return card
-		}
-		payload.Picker = nil
-	}
 	selectedCWD := strings.TrimSpace(payload.SelectedCWD)
 	if selectedCWD == "" {
 		selectedCWD = payload.RootPath
@@ -104,13 +97,6 @@ func (s *RenderService) RenderWorkspaceNewCard(sessionKey, requestID string, pay
 
 // RenderWorkspaceCloneCard renders the "clone workspace" card.
 func (s *RenderService) RenderWorkspaceCloneCard(view appselection.View, sessionKey, requestID string, payload ClonePayload) map[string]any {
-	if payload.Picker != nil {
-		card, err := s.RenderPathPickerCard(requestID, *payload.Picker)
-		if err == nil {
-			return card
-		}
-		payload.Picker = nil
-	}
 	workspaceID := view.CurrentID
 	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), view.CloneRoot)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)

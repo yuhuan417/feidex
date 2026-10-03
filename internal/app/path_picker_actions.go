@@ -7,10 +7,12 @@ import (
 	"os"
 	"strings"
 
+	pickercards "feidex/internal/adapter/feishu/pathpicker"
+	apppathpick "feidex/internal/adapter/filesystem/pathpicker"
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
-	apppathpick "feidex/internal/app/pathpick"
 	appworkspace "feidex/internal/app/workspace"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
+	pickerapp "feidex/internal/application/pathpicker"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
@@ -71,7 +73,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 			Card:  rawCard(a.feishu.SimpleStatusCard("路径选择已取消", "grey", "本次路径选择已取消。", nil)),
 		}, nil
 	case "path_picker.up":
-		payload.CurrentPath = apppathpick.ParentPath(payload)
+		payload.CurrentPath = pickerapp.ParentPath(payload)
 		payload.SelectedPath = ""
 	case "path_picker.open":
 		nextPath, _ := action.ActionValue["path"].(string)
@@ -97,7 +99,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 		}
 		payload.SelectedPath = resolved
 	case "path_picker.dropdown":
-		nextPath, isDir, ok := apppathpick.DecodeOption(action.Option)
+		nextPath, isDir, ok := pickercards.DecodeOption(action.Option)
 		if !ok {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "未收到有效选项"}}, nil
 		}
@@ -112,7 +114,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 			payload.SelectedPath = resolved
 		}
 	case "path_picker.confirm":
-		selectedPath, err := apppathpick.SelectedPathForConfirm(payload)
+		selectedPath, err := (pickerapp.Service{Filesystem: apppathpick.Filesystem{}}).SelectedPathForConfirm(payload)
 		if err != nil || strings.TrimSpace(selectedPath) == "" {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请先选择路径"}}, nil
 		}

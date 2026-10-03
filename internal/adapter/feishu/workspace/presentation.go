@@ -14,10 +14,36 @@ type Views interface {
 
 type Presentation struct {
 	*RenderService
-	Views Views
+	Views  Views
+	Picker PathPicker
+}
+
+type PathPicker interface {
+	RenderCard(string, PathPickerPayload) (map[string]any, error)
+}
+
+func (p *Presentation) RenderPathPickerCard(id string, payload PathPickerPayload) (map[string]any, error) {
+	if p.Picker == nil {
+		return nil, fmt.Errorf("path picker renderer is unavailable")
+	}
+	return p.Picker.RenderCard(id, payload)
+}
+
+func (p *Presentation) RenderWorkspaceNewCard(key, id string, payload NewPayload) map[string]any {
+	if payload.Picker != nil {
+		if card, err := p.RenderPathPickerCard(id, *payload.Picker); err == nil {
+			return card
+		}
+	}
+	return p.RenderService.RenderWorkspaceNewCard(key, id, payload)
 }
 
 func (p *Presentation) RenderWorkspaceCloneCard(key, id string, payload ClonePayload) map[string]any {
+	if payload.Picker != nil {
+		if card, err := p.RenderPathPickerCard(id, *payload.Picker); err == nil {
+			return card
+		}
+	}
 	return p.RenderService.RenderWorkspaceCloneCard(p.Views.Snapshot(key), key, id, payload)
 }
 func (p *Presentation) RenderWorkspaceWorktreeCard(key, id string, payload WorktreePayload) map[string]any {

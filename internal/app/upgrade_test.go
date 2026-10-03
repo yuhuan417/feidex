@@ -2,8 +2,8 @@ package app
 
 import (
 	"encoding/json"
+	apppathpick "feidex/internal/adapter/feishu/pathpicker"
 	appbackend "feidex/internal/app/backend"
-	apppathpick "feidex/internal/app/pathpick"
 	appupgradecmd "feidex/internal/app/upgradecmd"
 	"feidex/internal/daemon"
 	"feidex/internal/domain/conversation"

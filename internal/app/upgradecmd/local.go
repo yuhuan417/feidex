@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	apppathpick "feidex/internal/app/pathpick"
+	apppathpick "feidex/internal/adapter/filesystem/pathpicker"
 	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"

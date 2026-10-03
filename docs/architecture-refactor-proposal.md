@@ -559,6 +559,9 @@ Codex server request
 
 ### 2026-10-03 本轮边界收敛
 
+- workspace 查询与配置展示继续由 `application/workspace` 生成 detached view；Feishu workspace adapter 只消费 view。路径选择器已拆成 application snapshot、filesystem adapter 和纯 Feishu card renderer，文件解析、目录遍历及 symlink root 校验不再位于 card renderer。
+- workspace presentation 负责在需要时查询路径选择器并把结果交给纯 renderer；workspace cards 不再持有可执行的 filesystem callback。新增测试覆盖 symlink 越界拒绝和目录模式文件过滤。
+
 - 群绑定的模型、响应速度和工作区状态卡改为显式 `CardRenderer` capability；binding service 不再从宿主直接读取 Feishu renderer。
 - backend event application service 的十余个匿名 callback 字段收敛为单一 consumer-owned `EventSink` port；Feishu/app 入口只负责组装 sink 实现，事件分发器不再持有隐式 service callback 集合。
 - workspace command capability carrier 从兼容性的 `App` 重命名为 `Dependencies`，Config/Management/Render service 内部统一使用 `Deps` 字段；composition 仍负责注入 outbound、renderer、state 和 runtime ports。

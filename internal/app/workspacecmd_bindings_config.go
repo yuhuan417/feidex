@@ -90,8 +90,6 @@ func buildWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 			},
 		},
 		Backend: appworkspacecmd.BackendConfigDeps{
-			BackendWorkspaceSummaryLines:               bcfg.appendBackendWorkspaceSummaryLines,
-			BackendWorkspaceConfigButtons:              bcfg.backendWorkspaceConfigButtons,
 			BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,
 			BackendWorkspaceSwitchBindingFailureNotice: bcfg.backendWorkspaceSwitchBindingFailureNotice,
 			BackendWorkspaceSwitchInFlightNotice:       bcfg.backendWorkspaceSwitchInFlightNotice,

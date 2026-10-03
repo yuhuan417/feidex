@@ -276,18 +276,6 @@ func (s ConfigurationService) HandleBackendWorkspacePermissionCommand(msg *feish
 	return s.HandleWorkspacePermissionCommand(msg, args, sessionKey)
 }
 
-// AppendBackendWorkspaceSummaryLines appends backend-specific workspace
-// summary lines to the given slice.
-func (s ConfigurationService) AppendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	return s.deps.Driver.Permission().AppendWorkspaceSummaryLines(s.Permissions, lines, currentWS)
-}
-
-// BackendWorkspaceConfigButtons returns the workspace configuration buttons
-// for the active backend.
-func (s ConfigurationService) BackendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	return s.deps.Driver.Permission().WorkspaceConfigButtons(sessionKey)
-}
-
 // BackendWorkspaceSwitchInFlightNotice returns the notice text for a
 // workspace switch that is in flight.
 func (s ConfigurationService) BackendWorkspaceSwitchInFlightNotice() string {

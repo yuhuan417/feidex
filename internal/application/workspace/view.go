@@ -77,21 +77,7 @@ func (s ViewService) Snapshot(key string) View {
 		}
 		view.Unbound = view.CurrentID == ""
 	} else {
-		if source.Selection != nil {
-			view.CurrentID = strings.TrimSpace(source.Selection.WorkspaceID)
-		}
-		if view.CurrentID == "" && source.Session != nil && !strings.EqualFold(source.Session.ChatType, "group") && source.Profile != nil {
-			view.CurrentID = strings.TrimSpace(source.Profile.WorkspaceID)
-		}
-		if view.CurrentID == "" && source.Session != nil {
-			view.CurrentID = strings.TrimSpace(source.Session.WorkspaceID)
-		}
-		if view.CurrentID == "" {
-			view.CurrentID = "default"
-			if len(view.Workspaces) > 0 {
-				view.CurrentID = view.Workspaces[0].ID
-			}
-		}
+		view.CurrentID = selectedWorkspace(source)
 	}
 	for _, ws := range view.Workspaces {
 		if ws.ID == view.CurrentID {
@@ -104,9 +90,9 @@ func (s ViewService) Snapshot(key string) View {
 	}
 	view.SettingsWorkspace = view.Current
 	if view.SettingsWorkspace == nil && view.Group {
-		fallback := source
-		fallback.Group, fallback.Binding = false, nil
-		id := selectedWorkspace(fallback)
+		// Legacy machine-default selectors can be opened before group onboarding.
+		// Group-scoped setting commands still use the binding override workflow.
+		id := selectedWorkspace(source)
 		for _, ws := range view.Workspaces {
 			if ws.ID == id {
 				value := ws
