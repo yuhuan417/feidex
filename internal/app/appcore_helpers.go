@@ -7,7 +7,6 @@ import (
 
 // Function aliases — appcore shared helpers
 var (
-	feishuConfigUnlocked     = appcore.FeishuConfigUnlocked
 	feishuConfig             = appcore.FeishuConfig
 	replyInThreadEnabled     = appcore.ReplyInThreadEnabled
 	configuredBackend        = appcore.ConfiguredBackend
