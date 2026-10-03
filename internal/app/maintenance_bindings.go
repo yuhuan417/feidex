@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	appmaintenance "feidex/internal/app/maintenance"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/feishu"
 	"feidex/internal/runtime/maintenance"
 	"feidex/internal/state"
 )
@@ -48,7 +50,12 @@ func newStartupRecovery(a *App) maintenance.StartupRecovery {
 }
 func newRuntimeMaintenanceService(a *App) appmaintenance.RuntimeMaintenanceService {
 	return appmaintenance.NewRuntimeMaintenanceService(appmaintenance.Dependencies{
-		Context: a.Context, Store: a.store, Repository: a.State(), Client: a.feishu, MenuBody: menuCardBody,
+		Context: a.Context, Store: a.store, Repository: a.State(),
+		ArtifactClient:   a.feishu,
+		Outbound:         maintenanceOutbound{app: a},
+		Renderer:         maintenanceCardRenderer{app: a},
+		PermissionNotify: maintenancePermissionNotifier{client: a.feishu},
+		MenuBody:         menuCardBody,
 		Workspaces: func() []config.Workspace {
 			if a.cfg == nil {
 				return nil
@@ -59,4 +66,29 @@ func newRuntimeMaintenanceService(a *App) appmaintenance.RuntimeMaintenanceServi
 		ReadyChatIDs:      newStartupRecovery(a).FrontendStartupReadyChatIDs,
 		RunAsync:          func(fn func()) { runAsync(a, fn) },
 	})
+}
+
+type maintenancePermissionNotifier struct{ client interface{} }
+
+func (n maintenancePermissionNotifier) NotifyPermissionIssue(target appfeishuwrap.NotifyTarget, err error) {
+	if notifier, ok := n.client.(interface {
+		NotifyPermissionIssue(appfeishuwrap.NotifyTarget, error)
+	}); ok {
+		notifier.NotifyPermissionIssue(target, err)
+	}
+}
+
+type maintenanceOutbound struct{ app *App }
+
+func (o maintenanceOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
+	return patchCardEffect(ctx, o.app, messageID, card)
+}
+
+type maintenanceCardRenderer struct{ app *App }
+
+func (r maintenanceCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
+	if r.app == nil || r.app.feishu == nil {
+		return nil
+	}
+	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
