@@ -27,11 +27,11 @@ func (s *Service) CompleteApprovalAction(action *feishu.CardAction, actionName s
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "你没有权限处理这个审批"}}, nil
 	}
-	var replyPayload any
+	var replyValue any
 	var warning string
 	switch appapproval.NormalizeKind(pending.Kind) {
 	case appapproval.KindCommand:
-		replyPayload, warning = approvalview.CommandApprovalReplyPayload(pending, action, actionName)
+		replyValue, warning = approvalview.CommandApprovalReplyPayload(pending, action, actionName)
 	case appapproval.KindFile:
 		resp := map[string]any{"decision": "decline"}
 		switch actionName {
@@ -44,14 +44,14 @@ func (s *Service) CompleteApprovalAction(action *feishu.CardAction, actionName s
 		case "approval.file.decline":
 			resp["decision"] = "decline"
 		}
-		replyPayload = resp
+		replyValue = resp
 	case appapproval.KindPermissions:
 		payload := appapproval.ParseStoredPayload(pending.PayloadJSON)
 		scope := "turn"
 		if actionName == "approval.permissions.accept_session" {
 			scope = "session"
 		}
-		replyPayload = map[string]any{
+		replyValue = map[string]any{
 			"permissions": payload.Permissions,
 			"scope":       scope,
 		}
@@ -60,6 +60,10 @@ func (s *Service) CompleteApprovalAction(action *feishu.CardAction, actionName s
 	}
 	if strings.TrimSpace(warning) != "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: warning}}, nil
+	}
+	replyPayload, err := json.Marshal(replyValue)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "审批结果编码失败，请重试"}}, nil
 	}
 	adapter := s.AdapterForPending(pending)
 	if err := adapter.ReplyApproval(pending, actionName, replyPayload); err != nil {

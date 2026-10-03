@@ -2,6 +2,7 @@
 package backendops
 
 import (
+	"encoding/json"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/review"
 	"feidex/internal/domain/submission"
@@ -52,8 +53,10 @@ type GoalCleared struct{ Cleared bool }
 
 // ResponseToken preserves the backend's opaque numeric/string request identity.
 type Response struct {
-	Token   []byte
-	Payload any
+	Token []byte
+	// Payload is opaque backend JSON. Encoding belongs at the adapter boundary;
+	// application code must not pass arbitrary Go values through this port.
+	Payload json.RawMessage
 	Error   *ResponseError
 }
 type ResponseError struct {

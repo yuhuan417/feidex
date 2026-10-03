@@ -277,7 +277,11 @@ func reviewCancelledBody(pending *state.PendingRequest) string {
 type codexEffectReplyClient struct{ app *App }
 
 func (c codexEffectReplyClient) Reply(token json.RawMessage, payload any) error {
-	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: backendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Payload: payload}}})
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: backendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Payload: encoded}}})
 }
 func (c codexEffectReplyClient) ReplyError(token json.RawMessage, code int, message string) error {
 	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: backendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Error: &backendops.ResponseError{Code: code, Message: message}}}})

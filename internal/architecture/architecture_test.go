@@ -314,6 +314,33 @@ func TestApplicationCardActionsDoNotExposeSDKMaps(t *testing.T) {
 	}
 }
 
+func TestApplicationBackendRepliesUseOpaqueJSON(t *testing.T) {
+	root := repositoryRoot(t)
+	checks := []struct {
+		path string
+		bad  []string
+		good string
+	}{
+		{"internal/application/backendops/request.go", []string{"Payload any"}, "Payload json.RawMessage"},
+		{"internal/application/interaction/reply.go", []string{"replyPayload any"}, "replyPayload json.RawMessage"},
+	}
+	for _, check := range checks {
+		data, err := os.ReadFile(filepath.Join(root, check.path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := string(data)
+		for _, forbidden := range check.bad {
+			if strings.Contains(source, forbidden) {
+				t.Fatalf("%s still exposes untyped backend reply value %q", check.path, forbidden)
+			}
+		}
+		if !strings.Contains(source, check.good) {
+			t.Fatalf("%s must expose %s", check.path, check.good)
+		}
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	root, err := os.Getwd()

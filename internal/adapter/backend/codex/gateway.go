@@ -187,5 +187,42 @@ func Respond(ctx context.Context, client ReplyClient, response backendops.Respon
 	if response.Error != nil {
 		return client.ReplyError(json.RawMessage(response.Token), response.Error.Code, response.Error.Message)
 	}
-	return client.Reply(json.RawMessage(response.Token), response.Payload)
+	var payload any
+	if len(response.Payload) == 0 {
+		payload = nil
+	} else if err := json.Unmarshal(response.Payload, &payload); err != nil {
+		return fmt.Errorf("decode backend response payload: %w", err)
+	} else {
+		payload = normalizeResponseValue(payload)
+	}
+	return client.Reply(json.RawMessage(response.Token), payload)
+}
+
+// normalizeResponseValue retains the concrete string-list shape used by the
+// backend reply builders while keeping the application port JSON-only.
+func normalizeResponseValue(value any) any {
+	switch typed := value.(type) {
+	case []any:
+		allStrings := len(typed) > 0
+		stringsValue := make([]string, len(typed))
+		for i, item := range typed {
+			normalized := normalizeResponseValue(item)
+			typed[i] = normalized
+			stringItem, ok := normalized.(string)
+			if !ok {
+				allStrings = false
+				continue
+			}
+			stringsValue[i] = stringItem
+		}
+		if allStrings {
+			return stringsValue
+		}
+		return typed
+	case map[string]any:
+		for key, item := range typed {
+			typed[key] = normalizeResponseValue(item)
+		}
+	}
+	return value
 }

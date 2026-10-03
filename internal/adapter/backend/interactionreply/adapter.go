@@ -47,7 +47,7 @@ func (u unsupportedAdapter) err() error {
 	return fmt.Errorf("unsupported backend %q", backend)
 }
 
-func (u unsupportedAdapter) ReplyApproval(*state.PendingRequest, string, any) error {
+func (u unsupportedAdapter) ReplyApproval(*state.PendingRequest, string, json.RawMessage) error {
 	return u.err()
 }
 func (u unsupportedAdapter) ReplyQuickUserInput(*state.PendingRequest, interaction.ToolUserInputPayload, string, string) (string, error) {
@@ -89,8 +89,12 @@ func NewCodexAdapter(client CodexReplyClient, backendKind string) interactionapp
 
 func (c codexAdapter) Kind() string { return c.kind_ }
 
-func (c codexAdapter) ReplyApproval(pending *state.PendingRequest, _ string, replyPayload any) error {
-	return c.client.Reply(pendingRequestIDRaw(pending), replyPayload)
+func (c codexAdapter) ReplyApproval(pending *state.PendingRequest, _ string, replyPayload json.RawMessage) error {
+	var value any
+	if err := json.Unmarshal(replyPayload, &value); err != nil {
+		return err
+	}
+	return c.client.Reply(pendingRequestIDRaw(pending), value)
 }
 
 func (c codexAdapter) ReplyQuickUserInput(pending *state.PendingRequest, payload interaction.ToolUserInputPayload, questionID, answer string) (string, error) {
@@ -188,7 +192,7 @@ func NewClaudeAdapter(client ClaudeReplyClient, backendKind string) interactiona
 
 func (c claudeAdapter) Kind() string { return c.kind_ }
 
-func (c claudeAdapter) ReplyApproval(pending *state.PendingRequest, actionName string, _ any) error {
+func (c claudeAdapter) ReplyApproval(pending *state.PendingRequest, actionName string, _ json.RawMessage) error {
 	resolution, resolutionWarning := claudesupport.ClaudeApprovalResolutionForAction(actionName)
 	if strings.TrimSpace(resolutionWarning) != "" {
 		return interactionapp.Warning{Message: resolutionWarning}

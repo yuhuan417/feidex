@@ -127,7 +127,7 @@ func (r *replyRecorder) ReplyError(token json.RawMessage, code int, message stri
 func TestResponseGatewayPreservesOpaqueTokenAndCancellation(t *testing.T) {
 	for _, token := range []string{`42`, `"42"`} {
 		r := &replyRecorder{}
-		if err := Respond(context.Background(), r, backendops.Response{Token: []byte(token), Payload: map[string]any{"decision": "accept"}}); err != nil || string(r.token) != token {
+		if err := Respond(context.Background(), r, backendops.Response{Token: []byte(token), Payload: json.RawMessage(`{"decision":"accept"}`)}); err != nil || string(r.token) != token {
 			t.Fatalf("token %q: %v, %s", token, err, r.token)
 		}
 		ctx, cancel := context.WithCancel(context.Background())

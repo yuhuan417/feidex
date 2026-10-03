@@ -1,11 +1,13 @@
 package interaction
 
+import "encoding/json"
+
 import domain "feidex/internal/domain/interaction"
 
 // BackendReply is the interface for backend-specific pending request replies.
 type BackendReply interface {
 	Kind() string
-	ReplyApproval(pending *domain.PendingRequest, actionName string, replyPayload any) error
+	ReplyApproval(pending *domain.PendingRequest, actionName string, replyPayload json.RawMessage) error
 	ReplyQuickUserInput(pending *domain.PendingRequest, payload domain.ToolUserInputPayload, questionID, answer string) (string, error)
 	ReplyFormUserInput(pending *domain.PendingRequest, payload domain.ToolUserInputPayload, selections map[string]string) (string, error)
 	ReplyTextUserInput(pending *domain.PendingRequest, payload domain.ToolUserInputPayload, text string) (string, error)
