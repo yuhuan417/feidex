@@ -146,6 +146,42 @@ func TestLayerImportRules(t *testing.T) {
 	}
 }
 
+func TestMigratedCommandPackagesDoNotImportFeishuTransport(t *testing.T) {
+	root := repositoryRoot(t)
+	packages := []string{
+		"internal/app/goalcmd",
+		"internal/app/skillscmd",
+		"internal/app/reviewcmd",
+		"internal/app/planmode",
+		"internal/app/upgradecmd",
+		"internal/app/debugviewcmd",
+		"internal/app/threadmenu",
+		"internal/app/workspacecmd",
+	}
+	for _, relative := range packages {
+		base := filepath.Join(root, relative)
+		err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			if strings.Contains(string(data), "internal/adapter/feishu/transport") {
+				t.Errorf("%s imports the Feishu transport directly", path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	root, err := os.Getwd()
