@@ -598,3 +598,4 @@ Codex server request
 - history 查询已迁入 `application/history`：分页、详情、ordinal 解析、frontend scope 校验和当前 turn 标记由 use case 负责；Codex/Claude transcript reader 在 composition root 组装。Feishu history adapter 只负责命令路由和纯卡片渲染，移除了递归创建 history service 的回调环。查询结果会复制嵌套切片，避免 reader 缓存被当前 turn 标记或并发调用修改；该迁移只读取 thread/session，不改变 SM-03～SM-08 的生命周期边界。
 - backend configuration 的 backend、Feishu scope、默认 workspace 和模型值读取已收敛到 `internal/app/backend` 自有的窄 `PermissionDependencies` helper，不再依赖 `appcore` 或旧 `app/modelconfig` 聚合包；菜单顺序、模型生效边界、权限协议和状态卡文本保持不变。
 - 模型配置的 Feishu 卡片与命令适配器已从 `internal/app/modelconfig` 移到 `internal/adapter/feishu/modelconfig`；application 继续持有目录解析和快照策略，adapter 仅负责 Feishu 交互与 config/backend 端口连接，旧 app package 已删除。
+- plan mode 已移除对 `appcore` 与 `app/workspace` 的依赖，改用显式 ConfigProvider、ContextProvider、domain conversation binding 和 application modelconfig adapter 能力；`/plan` 的 Codex collaboration mode 请求与 SM-04/SM-05 边界不变。

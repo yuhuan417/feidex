@@ -3,7 +3,6 @@ package planmode
 import (
 	"context"
 	"feidex/internal/adapter/feishu/modelconfig"
-	"feidex/internal/app/appcore"
 	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
@@ -15,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -36,8 +34,11 @@ type CodexClient interface {
 // capability explicit at the composition boundary.
 type Dependencies struct {
 	ConfigProvider interface {
-		appcore.ConfigurationSource
-		appcore.FrontendIdentity
+		Config() *config.Config
+		ConfigMu() *sync.RWMutex
+		Backend() string
+		FrontendID() string
+		FrontendConfigIndex() int
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
@@ -55,7 +56,7 @@ type Dependencies struct {
 	ReplyInThreadForSubmissionFn func(*domainsubmission.Submission) bool
 	SendLocalTurnFollowupCardFn  func(context.Context, string, map[string]any, bool, *domainsubmission.Submission, string) (string, error)
 	StartNextSubmissionFn        func(string) error
-	StartWorkspaceThreadFn       func(string, *conversation.Session, *config.Workspace) (*appworkspace.ThreadBinding, error)
+	StartWorkspaceThreadFn       func(string, *conversation.Session, *config.Workspace) (*conversation.ThreadBinding, error)
 }
 
 type Outbound interface {
@@ -167,7 +168,7 @@ func (d Dependencies) StartNextSubmission(k string) error {
 	}
 	return d.StartNextSubmissionFn(k)
 }
-func (d Dependencies) StartWorkspaceThread(k string, s *conversation.Session, w *config.Workspace) (*appworkspace.ThreadBinding, error) {
+func (d Dependencies) StartWorkspaceThread(k string, s *conversation.Session, w *config.Workspace) (*conversation.ThreadBinding, error) {
 	if d.StartWorkspaceThreadFn == nil {
 		return nil, fmt.Errorf("workspace thread starter unavailable")
 	}
@@ -223,7 +224,7 @@ func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) erro
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
-		return a.OutboundCapability().ReplyText(appcore.Context(a), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
+		return a.OutboundCapability().ReplyText(a.Context(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	case len(args) == 0:
 		mode, err := ResolvePlanModeForSession(a, sess)
 		if err != nil {
@@ -234,7 +235,7 @@ func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) erro
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
-		return a.OutboundCapability().ReplyText(appcore.Context(a), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
+		return a.OutboundCapability().ReplyText(a.Context(), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
 	case strings.TrimSpace(args[0]) == "off":
 		defaultMode, err := ResolveDefaultCodexCollaborationModeForSession(a, sess)
 		if err != nil {
@@ -245,7 +246,7 @@ func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) erro
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已关闭 plan mode，旧的计划确认已失效。")
-		return a.OutboundCapability().ReplyText(appcore.Context(a), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
+		return a.OutboundCapability().ReplyText(a.Context(), msg.MessageID, "当前 thread 已关闭 `plan` collaboration mode。", a.ReplyInThreadEnabled(msg.ChatType))
 	default:
 		mode, err := ResolvePlanModeForSession(a, sess)
 		if err != nil {
@@ -256,7 +257,7 @@ func CommandPlan(a Dependencies, msg *feishu.InboundMessage, args []string) erro
 			return err
 		}
 		InvalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前 thread 已重新配置 plan mode，旧的计划确认已失效。")
-		return a.OutboundCapability().ReplyText(appcore.Context(a), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
+		return a.OutboundCapability().ReplyText(a.Context(), msg.MessageID, RenderPlanModeStatusText(mode), a.ReplyInThreadEnabled(msg.ChatType))
 	}
 }
 
@@ -292,7 +293,7 @@ func ResolvePlanModeForSession(a Dependencies, sess *conversation.Session) (*con
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(appcore.Context(a), 20*time.Second)
+	ctx, cancel := context.WithTimeout(a.Context(), 20*time.Second)
 	defer cancel()
 
 	listResp, err := client.ListCollaborationModes(ctx)
@@ -367,7 +368,7 @@ func ResolveDefaultCodexCollaborationModeForSession(a Dependencies, sess *conver
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(appcore.Context(a), 20*time.Second)
+	ctx, cancel := context.WithTimeout(a.Context(), 20*time.Second)
 	defer cancel()
 	model, effort, err := resolveDefaultCollaborationModeSettings(ctx, a, client)
 	if err != nil {
@@ -418,7 +419,7 @@ func defaultCodexCollaborationModeForSession(a Dependencies, sess *conversation.
 	}
 	if model == "" {
 		slog.Debug("plan mode disable could not build default collaboration mode",
-			"backend", appcore.ConfiguredBackend(a),
+			"backend", configuredBackend(a),
 			"active_thread_id", sessionActiveThreadIDForLog(sess),
 		)
 		return nil
@@ -606,7 +607,7 @@ func resolvePlanModeSettings(ctx context.Context, a Dependencies, client CodexCl
 	if entry == nil {
 		return "", "", fmt.Errorf("当前 Codex model 不可用，无法开启 `/plan`")
 	}
-	model = appcore.FirstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
+	model = firstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
 	if model == "" {
 		return "", "", fmt.Errorf("当前 Codex model 不可用，无法开启 `/plan`")
 	}
@@ -627,7 +628,7 @@ func resolveDefaultCollaborationModeSettings(ctx context.Context, a Dependencies
 	if entry == nil {
 		return "", "", fmt.Errorf("当前 Codex model 不可用，无法恢复 default collaboration mode")
 	}
-	model = appcore.FirstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
+	model = firstNonEmpty(strings.TrimSpace(entry.ID), strings.TrimSpace(entry.Model))
 	if model == "" {
 		return "", "", fmt.Errorf("当前 Codex model 不可用，无法恢复 default collaboration mode")
 	}
@@ -684,4 +685,30 @@ func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
 		return workspace.SelectionService{}
 	}
 	return d.ConfigProvider.WorkspaceSelection()
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+func configuredBackend(a Dependencies) string {
+	if a.ConfigProvider == nil {
+		return ""
+	}
+	if value := strings.TrimSpace(a.ConfigProvider.Backend()); value != "" {
+		return domainbackend.NormalizeBackend(value)
+	}
+	cfg := a.ConfigProvider.Config()
+	if cfg == nil {
+		return ""
+	}
+	index := a.ConfigProvider.FrontendConfigIndex()
+	if index >= 0 && index < len(cfg.Frontends) {
+		return domainbackend.NormalizeBackend(cfg.Frontends[index].FeishuConfig.Backend)
+	}
+	return domainbackend.NormalizeBackend(cfg.Feishu.Backend)
 }

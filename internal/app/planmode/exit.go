@@ -2,7 +2,6 @@ package planmode
 
 import (
 	"encoding/json"
-	"feidex/internal/app/appcore"
 	"feidex/internal/app/lifecycle"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
@@ -96,21 +95,21 @@ func ExitSuccessCard(a Dependencies, sessionKey, workspaceID, title, body string
 	if a.ConfigProvider == nil || a.Renderer() == nil {
 		return nil
 	}
-	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, strings.TrimSpace(appcore.FirstNonEmpty(title, ExitPendingTitle))), "green", strings.TrimSpace(body), nil)
+	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, strings.TrimSpace(firstNonEmpty(title, ExitPendingTitle))), "green", strings.TrimSpace(body), nil)
 }
 
 func ExitFailureCard(a Dependencies, sessionKey, workspaceID, body string) map[string]any {
 	if a.ConfigProvider == nil || a.Renderer() == nil {
 		return nil
 	}
-	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitPendingTitle), "red", strings.TrimSpace(appcore.FirstNonEmpty(body, "Unable to process the plan confirmation.")), nil)
+	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitPendingTitle), "red", strings.TrimSpace(firstNonEmpty(body, "Unable to process the plan confirmation.")), nil)
 }
 
 func ExitExpiredCard(a Dependencies, sessionKey, workspaceID, body string) map[string]any {
 	if a.ConfigProvider == nil || a.Renderer() == nil {
 		return nil
 	}
-	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitExpiredTitle), "grey", strings.TrimSpace(appcore.FirstNonEmpty(body, "This confirmation is no longer valid.")), nil)
+	return a.Renderer().SimpleStatusCard(ExitContentCardTitle(a, sessionKey, workspaceID, ExitExpiredTitle), "grey", strings.TrimSpace(firstNonEmpty(body, "This confirmation is no longer valid.")), nil)
 }
 
 func ExitPendingRequest(a Dependencies, sessionKey string) *state.PendingRequest {
@@ -170,7 +169,7 @@ func SessionHasPlanExitBlockers(a Dependencies, sess *conversation.Session) bool
 	if len(sess.Queue) > 0 || len(sess.StagedImages) > 0 {
 		return true
 	}
-	if conversation.NormalizeSessionStatus(appcore.FirstNonEmpty(strings.TrimSpace(sess.Status), conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
+	if conversation.NormalizeSessionStatus(firstNonEmpty(strings.TrimSpace(sess.Status), conversation.SessionStatusIdle.String())) != conversation.SessionStatusIdle {
 		return true
 	}
 	return false
@@ -190,8 +189,8 @@ func InvalidateCodexPlanModeExitArtifactsForSession(a Dependencies, sessionKey, 
 		req.Status = state.PendingRequestStatusExpired.String()
 	})
 	if pending.FeishuMsgID != "" {
-		body := appcore.FirstNonEmpty(reason, "This confirmation is no longer valid.")
-		_ = a.OutboundCapability().PatchCard(appcore.Context(a), pending.FeishuMsgID, ExitExpiredCard(a, sessionKey, "", body))
+		body := firstNonEmpty(reason, "This confirmation is no longer valid.")
+		_ = a.OutboundCapability().PatchCard(a.Context(), pending.FeishuMsgID, ExitExpiredCard(a, sessionKey, "", body))
 	}
 }
 
@@ -199,7 +198,7 @@ func ProcessCodexPlanModeExitOnTurnCompleted(a Dependencies, sessionKey string, 
 	if a.ConfigProvider == nil || sub == nil {
 		return false
 	}
-	if appcore.ConfiguredBackend(a) != BackendCodex {
+	if configuredBackend(a) != BackendCodex {
 		return false
 	}
 	if strings.TrimSpace(status) != domainsubmission.SubmissionStatusCompleted.String() {
@@ -216,8 +215,8 @@ func ProcessCodexPlanModeExitOnTurnCompleted(a Dependencies, sessionKey string, 
 	if sessionKey == "" || planMarkdown == "" {
 		return false
 	}
-	threadID = strings.TrimSpace(appcore.FirstNonEmpty(threadID, sub.ThreadID))
-	turnID = strings.TrimSpace(appcore.FirstNonEmpty(turnID, sub.TurnID))
+	threadID = strings.TrimSpace(firstNonEmpty(threadID, sub.ThreadID))
+	turnID = strings.TrimSpace(firstNonEmpty(turnID, sub.TurnID))
 	sess := a.State().Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveThreadID) != threadID {
 		return false
@@ -262,12 +261,12 @@ func sendCodexPlanModeExitPrompt(a Dependencies, sub *domainsubmission.Submissio
 	msgID := ""
 	reuseMessageID = strings.TrimSpace(reuseMessageID)
 	if reuseMessageID != "" {
-		if err := a.OutboundCapability().PatchCard(appcore.Context(a), reuseMessageID, card); err == nil {
+		if err := a.OutboundCapability().PatchCard(a.Context(), reuseMessageID, card); err == nil {
 			msgID = reuseMessageID
 		}
 	}
 	if msgID == "" {
-		msgID, err = a.OutboundCapability().ReplyCard(appcore.Context(a), sub.TriggerMessageID, card, a.ReplyInThreadForSubmission(sub))
+		msgID, err = a.OutboundCapability().ReplyCard(a.Context(), sub.TriggerMessageID, card, a.ReplyInThreadForSubmission(sub))
 		if err != nil {
 			return err
 		}
@@ -284,7 +283,7 @@ func sendCodexPlanModeExitPrompt(a Dependencies, sub *domainsubmission.Submissio
 		TurnID:      "",
 		OwnerUserID: strings.TrimSpace(sub.UserID),
 		FeishuMsgID: msgID,
-		PayloadJSON: appcore.MustJSON(payload),
+		PayloadJSON: mustJSON(payload),
 		Status:      state.PendingRequestStatusPending.String(),
 		CreatedAt:   time.Now().Unix(),
 		ExpiresAt:   time.Now().Add(30 * time.Minute).Unix(),
@@ -324,7 +323,7 @@ func CompleteCodexPlanModeExit(a Dependencies, action *feishu.CardAction, action
 			if err != nil {
 				errText = err.Error()
 			}
-			card = ExitFailureCard(a, pending.SessionKey, "", appcore.FirstNonEmpty(strings.TrimSpace(errText), "Unable to process the plan confirmation."))
+			card = ExitFailureCard(a, pending.SessionKey, "", firstNonEmpty(strings.TrimSpace(errText), "Unable to process the plan confirmation."))
 		}
 		if card == nil {
 			return
@@ -360,7 +359,7 @@ func sendCodexPlanModeExitFollowupCard(a Dependencies, pending *state.PendingReq
 	} else if sess := a.State().Session(strings.TrimSpace(pending.SessionKey)); sess != nil {
 		replyInThread = sess.ChatType == "group" && a.ReplyInThreadEnabled(sess.ChatType)
 	}
-	_, err := a.SendLocalTurnFollowupCard(appcore.Context(a), messageID, card, replyInThread, sub, ExitFollowupKind)
+	_, err := a.SendLocalTurnFollowupCard(a.Context(), messageID, card, replyInThread, sub, ExitFollowupKind)
 	return err
 }
 
@@ -464,7 +463,7 @@ func codexPlanModeExitImplementFresh(a Dependencies, pending *state.PendingReque
 			Toast: &callback.Toast{Type: "warning", Content: "当前还有其他任务在处理，请先完成它们"},
 		}, nil, nil
 	}
-	wsID := appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), appcore.DefaultWorkspaceID(a))
+	wsID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a))
 	ws := firstNonEmptyWorkspace(a, wsID)
 	if ws == nil {
 		return nil, nil, fmt.Errorf("workspace %q not found", wsID)
@@ -538,13 +537,13 @@ func createCodexPlanModeExitSubmission(a Dependencies, pending *state.PendingReq
 	}
 	sub := &domainsubmission.Submission{
 		SessionKey:           strings.TrimSpace(pending.SessionKey),
-		WorkspaceID:          appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), appcore.DefaultWorkspaceID(a)),
+		WorkspaceID:          firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a)),
 		ThreadID:             strings.TrimSpace(sess.ActiveThreadID),
-		UserID:               strings.TrimSpace(appcore.FirstNonEmpty(pending.OwnerUserID, sess.OwnerUserID)),
+		UserID:               strings.TrimSpace(firstNonEmpty(pending.OwnerUserID, sess.OwnerUserID)),
 		ChatID:               strings.TrimSpace(sess.ChatID),
-		TriggerMessageID:     strings.TrimSpace(appcore.FirstNonEmpty(pending.FeishuMsgID, sess.RootMessageID)),
-		SourceMessageIDs:     appsubmission.UniqueStrings([]string{strings.TrimSpace(appcore.FirstNonEmpty(pending.FeishuMsgID, sess.RootMessageID))}),
-		SourceRootMessageIDs: appsubmission.UniqueStrings([]string{strings.TrimSpace(appcore.FirstNonEmpty(sess.RootMessageID, pending.FeishuMsgID))}),
+		TriggerMessageID:     strings.TrimSpace(firstNonEmpty(pending.FeishuMsgID, sess.RootMessageID)),
+		SourceMessageIDs:     appsubmission.UniqueStrings([]string{strings.TrimSpace(firstNonEmpty(pending.FeishuMsgID, sess.RootMessageID))}),
+		SourceRootMessageIDs: appsubmission.UniqueStrings([]string{strings.TrimSpace(firstNonEmpty(sess.RootMessageID, pending.FeishuMsgID))}),
 		InputText:            strings.TrimSpace(inputText),
 		Status:               domainsubmission.SubmissionStatusQueued.String(),
 	}
@@ -628,3 +627,14 @@ func callbackResponseToastText(resp *callback.CardActionTriggerResponse) string 
 	}
 	return strings.TrimSpace(resp.Toast.Content)
 }
+
+func defaultWorkspaceID(a Dependencies) string {
+	if a.ConfigProvider == nil || a.Config() == nil {
+		return "default"
+	}
+	if len(a.Config().Workspaces) > 0 && strings.TrimSpace(a.Config().Workspaces[0].ID) != "" {
+		return a.Config().Workspaces[0].ID
+	}
+	return "default"
+}
+func mustJSON(value any) string { data, _ := json.Marshal(value); return string(data) }
