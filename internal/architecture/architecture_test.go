@@ -272,6 +272,9 @@ func TestWorkspaceRendererDoesNotDependOnAppCoreHelpers(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "internal/app/workspacecmd/render.go")); !os.IsNotExist(err) {
 		t.Fatal("legacy workspace renderer must not be reintroduced")
 	}
+	if _, err := os.Stat(filepath.Join(root, "internal/app/appcore/workspace_selection.go")); !os.IsNotExist(err) {
+		t.Fatal("workspace selection host bridge must not be reintroduced")
+	}
 }
 
 func TestPureCardRenderersDoNotImportFilesystemOrHostState(t *testing.T) {
