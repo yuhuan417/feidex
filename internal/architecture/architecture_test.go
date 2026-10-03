@@ -255,6 +255,26 @@ func TestApplicationContinuationUsesOneDependencyCarrier(t *testing.T) {
 	}
 }
 
+func TestApplicationLifecycleServicesUseDependencyCarriers(t *testing.T) {
+	root := repositoryRoot(t)
+	checks := []struct {
+		path string
+		want string
+	}{
+		{"internal/application/compaction/service.go", "type Service struct{ Deps Dependencies }"},
+		{"internal/application/conversation/service.go", "type Service struct{ Deps Dependencies }"},
+	}
+	for _, check := range checks {
+		data, err := os.ReadFile(filepath.Join(root, check.path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), check.want) {
+			t.Fatalf("%s must expose a grouped Dependencies carrier", check.path)
+		}
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	root, err := os.Getwd()

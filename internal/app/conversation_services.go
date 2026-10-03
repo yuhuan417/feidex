@@ -16,13 +16,13 @@ import (
 )
 
 func newConversationService(a *App) *conversation.Service {
-	s := &conversation.Service{Context: a.Context(), Backend: configuredBackend(a), Repository: composition.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context()}, Live: sqLiveThreadAdapter{app: a}}
-	if s.Backend == backendClaude {
-		s.Gateway = claudeadapter.ConversationGateway{Client: currentClaudeCore(a), Continue: newReplyContinuationService(a).ContinueClaudeSessionWithText}
-		s.ResolveModel = func(sess *domain.Session, ws *config.Workspace) string { return effectiveClaudeModel(a, sess, ws) }
+	s := &conversation.Service{Deps: conversation.Dependencies{Context: a.Context(), Backend: configuredBackend(a), Repository: composition.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context()}, Live: sqLiveThreadAdapter{app: a}}}
+	if s.Deps.Backend == backendClaude {
+		s.Deps.Gateway = claudeadapter.ConversationGateway{Client: currentClaudeCore(a), Continue: newReplyContinuationService(a).ContinueClaudeSessionWithText}
+		s.Deps.ResolveModel = func(sess *domain.Session, ws *config.Workspace) string { return effectiveClaudeModel(a, sess, ws) }
 	} else {
-		s.ResolveModel = func(sess *domain.Session, ws *config.Workspace) string { return effectiveCodexModel(a, sess, ws) }
-		s.Gateway = codexadapter.ConversationGateway{
+		s.Deps.ResolveModel = func(sess *domain.Session, ws *config.Workspace) string { return effectiveCodexModel(a, sess, ws) }
+		s.Deps.Gateway = codexadapter.ConversationGateway{
 			Client: func() (codexadapter.ConversationClient, error) { return requireCodexClient(a) },
 			StartParams: func(r conversation.Request) codexrpc.ThreadStartParams {
 				return buildThreadStartParams(a, r.Workspace, r.Session, r.Model)

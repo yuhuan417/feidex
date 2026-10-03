@@ -20,16 +20,18 @@ type SessionStore interface {
 type Gateway interface {
 	StartCompaction(context.Context, string) error
 }
-type Service struct {
+type Dependencies struct {
 	Context    func() context.Context
 	Repository SessionStore
 	Gateway    Gateway
 	Notices    func(context.Context, *conversation.Session, string)
 }
 
+type Service struct{ Deps Dependencies }
+
 func (s Service) context() context.Context {
-	if s.Context != nil {
-		return s.Context()
+	if s.Deps.Context != nil {
+		return s.Deps.Context()
 	}
 	return context.Background()
 }
@@ -47,10 +49,10 @@ func normalizeWorkingStatus(v any) string {
 
 // StartThreadCompaction starts a context compaction on the active thread.
 func (s Service) StartThreadCompaction(sessionKey string) (*conversation.Session, error) {
-	if s.Repository == nil {
+	if s.Deps.Repository == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
-	store := s.Repository
+	store := s.Deps.Repository
 	if store == nil {
 		return nil, fmt.Errorf("store not initialized")
 	}
@@ -69,11 +71,11 @@ func (s Service) StartThreadCompaction(sessionKey string) (*conversation.Session
 	ctx, cancel := context.WithTimeout(s.context(), 20*time.Second)
 	defer cancel()
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	if s.Gateway == nil {
+	if s.Deps.Gateway == nil {
 		RestoreSession(store, sessionKey, threadID, previousStatus)
 		return nil, fmt.Errorf("codex client not initialized")
 	}
-	if err := s.Gateway.StartCompaction(ctx, threadID); err != nil {
+	if err := s.Deps.Gateway.StartCompaction(ctx, threadID); err != nil {
 		RestoreSession(store, sessionKey, threadID, previousStatus)
 		return nil, err
 	}
@@ -84,10 +86,10 @@ func (s Service) StartThreadCompaction(sessionKey string) (*conversation.Session
 func (s Service) BindStandaloneCompactTurn(threadID, turnID string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
-	if s.Repository == nil || threadID == "" || turnID == "" {
+	if s.Deps.Repository == nil || threadID == "" || turnID == "" {
 		return false
 	}
-	store := s.Repository
+	store := s.Deps.Repository
 	if store == nil {
 		return false
 	}
@@ -133,10 +135,10 @@ func (s Service) NoteStandaloneCompactItemStarted(threadID, turnID string, item 
 func (s Service) CompleteStandaloneCompactTurn(threadID, turnID string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
-	if s.Repository == nil || threadID == "" {
+	if s.Deps.Repository == nil || threadID == "" {
 		return false
 	}
-	store := s.Repository
+	store := s.Deps.Repository
 	if store == nil {
 		return false
 	}
@@ -198,10 +200,10 @@ func (s Service) CompleteStandaloneCompactItem(threadID, turnID string, item map
 func (s Service) FinishStandaloneCompactTurn(threadID, turnID, status string) bool {
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
-	if s.Repository == nil || threadID == "" || turnID == "" {
+	if s.Deps.Repository == nil || threadID == "" || turnID == "" {
 		return false
 	}
-	store := s.Repository
+	store := s.Deps.Repository
 	if store == nil {
 		return false
 	}
@@ -239,10 +241,10 @@ func (s Service) FailStandaloneCompactTurn(threadID, turnID, message string) boo
 	threadID = strings.TrimSpace(threadID)
 	turnID = strings.TrimSpace(turnID)
 	message = strings.TrimSpace(message)
-	if s.Repository == nil || threadID == "" {
+	if s.Deps.Repository == nil || threadID == "" {
 		return false
 	}
-	store := s.Repository
+	store := s.Deps.Repository
 	if store == nil {
 		return false
 	}
@@ -316,10 +318,10 @@ func RestoreSession(store SessionStore, sessionKey, threadID, previousStatus str
 // RestoreStandaloneCompactSession restores a session to its previous status
 // after a failed compaction start.
 func (s Service) RestoreStandaloneCompactSession(sessionKey, threadID, previousStatus string) {
-	if s.Repository == nil {
+	if s.Deps.Repository == nil {
 		return
 	}
-	store := s.Repository
+	store := s.Deps.Repository
 	RestoreSession(store, sessionKey, threadID, previousStatus)
 }
 
@@ -352,10 +354,10 @@ func (s Service) sendStandaloneCompactResult(sess *conversation.Session, status 
 
 // SendSessionTextNotice sends a text notice to the session's chat.
 func (s Service) SendSessionTextNotice(sess *conversation.Session, text string) {
-	if s.Notices == nil || sess == nil || strings.TrimSpace(text) == "" {
+	if s.Deps.Notices == nil || sess == nil || strings.TrimSpace(text) == "" {
 		return
 	}
 	ctx, cancel := context.WithTimeout(s.context(), 10*time.Second)
 	defer cancel()
-	s.Notices(ctx, sess, strings.TrimSpace(text))
+	s.Deps.Notices(ctx, sess, strings.TrimSpace(text))
 }

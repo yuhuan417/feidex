@@ -46,7 +46,7 @@ func TestResumePersistenceFailureKeepsLineageAndDoesNotPublishLiveThread(t *test
 	g := &gatewayStub{result: Thread{ID: "new", Applied: &modelconfig.Snapshot{Model: "new-model"}}}
 	r := &repositoryStub{err: failure}
 	live := &liveStub{}
-	s := Service{Backend: "codex", Gateway: g, Repository: r, Live: live}
+	s := Service{Deps: Dependencies{Backend: "codex", Gateway: g, Repository: r, Live: live}}
 	sess := &domain.Session{Key: "session", ActiveThreadID: "old", ActiveThreadSandboxMode: "read-only", AppliedModelConfig: modelconfig.Snapshot{Model: "old-model"}}
 	_, err := s.ResumeSelectedThread("session", sess, &workspace.Workspace{ID: "ws", Cwd: "/repo"}, domain.ThreadSelection{ThreadID: "new", Cwd: "/repo"})
 	if !errors.Is(err, failure) || sess.ActiveThreadID != "old" || sess.ActiveThreadSandboxMode != "read-only" || sess.AppliedModelConfig.Model != "old-model" || live.marked != "" {
@@ -56,7 +56,7 @@ func TestResumePersistenceFailureKeepsLineageAndDoesNotPublishLiveThread(t *test
 
 func TestExplicitSelectionRejectsForeignWorkspaceBeforeBackendCall(t *testing.T) {
 	g := &gatewayStub{}
-	s := Service{Backend: "codex", Gateway: g, Repository: &repositoryStub{}}
+	s := Service{Deps: Dependencies{Backend: "codex", Gateway: g, Repository: &repositoryStub{}}}
 	_, err := s.ResumeSelectedThread("session", &domain.Session{}, &workspace.Workspace{Cwd: "/repo"}, domain.ThreadSelection{ThreadID: "t", Cwd: "/other"})
 	if !domain.IsWarning(err) || len(g.requests) != 0 {
 		t.Fatalf("error=%v requests=%v", err, g.requests)
@@ -67,7 +67,7 @@ func TestConfirmedResumePublishesAppliedSnapshotAfterSaving(t *testing.T) {
 	g := &gatewayStub{result: Thread{ID: "new", Name: "name", Applied: &modelconfig.Snapshot{Model: "confirmed"}}}
 	r := &repositoryStub{}
 	live := &liveStub{}
-	s := Service{Backend: "codex", Gateway: g, Repository: r, Live: live}
+	s := Service{Deps: Dependencies{Backend: "codex", Gateway: g, Repository: r, Live: live}}
 	sess := &domain.Session{Key: "session", ActiveThreadID: "old", ModelConfigError: "previous failure"}
 	if _, err := s.ResumeSelectedThread("session", sess, &workspace.Workspace{ID: "ws"}, domain.ThreadSelection{ThreadID: "new"}); err != nil {
 		t.Fatal(err)

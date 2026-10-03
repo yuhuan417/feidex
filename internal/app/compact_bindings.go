@@ -27,7 +27,7 @@ func newCompactionService(a *App) compaction.Service {
 		return compaction.Service{}
 	}
 	st := a.State()
-	return compaction.Service{
+	return compaction.Service{Deps: compaction.Dependencies{
 		Context: a.Context, Repository: compactSessionStoreAdapter{Session: st.Session, Sessions: st.Sessions, Save: st.SaveSession},
 		Gateway: codexadapter.Gateway{Client: currentCodexClient(a)},
 		Notices: func(ctx context.Context, sess *conversation.Session, text string) {
@@ -35,7 +35,7 @@ func newCompactionService(a *App) compaction.Service {
 				_ = sendTextEffect(ctx, a, sess.ChatID, text)
 			}
 		},
-	}
+	}}
 }
 func commandCompact(a *App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {

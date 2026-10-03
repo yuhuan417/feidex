@@ -48,7 +48,7 @@ type LiveThreads interface {
 	ClearSessionLiveThread(string)
 }
 
-type Service struct {
+type Dependencies struct {
 	Context      context.Context
 	Backend      string
 	Gateway      Gateway
@@ -57,16 +57,18 @@ type Service struct {
 	ResolveModel func(*domain.Session, *workspace.Workspace) string
 }
 
+type Service struct{ Deps Dependencies }
+
 func (s *Service) context() context.Context {
-	if s.Context != nil {
-		return s.Context
+	if s.Deps.Context != nil {
+		return s.Deps.Context
 	}
 	return context.Background()
 }
 func (s *Service) request(key string, sess *domain.Session, ws *workspace.Workspace) Request {
 	r := Request{SessionKey: key, Session: sess, Workspace: ws}
-	if s.ResolveModel != nil {
-		r.Model = strings.TrimSpace(s.ResolveModel(sess, ws))
+	if s.Deps.ResolveModel != nil {
+		r.Model = strings.TrimSpace(s.Deps.ResolveModel(sess, ws))
 	}
 	return r
 }
@@ -77,8 +79,8 @@ func (s *Service) validate(sess *domain.Session, ws *workspace.Workspace) error 
 	if ws == nil {
 		return fmt.Errorf("workspace not found")
 	}
-	if s.Gateway == nil {
-		return fmt.Errorf("%s backend not initialized", s.Backend)
+	if s.Deps.Gateway == nil {
+		return fmt.Errorf("%s backend not initialized", s.Deps.Backend)
 	}
 	return nil
 }
@@ -87,12 +89,12 @@ func (s *Service) ListWorkspaceThreads(_ string, ws *workspace.Workspace, all bo
 	if ws == nil {
 		return nil, fmt.Errorf("workspace not found")
 	}
-	if s.Gateway == nil {
-		return nil, fmt.Errorf("%s backend not initialized", s.Backend)
+	if s.Deps.Gateway == nil {
+		return nil, fmt.Errorf("%s backend not initialized", s.Deps.Backend)
 	}
 	ctx, cancel := context.WithTimeout(s.context(), 20*time.Second)
 	defer cancel()
-	return s.Gateway.List(ctx, ws, all)
+	return s.Deps.Gateway.List(ctx, ws, all)
 }
 
 func (s *Service) bind(key string, sess *domain.Session, ws *workspace.Workspace, t Thread, resumed, clear bool) (*domain.ThreadBinding, error) {
@@ -111,12 +113,12 @@ func (s *Service) bind(key string, sess *domain.Session, ws *workspace.Workspace
 	}
 	domain.ResetActiveOperations(sess)
 	sess.Status = domain.SessionStatusIdle.String()
-	if err := s.Repository.SaveSession(sess); err != nil {
+	if err := s.Deps.Repository.SaveSession(sess); err != nil {
 		return nil, err
 	}
 	*original = *sess
-	if s.Live != nil {
-		s.Live.MarkSessionThreadLive(key, t.ID)
+	if s.Deps.Live != nil {
+		s.Deps.Live.MarkSessionThreadLive(key, t.ID)
 	}
 	return &domain.ThreadBinding{ThreadID: t.ID, Name: sess.ActiveThreadName, Preview: sess.ActiveThreadPreview, Resumed: resumed}, nil
 }
@@ -127,7 +129,7 @@ func (s *Service) StartWorkspaceThread(key string, sess *domain.Session, ws *wor
 	}
 	ctx, cancel := context.WithTimeout(s.context(), 30*time.Second)
 	defer cancel()
-	t, err := s.Gateway.Start(ctx, s.request(key, sess, ws))
+	t, err := s.Deps.Gateway.Start(ctx, s.request(key, sess, ws))
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +151,7 @@ func (s *Service) ResumeSelectedThread(key string, sess *domain.Session, ws *wor
 	r.SelectionExplicit = true
 	ctx, cancel := context.WithTimeout(s.context(), 30*time.Second)
 	defer cancel()
-	t, err := s.Gateway.Resume(ctx, r)
+	t, err := s.Deps.Gateway.Resume(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -157,13 +159,13 @@ func (s *Service) ResumeSelectedThread(key string, sess *domain.Session, ws *wor
 	sess = domain.CloneSession(sess)
 	// Explicit selection clears per-thread permission and collaboration overrides.
 	// Codex's multi-agent and service-tier settings retain their existing scope.
-	if s.Backend == "codex" {
+	if s.Deps.Backend == "codex" {
 		sess.ActiveThreadApprovalPolicy = ""
 		sess.ActiveThreadSandboxMode = ""
 		sess.ActiveClaudePermissionMode = ""
 		sess.ActiveThreadCollaborationMode = nil
 	}
-	binding, err := s.bind(key, sess, ws, t, true, s.Backend == "claude")
+	binding, err := s.bind(key, sess, ws, t, true, s.Deps.Backend == "claude")
 	if err == nil {
 		*original = *sess
 	}
@@ -174,12 +176,12 @@ func (s *Service) EnsureWorkspaceThreadBinding(key string, sess *domain.Session,
 	if err := s.validate(sess, ws); err != nil {
 		return nil, err
 	}
-	if s.Backend == "claude" {
+	if s.Deps.Backend == "claude" {
 		if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(ws.ID) && strings.TrimSpace(sess.ActiveThreadID) != "" {
 			r := s.request(key, sess, ws)
 			r.Selection.ThreadID = sess.ActiveThreadID
 			ctx, cancel := context.WithTimeout(s.context(), 30*time.Second)
-			t, err := s.Gateway.Resume(ctx, r)
+			t, err := s.Deps.Gateway.Resume(ctx, r)
 			cancel()
 			if err == nil {
 				t.Name = textutil.FirstNonEmpty(sess.ActiveThreadName, "Claude")
@@ -199,7 +201,7 @@ func (s *Service) EnsureWorkspaceThreadBinding(key string, sess *domain.Session,
 			e := items[0]
 			r.Selection = domain.ThreadSelection{ThreadID: e.ID, Name: e.Name, Preview: e.Preview, Cwd: e.Cwd}
 			ctx, cancel := context.WithTimeout(s.context(), 30*time.Second)
-			t, err := s.Gateway.Resume(ctx, r)
+			t, err := s.Deps.Gateway.Resume(ctx, r)
 			cancel()
 			if err == nil {
 				return s.bind(key, sess, ws, t, true, true)
@@ -216,15 +218,15 @@ func (s *Service) ForkActiveConversation(key string, sess *domain.Session, ws *w
 	}
 	ctx, cancel := context.WithTimeout(s.context(), 30*time.Second)
 	defer cancel()
-	t, err := s.Gateway.Fork(ctx, s.request(key, sess, ws))
+	t, err := s.Deps.Gateway.Fork(ctx, s.request(key, sess, ws))
 	if err != nil {
 		return "", err
 	}
 	// Claude can defer materializing a branch until its next input.
-	if t.ID == "" && s.Backend != "claude" {
+	if t.ID == "" && s.Deps.Backend != "claude" {
 		return "", fmt.Errorf("fork thread returned empty thread id")
 	}
-	if s.Backend == "claude" {
+	if s.Deps.Backend == "claude" {
 		domain.ClearThreadContext(sess)
 	}
 	domain.SetThreadContext(sess, textutil.FirstNonEmpty(sess.WorkspaceID, ws.ID), t.ID, t.Name, t.Preview)
@@ -233,28 +235,28 @@ func (s *Service) ForkActiveConversation(key string, sess *domain.Session, ws *w
 	sess.Status = domain.SessionStatusIdle.String()
 	sess.Queue = nil
 	sess.StagedImages = nil
-	if err := s.Repository.SaveSession(sess); err != nil {
+	if err := s.Deps.Repository.SaveSession(sess); err != nil {
 		return "", err
 	}
-	if s.Live != nil {
+	if s.Deps.Live != nil {
 		if t.ID != "" {
-			s.Live.MarkSessionThreadLive(key, t.ID)
+			s.Deps.Live.MarkSessionThreadLive(key, t.ID)
 		} else {
-			s.Live.ClearSessionLiveThread(key)
+			s.Deps.Live.ClearSessionLiveThread(key)
 		}
 	}
 	return t.ID, nil
 }
 
 func (s *Service) InterruptActiveTurn(ctx context.Context, _ string, sess *domain.Session) error {
-	return s.Gateway.Interrupt(ctx, sess)
+	return s.Deps.Gateway.Interrupt(ctx, sess)
 }
 func (s *Service) ContinueActiveTurn(key, text string) error {
-	sess := s.Repository.Session(key)
+	sess := s.Deps.Repository.Session(key)
 	if strings.TrimSpace(text) == "" || sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
 	ctx, cancel := context.WithTimeout(s.context(), 20*time.Second)
 	defer cancel()
-	return s.Gateway.Steer(ctx, sess, strings.TrimSpace(text))
+	return s.Deps.Gateway.Steer(ctx, sess, strings.TrimSpace(text))
 }

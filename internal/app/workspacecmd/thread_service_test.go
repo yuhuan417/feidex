@@ -192,11 +192,11 @@ func (l threadTestLive) MarkSessionThreadLive(k, id string) {
 }
 func (l threadTestLive) ClearSessionLiveThread(string) {}
 func newTestThreadService(app *testWorkspaceApp, session *conversation.Session, opts threadServiceOptions) *conversationapp.Service {
-	svc := &conversationapp.Service{Backend: app.backend, Repository: &threadTestRepository{session: session}, Live: threadTestLive{mark: opts.markLive}, ResolveModel: func(*conversation.Session, *config.Workspace) string { return app.cfg.Claude.Model }}
+	svc := &conversationapp.Service{Deps: conversationapp.Dependencies{Backend: app.backend, Repository: &threadTestRepository{session: session}, Live: threadTestLive{mark: opts.markLive}, ResolveModel: func(*conversation.Session, *config.Workspace) string { return app.cfg.Claude.Model }}}
 	if app.backend == domainbackend.BackendClaude {
-		svc.Gateway = claudeadapter.ConversationGateway{Client: opts.claude}
+		svc.Deps.Gateway = claudeadapter.ConversationGateway{Client: opts.claude}
 	} else {
-		svc.Gateway = codexadapter.ConversationGateway{Client: func() (codexadapter.ConversationClient, error) { return nil, opts.codexErr }}
+		svc.Deps.Gateway = codexadapter.ConversationGateway{Client: func() (codexadapter.ConversationClient, error) { return nil, opts.codexErr }}
 	}
 	return svc
 }

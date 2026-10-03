@@ -565,3 +565,4 @@ Codex server request
 - architecture tests 新增 application 禁止同步 Feishu outbound 调用、backend event 必须使用单一 sink port 的守卫。
 - backend configuration/selection 与 permission driver 的 capability carrier 去掉 `App` 字段命名，统一改为 `Permissions`/`Source`；thread menu 和 workspace command 的权限渲染注入同步更新，避免继续把 capability interface 当作宿主聚合。
 - reply continuation 的状态、存储、附件、steer 和 submission 回调收进显式 `continuation.Dependencies` carrier；application service 只持有该 carrier，不再平铺十余个宿主回调字段。
+- standalone compaction 与 conversation/thread service 的 context、gateway、repository、live-thread 和 model resolver 依赖收进 `Dependencies` carrier，调用方通过显式 `Deps` 组装，避免生命周期服务再次暴露宿主式平铺字段。
