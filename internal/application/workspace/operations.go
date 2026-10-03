@@ -8,7 +8,6 @@ import (
 
 	"feidex/internal/domain/conversation"
 	domain "feidex/internal/domain/workspace"
-	apputil "feidex/internal/formatutil"
 )
 
 func CloneDefaultID(repoName string) string { return SuggestedID(repoName) }
@@ -33,8 +32,8 @@ func CloneRepoName(repoURL string) (string, error) {
 	return base, nil
 }
 
-func MergeNewFormValues(payload NewPayload, values map[string]any) NewPayload {
-	if value, ok := apputil.FormValueString(values, "workspace_id"); ok {
+func MergeNewFormValues(payload NewPayload, values map[string]string) NewPayload {
+	if value, ok := values["workspace_id"]; ok {
 		if value != "" {
 			payload.DraftID = value
 			if strings.TrimSpace(payload.AutoDraftID) != value {
@@ -44,29 +43,29 @@ func MergeNewFormValues(payload NewPayload, values map[string]any) NewPayload {
 			payload.DraftID, payload.AutoDraftID = "", ""
 		}
 	}
-	if value, ok := apputil.FormValueString(values, "workspace_name"); ok {
+	if value, ok := values["workspace_name"]; ok {
 		payload.DraftName = value
 	}
 	return payload
 }
 
-func MergeCloneFormValues(payload ClonePayload, values map[string]any) ClonePayload {
-	if value, ok := apputil.FormValueString(values, "repo_url"); ok {
+func MergeCloneFormValues(payload ClonePayload, values map[string]string) ClonePayload {
+	if value, ok := values["repo_url"]; ok {
 		payload.RepoURL = value
 	}
-	if value, ok := apputil.FormValueString(values, "workspace_id"); ok {
+	if value, ok := values["workspace_id"]; ok {
 		payload.DraftID = value
 	}
-	if value, ok := apputil.FormValueString(values, "clone_mode"); ok {
+	if value, ok := values["clone_mode"]; ok {
 		payload.CloneMode = NormalizeCloneMode(value)
 	}
-	if value, ok := apputil.FormValueString(values, "worktree_branch_name"); ok {
+	if value, ok := values["worktree_branch_name"]; ok {
 		payload.WorktreeBranchName = value
 	}
-	if value, ok := apputil.FormValueString(values, "worktree_workspace_id"); ok {
+	if value, ok := values["worktree_workspace_id"]; ok {
 		payload.WorktreeWorkspaceID = value
 	}
-	if value, ok := apputil.FormValueString(values, "worktree_directory_name"); ok {
+	if value, ok := values["worktree_directory_name"]; ok {
 		payload.WorktreeDirectoryName = value
 	}
 	return payload
@@ -77,17 +76,17 @@ func CloneCreatesWorktree(payload ClonePayload) bool {
 	return NormalizeCloneMode(payload.CloneMode) == CloneModeWorktree
 }
 
-func MergeWorktreeFormValues(payload WorktreePayload, values map[string]any) WorktreePayload {
-	if value, ok := apputil.FormValueString(values, "base_workspace_id"); ok {
+func MergeWorktreeFormValues(payload WorktreePayload, values map[string]string) WorktreePayload {
+	if value, ok := values["base_workspace_id"]; ok {
 		payload.BaseWorkspaceID = value
 	}
-	if value, ok := apputil.FormValueString(values, "branch_name"); ok {
+	if value, ok := values["branch_name"]; ok {
 		payload.BranchName = value
 	}
-	if value, ok := apputil.FormValueString(values, "workspace_id"); ok {
+	if value, ok := values["workspace_id"]; ok {
 		payload.WorkspaceID = value
 	}
-	if value, ok := apputil.FormValueString(values, "directory_name"); ok {
+	if value, ok := values["directory_name"]; ok {
 		payload.DirectoryName = value
 	}
 	return payload

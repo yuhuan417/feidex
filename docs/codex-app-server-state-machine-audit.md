@@ -741,3 +741,9 @@ frontend 的有效 client，审批 reply/resolved、turn/start timeout 和 revie
 - Backend permission configuration now receives a narrow capability port rather
   than the former aggregate workspace host interface; this is a structural
   change only and does not alter SM-09/10/11/22/23 payload or resolution order.
+
+## 2026-10-03 host bridge 与 workspace runtime 核对
+
+- 删除旧 appcore/workspace 包，frontend scope、legacy session key fallback 与 backend 配置读取保持原规则；本地 upgrade 使用自身 frontend lifecycle context。
+- clone/worktree 的进程与取消状态归 runtime，workspace 参数解析、命名、表单更新归 application；Feishu map 解码和 pending JSON 读取仍在入口边界。
+- 核对 SM-03/04/05、SM-09/10/11/22/23：本次未改变 thread start/resume、turn snapshot/steer、pending → replied → serverRequest/resolved 的调用与终态。原状态机契约测试和全量 race/shuffle 测试通过，未运行 live token-consuming integration tests。

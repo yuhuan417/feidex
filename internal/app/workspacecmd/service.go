@@ -17,6 +17,7 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	"feidex/internal/formatutil"
 	runtimeworkspace "feidex/internal/runtime/workspace"
 	"feidex/internal/state"
 
@@ -63,9 +64,6 @@ var (
 	MultiAgentModeOptions        = appworkspace.MultiAgentModeOptions
 	ParseCloneArgs               = appworkspace.ParseCloneArgs
 	ParseWorktreeArgs            = appworkspace.ParseWorktreeArgs
-	MergeNewFormValues           = appworkspace.MergeNewFormValues
-	MergeCloneFormValues         = appworkspace.MergeCloneFormValues
-	MergeWorktreeFormValues      = appworkspace.MergeWorktreeFormValues
 	NormalizeCloneMode           = appworkspace.NormalizeCloneMode
 	CloneCreatesWorktree         = appworkspace.CloneCreatesWorktree
 	NewTakeoverPayload           = appworkspace.NewTakeoverPayload
@@ -979,3 +977,24 @@ func allowLegacyFallback(a Dependencies) bool {
 	return len(a.Config().ResolvedFrontends()) == 1
 }
 func mustJSON(value any) string { data, _ := json.Marshal(value); return string(data) }
+
+// Form values are decoded at the Feishu entrypoint before application policy
+// sees them. Preserve the existing explicit-empty and non-string coercion rules.
+func workspaceFormValues(values map[string]any) map[string]string {
+	result := make(map[string]string, len(values))
+	for key := range values {
+		if value, ok := formatutil.FormValueString(values, key); ok {
+			result[key] = value
+		}
+	}
+	return result
+}
+func MergeNewFormValues(payload NewPayload, values map[string]any) NewPayload {
+	return appworkspace.MergeNewFormValues(payload, workspaceFormValues(values))
+}
+func MergeCloneFormValues(payload ClonePayload, values map[string]any) ClonePayload {
+	return appworkspace.MergeCloneFormValues(payload, workspaceFormValues(values))
+}
+func MergeWorktreeFormValues(payload WorktreePayload, values map[string]any) WorktreePayload {
+	return appworkspace.MergeWorktreeFormValues(payload, workspaceFormValues(values))
+}

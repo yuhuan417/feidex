@@ -15,6 +15,22 @@ import (
 
 const modulePath = "feidex"
 
+func TestDeletedHostBridgesCannotReturn(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, relative := range []string{"internal/app/appcore", "internal/app/workspace"} {
+		if _, err := os.Stat(filepath.Join(root, relative)); !os.IsNotExist(err) {
+			t.Fatalf("deleted host bridge must remain absent: %s", relative)
+		}
+		violations, err := importsUnder(root, "internal", []string{modulePath + "/" + relative})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(violations) != 0 {
+			t.Fatalf("deleted host bridge dependencies must not return: %v", violations)
+		}
+	}
+}
+
 func TestModelSettingsRendererDoesNotReadConfigurationOrSessionState(t *testing.T) {
 	violations, err := importsUnder(repositoryRoot(t), "internal/adapter/feishu/modelsettings", []string{
 		modulePath + "/internal/config", modulePath + "/internal/state", modulePath + "/internal/adapter/storage",
