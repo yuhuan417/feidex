@@ -29,7 +29,7 @@ Keep these rules visible in day-to-day work:
 - Slow workflows must follow `fast callback ack -> async work -> card patch/follow-up`. Do not run clone, review, upgrade, download, or similar work inline in card callbacks.
 - Backend switching remains idle-only. Model configuration writes save desired settings and are allowed during active work, queued/staged input and open forms; applying them must respect the turn/session boundaries below.
 - New user-visible item or workflow types must update normalization, rendering, quiet-mode behavior, and tests together.
-- Each frontend owns a runtime lifecycle context. During migration, background work may derive cancellation from `App.Context()` (or `appcore.Context(host)` across compatibility interfaces); the target runtime uses `FrontendRuntime.Context()`. Keep operation-specific timeouts. Shutdown cancels the frontend context before closing transports, rejects new async work, and waits for admitted work up to the shutdown deadline. Cleanup itself uses the separate shutdown context. Backend startup probe timeouts must not become the lifetime of an already-started backend process.
+- Each frontend owns a runtime lifecycle context. Background work derives cancellation from `App.Context()` at the Feishu entrypoint or `FrontendRuntime.Context()` in the target runtime. Keep operation-specific timeouts. Shutdown cancels the frontend context before closing transports, rejects new async work, and waits for admitted work up to the shutdown deadline. Cleanup itself uses the separate shutdown context. Backend startup probe timeouts must not become the lifetime of an already-started backend process.
 
 ## Frontend Topology
 

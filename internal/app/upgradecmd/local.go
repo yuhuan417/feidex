@@ -11,15 +11,15 @@ import (
 	"time"
 
 	apppathpick "feidex/internal/adapter/filesystem/pathpicker"
-	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
+	domainworkspace "feidex/internal/domain/workspace"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type PathPickerPayload = appworkspace.PathPickerPayload
+type PathPickerPayload = domainworkspace.PathPickerPayload
 
 func NewUpgradeLocalPickerPayload(ws *config.Workspace) (PathPickerPayload, error) {
 	root, err := apppathpick.ResolvePathPickerRoot(ws)
@@ -27,8 +27,8 @@ func NewUpgradeLocalPickerPayload(ws *config.Workspace) (PathPickerPayload, erro
 		return PathPickerPayload{}, err
 	}
 	return PathPickerPayload{
-		Mode:        appworkspace.PathPickerModeFile,
-		Style:       appworkspace.PathPickerStyleDropdown,
+		Mode:        domainworkspace.PathPickerModeFile,
+		Style:       domainworkspace.PathPickerStyleDropdown,
 		RootPath:    root,
 		CurrentPath: root,
 	}, nil

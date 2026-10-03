@@ -60,8 +60,8 @@ var (
 	SandboxOptions               = appworkspace.SandboxOptions
 	ApprovalPolicyOptions        = appworkspace.ApprovalPolicyOptions
 	MultiAgentModeOptions        = appworkspace.MultiAgentModeOptions
-	ParseCloneArgs               = appworkspace.ParseCloneArgs
-	ParseWorktreeArgs            = appworkspace.ParseWorktreeArgs
+	ParseCloneArgs               = workspace.ParseCloneArgs
+	ParseWorktreeArgs            = workspace.ParseWorktreeArgs
 	NewPayloadFromPending        = appworkspace.NewPayloadFromPending
 	ClonePayloadFromPending      = appworkspace.ClonePayloadFromPending
 	WorktreePayloadFromPending   = appworkspace.WorktreePayloadFromPending

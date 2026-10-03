@@ -531,7 +531,7 @@ Codex server request
 - attachment prompt、skill selection、Claude support、pending reply adapter 和 card view 均移向 application/domain/adapter；`CardView` 约束禁止 effect 层继续接收无类型的 Feishu map。
 - backend selection/maintenance/action/failure 的宿主 capability 已拆为 configuration、selection、repository、tracker、runtime callback 等使用方端口；切换状态自持锁，维护查询只读当前 frontend scope。
 - 模型 desired/applied/turn snapshot 优先级保持不变；“最近已应用模型”只来自 session 的 applied snapshot，不再混读单聊/global desired 配置。
-- 工作区选择策略迁入 `internal/application/workspace`，由 scoped repository 提供持久化；appcore 只保留兼容的薄转发，业务服务通过 `WorkspaceSelection` capability 获取用例。
+- 工作区选择策略迁入 `internal/application/workspace`，由 scoped repository 提供持久化；业务服务通过 `WorkspaceSelection` capability 获取用例，旧 appcore 桥接已删除。
 - Codex thread/read 的恢复路径只接收语义化 turn 状态，业务层不再依赖协议响应 DTO；协作模式发送前统一裁剪空白值。
 - 删除 `appcore.WorkspaceSource` 宽宿主接口；workspace/thread/review/plan/debug consumer 改为声明各自的配置、身份、存储和 selection ports，permission driver 仅接收其所需的配置快照、scoped store 与 workspace selection。
 - 群 primary 的自动初始化也经过 routing application service 和 JSON repository，`internal/app` 只负责 Feishu bot-count/open-id 事实采集与结果展示。
@@ -604,3 +604,9 @@ Codex server request
 - thread/session menu 已移除 `appcore` 与旧 `app/workspace` 依赖，ConfigProvider、frontend identity、workspace selection 和 conversation binding 改由显式 capability/domain 类型提供；thread resume/fork/interrupt 的生命周期边界保持不变。
 - workspace command 的 config/management/service 三个入口已移除 `appcore` 依赖，session key、legacy frontend fallback、lifecycle context 和 JSON payload 通过本包的显式 capability helper 处理；工作区创建、clone、权限和群绑定行为保持不变。
 - debug/usage command 已移除 `appcore`、旧 thread menu 和旧 workspace 包依赖；日志级别、usage、文件分享和 path picker 继续通过显式 runtime/config/outbound/artifact ports 执行，慢速下载仍保持异步 patch 流程。
+
+### 2026-10-03 appcore 与 workspace 解析边界清理
+
+- 删除 `internal/app/appcore` 整个兼容桥接包。配置、backend、session identity 和 lifecycle helper 由 Feishu entrypoint 保留为窄的 frontend-scoped helper；升级本地 Binary 流程直接使用自身 `Context()`，群公告和 session migration 直接使用 domain identity。
+- `/workspace clone`、`/workspace new worktree` 参数解析以及目录选择后的 workspace ID 推导迁入 `internal/application/workspace`；command matcher、path picker、plan mode 和 upgrade local picker 不再依赖旧 `internal/app/workspace` 包。
+- 旧 workspace 包当前仅由 `workspacecmd` 的 clone/worktree orchestration 兼容别名使用，后续拆分 Git process supervision、pending payload decoding 和 workspace presentation 时继续收敛；本次未改变工作区创建、clone、worktree 或路径选择行为。

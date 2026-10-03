@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"strings"
 
-	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -152,7 +151,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 			return sendLocalTurnFollowupCard(ctx, a, parent, card, reply, sub, kind)
 		},
 		StartNextSubmissionFn: func(key string) error { return startNextSubmission(a, key) },
-		StartWorkspaceThreadFn: func(key string, sess *conversation.Session, ws *config.Workspace) (*appworkspace.ThreadBinding, error) {
+		StartWorkspaceThreadFn: func(key string, sess *conversation.Session, ws *config.Workspace) (*conversation.ThreadBinding, error) {
 			return newConversationService(a).StartWorkspaceThread(key, sess, ws)
 		},
 	}

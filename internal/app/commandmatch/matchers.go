@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	appworkspace "feidex/internal/app/workspace"
+	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/release"
 )
 

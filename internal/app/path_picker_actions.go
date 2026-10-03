@@ -10,9 +10,9 @@ import (
 	pickercards "feidex/internal/adapter/feishu/pathpicker"
 	apppathpick "feidex/internal/adapter/filesystem/pathpicker"
 	appdebugviewcmd "feidex/internal/app/debugviewcmd"
-	appworkspace "feidex/internal/app/workspace"
 	appworkspacecmd "feidex/internal/app/workspacecmd"
 	pickerapp "feidex/internal/application/pathpicker"
+	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
