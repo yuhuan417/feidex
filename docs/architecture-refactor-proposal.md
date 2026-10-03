@@ -600,3 +600,4 @@ Codex server request
 - 模型配置的 Feishu 卡片与命令适配器已从 `internal/app/modelconfig` 移到 `internal/adapter/feishu/modelconfig`；application 继续持有目录解析和快照策略，adapter 仅负责 Feishu 交互与 config/backend 端口连接，旧 app package 已删除。
 - plan mode 已移除对 `appcore` 与 `app/workspace` 的依赖，改用显式 ConfigProvider、ContextProvider、domain conversation binding 和 application modelconfig adapter 能力；`/plan` 的 Codex collaboration mode 请求与 SM-04/SM-05 边界不变。
 - review command 已移除 `appcore` 依赖，ContextProvider 和显式 frontend/config/store/workspace capabilities 由 composition adapter 注入；inline review 的 `review/start` turn 绑定及 queued submission 生命周期保持不变。
+- goal command 已移除 `appcore` 依赖，继续通过显式 ContextProvider、outbound、state 和 tracker ports 执行 goal set/clear 与 continuation；SM-25 goal 通知、SM-04 continuation turn 绑定和新 outbound 根卡行为不变。

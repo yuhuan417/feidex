@@ -2,7 +2,6 @@ package goalcmd
 
 import (
 	"context"
-	"feidex/internal/app/appcore"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
@@ -270,9 +269,9 @@ func (t *Tracker) RecordContext(anchor Anchor) {
 		t.anchors = map[string]Anchor{}
 	}
 	if existing, ok := t.anchors[anchor.ThreadID]; ok {
-		anchor.ChatID = appcore.FirstNonEmpty(strings.TrimSpace(anchor.ChatID), strings.TrimSpace(existing.ChatID))
-		anchor.ChatType = appcore.FirstNonEmpty(strings.TrimSpace(anchor.ChatType), strings.TrimSpace(existing.ChatType))
-		anchor.UserID = appcore.FirstNonEmpty(strings.TrimSpace(anchor.UserID), strings.TrimSpace(existing.UserID))
+		anchor.ChatID = firstNonEmpty(strings.TrimSpace(anchor.ChatID), strings.TrimSpace(existing.ChatID))
+		anchor.ChatType = firstNonEmpty(strings.TrimSpace(anchor.ChatType), strings.TrimSpace(existing.ChatType))
+		anchor.UserID = firstNonEmpty(strings.TrimSpace(anchor.UserID), strings.TrimSpace(existing.UserID))
 	}
 	t.anchors[anchor.ThreadID] = anchor
 }
@@ -363,7 +362,7 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 			return s.replyGoalCard(msg, sessionKey, threadID, nil)
 		}
 		card := s.renderGoalEditCard(sessionKey, threadID, *goal)
-		_, err = a.Outbound.ReplyCard(appcore.Context(s.app), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
+		_, err = a.Outbound.ReplyCard(s.app.Context(), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 		s.recordContext(sessionKey, threadID, msg)
 		return err
 	default:
@@ -377,7 +376,7 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 		}
 		if existing != nil && shouldConfirmBeforeReplacingGoal(*existing) {
 			card := s.renderGoalReplaceConfirmCard(sessionKey, threadID, *existing, objective)
-			_, err := a.Outbound.ReplyCard(appcore.Context(s.app), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
+			_, err := a.Outbound.ReplyCard(s.app.Context(), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 			s.recordContext(sessionKey, threadID, msg)
 			return err
 		}
@@ -398,7 +397,7 @@ func (s Service) replyGoalSetText(msg *feishu.InboundMessage, sessionKey, thread
 		return nil
 	}
 	s.recordContext(sessionKey, threadID, msg)
-	return s.app.Outbound.ReplyText(appcore.Context(s.app), msg.MessageID, "已设置 goal。", s.app.ReplyInThreadEnabled(msg.ChatType))
+	return s.app.Outbound.ReplyText(s.app.Context(), msg.MessageID, "已设置 goal。", s.app.ReplyInThreadEnabled(msg.ChatType))
 }
 
 func goalCommandTail(raw string, args []string) string {
@@ -457,7 +456,7 @@ func (s Service) threadGoalGet(threadID string) (*conversation.ThreadGoal, error
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
+	ctx, cancel := context.WithTimeout(s.app.Context(), 20*time.Second)
 	defer cancel()
 	resp, err := client.GetGoal(ctx, threadID)
 	if err != nil {
@@ -492,7 +491,7 @@ func (s Service) threadGoalSetObjective(threadID, objective string, status conve
 	if tokenBudget != nil {
 		params.TokenBudget = newBudgetUpdate(tokenBudget)
 	}
-	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
+	ctx, cancel := context.WithTimeout(s.app.Context(), 20*time.Second)
 	defer cancel()
 	resp, err := client.SetGoal(ctx, params)
 	if err != nil {
@@ -507,7 +506,7 @@ func (s Service) threadGoalClear(threadID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	ctx, cancel := context.WithTimeout(appcore.Context(s.app), 20*time.Second)
+	ctx, cancel := context.WithTimeout(s.app.Context(), 20*time.Second)
 	defer cancel()
 	resp, err := client.ClearGoal(ctx, threadID)
 	if err != nil {
@@ -540,7 +539,7 @@ func goalFriendlyError(action string, err error) string {
 
 func (s Service) replyGoalCard(msg *feishu.InboundMessage, sessionKey, threadID string, goal *conversation.ThreadGoal) error {
 	card := s.renderGoalCard(sessionKey, threadID, goal)
-	_, err := s.app.Outbound.ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.Outbound.ReplyCard(s.app.Context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
 }
@@ -555,7 +554,7 @@ func (s Service) replyGoalClearedCard(msg *feishu.InboundMessage, sessionKey, th
 		title = "Goal cleared"
 	}
 	card := s.app.Renderer().SimpleStatusCard(title, color, s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalBackButtons(sessionKey))
-	_, err := s.app.Outbound.ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.Outbound.ReplyCard(s.app.Context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
 }
@@ -810,7 +809,7 @@ func (s Service) renderGoalObjectiveFormCard(opts goalObjectiveFormOptions) map[
 	}
 	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
-			Text:  appcore.FirstNonEmpty(opts.SubmitText, "保存"),
+			Text:  firstNonEmpty(opts.SubmitText, "保存"),
 			Type:  "primary",
 			Name:  "goal_edit_submit",
 			Value: opts.SubmitValue,
@@ -819,7 +818,7 @@ func (s Service) renderGoalObjectiveFormCard(opts goalObjectiveFormOptions) map[
 			Text:  "取消",
 			Type:  "default",
 			Name:  "goal_edit_cancel",
-			Value: map[string]any{"action": appcore.FirstNonEmpty(opts.CancelAction, "menu.goal"), "session_key": opts.SessionKey},
+			Value: map[string]any{"action": firstNonEmpty(opts.CancelAction, "menu.goal"), "session_key": opts.SessionKey},
 		},
 	})
 	if len(buttonRows) > 0 {
@@ -1083,7 +1082,7 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 		return false
 	}
 	triggerMessageID := anchor.MessageID
-	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.app.DefaultWorkspaceID())
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.app.DefaultWorkspaceID())
 	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
 		WorkspaceID:          workspaceID,
@@ -1141,16 +1140,16 @@ func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string,
 		UserID:     strings.TrimSpace(sess.OwnerUserID),
 	}
 	if recorded, ok := s.app.Tracker().Anchor(threadID); ok {
-		anchor.ChatID = appcore.FirstNonEmpty(anchor.ChatID, strings.TrimSpace(recorded.ChatID))
-		anchor.ChatType = appcore.FirstNonEmpty(anchor.ChatType, strings.TrimSpace(recorded.ChatType))
-		anchor.UserID = appcore.FirstNonEmpty(anchor.UserID, strings.TrimSpace(recorded.UserID))
+		anchor.ChatID = firstNonEmpty(anchor.ChatID, strings.TrimSpace(recorded.ChatID))
+		anchor.ChatType = firstNonEmpty(anchor.ChatType, strings.TrimSpace(recorded.ChatType))
+		anchor.UserID = firstNonEmpty(anchor.UserID, strings.TrimSpace(recorded.UserID))
 	}
 	if anchor.ChatID == "" {
 		return Anchor{}, false
 	}
 	ordinal := s.app.Tracker().NextContinuationOrdinal(threadID)
 	card := s.renderGoalContinuationCard(sessionKey, threadID, turnID, goal, ordinal)
-	messageID, err := s.app.Outbound.SendCard(appcore.Context(s.app), anchor.ChatID, card)
+	messageID, err := s.app.Outbound.SendCard(s.app.Context(), anchor.ChatID, card)
 	if err != nil {
 		return Anchor{}, false
 	}
@@ -1172,7 +1171,7 @@ func (s Service) renderGoalContinuationCard(_, _, _ string, goal conversation.Th
 }
 
 func renderGoalContinuationTitle(goal conversation.ThreadGoal, ordinal int) string {
-	objective := appcore.Truncate(strings.TrimSpace(goal.Objective), 96)
+	objective := truncate(strings.TrimSpace(goal.Objective), 96)
 	if ordinal > 0 {
 		if objective != "" {
 			return fmt.Sprintf("Turn #%d - %s", ordinal, objective)
@@ -1226,7 +1225,7 @@ func goalUniqueNonEmpty(items []string) []string {
 			trimmed = append(trimmed, item)
 		}
 	}
-	return appcore.UniqueStrings(trimmed)
+	return uniqueStrings(trimmed)
 }
 
 func newBudgetUpdate(value *int64) *backendops.BudgetUpdate {
@@ -1235,4 +1234,36 @@ func newBudgetUpdate(value *int64) *backendops.BudgetUpdate {
 	}
 	cp := *value
 	return &backendops.BudgetUpdate{Value: &cp}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+func truncate(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if limit <= 0 || len([]rune(value)) <= limit {
+		return value
+	}
+	return string([]rune(value)[:limit])
+}
+func uniqueStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }

@@ -108,6 +108,17 @@ func TestReviewCommandUsesExplicitContextAndConfigurationCapabilities(t *testing
 	}
 }
 
+func TestGoalCommandDoesNotDependOnAppCore(t *testing.T) {
+	root := repositoryRoot(t)
+	violations, err := importsUnder(root, "internal/app/goalcmd", []string{modulePath + "/internal/app/appcore"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("goal command must use explicit context and value helpers: %v", violations)
+	}
+}
+
 func TestModelSettingsEntrypointsDoNotMutateBusinessState(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, relative := range []string{"internal/app/bot_profile.go", "internal/app/binding_scoped_commands.go", "internal/app/binding_model_actions.go"} {
