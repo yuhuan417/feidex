@@ -1,17 +1,13 @@
-package workspacecmd
+package workspace
 
 import (
-	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	"feidex/internal/adapter/feishu/cardactions"
 	appcards "feidex/internal/adapter/feishu/cards"
-	appbackend "feidex/internal/app/backend"
 	appselection "feidex/internal/application/workspace"
-	"feidex/internal/config"
-	"feidex/internal/domain/identity"
+	domain "feidex/internal/domain/workspace"
 	"feidex/internal/feishu"
 )
 
@@ -107,7 +103,7 @@ func (s *RenderService) RenderWorkspaceNewCard(sessionKey, requestID string, pay
 }
 
 // RenderWorkspaceCloneCard renders the "clone workspace" card.
-func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, payload ClonePayload) map[string]any {
+func (s *RenderService) RenderWorkspaceCloneCard(view appselection.View, sessionKey, requestID string, payload ClonePayload) map[string]any {
 	if payload.Picker != nil {
 		card, err := s.RenderPathPickerCard(requestID, *payload.Picker)
 		if err == nil {
@@ -115,13 +111,11 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 		}
 		payload.Picker = nil
 	}
-	sess := s.GetSession(sessionKey)
-	workspaceID := s.WorkspaceIDForSession(sessionKey, sess)
-	ws := config.FindWorkspace(s.Deps.Config(), workspaceID)
-	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), s.DefaultWorkspaceCloneRoot(ws))
+	workspaceID := view.CurrentID
+	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), view.CloneRoot)
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
-		parentDir = firstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), rootPath)
+		parentDir = firstNonEmpty(strings.TrimSpace(view.CloneParent), rootPath)
 	}
 	cloneMode := NormalizeCloneMode(payload.CloneMode)
 	workspaceLabel := "(未配置)"
@@ -291,7 +285,7 @@ func (s *RenderService) RenderWorkspaceClonePreparingCard(requestID string, payl
 			},
 		}
 	}
-	return s.Deps.Renderer().SimpleStatusCard("从仓库创建工作区", "blue", strings.Join(lines, "\n"), buttons)
+	return feishu.SimpleStatusCard("从仓库创建工作区", "blue", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceCloneSuccessCard renders the clone success card.
@@ -304,7 +298,7 @@ func (s *RenderService) RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID,
 		},
 	}
 	body := "已从仓库创建并切换到工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
-	return s.Deps.Renderer().SimpleStatusCard("工作区已创建", "green", body, buttons)
+	return feishu.SimpleStatusCard("工作区已创建", "green", body, buttons)
 }
 
 // RenderWorkspaceSwitchExistingCard renders the "workspace already exists" card.
@@ -333,7 +327,7 @@ func (s *RenderService) RenderWorkspaceSwitchExistingCard(sessionKey, workspaceI
 			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
 	}
-	return s.Deps.Renderer().SimpleStatusCard("工作区已存在", "blue", body, buttons)
+	return feishu.SimpleStatusCard("工作区已存在", "blue", body, buttons)
 }
 
 // RenderWorkspaceCloneSwitchExistingCard renders the clone "target already exists" card.
@@ -362,7 +356,7 @@ func (s *RenderService) RenderWorkspaceCloneManualHintCard(sessionKey, workspace
 			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
 	}
-	return s.Deps.Renderer().SimpleStatusCard("仓库已拉取", "orange", strings.Join(lines, "\n"), buttons)
+	return feishu.SimpleStatusCard("仓库已拉取", "orange", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceCloneCanceledCard renders the clone canceled card.
@@ -396,18 +390,18 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 			},
 		},
 	}
-	return s.Deps.Renderer().SimpleStatusCard("仓库克隆已取消", "grey", strings.Join(lines, "\n"), buttons)
+	return feishu.SimpleStatusCard("仓库克隆已取消", "grey", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceWorktreeCard renders the git worktree workspace card.
-func (s *RenderService) RenderWorkspaceWorktreeCard(sessionKey, requestID string, payload WorktreePayload) map[string]any {
+func (s *RenderService) RenderWorkspaceWorktreeCard(view appselection.View, sessionKey, requestID string, payload WorktreePayload) map[string]any {
 	baseWorkspaceID := strings.TrimSpace(payload.BaseWorkspaceID)
 	branchName := strings.TrimSpace(payload.BranchName)
 	workspaceID := strings.TrimSpace(payload.WorkspaceID)
 	directoryName := strings.TrimSpace(payload.DirectoryName)
 	targetDir := strings.TrimSpace(payload.TargetDir)
 
-	workspaces := s.Deps.Config().Workspaces
+	workspaces := view.Workspaces
 	baseOptions := make([]appcards.SelectStaticOption, 0, len(workspaces)+1)
 	seenBase := false
 	for _, ws := range workspaces {
@@ -555,7 +549,7 @@ func (s *RenderService) RenderWorkspaceWorktreePreparingCard(requestID string, p
 			Value: cardactions.RequestActionValue{Action: "workspace.worktree.cancel", RequestID: requestID}.Map(),
 		}}
 	}
-	return s.Deps.Renderer().SimpleStatusCard("从 Worktree 创建工作区", "blue", strings.Join(lines, "\n"), buttons)
+	return feishu.SimpleStatusCard("从 Worktree 创建工作区", "blue", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceWorktreeSuccessCard renders the worktree success card.
@@ -566,7 +560,7 @@ func (s *RenderService) RenderWorkspaceWorktreeSuccessCard(sessionKey, workspace
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
 	body := "已从 Worktree 创建工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
-	return s.Deps.Renderer().SimpleStatusCard("工作区已创建", "green", body, buttons)
+	return feishu.SimpleStatusCard("工作区已创建", "green", body, buttons)
 }
 
 // RenderWorkspaceWorktreeManualHintCard renders the worktree manual takeover hint card.
@@ -588,7 +582,7 @@ func (s *RenderService) RenderWorkspaceWorktreeManualHintCard(sessionKey, worksp
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
-	return s.Deps.Renderer().SimpleStatusCard("Worktree 已创建", "orange", strings.Join(lines, "\n"), buttons)
+	return feishu.SimpleStatusCard("Worktree 已创建", "orange", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceWorktreeCanceledCard renders the worktree canceled card.
@@ -615,23 +609,20 @@ func (s *RenderService) RenderWorkspaceWorktreeCanceledCard(sessionKey string, p
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
-	return s.Deps.Renderer().SimpleStatusCard("Worktree 创建已取消", "grey", strings.Join(lines, "\n"), buttons)
+	return feishu.SimpleStatusCard("Worktree 创建已取消", "grey", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceMenuCard renders the workspace management menu card.
-func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]any {
-	sess := s.GetSession(sessionKey)
-	currentID := s.WorkspaceIDForSession(sessionKey, sess)
-	currentWS := config.FindWorkspace(s.Deps.Config(), currentID)
+func (s *RenderService) RenderWorkspaceMenuCard(view appselection.View, sessionKey string) map[string]any {
+	currentID := view.CurrentID
 	currentLabel := "(未配置)"
 	if strings.TrimSpace(currentID) != "" {
 		currentLabel = "`" + currentID + "`"
 	}
 	bodyLines := []string{"当前工作区: " + currentLabel}
-	bodyLines = s.BackendWorkspaceSummaryLines(bodyLines, currentWS)
-	bodyLines = s.WorkspaceMenuBodyLines(sessionKey, sess, bodyLines)
+	bodyLines = appendWorkspaceSummary(bodyLines, view)
 	buttons := make([]feishu.Button, 0, 6)
-	workspaces := s.Deps.Config().Workspaces
+	workspaces := view.Workspaces
 	selectOptions := make([]appcards.SelectStaticOption, 0, len(workspaces))
 	for _, ws := range workspaces {
 		label := ws.ID
@@ -669,8 +660,8 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 			},
 		},
 	)
-	buttons = append(buttons, s.BackendWorkspaceConfigButtons(sessionKey)...)
-	if s.deps.WorkspaceMenuIsGroup != nil && s.deps.WorkspaceMenuIsGroup(sessionKey) {
+	buttons = append(buttons, workspaceConfigButtons(view.ConfigActions, sessionKey)...)
+	if view.Group {
 		if currentID != "" {
 			buttons = append(buttons, feishu.Button{
 				Text: "解除本群绑定",
@@ -719,23 +710,9 @@ func (s *RenderService) RenderWorkspaceMenuCard(sessionKey string) map[string]an
 }
 
 // RenderWorkspaceChooseCard renders the workspace choose card with buttons sorted by recently used.
-func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]any {
-	sess := s.GetSession(sessionKey)
-	currentID := s.WorkspaceIDForSession(sessionKey, sess)
-	var recentIDs []string
-	if sess != nil {
-		if selectionKey := appselection.SelectionKey(identity.FrontendID(s.Deps.FrontendID()), sess.ChatType, sess.ChatID, sess.OwnerUserID); selectionKey != "" {
-			if selectionSess := s.GetSession(selectionKey); selectionSess != nil {
-				recentIDs = selectionSess.RecentWorkspaceIDs
-			}
-		}
-		if len(recentIDs) == 0 {
-			recentIDs = sess.RecentWorkspaceIDs
-		}
-	}
-
-	workspaces := s.Deps.Config().Workspaces
-	sorted := sortWorkspacesByRecent(workspaces, recentIDs, currentID)
+func (s *RenderService) RenderWorkspaceChooseCard(view appselection.View, sessionKey string) map[string]any {
+	currentID := view.CurrentID
+	sorted := view.RecentWorkspaces
 
 	card := appcards.NewMarkdownBodyCard("选择工作区", "blue")
 	buttons := make([]feishu.Button, 0, len(sorted))
@@ -764,63 +741,10 @@ func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]
 	return card
 }
 
-func sortWorkspacesByRecent(workspaces []config.Workspace, recentIDs []string, currentID string) []config.Workspace {
-	if len(workspaces) == 0 {
-		return nil
-	}
-	rank := make(map[string]int, len(recentIDs))
-	for i, id := range recentIDs {
-		if _, exists := rank[id]; !exists {
-			rank[id] = i
-		}
-	}
-	sorted := make([]config.Workspace, len(workspaces))
-	copy(sorted, workspaces)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		ri, iok := rank[sorted[i].ID]
-		rj, jok := rank[sorted[j].ID]
-		if iok && jok {
-			return ri < rj
-		}
-		if iok {
-			return true
-		}
-		if jok {
-			return false
-		}
-		return sorted[i].ID < sorted[j].ID
-	})
-	return sorted
-}
-
-// RenderWorkspaceSandboxMenuCard renders the sandbox configuration menu card.
-func (s *RenderService) RenderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
-	return s.Deps.PermissionDriver().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		Permissions:    s.Deps,
-		FormatMenuBody: s.FormatMenuBody,
-	})
-}
-
-// RenderWorkspacePolicyMenuCard renders the policy configuration menu card.
-func (s *RenderService) RenderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
-	return s.Deps.PermissionDriver().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		Permissions:    s.Deps,
-		FormatMenuBody: s.FormatMenuBody,
-	})
-}
-
-// RenderWorkspaceMultiAgentMenuCard renders the multi-agent mode configuration menu card.
-func (s *RenderService) RenderWorkspaceMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
-	return s.Deps.PermissionDriver().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		Permissions:    s.Deps,
-		FormatMenuBody: s.FormatMenuBody,
-	})
-}
-
 // RenderWorkspaceDeleteMenuCard renders the workspace delete menu card.
-func (s *RenderService) RenderWorkspaceDeleteMenuCard(sessionKey string) (map[string]any, error) {
-	currentID := selectedWorkspaceIDForSession(s.Deps, s.GetSession(sessionKey))
-	workspaces := s.Deps.Config().Workspaces
+func (s *RenderService) RenderWorkspaceDeleteMenuCard(view appselection.View, sessionKey string) (map[string]any, error) {
+	currentID := view.CurrentID
+	workspaces := view.Workspaces
 	lines := []string{
 		"删除 workspace 只会移除配置，不会删除磁盘目录。",
 		"",
@@ -828,10 +752,7 @@ func (s *RenderService) RenderWorkspaceDeleteMenuCard(sessionKey string) (map[st
 		"当前工作区不可删除，请先切换到其他工作区。",
 	}
 	deleteOptions := make([]appcards.SelectStaticOption, 0, len(workspaces))
-	for _, ws := range workspaces {
-		if strings.TrimSpace(ws.ID) == "" || ws.ID == currentID {
-			continue
-		}
+	for _, ws := range view.DeletableWorkspaces {
 		label := ws.ID
 		if name := strings.TrimSpace(ws.Name); name != "" && name != ws.ID {
 			label = name + " · " + ws.ID
@@ -877,12 +798,8 @@ func (s *RenderService) RenderWorkspaceDeleteMenuCard(sessionKey string) (map[st
 }
 
 // RenderWorkspaceDeleteConfirmCard renders the workspace delete confirmation card.
-func (s *RenderService) RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID string) (map[string]any, error) {
-	workspaceID = strings.TrimSpace(workspaceID)
-	ws := config.FindWorkspace(s.Deps.Config(), workspaceID)
-	if ws == nil {
-		return nil, fmt.Errorf("workspace %q 不存在", workspaceID)
-	}
+func (s *RenderService) RenderWorkspaceDeleteConfirmCard(sessionKey string, ws domain.Workspace) (map[string]any, error) {
+	workspaceID := ws.ID
 	body := []string{
 		"即将删除工作区配置：`" + workspaceID + "`",
 		"",
@@ -913,5 +830,5 @@ func (s *RenderService) RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID
 	}
 	bodyText := strings.Join(body, "\n")
 	bodyText = s.FormatMenuBody("workspace.delete.confirm", bodyText)
-	return s.Deps.Renderer().SimpleStatusCard("确认删除工作区", "red", bodyText, buttons), nil
+	return feishu.SimpleStatusCard("确认删除工作区", "red", bodyText, buttons), nil
 }

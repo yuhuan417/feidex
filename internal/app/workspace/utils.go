@@ -3,6 +3,7 @@ package workspace
 import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
+	domainworkspace "feidex/internal/domain/workspace"
 	"feidex/internal/textutil"
 	"fmt"
 	"net/url"
@@ -125,12 +126,7 @@ func MergeCloneFormValues(payload ClonePayload, values map[string]any) ClonePayl
 
 // NormalizeCloneMode canonicalizes the clone output mode.
 func NormalizeCloneMode(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case CloneModeWorktree:
-		return CloneModeWorktree
-	default:
-		return CloneModeWorkspace
-	}
+	return domainworkspace.NormalizeCloneMode(value)
 }
 
 // CloneCreatesWorktree reports whether the clone flow should create the final

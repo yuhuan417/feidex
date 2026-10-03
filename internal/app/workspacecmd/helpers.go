@@ -2,10 +2,8 @@ package workspacecmd
 
 import (
 	"feidex/internal/domain/conversation"
-	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"feidex/internal/app/appcore"
 	"feidex/internal/feishu"
@@ -17,24 +15,6 @@ func rawCard(card map[string]any) *callback.Card {
 	return &callback.Card{Type: "raw", Data: card}
 }
 
-func formatTurnElapsedLine(d time.Duration) string {
-	seconds := int(d.Seconds())
-	if seconds < 60 {
-		return fmt.Sprintf("elapsed: %ds", seconds)
-	}
-	minutes := seconds / 60
-	secs := seconds % 60
-	return fmt.Sprintf("elapsed: %dm%ds", minutes, secs)
-}
-
-func markdownCodeBlock(content string) string {
-	content = strings.TrimSpace(content)
-	if content == "" {
-		return ""
-	}
-	return "```\n" + content + "\n```"
-}
-
 func sameWorkspaceCWD(a, b string) bool {
 	a = strings.TrimSpace(a)
 	b = strings.TrimSpace(b)
@@ -42,30 +22,6 @@ func sameWorkspaceCWD(a, b string) bool {
 		return false
 	}
 	return filepath.Clean(a) == filepath.Clean(b)
-}
-
-func submenuLabel(label string) string {
-	label = strings.TrimSpace(label)
-	if label == "" {
-		return "›"
-	}
-	return label + " ›"
-}
-
-func commandLabel(label, slash string) string {
-	label = strings.TrimSpace(label)
-	slash = strings.TrimSpace(slash)
-	if label == "" {
-		return slash
-	}
-	if slash == "" {
-		return label
-	}
-	return label + " " + slash
-}
-
-func submenuCommandLabel(label, slash string) string {
-	return submenuLabel(commandLabel(label, slash))
 }
 
 func selectedWorkspaceIDForMessage(app appcore.WorkspaceSelectionSource, msg *feishu.InboundMessage, sess *conversation.Session) string {

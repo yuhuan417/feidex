@@ -48,8 +48,9 @@ func workspaceCommandApp(a *App) appworkspacecmd.Dependencies {
 			}
 			return a.feishu.BotName()
 		},
-		ContextProvider: a,
-		BackendDriver:   a.BackendDriver(),
+		ContextProvider:  a,
+		BackendDriver:    a.BackendDriver(),
+		SettingsRenderer: buildWorkspaceRenderService(a),
 	}
 }
 

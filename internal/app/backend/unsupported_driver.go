@@ -107,18 +107,6 @@ func (d unsupportedPermissionDriver) HandleWorkspaceCommand(req WorkspacePermiss
 	return unsupportedBackendError(d.rawKind)
 }
 
-func (d unsupportedPermissionDriver) RenderWorkspaceSandboxMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
-	return nil, unsupportedBackendError(d.rawKind)
-}
-
-func (d unsupportedPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
-	return nil, unsupportedBackendError(d.rawKind)
-}
-
-func (d unsupportedPermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
-	return nil, unsupportedBackendError(d.rawKind)
-}
-
 func (d unsupportedPermissionDriver) CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	return unsupportedBackendActionResponse(d.rawKind), nil
 }
@@ -129,10 +117,6 @@ func (d unsupportedPermissionDriver) CompleteWorkspacePolicySet(sessionKey, work
 
 func (d unsupportedPermissionDriver) CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode string, deps WorkspacePermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	return unsupportedBackendActionResponse(d.rawKind), nil
-}
-
-func (d unsupportedPermissionDriver) RenderWorkspaceMultiAgentMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
-	return nil, unsupportedBackendError(d.rawKind)
 }
 
 func (d unsupportedPermissionDriver) CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {

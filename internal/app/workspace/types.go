@@ -3,70 +3,29 @@ package workspace
 import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
+	domain "feidex/internal/domain/workspace"
 	"fmt"
 	"strings"
-	"time"
 
 	"feidex/internal/state"
 )
 
 const (
-	PathPickerKind          = "path_picker"
-	PathPickerModeDirectory = "directory"
-	PathPickerModeFile      = "file"
-	PathPickerStyleDropdown = "dropdown"
-	CloneModeWorkspace      = "workspace"
-	CloneModeWorktree       = "worktree"
+	PathPickerKind          = domain.PathPickerKind
+	PathPickerModeDirectory = domain.PathPickerModeDirectory
+	PathPickerModeFile      = domain.PathPickerModeFile
+	PathPickerStyleDropdown = domain.PathPickerStyleDropdown
+	CloneModeWorkspace      = domain.CloneModeWorkspace
+	CloneModeWorktree       = domain.CloneModeWorktree
 
 	CommandUsage = "/workspace | /workspace list | /workspace new | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace sandbox [MODE] | /workspace policy [POLICY]"
 )
 
-type PathPickerPayload struct {
-	Mode         string `json:"mode"`
-	Style        string `json:"style"`
-	RootPath     string `json:"root_path"`
-	CurrentPath  string `json:"current_path"`
-	SelectedPath string `json:"selected_path,omitempty"`
-}
-
-type PathPickerEntry struct {
-	Name  string
-	Path  string
-	IsDir bool
-}
-
-type NewPayload struct {
-	RootPath    string             `json:"root_path"`
-	SelectedCWD string             `json:"selected_cwd"`
-	DraftID     string             `json:"draft_id,omitempty"`
-	AutoDraftID string             `json:"auto_draft_id,omitempty"`
-	DraftName   string             `json:"draft_name,omitempty"`
-	Notice      string             `json:"notice,omitempty"`
-	Picker      *PathPickerPayload `json:"picker,omitempty"`
-}
-
-type ClonePayload struct {
-	RootPath              string             `json:"root_path"`
-	SelectedParentDir     string             `json:"selected_parent_dir,omitempty"`
-	RepoURL               string             `json:"repo_url,omitempty"`
-	DraftID               string             `json:"draft_id,omitempty"`
-	CloneMode             string             `json:"clone_mode,omitempty"`
-	WorktreeBranchName    string             `json:"worktree_branch_name,omitempty"`
-	WorktreeWorkspaceID   string             `json:"worktree_workspace_id,omitempty"`
-	WorktreeDirectoryName string             `json:"worktree_directory_name,omitempty"`
-	WorktreeTargetDir     string             `json:"worktree_target_dir,omitempty"`
-	ErrorMessage          string             `json:"error_message,omitempty"`
-	Picker                *PathPickerPayload `json:"picker,omitempty"`
-}
-
-type WorktreePayload struct {
-	BaseWorkspaceID string `json:"base_workspace_id,omitempty"`
-	BranchName      string `json:"branch_name,omitempty"`
-	WorkspaceID     string `json:"workspace_id,omitempty"`
-	DirectoryName   string `json:"directory_name,omitempty"`
-	TargetDir       string `json:"target_dir,omitempty"`
-	ErrorMessage    string `json:"error_message,omitempty"`
-}
+type PathPickerPayload = domain.PathPickerPayload
+type PathPickerEntry = domain.PathPickerEntry
+type NewPayload = domain.NewPayload
+type ClonePayload = domain.ClonePayload
+type WorktreePayload = domain.WorktreePayload
 
 type CloneTakeoverError struct {
 	WorkspaceID string
@@ -84,36 +43,10 @@ type CloneExistingWorkspaceError struct {
 	TargetDir   string
 }
 
-type CloneProgressSnapshot struct {
-	StartedAt      time.Time
-	LastProgressAt time.Time
-	State          string
-	Lines          []string
-}
-
-type ClonePlan struct {
-	RepoName    string
-	WorkspaceID string
-	TargetDir   string
-	Worktree    *CloneWorktreePlan
-}
-
-type CloneWorktreePlan struct {
-	BaseRepoRoot  string
-	BranchName    string
-	WorkspaceID   string
-	DirectoryName string
-	TargetDir     string
-}
-
-type WorktreePlan struct {
-	BaseWorkspaceID string
-	BaseRepoRoot    string
-	BranchName      string
-	WorkspaceID     string
-	DirectoryName   string
-	TargetDir       string
-}
+type CloneProgressSnapshot = domain.CloneProgressSnapshot
+type ClonePlan = domain.ClonePlan
+type CloneWorktreePlan = domain.CloneWorktreePlan
+type WorktreePlan = domain.WorktreePlan
 
 func (e *CloneTakeoverError) Error() string {
 	if e == nil {
@@ -144,39 +77,24 @@ func (e *CloneExistingWorkspaceError) Error() string {
 }
 
 // SettingOption represents a workspace setting choice (sandbox mode or approval policy).
-type SettingOption struct {
-	Value string
-	Label string
-}
+type SettingOption = domain.SettingOption
 
 // ThreadBinding represents the result of binding a session to a workspace thread.
 type ThreadBinding = conversation.ThreadBinding
 
 // SandboxOptions returns the available sandbox mode options.
 func SandboxOptions() []SettingOption {
-	return []SettingOption{
-		{Value: "read-only", Label: "read-only"},
-		{Value: "workspace-write", Label: "workspace-write"},
-		{Value: "danger-full-access", Label: "danger-full-access"},
-	}
+	return domain.SandboxOptions()
 }
 
 // ApprovalPolicyOptions returns the available approval policy options.
 func ApprovalPolicyOptions() []SettingOption {
-	return []SettingOption{
-		{Value: "untrusted", Label: "untrusted"},
-		{Value: "on-request", Label: "on-request"},
-		{Value: "never", Label: "never"},
-	}
+	return domain.ApprovalPolicyOptions()
 }
 
 // MultiAgentModeOptions returns the available multi-agent mode options.
 func MultiAgentModeOptions() []SettingOption {
-	return []SettingOption{
-		{Value: "explicitRequestOnly", Label: "explicit request only"},
-		{Value: "proactive", Label: "proactive"},
-		{Value: "none", Label: "none"},
-	}
+	return domain.MultiAgentModeOptions()
 }
 
 // ParseCloneArgs parses /workspace clone arguments into repo URL, workspace ID, and parent dir.

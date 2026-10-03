@@ -146,10 +146,7 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 }
 
 func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
-	return a.BackendDriver().Permission().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		Permissions:    a,
-		FormatMenuBody: func(action, body string) string { return menuCardBodyForBackend(configuredBackend(a), action, body) },
-	})
+	return newWorkspaceRenderService(a).RenderWorkspacePermissionModeMenuCard(sessionKey)
 }
 
 func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error {

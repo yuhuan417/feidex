@@ -259,13 +259,18 @@ func TestMigratedCommandPackagesDoNotImportFeishuTransport(t *testing.T) {
 
 func TestWorkspaceRendererDoesNotDependOnAppCoreHelpers(t *testing.T) {
 	root := repositoryRoot(t)
-	path := filepath.Join(root, "internal", "app", "workspacecmd", "render.go")
-	data, err := os.ReadFile(path)
+	violations, err := importsUnder(root, "internal/adapter/feishu/workspace", []string{
+		modulePath + "/internal/app", modulePath + "/internal/config", modulePath + "/internal/state",
+		modulePath + "/internal/adapter/storage", modulePath + "/internal/domain/conversation", modulePath + "/internal/domain/routing",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), "internal/app/appcore") {
-		t.Fatal("workspace renderer must use workspace/application values instead of appcore helpers")
+	if len(violations) != 0 {
+		t.Fatalf("workspace renderer must consume application views: %v", violations)
+	}
+	if _, err := os.Stat(filepath.Join(root, "internal/app/workspacecmd/render.go")); !os.IsNotExist(err) {
+		t.Fatal("legacy workspace renderer must not be reintroduced")
 	}
 }
 

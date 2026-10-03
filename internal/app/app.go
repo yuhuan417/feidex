@@ -8,6 +8,7 @@ import (
 
 	"context"
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+	workspacecards "feidex/internal/adapter/feishu/workspace"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/backendops"
 	"feidex/internal/composition"
@@ -90,7 +91,7 @@ type appComposition struct {
 	backendActions   *backend.ActionService
 	workspaceConfig  *appworkspacecmd.ConfigService
 	workspaceManage  *appworkspacecmd.ManagementService
-	workspaceRender  *appworkspacecmd.RenderService
+	workspaceRender  *workspacecards.Presentation
 	serverRequestSvc *serverrequest.Service
 	dispatcher       *application.Dispatcher
 	effectRunner     *frontendruntime.EffectRunner

@@ -7,7 +7,6 @@ import (
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	frontendclients "feidex/internal/runtime"
-	"strings"
 	"sync"
 
 	"feidex/internal/app/appcore"
@@ -102,11 +101,17 @@ type Dependencies struct {
 		WorkspaceSelection() workspace.SelectionService
 		ConfigPath() string
 	}
-	Outbound        Outbound
-	CardRenderer    CardRenderer
-	BotNameFn       func() string
-	ContextProvider interface{ Context() context.Context }
-	BackendDriver   appbackend.Driver
+	Outbound         Outbound
+	CardRenderer     CardRenderer
+	BotNameFn        func() string
+	ContextProvider  interface{ Context() context.Context }
+	BackendDriver    appbackend.Driver
+	SettingsRenderer interface {
+		RenderWorkspaceSandboxMenuCard(string) (map[string]any, error)
+		RenderWorkspacePolicyMenuCard(string) (map[string]any, error)
+		RenderWorkspaceMultiAgentMenuCard(string) (map[string]any, error)
+		RenderWorkspacePermissionModeMenuCard(string) (map[string]any, error)
+	}
 }
 
 func (a Dependencies) Config() *config.Config {
@@ -282,8 +287,6 @@ type (
 	RenderWorkspaceMultiAgentMenuCardFn func(sessionKey string) (map[string]any, error)
 	RenderWorkspaceDeleteMenuCardFn     func(sessionKey string) (map[string]any, error)
 	RenderWorkspaceDeleteConfirmCardFn  func(sessionKey, workspaceID string) (map[string]any, error)
-	WorkspaceIDForSessionFn             func(sessionKey string, sess *conversation.Session) string
-	WorkspaceMenuBodyLinesFn            func(sessionKey string, sess *conversation.Session, lines []string) []string
 )
 
 // ---------------------------------------------------------------------------
@@ -385,15 +388,6 @@ type ManagementRenderDeps struct {
 	RenderMenuCard                RenderWorkspaceMenuCardFn
 }
 
-type PathPickerDeps struct {
-	RenderPathPickerCard func(requestID string, payload PathPickerPayload) (map[string]any, error)
-}
-
-type RenderManagementDeps struct {
-	DefaultWorkspaceCloneRoot   func(ws *config.Workspace) string
-	DefaultWorkspaceCloneParent func(ws *config.Workspace) string
-}
-
 type ClaudeDeps struct {
 	RequireClaudeCore func() (frontendclients.ClaudeCore, error)
 }
@@ -421,18 +415,6 @@ type ManagementDeps struct {
 	Formatting     FormattingDeps
 	Async          AsyncDeps
 	Render         ManagementRenderDeps
-}
-
-type RenderDeps struct {
-	Dependencies           Dependencies
-	State                  StateDeps
-	Backend                BackendConfigDeps
-	Formatting             FormattingDeps
-	PathPicker             PathPickerDeps
-	Management             RenderManagementDeps
-	WorkspaceIDForSession  WorkspaceIDForSessionFn
-	WorkspaceMenuBodyLines WorkspaceMenuBodyLinesFn
-	WorkspaceMenuIsGroup   func(sessionKey string) bool
 }
 
 // ---------------------------------------------------------------------------
@@ -942,79 +924,6 @@ func (s ManagementService) RenderMenuCard(sessionKey string) map[string]any {
 		return nil
 	}
 	return s.deps.Render.RenderMenuCard(sessionKey)
-}
-
-// ---------------------------------------------------------------------------
-// RenderService
-// ---------------------------------------------------------------------------
-
-// RenderService handles all workspace card rendering.
-type RenderService struct {
-	Deps Dependencies
-	deps RenderDeps
-}
-
-// NewRenderService creates a new RenderService.
-func NewRenderService(deps RenderDeps) *RenderService {
-	return &RenderService{Deps: deps.Dependencies, deps: deps}
-}
-
-func (s RenderService) GetSession(key string) *conversation.Session {
-	if s.deps.State.GetSession == nil {
-		return nil
-	}
-	return s.deps.State.GetSession(key)
-}
-
-func (s RenderService) WorkspaceIDForSession(sessionKey string, sess *conversation.Session) string {
-	if s.deps.WorkspaceIDForSession != nil {
-		return strings.TrimSpace(s.deps.WorkspaceIDForSession(sessionKey, sess))
-	}
-	return selectedWorkspaceIDForSession(s.Deps, sess)
-}
-
-func (s RenderService) WorkspaceMenuBodyLines(sessionKey string, sess *conversation.Session, lines []string) []string {
-	if s.deps.WorkspaceMenuBodyLines == nil {
-		return lines
-	}
-	return s.deps.WorkspaceMenuBodyLines(sessionKey, sess, lines)
-}
-
-func (s RenderService) BackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	if s.deps.Backend.BackendWorkspaceSummaryLines == nil {
-		return lines
-	}
-	return s.deps.Backend.BackendWorkspaceSummaryLines(lines, currentWS)
-}
-func (s RenderService) BackendWorkspaceConfigButtons(sessionKey string) []feishu.Button {
-	if s.deps.Backend.BackendWorkspaceConfigButtons == nil {
-		return nil
-	}
-	return s.deps.Backend.BackendWorkspaceConfigButtons(sessionKey)
-}
-func (s RenderService) FormatMenuBody(action, body string) string {
-	if s.deps.Formatting.FormatMenuBody == nil {
-		return body
-	}
-	return s.deps.Formatting.FormatMenuBody(action, body)
-}
-func (s RenderService) RenderPathPickerCard(requestID string, payload PathPickerPayload) (map[string]any, error) {
-	if s.deps.PathPicker.RenderPathPickerCard == nil {
-		return nil, nil
-	}
-	return s.deps.PathPicker.RenderPathPickerCard(requestID, payload)
-}
-func (s RenderService) DefaultWorkspaceCloneRoot(ws *config.Workspace) string {
-	if s.deps.Management.DefaultWorkspaceCloneRoot == nil {
-		return ""
-	}
-	return s.deps.Management.DefaultWorkspaceCloneRoot(ws)
-}
-func (s RenderService) DefaultWorkspaceCloneParent(ws *config.Workspace) string {
-	if s.deps.Management.DefaultWorkspaceCloneParent == nil {
-		return ""
-	}
-	return s.deps.Management.DefaultWorkspaceCloneParent(ws)
 }
 
 func (a Dependencies) WorkspaceSelection() workspace.SelectionService {

@@ -96,11 +96,6 @@ type ConversationPermissionCommandRequest struct {
 	CommandActionFromMessage              func(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction
 }
 
-type WorkspacePermissionRenderDeps struct {
-	Permissions    PermissionDependencies
-	FormatMenuBody func(action, body string) string
-}
-
 type ConversationPermissionRenderDeps struct {
 	Permissions    PermissionDependencies
 	Session        func(sessionKey string) *conversation.Session
@@ -146,13 +141,9 @@ type PermissionDriver interface {
 	WorkspaceConfigButtons(sessionKey string) []feishu.Button
 	AppendStatusLines(app PermissionDependencies, lines []string, sess *conversation.Session, ws *config.Workspace) []string
 	HandleWorkspaceCommand(req WorkspacePermissionCommandRequest) error
-	RenderWorkspaceSandboxMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)
-	RenderWorkspacePolicyMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)
-	RenderWorkspacePermissionModeMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)
 	CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 	CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 	CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode string, deps WorkspacePermissionModeUpdateDeps) (*callback.CardActionTriggerResponse, error)
-	RenderWorkspaceMultiAgentMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error)
 	CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error)
 	HandleConversationCommand(req ConversationPermissionCommandRequest) error
 	RenderConversationSandboxMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error)
