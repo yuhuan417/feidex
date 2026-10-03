@@ -4,7 +4,6 @@ package workspacecmd
 
 import (
 	"context"
-	feishutransport "feidex/internal/adapter/feishu/transport"
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	frontendclients "feidex/internal/runtime"
@@ -103,7 +102,9 @@ type App struct {
 		WorkspaceSelection() workspace.SelectionService
 		ConfigPath() string
 	}
-	FeishuClient    feishutransport.Client
+	Outbound        Outbound
+	CardRenderer    CardRenderer
+	BotNameFn       func() string
 	ContextProvider interface{ Context() context.Context }
 	BackendDriver   appbackend.Driver
 }
@@ -150,7 +151,14 @@ func (a App) ConfigPath() string {
 	}
 	return a.ConfigProvider.ConfigPath()
 }
-func (a App) Feishu() feishutransport.Client { return a.FeishuClient }
+func (a App) OutboundCapability() Outbound { return a.Outbound }
+func (a App) Renderer() CardRenderer       { return a.CardRenderer }
+func (a App) BotName() string {
+	if a.BotNameFn == nil {
+		return ""
+	}
+	return a.BotNameFn()
+}
 func (a App) Context() context.Context {
 	if a.ContextProvider != nil {
 		if c := a.ContextProvider.Context(); c != nil {
@@ -159,6 +167,18 @@ func (a App) Context() context.Context {
 	}
 	return context.Background()
 }
+
+// Outbound is the semantic messaging capability used by workspace commands.
+type Outbound interface {
+	ReplyText(context.Context, string, string, bool) error
+	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
+	PatchCard(context.Context, string, map[string]any) error
+}
+
+type CardRenderer interface {
+	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
+}
+
 func (a App) PermissionDriver() appbackend.PermissionDriver {
 	if a.BackendDriver == nil {
 		return nil

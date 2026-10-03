@@ -79,7 +79,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 			return err
 		}
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
-		return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		return s.App.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	}
 	if args[0] == "permissions" || args[0] == "sandbox" || args[0] == "policy" || args[0] == "multiagent" {
 		return s.App.PermissionDriver().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
@@ -103,7 +103,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 				if err != nil {
 					return err
 				}
-				_, err = s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+				_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 				return err
 			},
 			ShowWorkspaceMultiAgentMenu: func(msg *feishu.InboundMessage) error {
@@ -151,10 +151,10 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		if err != nil {
 			// Log warning but don't fail
 			reply += s.BackendWorkspaceSwitchBindingFailureNotice()
-			return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+			return s.App.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 		}
 		reply += s.BackendWorkspaceSwitchBindingNotice(binding)
-		return s.App.Feishu().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		return s.App.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	}
 	return fmt.Errorf("usage: %s", s.BackendWorkspaceCommandUsage())
 }
@@ -162,7 +162,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 // ShowWorkspaceMenu shows the workspace management menu.
 func (s *ConfigService) ShowWorkspaceMenu(msg *feishu.InboundMessage) error {
 	card := s.RenderMenuCard(appcore.MakeSessionKey(s.App, msg))
-	_, err := s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err := s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	return err
 }
 
@@ -172,7 +172,7 @@ func (s *ConfigService) ShowWorkspaceChooseMenu(msg *feishu.InboundMessage) erro
 	if card == nil {
 		return s.ShowWorkspaceMenu(msg)
 	}
-	_, err := s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err := s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	return err
 }
 
@@ -190,7 +190,7 @@ func (s *ConfigService) ShowWorkspaceSandboxMenu(msg *feishu.InboundMessage) err
 	if err != nil {
 		return err
 	}
-	_, err = s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	return err
 }
 
@@ -200,7 +200,7 @@ func (s *ConfigService) ShowWorkspacePolicyMenu(msg *feishu.InboundMessage) erro
 	if err != nil {
 		return err
 	}
-	_, err = s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	return err
 }
 
@@ -210,7 +210,7 @@ func (s *ConfigService) ShowWorkspaceMultiAgentMenu(msg *feishu.InboundMessage) 
 	if err != nil {
 		return err
 	}
-	_, err = s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	return err
 }
 
@@ -220,7 +220,7 @@ func (s *ConfigService) ShowWorkspaceDeleteMenu(msg *feishu.InboundMessage) erro
 	if err != nil {
 		return err
 	}
-	_, err = s.App.Feishu().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	return err
 }
 

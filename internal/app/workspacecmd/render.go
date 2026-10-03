@@ -281,7 +281,7 @@ func (s *RenderService) RenderWorkspaceClonePreparingCard(requestID string, payl
 			},
 		}
 	}
-	return s.App.Feishu().SimpleStatusCard("从仓库创建工作区", "blue", strings.Join(lines, "\n"), buttons)
+	return s.App.Renderer().SimpleStatusCard("从仓库创建工作区", "blue", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceCloneSuccessCard renders the clone success card.
@@ -294,7 +294,7 @@ func (s *RenderService) RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID,
 		},
 	}
 	body := "已从仓库创建并切换到工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
-	return s.App.Feishu().SimpleStatusCard("工作区已创建", "green", body, buttons)
+	return s.App.Renderer().SimpleStatusCard("工作区已创建", "green", body, buttons)
 }
 
 // RenderWorkspaceSwitchExistingCard renders the "workspace already exists" card.
@@ -323,7 +323,7 @@ func (s *RenderService) RenderWorkspaceSwitchExistingCard(sessionKey, workspaceI
 			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
 	}
-	return s.App.Feishu().SimpleStatusCard("工作区已存在", "blue", body, buttons)
+	return s.App.Renderer().SimpleStatusCard("工作区已存在", "blue", body, buttons)
 }
 
 // RenderWorkspaceCloneSwitchExistingCard renders the clone "target already exists" card.
@@ -352,7 +352,7 @@ func (s *RenderService) RenderWorkspaceCloneManualHintCard(sessionKey, workspace
 			Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 		},
 	}
-	return s.App.Feishu().SimpleStatusCard("仓库已拉取", "orange", strings.Join(lines, "\n"), buttons)
+	return s.App.Renderer().SimpleStatusCard("仓库已拉取", "orange", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceCloneCanceledCard renders the clone canceled card.
@@ -386,7 +386,7 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 			},
 		},
 	}
-	return s.App.Feishu().SimpleStatusCard("仓库克隆已取消", "grey", strings.Join(lines, "\n"), buttons)
+	return s.App.Renderer().SimpleStatusCard("仓库克隆已取消", "grey", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceWorktreeCard renders the git worktree workspace card.
@@ -545,7 +545,7 @@ func (s *RenderService) RenderWorkspaceWorktreePreparingCard(requestID string, p
 			Value: cardactions.RequestActionValue{Action: "workspace.worktree.cancel", RequestID: requestID}.Map(),
 		}}
 	}
-	return s.App.Feishu().SimpleStatusCard("从 Worktree 创建工作区", "blue", strings.Join(lines, "\n"), buttons)
+	return s.App.Renderer().SimpleStatusCard("从 Worktree 创建工作区", "blue", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceWorktreeSuccessCard renders the worktree success card.
@@ -556,7 +556,7 @@ func (s *RenderService) RenderWorkspaceWorktreeSuccessCard(sessionKey, workspace
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
 	body := "已从 Worktree 创建工作区 `" + workspaceID + "`\n\ncwd: `" + targetDir + "`"
-	return s.App.Feishu().SimpleStatusCard("工作区已创建", "green", body, buttons)
+	return s.App.Renderer().SimpleStatusCard("工作区已创建", "green", body, buttons)
 }
 
 // RenderWorkspaceWorktreeManualHintCard renders the worktree manual takeover hint card.
@@ -578,7 +578,7 @@ func (s *RenderService) RenderWorkspaceWorktreeManualHintCard(sessionKey, worksp
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
-	return s.App.Feishu().SimpleStatusCard("Worktree 已创建", "orange", strings.Join(lines, "\n"), buttons)
+	return s.App.Renderer().SimpleStatusCard("Worktree 已创建", "orange", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceWorktreeCanceledCard renders the worktree canceled card.
@@ -605,7 +605,7 @@ func (s *RenderService) RenderWorkspaceWorktreeCanceledCard(sessionKey string, p
 		Type:  "default",
 		Value: cardactions.MenuActionValue{Action: "menu.workspace", SessionKey: sessionKey}.Map(),
 	}}
-	return s.App.Feishu().SimpleStatusCard("Worktree 创建已取消", "grey", strings.Join(lines, "\n"), buttons)
+	return s.App.Renderer().SimpleStatusCard("Worktree 创建已取消", "grey", strings.Join(lines, "\n"), buttons)
 }
 
 // RenderWorkspaceMenuCard renders the workspace management menu card.
@@ -903,5 +903,5 @@ func (s *RenderService) RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID
 	}
 	bodyText := strings.Join(body, "\n")
 	bodyText = s.FormatMenuBody("workspace.delete.confirm", bodyText)
-	return s.App.Feishu().SimpleStatusCard("确认删除工作区", "red", bodyText, buttons), nil
+	return s.App.Renderer().SimpleStatusCard("确认删除工作区", "red", bodyText, buttons), nil
 }

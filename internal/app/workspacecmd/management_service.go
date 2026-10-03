@@ -52,7 +52,7 @@ func (s *ManagementService) BeginWorkspaceWorktreeWithPayload(msg *feishu.Inboun
 		return err
 	}
 	card := s.RenderWorktreeCard(sessionKey, requestID, payload)
-	msgID, err := s.App.Feishu().ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	msgID, err := s.App.OutboundCapability().ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (s *ManagementService) BeginWorkspaceNewWithPayload(msg *feishu.InboundMess
 		return err
 	}
 	card := s.RenderNewCard(sessionKey, requestID, payload)
-	msgID, err := s.App.Feishu().ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	msgID, err := s.App.OutboundCapability().ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func (s *ManagementService) CloneWorkspaceAndSwitchInSelectedParent(msg *feishu.
 		return err
 	}
 	reply := "已从仓库创建并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
-	return s.App.Feishu().ReplyText(appcore.Context(s.App), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	return s.App.OutboundCapability().ReplyText(appcore.Context(s.App), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 }
 
 // PrepareWorkspaceClone validates and prepares a clone operation.
@@ -512,10 +512,8 @@ func (s *ManagementService) prepareCloneWorktreePlan(payload ClonePayload, repoN
 
 func (s *ManagementService) worktreeBotLabel() string {
 	if s != nil && s.App.ConfigProvider != nil {
-		if client := s.App.Feishu(); client != nil {
-			if name := strings.TrimSpace(client.BotName()); name != "" {
-				return name
-			}
+		if name := strings.TrimSpace(s.App.BotName()); name != "" {
+			return name
 		}
 		if frontendID := strings.TrimSpace(s.App.FrontendID()); frontendID != "" {
 			return frontendID
@@ -727,7 +725,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneCanceledCard(sessionKey, payload, parentDir, op.Snapshot()))
+				s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneCanceledCard(sessionKey, payload, parentDir, op.Snapshot()))
 			}
 			return
 		}
@@ -756,7 +754,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				_ = s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
+				_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
 			}
 			return
 		}
@@ -776,7 +774,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneCard(sessionKey, requestID, payload))
+			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -794,7 +792,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 		req.PayloadJSON = appcore.MustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneSuccessCard(sessionKey, workspaceID, targetDir))
+		_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneSuccessCard(sessionKey, workspaceID, targetDir))
 	}
 }
 
@@ -810,7 +808,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
+			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -825,7 +823,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				_ = s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCanceledCard(sessionKey, payload, plan, op.Snapshot()))
+				_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCanceledCard(sessionKey, payload, plan, op.Snapshot()))
 			}
 			return
 		}
@@ -836,7 +834,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
+			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -847,7 +845,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
+			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
 		}
 		return
 	}
@@ -856,7 +854,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 		req.PayloadJSON = appcore.MustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeSuccessCard(sessionKey, plan.WorkspaceID, plan.TargetDir))
+		_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeSuccessCard(sessionKey, plan.WorkspaceID, plan.TargetDir))
 	}
 }
 
@@ -1254,7 +1252,7 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 	body := "已创建并切换到工作区 `" + id + "`\n\ncwd: `" + cwd + "`"
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已创建工作区"},
-		Card:  rawCard(s.App.Feishu().SimpleStatusCard("工作区已创建", "green", body, nil)),
+		Card:  rawCard(s.App.Renderer().SimpleStatusCard("工作区已创建", "green", body, nil)),
 	}, nil
 }
 
@@ -1523,18 +1521,18 @@ func (s *ManagementService) CompleteWorkspaceNewText(msg *feishu.InboundMessage,
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		if pending.FeishuMsgID != "" {
-			_ = s.App.Feishu().PatchCard(appcore.Context(s.App), pending.FeishuMsgID, s.RenderSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, NewExistingWorkspaceNotice()))
+			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), pending.FeishuMsgID, s.RenderSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, NewExistingWorkspaceNotice()))
 		}
-		return s.App.Feishu().ReplyText(appcore.Context(s.App), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		return s.App.OutboundCapability().ReplyText(appcore.Context(s.App), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 	}
 	if err := s.CreateWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
 	_ = s.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	if pending.FeishuMsgID != "" {
-		_ = s.App.Feishu().PatchCard(appcore.Context(s.App), pending.FeishuMsgID, s.App.Feishu().SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
+		_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), pending.FeishuMsgID, s.App.Renderer().SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}
-	return s.App.Feishu().ReplyText(appcore.Context(s.App), msg.MessageID, "已创建并切换到工作区 "+id, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	return s.App.OutboundCapability().ReplyText(appcore.Context(s.App), msg.MessageID, "已创建并切换到工作区 "+id, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
 }
 
 // --- private helpers ---
@@ -1623,7 +1621,7 @@ func (s *ManagementService) patchWorkspaceCloneProgressCard(messageID, requestID
 		return
 	}
 	card := s.RenderClonePreparingCard(requestID, payload, parentDir, snapshot)
-	if err := s.App.Feishu().PatchCard(appcore.Context(s.App), messageID, card); err != nil {
+	if err := s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, card); err != nil {
 		slog.Warn("workspace clone progress patch failed",
 			"request_id", requestID,
 			"message_id", messageID,

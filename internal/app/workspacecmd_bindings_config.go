@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
@@ -12,11 +13,44 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type workspaceOutbound struct{ app *App }
+
+func (o workspaceOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
+	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
+}
+func (o workspaceOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+}
+func (o workspaceOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
+	return patchCardEffect(ctx, o.app, messageID, card)
+}
+
+type workspaceCardRenderer struct{ app *App }
+
+func (r workspaceCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
+	if r.app == nil || r.app.feishu == nil {
+		return nil
+	}
+	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
+}
+
 func workspaceCommandApp(a *App) appworkspacecmd.App {
 	if a == nil {
 		return appworkspacecmd.App{}
 	}
-	return appworkspacecmd.App{ConfigProvider: a, FeishuClient: a.feishu, ContextProvider: a, BackendDriver: a.BackendDriver()}
+	return appworkspacecmd.App{
+		ConfigProvider: a,
+		Outbound:       workspaceOutbound{app: a},
+		CardRenderer:   workspaceCardRenderer{app: a},
+		BotNameFn: func() string {
+			if a == nil || a.feishu == nil {
+				return ""
+			}
+			return a.feishu.BotName()
+		},
+		ContextProvider: a,
+		BackendDriver:   a.BackendDriver(),
+	}
 }
 
 func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
