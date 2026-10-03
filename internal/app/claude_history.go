@@ -10,6 +10,7 @@ import (
 	history "feidex/internal/adapter/feishu/history"
 	appthreadmenu "feidex/internal/app/threadmenu"
 	"feidex/internal/codexrpc"
+	"feidex/internal/feishu"
 	appruntime "feidex/internal/runtime"
 )
 
@@ -24,6 +25,7 @@ func newClaudeHistoryService(a *App) *claudesupport.HistoryService {
 		},
 		ThreadLabel:  appthreadmenu.SessionCurrentThreadLabel,
 		MenuCardBody: menuCardBody,
+		Renderer:     claudeHistoryCardRenderer{app: a},
 		PageSize:     history.HistoryPageSize,
 	}
 }
@@ -41,7 +43,16 @@ func renderClaudeHistoryCard(a *App, sessionKey string, page int) (map[string]an
 }
 
 func renderClaudeHistoryDetailCard(a *App, sessionKey string, index int) (map[string]any, error) {
-	return newClaudeHistoryService(a).RenderHistoryDetailCard(sessionKey, index, a.feishu.SimpleStatusCard)
+	return newClaudeHistoryService(a).RenderHistoryDetailCard(sessionKey, index, nil)
+}
+
+type claudeHistoryCardRenderer struct{ app *App }
+
+func (r claudeHistoryCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
+	if r.app == nil || r.app.feishu == nil {
+		return nil
+	}
+	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
 // ---------------------------------------------------------------------------

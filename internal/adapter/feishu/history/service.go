@@ -54,13 +54,16 @@ type ThreadHistoryReader interface {
 	ReadThreadHistory(context.Context, string) (backendops.ThreadHistory, error)
 }
 
-type FeishuClient interface {
+type Outbound interface {
 	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
+}
+type CardRenderer interface {
 	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }
 type Dependencies struct {
 	Context       func() context.Context
-	Feishu        FeishuClient
+	Outbound      Outbound
+	Renderer      CardRenderer
 	State         StateProvider
 	Reader        func() (ThreadHistoryReader, error)
 	SessionKey    func(*feishu.InboundMessage) string
@@ -105,7 +108,7 @@ func (s Service) CommandHistory(msg *feishu.InboundMessage, args []string) error
 		if err != nil {
 			return err
 		}
-		_, err = s.deps.Feishu.ReplyCard(s.context(), msg.MessageID, card, s.deps.ReplyInThread(msg.ChatType))
+		_, err = s.deps.Outbound.ReplyCard(s.context(), msg.MessageID, card, s.deps.ReplyInThread(msg.ChatType))
 		return err
 	}
 	sessionKey := s.deps.SessionKey(msg)
@@ -113,7 +116,7 @@ func (s Service) CommandHistory(msg *feishu.InboundMessage, args []string) error
 	if err != nil {
 		return err
 	}
-	_, err = s.deps.Feishu.ReplyCard(s.context(), msg.MessageID, card, s.deps.ReplyInThread(msg.ChatType))
+	_, err = s.deps.Outbound.ReplyCard(s.context(), msg.MessageID, card, s.deps.ReplyInThread(msg.ChatType))
 	return err
 }
 
@@ -310,7 +313,7 @@ func (s Service) RenderCodexHistoryDetailCard(sessionKey string, index int) (map
 		Type:  "default",
 		Value: cardactions.HistoryPageActionValue{SessionKey: sessionKey, Page: index / HistoryPageSize}.Map(),
 	})
-	return s.deps.Feishu.SimpleStatusCard("Turn 详情", "blue", s.deps.MenuBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
+	return s.deps.Renderer.SimpleStatusCard("Turn 详情", "blue", s.deps.MenuBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
 }
 
 // ---------------------------------------------------------------------------

@@ -24,6 +24,10 @@ type ThreadLabelFunc func(sess *conversation.Session) string
 // MenuCardBodyFunc formats a menu card body with breadcrumb navigation.
 type MenuCardBodyFunc func(action, body string) string
 
+type CardRenderer interface {
+	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
+}
+
 // ---------- HistoryService ----------
 
 // HistoryService manages Claude history operations with callbacks for
@@ -32,6 +36,7 @@ type HistoryService struct {
 	FetchClaudeSessionTurns FetchClaudeSessionTurnsFunc
 	ThreadLabel             ThreadLabelFunc
 	MenuCardBody            MenuCardBodyFunc
+	Renderer                CardRenderer
 	PageSize                int
 }
 
@@ -153,6 +158,9 @@ func (s *HistoryService) RenderHistoryCard(sessionKey string, page int) (map[str
 // RenderHistoryDetailCard renders the history detail card for a specific turn
 // using the provided SimpleStatusCard callback for card construction.
 func (s *HistoryService) RenderHistoryDetailCard(sessionKey string, index int, simpleStatusCard SimpleStatusCardFunc) (map[string]any, error) {
+	if simpleStatusCard == nil && s.Renderer != nil {
+		simpleStatusCard = s.Renderer.SimpleStatusCard
+	}
 	sess, thread, turns, err := s.FetchClaudeSessionTurns(sessionKey)
 	if err != nil {
 		return nil, err
