@@ -119,6 +119,20 @@ func TestGoalCommandDoesNotDependOnAppCore(t *testing.T) {
 	}
 }
 
+func TestThreadMenuDoesNotDependOnLegacyWorkspaceOrAppCoreHelpers(t *testing.T) {
+	root := repositoryRoot(t)
+	violations, err := importsUnder(root, "internal/app/threadmenu", []string{
+		modulePath + "/internal/app/appcore",
+		modulePath + "/internal/app/workspace",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("thread menu must use explicit capabilities and domain values: %v", violations)
+	}
+}
+
 func TestModelSettingsEntrypointsDoNotMutateBusinessState(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, relative := range []string{"internal/app/bot_profile.go", "internal/app/binding_scoped_commands.go", "internal/app/binding_model_actions.go"} {

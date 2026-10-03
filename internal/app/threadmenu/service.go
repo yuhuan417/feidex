@@ -7,7 +7,9 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/application/workspace"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	"fmt"
 	"sort"
 	"strings"
@@ -15,10 +17,8 @@ import (
 	"time"
 
 	appthreadview "feidex/internal/adapter/feishu/threadview"
-	appcore "feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 
-	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -35,8 +35,11 @@ const (
 // composition root. The menu service never receives the application root.
 type Dependencies struct {
 	ConfigProvider interface {
-		appcore.ConfigurationSource
-		appcore.FrontendIdentity
+		Config() *config.Config
+		ConfigMu() *sync.RWMutex
+		Backend() string
+		FrontendID() string
+		FrontendConfigIndex() int
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
@@ -296,7 +299,7 @@ type BackendActionProvider interface {
 type ThreadResumeSelection = conversation.ThreadSelection
 
 // ThreadBinding is an alias for the workspace thread binding type.
-type ThreadBinding = appworkspace.ThreadBinding
+type ThreadBinding = conversation.ThreadBinding
 
 // uiWarningError is a sentinel error type for UI warning messages.
 type uiWarningError struct{ message string }
@@ -410,7 +413,7 @@ func (s *Service) messageForThreadMenu(msg *feishu.InboundMessage) (*feishu.Inbo
 	if msg == nil {
 		return nil, ""
 	}
-	sessionKey := appcore.MakeSessionKey(s.app, msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	effectiveSessionKey := s.effectiveSessionKey(sessionKey)
 	if effectiveSessionKey == "" || effectiveSessionKey == sessionKey {
 		return msg, sessionKey
@@ -439,7 +442,7 @@ func (s *Service) interruptSurfaceSessionKeys(sessionKey string) []string {
 			continue
 		}
 		candidateKey := strings.TrimSpace(sess.Key)
-		if candidateKey == "" || !appcore.SessionBelongsToFrontend(s.app, candidateKey) {
+		if candidateKey == "" || !sessionBelongsToFrontend(s.app, candidateKey) {
 			continue
 		}
 		candidateChatType, candidateChatID := sessionGroupChat(candidateKey, sess)
@@ -465,7 +468,7 @@ func appendUniqueSessionKey(keys []string, key string) []string {
 }
 
 func sessionGroupChat(sessionKey string, sess *conversation.Session) (chatType, chatID string) {
-	_, chatType, chatID, _, _ = appcore.ParseSessionKey(sessionKey)
+	_, chatType, chatID, _, _ = parseSessionKey(sessionKey)
 	if chatType == "" && sess != nil {
 		chatType = strings.TrimSpace(sess.ChatType)
 		chatID = strings.TrimSpace(sess.ChatID)
@@ -544,7 +547,7 @@ func (s *Service) StartFreshThread(sessionKey, userID, chatID, chatType string) 
 		return 0, nil, fmt.Errorf("store not initialized")
 	}
 	appState := s.app.ThreadMenuAppState()
-	defaultWorkspaceID := appcore.DefaultWorkspaceID(s.app)
+	defaultWorkspaceID := defaultWorkspaceID(s.app)
 	sess := appState.Session(sessionKey)
 	if sess != nil && s.app.SessionHasActiveWork(sess) {
 		return 0, nil, fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
@@ -581,7 +584,7 @@ func (s *Service) StartFreshThread(sessionKey, userID, chatID, chatType string) 
 	if strings.TrimSpace(sess.ChatType) == "" {
 		sess.ChatType = chatType
 	}
-	workspaceID := appcore.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID)
+	workspaceID := firstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID)
 	ws := config.FindWorkspace(s.app.Config(), workspaceID)
 	if ws == nil {
 		return discarded, nil, fmt.Errorf("workspace %q not found", workspaceID)
@@ -603,7 +606,7 @@ func (s *Service) CommandThreadsNew(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	backend := appcore.ConfiguredBackend(s.app)
+	backend := configuredBackend(s.app)
 	noun := primaryConversationNoun(backend)
 	reply := "已创建新" + noun + "并切换过去。"
 	if binding != nil && strings.TrimSpace(binding.ThreadID) != "" {
@@ -612,7 +615,7 @@ func (s *Service) CommandThreadsNew(msg *feishu.InboundMessage) error {
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}
-	return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, false)
 }
 
 // CommandThreads handles /thread list or /session list.
@@ -625,7 +628,7 @@ func (s *Service) CommandThreads(msg *feishu.InboundMessage, includeAll bool) er
 	if err != nil {
 		return err
 	}
-	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, false)
 	return err
 }
 
@@ -762,7 +765,7 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 				if err != nil {
 					return err
 				}
-				_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+				_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, false)
 				return err
 			},
 			CompleteConversationPermissionModeSet: func(action *feishu.CardAction, sessionKey, threadID, rawMode string) (*callback.CardActionTriggerResponse, error) {
@@ -780,7 +783,7 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 
 // CommandInterrupt handles /stop — interrupts the active turn.
 func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
-	sessionKey := appcore.MakeSessionKey(s.app, msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	sessionKeys := s.interruptSurfaceSessionKeys(sessionKey)
 	sort.Strings(sessionKeys)
 	for _, key := range sessionKeys {
@@ -804,10 +807,10 @@ func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 			if discarded > 0 {
 				reply += fmt.Sprintf(" 已清空 %d 条排队或暂存输入。", discarded)
 			}
-			return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+			return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, false)
 		}
 		if discarded > 0 {
-			return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+			return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, fmt.Sprintf("已清空 %d 条排队或暂存输入。", discarded), false)
 		}
 		return fmt.Errorf("当前没有运行中的任务")
 	}
@@ -830,12 +833,12 @@ func (s *Service) CommandInterrupt(msg *feishu.InboundMessage) error {
 	if canceledRetry {
 		reply += " 当前 session 的自动重试也已停止。"
 	}
-	return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	return s.app.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, false)
 }
 
 // CommandAppend handles appending text to the active turn.
 func (s *Service) CommandAppend(msg *feishu.InboundMessage, text string) error {
-	sessionKey := appcore.MakeSessionKey(s.app, msg)
+	sessionKey := makeSessionKey(s.app, msg)
 	sess := s.app.ThreadMenuAppState().Session(sessionKey)
 	if sess == nil || sess.ActiveTurnID == "" || sess.ActiveThreadID == "" {
 		return fmt.Errorf("当前没有可补充的任务")
@@ -853,7 +856,7 @@ func (s *Service) ShowThreadSandboxMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, false)
 	return err
 }
 
@@ -877,7 +880,7 @@ func (s *Service) ShowThreadPolicyMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, false)
 	return err
 }
 
@@ -901,7 +904,7 @@ func (s *Service) ShowThreadMultiAgentMenu(msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.app, msg.ChatType))
+	_, err = s.app.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, false)
 	return err
 }
 
@@ -918,7 +921,7 @@ func (s *Service) RenderThreadMultiAgentMenuCard(sessionKey string) (map[string]
 // CompleteMenuThread handles the "menu.thread" card action.
 func (s *Service) CompleteMenuThread(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	slash := primaryConversationSlash(appcore.ConfiguredBackend(s.app))
+	slash := primaryConversationSlash(configuredBackend(s.app))
 	if strings.TrimSpace(slash) == "" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "当前 frontend 还没有设置 backend，请先选择。"},
@@ -930,7 +933,7 @@ func (s *Service) CompleteMenuThread(action *feishu.CardAction, sessionKey strin
 // CompleteMenuNew handles the "menu.thread.new" card action.
 func (s *Service) CompleteMenuNew(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
-	slash := primaryConversationSlash(appcore.ConfiguredBackend(s.app))
+	slash := primaryConversationSlash(configuredBackend(s.app))
 	if strings.TrimSpace(slash) == "" {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: "当前 frontend 还没有设置 backend，请先选择。"},
@@ -1046,7 +1049,7 @@ func (s *Service) CompleteThreadResume(action *feishu.CardAction, sessionKey, th
 		sess.ChatID = action.ChatID
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = appcore.DefaultWorkspaceID(s.app)
+		sess.WorkspaceID = defaultWorkspaceID(s.app)
 	}
 	ws := config.FindWorkspace(s.app.Config(), sess.WorkspaceID)
 	if ws == nil {
@@ -1072,10 +1075,10 @@ func (s *Service) CompleteThreadResume(action *feishu.CardAction, sessionKey, th
 	includeAll, _ := action.ActionValue["include_all"].(bool)
 	card, err := s.app.ThreadMenuConversationBackend().RenderThreadsCard(sessionKey, includeAll)
 	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(appcore.ConfiguredBackend(s.app))}}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(configuredBackend(s.app))}}, nil
 	}
 	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(appcore.ConfiguredBackend(s.app))},
+		Toast: &callback.Toast{Type: "success", Content: "已恢复" + primaryConversationNoun(configuredBackend(s.app))},
 		Card:  RawCard(card),
 	}, nil
 }
@@ -1133,4 +1136,63 @@ func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
 		return workspace.SelectionService{}
 	}
 	return d.ConfigProvider.WorkspaceSelection()
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+func configuredBackend(a Dependencies) string {
+	if a.ConfigProvider == nil {
+		return ""
+	}
+	if value := strings.TrimSpace(a.ConfigProvider.Backend()); value != "" {
+		return domainbackend.NormalizeBackend(value)
+	}
+	cfg := a.ConfigProvider.Config()
+	if cfg == nil {
+		return ""
+	}
+	index := a.ConfigProvider.FrontendConfigIndex()
+	if index >= 0 && index < len(cfg.Frontends) {
+		return domainbackend.NormalizeBackend(cfg.Frontends[index].FeishuConfig.Backend)
+	}
+	return domainbackend.NormalizeBackend(cfg.Feishu.Backend)
+}
+func defaultWorkspaceID(a Dependencies) string {
+	if a.ConfigProvider == nil || a.ConfigProvider.Config() == nil {
+		return "default"
+	}
+	cfg := a.ConfigProvider.Config()
+	if len(cfg.Workspaces) > 0 && strings.TrimSpace(cfg.Workspaces[0].ID) != "" {
+		return cfg.Workspaces[0].ID
+	}
+	return "default"
+}
+func makeSessionKey(a Dependencies, msg *feishu.InboundMessage) string {
+	if msg == nil {
+		return ""
+	}
+	if strings.TrimSpace(msg.SessionKey) != "" {
+		return identity.CanonicalSessionKey(a.FrontendID(), msg.SessionKey)
+	}
+	if strings.TrimSpace(msg.ChatID) == "" {
+		return ""
+	}
+	frontendID := strings.TrimSpace(a.FrontendID())
+	if frontendID == "" {
+		return "feishu:chat:" + strings.TrimSpace(msg.ChatID)
+	}
+	return "feishu:frontend:" + frontendID + ":chat:" + strings.TrimSpace(msg.ChatID)
+}
+func sessionBelongsToFrontend(a Dependencies, key string) bool {
+	frontend, _, _, _, _ := identity.ParseSessionKey(key)
+	return frontend == strings.TrimSpace(a.FrontendID()) || frontend == ""
+}
+func parseSessionKey(key string) (string, string, string, string, string) {
+	return identity.ParseSessionKey(key)
 }

@@ -466,7 +466,11 @@ func makeSessionKey(source SelectionSource, msg *feishu.InboundMessage) string {
 	if chatID == "" {
 		return ""
 	}
-	return "feishu:frontend:" + strings.TrimSpace(source.FrontendID()) + ":chat:" + chatID
+	frontendID := strings.TrimSpace(source.FrontendID())
+	if frontendID == "" {
+		return "feishu:chat:" + chatID
+	}
+	return "feishu:frontend:" + frontendID + ":chat:" + chatID
 }
 func sessionBelongsToFrontend(source SelectionSource, key string) bool {
 	frontend, _, _, _, _ := identity.ParseSessionKey(key)
