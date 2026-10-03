@@ -284,6 +284,9 @@ func TestBackendEventsExposeTypedSemanticPayloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(data)
+	if strings.Contains(source, "Payload any") {
+		t.Fatal("BackendEvent must not expose an untyped payload escape hatch")
+	}
 	for _, field := range []string{"Item", "Usage", "Goal"} {
 		if !strings.Contains(source, field) {
 			t.Fatalf("BackendEvent missing typed semantic field %s", field)

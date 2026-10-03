@@ -20,7 +20,7 @@ func TestDecodeLifecyclePreservesBindingAndAuthoritativeBoundaries(t *testing.T)
 		{"error", `{"threadId":"thread","turnId":"failed","error":{"message":"failure"}}`, application.EventTurnError, "failed", "", ""},
 	} {
 		event, handled, err := DecodeLifecycle(tc.method, json.RawMessage(tc.wire))
-		if err != nil || !handled || event.Kind != tc.kind || event.ThreadID != "thread" || event.TurnID != tc.turn || event.RequestID != tc.request || event.Status != tc.status || event.Payload != nil {
+		if err != nil || !handled || event.Kind != tc.kind || event.ThreadID != "thread" || event.TurnID != tc.turn || event.RequestID != tc.request || event.Status != tc.status {
 			t.Errorf("DecodeLifecycle(%s) = %+v, handled=%v, err=%v", tc.method, event, handled, err)
 		}
 	}

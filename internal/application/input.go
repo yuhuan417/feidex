@@ -82,14 +82,12 @@ type BackendEvent struct {
 	Usage *turn.ThreadTokenUsage
 	Goal  *conversation.ThreadGoal
 	// Interaction payloads are explicit so application consumers do not need
-	// to type-switch an unbounded adapter value. Payload is retained as a
-	// compatibility mirror for older callers and tests during migration.
+	// to type-switch an unbounded adapter value.
 	Approval        *ApprovalRequested
 	UserInput       *interaction.ToolUserInputPayload
 	ElicitationURL  *interaction.ElicitationURLPayload
 	ElicitationForm *interaction.ElicitationFormPayload
 	Rejected        *RequestRejected
-	Payload         any
 }
 
 const (

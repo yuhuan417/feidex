@@ -6,7 +6,6 @@ import (
 
 	"feidex/internal/application"
 	"feidex/internal/codexrpc"
-	"feidex/internal/domain/interaction"
 )
 
 func TestRequestDecodePreservesResponseToken(t *testing.T) {
@@ -15,8 +14,8 @@ func TestRequestDecodePreservesResponseToken(t *testing.T) {
 		if event.ResponseToken != id || event.Kind != application.EventUserInputRequested {
 			t.Fatalf("request %s: %#v", id, event)
 		}
-		if payload, ok := event.Payload.(interaction.ToolUserInputPayload); !ok || len(payload.Questions) != 1 || payload.Questions[0].ID != "q" {
-			t.Fatalf("payload=%#v", event.Payload)
+		if event.UserInput == nil || len(event.UserInput.Questions) != 1 || event.UserInput.Questions[0].ID != "q" {
+			t.Fatalf("user input=%#v", event.UserInput)
 		}
 		resolved, handled, err := DecodeNotification("serverRequest/resolved", json.RawMessage(`{"requestId":`+id+`}`))
 		if !handled || err != nil || resolved.RequestID != event.RequestID {
@@ -27,8 +26,7 @@ func TestRequestDecodePreservesResponseToken(t *testing.T) {
 
 func TestMalformedRequestBecomesProtocolRejection(t *testing.T) {
 	event := DecodeRequest(codexrpc.RequestEnvelope{ID: json.RawMessage(`77`), Method: "item/permissions/requestApproval", Params: json.RawMessage(`{`)})
-	rejection, ok := event.Payload.(application.RequestRejected)
-	if event.Kind != application.EventRequestRejected || event.ResponseToken != "77" || !ok || rejection.Code != -32602 {
+	if event.Kind != application.EventRequestRejected || event.ResponseToken != "77" || event.Rejected == nil || event.Rejected.Code != -32602 {
 		t.Fatalf("event=%#v", event)
 	}
 }
