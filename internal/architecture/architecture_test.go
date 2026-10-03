@@ -188,6 +188,18 @@ func TestMigratedCommandPackagesDoNotImportFeishuTransport(t *testing.T) {
 	}
 }
 
+func TestWorkspaceRendererDoesNotDependOnAppCoreHelpers(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "internal", "app", "workspacecmd", "render.go")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "internal/app/appcore") {
+		t.Fatal("workspace renderer must use workspace/application values instead of appcore helpers")
+	}
+}
+
 func TestApplicationDoesNotCallSynchronousOutboundPorts(t *testing.T) {
 	root := repositoryRoot(t)
 	base := filepath.Join(root, "internal", "application")

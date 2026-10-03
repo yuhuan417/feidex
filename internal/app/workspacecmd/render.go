@@ -8,11 +8,21 @@ import (
 
 	"feidex/internal/adapter/feishu/cardactions"
 	appcards "feidex/internal/adapter/feishu/cards"
-	"feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
+	appselection "feidex/internal/application/workspace"
 	"feidex/internal/config"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 )
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
+}
 
 // RenderWorkspaceNewCard renders the "new workspace" card.
 func (s *RenderService) RenderWorkspaceNewCard(sessionKey, requestID string, payload NewPayload) map[string]any {
@@ -29,8 +39,8 @@ func (s *RenderService) RenderWorkspaceNewCard(sessionKey, requestID string, pay
 	}
 	card := appcards.NewMarkdownBodyCard("新建工作区", "orange")
 	body := "当前位置：主菜单 / workspace / new\n\n" +
-		"已选目录: `" + appcore.FirstNonEmpty(selectedCWD, "-") + "`\n" +
-		"浏览根目录: `" + appcore.FirstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
+		"已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
+		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
 		"可以先选目录，再填写 `workspace_id` 和可选的 `name`。选完目录后会按目录名自动建议 `workspace_id`。点「确认」时才会校验 `workspace_id`。"
 	if notice := strings.TrimSpace(payload.Notice); notice != "" {
 		body = notice + "\n\n" + body
@@ -108,10 +118,10 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 	sess := s.GetSession(sessionKey)
 	workspaceID := s.WorkspaceIDForSession(sessionKey, sess)
 	ws := config.FindWorkspace(s.Deps.Config(), workspaceID)
-	rootPath := appcore.FirstNonEmpty(strings.TrimSpace(payload.RootPath), s.DefaultWorkspaceCloneRoot(ws))
+	rootPath := firstNonEmpty(strings.TrimSpace(payload.RootPath), s.DefaultWorkspaceCloneRoot(ws))
 	parentDir := strings.TrimSpace(payload.SelectedParentDir)
 	if parentDir == "" {
-		parentDir = appcore.FirstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), rootPath)
+		parentDir = firstNonEmpty(strings.TrimSpace(s.DefaultWorkspaceCloneParent(ws)), rootPath)
 	}
 	cloneMode := NormalizeCloneMode(payload.CloneMode)
 	workspaceLabel := "(未配置)"
@@ -121,9 +131,9 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 
 	card := appcards.NewMarkdownBodyCard("从仓库创建工作区", "orange")
 	body := "当前工作区: " + workspaceLabel + "\n" +
-		"已选父目录: `" + appcore.FirstNonEmpty(parentDir, "-") + "`\n" +
+		"已选父目录: `" + firstNonEmpty(parentDir, "-") + "`\n" +
 		"创建方式: `" + cloneMode + "`\n" +
-		"浏览根目录: `" + appcore.FirstNonEmpty(rootPath, "-") + "`\n\n" +
+		"浏览根目录: `" + firstNonEmpty(rootPath, "-") + "`\n\n" +
 		"先填写 Git 地址，再按需调整父目录和 `workspace_id`；`workspace_id` 留空会按仓库名自动推导。选择 `clone 后创建 worktree` 后，点「更新表单」会显示 worktree 分支、workspace_id 和目录名；这些字段留空会按 bot 显示名 + base project 自动推导，目录名默认等于 worktree workspace_id。"
 	body = s.FormatMenuBody("workspace.clone", body)
 	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
@@ -235,7 +245,7 @@ func (s *RenderService) RenderWorkspaceCloneCard(sessionKey, requestID string, p
 // RenderWorkspaceClonePreparingCard renders the clone in-progress card.
 func (s *RenderService) RenderWorkspaceClonePreparingCard(requestID string, payload ClonePayload, parentDir string, snapshot CloneProgressSnapshot) map[string]any {
 	repoURL := strings.TrimSpace(payload.RepoURL)
-	parentDir = appcore.FirstNonEmpty(strings.TrimSpace(parentDir), strings.TrimSpace(payload.SelectedParentDir), "-")
+	parentDir = firstNonEmpty(strings.TrimSpace(parentDir), strings.TrimSpace(payload.SelectedParentDir), "-")
 	workspaceID := strings.TrimSpace(payload.DraftID)
 	if workspaceID == "" {
 		workspaceID = "将从仓库名自动推导"
@@ -250,16 +260,16 @@ func (s *RenderService) RenderWorkspaceClonePreparingCard(requestID string, payl
 	lines := []string{
 		statusLine,
 		"",
-		"仓库: `" + appcore.FirstNonEmpty(repoURL, "-") + "`",
+		"仓库: `" + firstNonEmpty(repoURL, "-") + "`",
 		"父目录: `" + parentDir + "`",
 		"创建方式: `" + mode + "`",
 		"workspace_id: `" + workspaceID + "`",
 	}
 	if mode == CloneModeWorktree {
 		lines = append(lines,
-			"worktree 分支: `"+appcore.FirstNonEmpty(strings.TrimSpace(payload.WorktreeBranchName), "自动推导")+"`",
-			"worktree workspace_id: `"+appcore.FirstNonEmpty(strings.TrimSpace(payload.WorktreeWorkspaceID), "自动推导")+"`",
-			"worktree 目标目录: `"+appcore.FirstNonEmpty(strings.TrimSpace(payload.WorktreeTargetDir), "自动推导")+"`",
+			"worktree 分支: `"+firstNonEmpty(strings.TrimSpace(payload.WorktreeBranchName), "自动推导")+"`",
+			"worktree workspace_id: `"+firstNonEmpty(strings.TrimSpace(payload.WorktreeWorkspaceID), "自动推导")+"`",
+			"worktree 目标目录: `"+firstNonEmpty(strings.TrimSpace(payload.WorktreeTargetDir), "自动推导")+"`",
 		)
 	}
 	if !snapshot.StartedAt.IsZero() {
@@ -304,8 +314,8 @@ func (s *RenderService) RenderWorkspaceSwitchExistingCard(sessionKey, workspaceI
 		body = "该目录已经由现有工作区接管。"
 	}
 	body += "\n\n" +
-		"目录: `" + appcore.FirstNonEmpty(strings.TrimSpace(targetDir), "-") + "`\n" +
-		"workspace_id: `" + appcore.FirstNonEmpty(strings.TrimSpace(workspaceID), "-") + "`\n\n" +
+		"目录: `" + firstNonEmpty(strings.TrimSpace(targetDir), "-") + "`\n" +
+		"workspace_id: `" + firstNonEmpty(strings.TrimSpace(workspaceID), "-") + "`\n\n" +
 		"是否直接切换到这个工作区？"
 	buttons := []feishu.Button{
 		{
@@ -336,7 +346,7 @@ func (s *RenderService) RenderWorkspaceCloneManualHintCard(sessionKey, workspace
 	lines := []string{
 		"仓库已拉取，可手动接管。",
 		"",
-		"目录: `" + appcore.FirstNonEmpty(strings.TrimSpace(targetDir), "-") + "`",
+		"目录: `" + firstNonEmpty(strings.TrimSpace(targetDir), "-") + "`",
 	}
 	if workspaceID = strings.TrimSpace(workspaceID); workspaceID != "" {
 		lines = append(lines, "建议 workspace_id: `"+workspaceID+"`")
@@ -358,7 +368,7 @@ func (s *RenderService) RenderWorkspaceCloneManualHintCard(sessionKey, workspace
 // RenderWorkspaceCloneCanceledCard renders the clone canceled card.
 func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payload ClonePayload, parentDir string, snapshot CloneProgressSnapshot) map[string]any {
 	repoURL := strings.TrimSpace(payload.RepoURL)
-	parentDir = appcore.FirstNonEmpty(strings.TrimSpace(parentDir), strings.TrimSpace(payload.SelectedParentDir), "-")
+	parentDir = firstNonEmpty(strings.TrimSpace(parentDir), strings.TrimSpace(payload.SelectedParentDir), "-")
 	workspaceID := strings.TrimSpace(payload.DraftID)
 	if workspaceID == "" {
 		workspaceID = "将从仓库名自动推导"
@@ -366,7 +376,7 @@ func (s *RenderService) RenderWorkspaceCloneCanceledCard(sessionKey string, payl
 	lines := []string{
 		"已取消仓库克隆。",
 		"",
-		"仓库: `" + appcore.FirstNonEmpty(repoURL, "-") + "`",
+		"仓库: `" + firstNonEmpty(repoURL, "-") + "`",
 		"父目录: `" + parentDir + "`",
 		"创建方式: `" + NormalizeCloneMode(payload.CloneMode) + "`",
 		"workspace_id: `" + workspaceID + "`",
@@ -421,11 +431,11 @@ func (s *RenderService) RenderWorkspaceWorktreeCard(sessionKey, requestID string
 
 	card := appcards.NewMarkdownBodyCard("从 Worktree 创建工作区", "orange")
 	body := strings.Join([]string{
-		"基准工作区: `" + appcore.FirstNonEmpty(baseWorkspaceID, "-") + "`",
-		"新分支: `" + appcore.FirstNonEmpty(branchName, "-") + "`",
-		"workspace_id: `" + appcore.FirstNonEmpty(workspaceID, "-") + "`",
-		"目录名: `" + appcore.FirstNonEmpty(directoryName, "-") + "`",
-		"目标目录: `" + appcore.FirstNonEmpty(targetDir, "确认时从基准 Git 根目录推导") + "`",
+		"基准工作区: `" + firstNonEmpty(baseWorkspaceID, "-") + "`",
+		"新分支: `" + firstNonEmpty(branchName, "-") + "`",
+		"workspace_id: `" + firstNonEmpty(workspaceID, "-") + "`",
+		"目录名: `" + firstNonEmpty(directoryName, "-") + "`",
+		"目标目录: `" + firstNonEmpty(targetDir, "确认时从基准 Git 根目录推导") + "`",
 		"",
 		"默认会用 bot 显示名和基准项目名生成分支、workspace_id 和目录名。通常只需要确认；需要隔离到其他基准仓库时再调整下拉。",
 		"",
@@ -515,18 +525,18 @@ func (s *RenderService) RenderWorkspaceWorktreePreparingCard(requestID string, p
 	workspaceID := strings.TrimSpace(payload.WorkspaceID)
 	targetDir := strings.TrimSpace(payload.TargetDir)
 	if plan != nil {
-		baseWorkspaceID = appcore.FirstNonEmpty(strings.TrimSpace(plan.BaseWorkspaceID), baseWorkspaceID)
-		branchName = appcore.FirstNonEmpty(strings.TrimSpace(plan.BranchName), branchName)
-		workspaceID = appcore.FirstNonEmpty(strings.TrimSpace(plan.WorkspaceID), workspaceID)
-		targetDir = appcore.FirstNonEmpty(strings.TrimSpace(plan.TargetDir), targetDir)
+		baseWorkspaceID = firstNonEmpty(strings.TrimSpace(plan.BaseWorkspaceID), baseWorkspaceID)
+		branchName = firstNonEmpty(strings.TrimSpace(plan.BranchName), branchName)
+		workspaceID = firstNonEmpty(strings.TrimSpace(plan.WorkspaceID), workspaceID)
+		targetDir = firstNonEmpty(strings.TrimSpace(plan.TargetDir), targetDir)
 	}
 	lines := []string{
 		statusLine,
 		"",
-		"基准工作区: `" + appcore.FirstNonEmpty(baseWorkspaceID, "-") + "`",
-		"分支: `" + appcore.FirstNonEmpty(branchName, "-") + "`",
-		"workspace_id: `" + appcore.FirstNonEmpty(workspaceID, "-") + "`",
-		"目标目录: `" + appcore.FirstNonEmpty(targetDir, "-") + "`",
+		"基准工作区: `" + firstNonEmpty(baseWorkspaceID, "-") + "`",
+		"分支: `" + firstNonEmpty(branchName, "-") + "`",
+		"workspace_id: `" + firstNonEmpty(workspaceID, "-") + "`",
+		"目标目录: `" + firstNonEmpty(targetDir, "-") + "`",
 	}
 	if !snapshot.StartedAt.IsZero() {
 		lines = append(lines, "已运行: `"+strings.TrimSpace(strings.TrimPrefix(formatTurnElapsedLine(time.Since(snapshot.StartedAt)), "elapsed: "))+"`")
@@ -564,7 +574,7 @@ func (s *RenderService) RenderWorkspaceWorktreeManualHintCard(sessionKey, worksp
 	lines := []string{
 		"Worktree 已创建，可手动接管。",
 		"",
-		"目录: `" + appcore.FirstNonEmpty(strings.TrimSpace(targetDir), "-") + "`",
+		"目录: `" + firstNonEmpty(strings.TrimSpace(targetDir), "-") + "`",
 	}
 	if workspaceID = strings.TrimSpace(workspaceID); workspaceID != "" {
 		lines = append(lines, "建议 workspace_id: `"+workspaceID+"`")
@@ -585,15 +595,15 @@ func (s *RenderService) RenderWorkspaceWorktreeManualHintCard(sessionKey, worksp
 func (s *RenderService) RenderWorkspaceWorktreeCanceledCard(sessionKey string, payload WorktreePayload, plan *WorktreePlan, snapshot CloneProgressSnapshot) map[string]any {
 	targetDir := strings.TrimSpace(payload.TargetDir)
 	if plan != nil {
-		targetDir = appcore.FirstNonEmpty(strings.TrimSpace(plan.TargetDir), targetDir)
+		targetDir = firstNonEmpty(strings.TrimSpace(plan.TargetDir), targetDir)
 	}
 	lines := []string{
 		"已取消 Worktree 创建。",
 		"",
-		"基准工作区: `" + appcore.FirstNonEmpty(strings.TrimSpace(payload.BaseWorkspaceID), "-") + "`",
-		"分支: `" + appcore.FirstNonEmpty(strings.TrimSpace(payload.BranchName), "-") + "`",
-		"workspace_id: `" + appcore.FirstNonEmpty(strings.TrimSpace(payload.WorkspaceID), "-") + "`",
-		"目标目录: `" + appcore.FirstNonEmpty(targetDir, "-") + "`",
+		"基准工作区: `" + firstNonEmpty(strings.TrimSpace(payload.BaseWorkspaceID), "-") + "`",
+		"分支: `" + firstNonEmpty(strings.TrimSpace(payload.BranchName), "-") + "`",
+		"workspace_id: `" + firstNonEmpty(strings.TrimSpace(payload.WorkspaceID), "-") + "`",
+		"目标目录: `" + firstNonEmpty(targetDir, "-") + "`",
 		"",
 		"如果目标目录有残留，请清理后重新发起。",
 	}
@@ -714,7 +724,7 @@ func (s *RenderService) RenderWorkspaceChooseCard(sessionKey string) map[string]
 	currentID := s.WorkspaceIDForSession(sessionKey, sess)
 	var recentIDs []string
 	if sess != nil {
-		if selectionKey := appcore.MakeWorkspaceSelectionKeyForSession(s.Deps, sess); selectionKey != "" {
+		if selectionKey := appselection.SelectionKey(identity.FrontendID(s.Deps.FrontendID()), sess.ChatType, sess.ChatID, sess.OwnerUserID); selectionKey != "" {
 			if selectionSess := s.GetSession(selectionKey); selectionSess != nil {
 				recentIDs = selectionSess.RecentWorkspaceIDs
 			}
@@ -876,7 +886,7 @@ func (s *RenderService) RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID
 	body := []string{
 		"即将删除工作区配置：`" + workspaceID + "`",
 		"",
-		"name: `" + appcore.FirstNonEmpty(strings.TrimSpace(ws.Name), workspaceID) + "`",
+		"name: `" + firstNonEmpty(strings.TrimSpace(ws.Name), workspaceID) + "`",
 		"cwd: `" + strings.TrimSpace(ws.Cwd) + "`",
 		"",
 		"这只会删除配置项，不会删除磁盘目录。",
