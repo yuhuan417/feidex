@@ -167,6 +167,10 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 	}
 	app.stateView = appstate.NewScoped(app.store, app.FrontendID(), configuredBackend(app), allowLegacyFrontendFallback(app))
 	app.stateView.RevisionMutex = app.ConfigMu()
+	// Workspace presentation is a composition concern. Build it once after the
+	// scoped state repository exists; its query reads detached snapshots and
+	// follows runtime backend changes through the injected capability.
+	app.composition.workspaceRender = buildWorkspaceRenderService(app)
 	dispatcher := newInputDispatcher(app)
 	app.composition.dispatcher = &dispatcher
 	if err := canonicalizeStoredSessionKeys(app); err != nil {

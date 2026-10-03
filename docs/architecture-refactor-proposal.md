@@ -593,3 +593,4 @@ Codex server request
 - 新增活动 turn 不变、保存失败不发布、frontend/group 隔离、submission binding、不混读配置 revision 与 workspace `default` ID 回归；AST 架构守卫禁止模型入口直接写 override/turn 字段，并禁止 conversation/submission 重新引入根模型回调。
 - 本批完成的是模型作用域与快照职责迁移；workspace renderer 状态读取、其余业务 callback、菜单政策、composition root 集中及旧桥接删除仍需继续，整体提案尚未完成。
 - workspace config、management 和 renderer 的构造实例已归入 frontend `appComposition`；backend/config 失效时统一清理 workspace capability cache，减少命令和 card action 重复组装同一组服务。
+- workspace presentation 现在在 frontend composition 初始化阶段一次性构造；配置或 backend 变化只影响其注入的查询快照，不再重建 Feishu renderer。
