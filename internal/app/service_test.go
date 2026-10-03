@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"feidex/internal/composition"
 	"feidex/internal/config"
 )
 
@@ -61,7 +60,8 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 		},
 	}
 
-	svc, err := composition.NewService(cfg, filepath.Join(t.TempDir(), "config.toml"), NewFrontend)
+	apps, err := newTestService(cfg, filepath.Join(t.TempDir(), "config.toml"))
+	svc := struct{ Frontends []*App }{Frontends: apps}
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -134,7 +134,8 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 		},
 	}}
 
-	svc, err := composition.NewService(cfg, filepath.Join(t.TempDir(), "config.toml"), NewFrontend)
+	apps, err := newTestService(cfg, filepath.Join(t.TempDir(), "config.toml"))
+	svc := struct{ Frontends []*App }{Frontends: apps}
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}

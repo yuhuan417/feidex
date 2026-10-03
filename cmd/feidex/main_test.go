@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"testing"
 
-	"feidex/internal/app"
 	"feidex/internal/buildinfo"
 	"feidex/internal/composition"
 	"feidex/internal/config"
@@ -141,7 +140,7 @@ func minimalConfig() *config.Config {
 func resetMainStubs() {
 	loadConfig = config.Load
 	newApp = func(cfg *config.Config, cfgPath string) (appService, error) {
-		return composition.NewService(cfg, cfgPath, app.NewFrontend)
+		return composition.NewService(cfg, cfgPath, composition.NewFrontend)
 	}
 	notifyCtx = signalNotifyContext
 	resolveDaemonConfig = daemon.Resolve

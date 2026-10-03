@@ -4,7 +4,7 @@ import (
 	"context"
 	codexadapter "feidex/internal/adapter/backend/codex"
 	history "feidex/internal/adapter/feishu/history"
-	"feidex/internal/composition"
+	"feidex/internal/compositionkit"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 )
@@ -16,7 +16,7 @@ func (o historyOutbound) ReplyCard(ctx context.Context, messageID string, card m
 }
 
 func newHistoryService(app *App) history.Service {
-	return composition.NewHistory(composition.HistoryDependencies{
+	return compositionkit.NewHistory(compositionkit.HistoryDependencies{
 		Frontend: identity.FrontendID(app.FrontendID()), AllowLegacyFallback: allowLegacyFrontendFallback(app),
 		Context: app.Context, Outbound: historyOutbound{app: app},
 		Repository: app.State(), Backend: func() string { return configuredBackend(app) },

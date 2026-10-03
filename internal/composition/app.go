@@ -1,5 +1,4 @@
-// Package composition constructs frontend scopes and their runtime supervisor.
-// Factories assemble concrete adapters; no input, menu, or product policy lives here.
+// Package composition is the production composition root.
 package composition
 
 import (
@@ -7,30 +6,24 @@ import (
 	"path/filepath"
 	"sync"
 
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+	"feidex/internal/app"
 	"feidex/internal/config"
+	"feidex/internal/feishu"
 	"feidex/internal/runtime"
 	"feidex/internal/state"
 )
 
-type FrontendScope struct {
-	Config      *config.Config
-	ConfigPath  string
-	Store       *state.Store
-	ConfigMutex *sync.RWMutex
-	Frontend    config.ResolvedFrontend
-}
-
-// NewFrontendOwner is the composition boundary for frontend-scoped mutable
-// runtime state. The owner itself lives in runtime; composition decides when
-// one is created for each frontend.
-func NewFrontendOwner() *runtime.FrontendOwner {
-	return runtime.NewFrontendOwner()
-}
+type FrontendScope = app.FrontendScope
 
 type Factory[T runtime.ManagedFrontend] func(FrontendScope) (T, error)
 type Service[T runtime.ManagedFrontend] struct {
 	runtime.FrontendGroup
 	Frontends []T
+}
+
+func NewFrontend(scope FrontendScope) (*app.App, error) {
+	return app.NewFeishuFrontend(scope)
 }
 
 func scopes(cfg *config.Config, cfgPath string) ([]FrontendScope, error) {
@@ -48,10 +41,17 @@ func scopes(cfg *config.Config, cfgPath string) ([]FrontendScope, error) {
 	mu := &sync.RWMutex{}
 	result := make([]FrontendScope, 0, len(frontends))
 	for _, frontend := range frontends {
-		result = append(result, FrontendScope{Config: cfg, ConfigPath: cfgPath, Store: store, ConfigMutex: mu, Frontend: frontend})
+		transport := appfeishuwrap.WrapFeishuClient(feishu.New(frontend.Feishu))
+		result = append(result, FrontendScope{
+			Config: cfg, ConfigPath: cfgPath, Store: store, ConfigMutex: mu, Frontend: frontend,
+			FeishuTransport: transport,
+			Registry:        runtime.NewRegistry(transport),
+			RuntimeOwner:    runtime.NewFrontendOwner(),
+		})
 	}
 	return result, nil
 }
+
 func NewService[T runtime.ManagedFrontend](cfg *config.Config, cfgPath string, factory Factory[T]) (*Service[T], error) {
 	inputs, err := scopes(cfg, cfgPath)
 	if err != nil {
@@ -68,6 +68,7 @@ func NewService[T runtime.ManagedFrontend](cfg *config.Config, cfgPath string, f
 	}
 	return service, nil
 }
+
 func New[T runtime.ManagedFrontend](cfg *config.Config, cfgPath string, factory Factory[T]) (T, error) {
 	var zero T
 	inputs, err := scopes(cfg, cfgPath)

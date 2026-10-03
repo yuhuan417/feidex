@@ -17,7 +17,6 @@ import (
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/codexrpc"
-	"feidex/internal/composition"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
@@ -898,38 +897,38 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	return a, ff, fc
 }
 
-func testRegistryWithCodex(client CodexClient) *composition.Registry {
-	r := composition.NewRegistry(nil)
+func testRegistryWithCodex(client CodexClient) *frontendruntime.Registry {
+	r := frontendruntime.NewRegistry(nil)
 	r.Codex = client
 	return r
 }
 
-func testRegistryWithClaude(core ClaudeCore) *composition.Registry {
-	r := composition.NewRegistry(nil)
+func testRegistryWithClaude(core ClaudeCore) *frontendruntime.Registry {
+	r := frontendruntime.NewRegistry(nil)
 	r.Claude = core
 	return r
 }
 
-func testRegistryWithCodexAndTrackers(client CodexClient, trackers *appTrackers) *composition.Registry {
+func testRegistryWithCodexAndTrackers(client CodexClient, trackers *appTrackers) *frontendruntime.Registry {
 	r := testRegistryWithCodex(client)
 	r.Set("trackers", trackers)
 	return r
 }
 
-func testRegistryWithTrackers(trackers *appTrackers) *composition.Registry {
-	r := composition.NewRegistry(nil)
+func testRegistryWithTrackers(trackers *appTrackers) *frontendruntime.Registry {
+	r := frontendruntime.NewRegistry(nil)
 	r.Set("trackers", trackers)
 	return r
 }
 
 func testOwnerWithLiveThreads(live *frontendruntime.LiveThreads) *frontendruntime.FrontendOwner {
-	o := composition.NewFrontendOwner()
+	o := frontendruntime.NewFrontendOwner()
 	o.LiveThreads = live
 	return o
 }
 
 func testOwnerWithAutoRetries(tracker *appautoretry.Tracker) *frontendruntime.FrontendOwner {
-	o := composition.NewFrontendOwner()
+	o := frontendruntime.NewFrontendOwner()
 	o.AutoRetries = tracker
 	return o
 }

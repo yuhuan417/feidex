@@ -5,7 +5,6 @@ import (
 
 	appbackend "feidex/internal/adapter/feishu/backend"
 	appstate "feidex/internal/adapter/storage/json/scoped"
-	"feidex/internal/composition"
 	frontendruntime "feidex/internal/runtime"
 
 	"feidex/internal/config"
@@ -148,14 +147,14 @@ func currentClaudeCore(a *App) ClaudeCore {
 }
 
 // registryFor returns the frontend-scoped composition registry.
-func registryFor(a *App) *composition.Registry {
+func registryFor(a *App) *frontendruntime.Registry {
 	if a == nil {
 		return nil
 	}
 	if a.registry != nil {
 		return a.registry
 	}
-	a.registry = composition.NewRegistry(a.feishu)
+	a.registry = frontendruntime.NewRegistry(a.feishu)
 	return a.registry
 }
 
@@ -169,7 +168,7 @@ func ensureRuntimeOwner(a *App) *frontendruntime.FrontendOwner {
 	if a.runtimeOwner != nil {
 		return a.runtimeOwner
 	}
-	a.runtimeOwner = composition.NewFrontendOwner()
+	a.runtimeOwner = frontendruntime.NewFrontendOwner()
 	registry.ClientsMu.RLock()
 	codexClient, _ := registry.Codex.(CodexClient)
 	claudeCore, _ := registry.Claude.(ClaudeCore)

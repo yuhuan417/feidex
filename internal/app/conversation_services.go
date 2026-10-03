@@ -7,7 +7,7 @@ import (
 	"feidex/internal/adapter/feishu/threadview"
 	"feidex/internal/application/backendops"
 	"feidex/internal/application/conversation"
-	"feidex/internal/composition"
+	"feidex/internal/compositionkit"
 	"feidex/internal/config"
 	domainbackend "feidex/internal/domain/backend"
 	domain "feidex/internal/domain/conversation"
@@ -17,7 +17,7 @@ import (
 )
 
 func newConversationService(a *App) *conversation.Service {
-	s := &conversation.Service{Deps: conversation.Dependencies{Context: a.Context(), Backend: configuredBackend(a), Repository: composition.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context()}, Live: sqLiveThreadAdapter{app: a}}}
+	s := &conversation.Service{Deps: conversation.Dependencies{Context: a.Context(), Backend: configuredBackend(a), Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context()}, Live: sqLiveThreadAdapter{app: a}}}
 	s.Deps.ModelSettings = newModelSnapshotService(a)
 	if s.Deps.Backend == domainbackend.BackendClaude {
 		s.Deps.Gateway = claudeadapter.ConversationGateway{Client: currentClaudeCore(a), Continue: newReplyContinuationService(a).ContinueClaudeSessionWithText}

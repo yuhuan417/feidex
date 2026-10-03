@@ -1,11 +1,9 @@
-package composition
+package runtime
 
 import "sync"
 
-// Registry is the frontend-scoped composition state. It owns binding caches
-// and external client references without exposing the application aggregate to
-// the services that consume them. Product state remains in domain/application
-// owners; this registry only stores constructed adapters and composition glue.
+// Registry stores frontend-scoped composition state. It is created by the
+// composition root and injected into the Feishu entrypoint.
 type Registry struct {
 	Mu          sync.Mutex
 	WorkspaceMu sync.Mutex
@@ -19,10 +17,7 @@ type Registry struct {
 }
 
 func NewRegistry(feishuTransport any) *Registry {
-	return &Registry{
-		FeishuTransport: feishuTransport,
-		values:          make(map[string]any),
-	}
+	return &Registry{FeishuTransport: feishuTransport, values: make(map[string]any)}
 }
 
 func (r *Registry) Get(key string) any {
@@ -50,6 +45,4 @@ func (r *Registry) Set(key string, value any) {
 	r.values[key] = value
 }
 
-func (r *Registry) Delete(key string) {
-	r.Set(key, nil)
-}
+func (r *Registry) Delete(key string) { r.Set(key, nil) }

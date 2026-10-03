@@ -4,7 +4,7 @@ import (
 	"context"
 	skillsadapter "feidex/internal/adapter/feishu/skills"
 	skillapp "feidex/internal/application/skill"
-	"feidex/internal/composition"
+	"feidex/internal/compositionkit"
 	"feidex/internal/domain/identity"
 	skillcatalog "feidex/internal/domain/skill"
 	"feidex/internal/feishu"
@@ -41,7 +41,7 @@ func newSkillUseCase(a *App) *skillapp.Service {
 	}
 	pending := trackers.pendingSkills
 	registryFor(a).Mu.Unlock()
-	return composition.NewSkillService(composition.SkillDependencies{
+	return compositionkit.NewSkillService(compositionkit.SkillDependencies{
 		Frontend: identity.FrontendID(a.FrontendID()),
 		Context:  a.Context, Config: a.cfg, Mutex: a.ConfigMu(),
 		Sessions: a.State(), Pending: pending,

@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"feidex/internal/app"
 	"feidex/internal/buildinfo"
 	"feidex/internal/composition"
 	"feidex/internal/config"
@@ -26,7 +25,7 @@ type appService interface {
 var (
 	loadConfig = config.Load
 	newApp     = func(cfg *config.Config, cfgPath string) (appService, error) {
-		return composition.NewService(cfg, cfgPath, app.NewFrontend)
+		return composition.NewService(cfg, cfgPath, composition.NewFrontend)
 	}
 	notifyCtx = signal.NotifyContext
 )

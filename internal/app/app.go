@@ -12,7 +12,6 @@ import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/backendops"
-	"feidex/internal/composition"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"log/slog"
@@ -53,7 +52,7 @@ type App struct {
 	runtimeOwner           *frontendruntime.FrontendOwner
 	stateMu                sync.Mutex
 	stateView              *appstate.Store
-	registry               *composition.Registry
+	registry               *frontendruntime.Registry
 	deduper                *frontendruntime.InboundDeduper
 	asyncRunner            func(func())
 	waitAsync              func()
@@ -61,6 +60,19 @@ type App struct {
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
 	runtimeOwnerMu         sync.Mutex
+}
+
+// FrontendScope is supplied by internal/composition. App consumes the
+// already-constructed frontend resources and only installs Feishu handlers.
+type FrontendScope struct {
+	Config          *config.Config
+	ConfigPath      string
+	Store           *state.Store
+	ConfigMutex     *sync.RWMutex
+	Frontend        config.ResolvedFrontend
+	FeishuTransport any
+	Registry        *frontendruntime.Registry
+	RuntimeOwner    *frontendruntime.FrontendOwner
 }
 
 func (a *App) configMutex() *sync.RWMutex {
@@ -88,7 +100,7 @@ type appTrackers struct {
 	goals               *goalcmd.Tracker
 }
 
-func NewFrontend(scope composition.FrontendScope) (*App, error) {
+func NewFeishuFrontend(scope FrontendScope) (*App, error) {
 	cfg, cfgPath, store, frontend := scope.Config, scope.ConfigPath, scope.Store, scope.Frontend
 	if cfg == nil {
 		return nil, fmt.Errorf("nil config")
@@ -97,8 +109,14 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		return nil, fmt.Errorf("nil store")
 	}
 	backend := normalizeRuntimeBackend(frontend.Backend)
-	feishuTransport := appfeishuwrap.WrapFeishuClient(newFeishuClient(frontend.Feishu))
-	owner := composition.NewFrontendOwner()
+	feishuTransport, ok := scope.FeishuTransport.(FeishuClient)
+	if !ok || feishuTransport == nil {
+		return nil, fmt.Errorf("nil Feishu transport")
+	}
+	if scope.Registry == nil || scope.RuntimeOwner == nil {
+		return nil, fmt.Errorf("frontend composition is incomplete")
+	}
+	owner := scope.RuntimeOwner
 	app := &App{
 		cfg:                 cfg,
 		sharedConfigMu:      scope.ConfigMutex,
@@ -108,7 +126,7 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		frontendConfigIndex: frontend.ConfigIndex,
 		backend:             backend,
 		backendDriver:       backendDriverForKind(backend),
-		registry:            composition.NewRegistry(feishuTransport),
+		registry:            scope.Registry,
 		feishu:              feishuTransport,
 		started:             time.Now(),
 		deduper:             frontendruntime.NewInboundDeduper(),

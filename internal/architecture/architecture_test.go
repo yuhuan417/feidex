@@ -143,8 +143,11 @@ func TestFrontendRuntimeOwnerConstructionStaysInComposition(t *testing.T) {
 			t.Fatalf("frontend construction must stay behind composition owner factory: %q", forbidden)
 		}
 	}
-	if !strings.Contains(source, "composition.NewFrontendOwner()") {
-		t.Fatal("NewFrontend must obtain its runtime owner from composition")
+	if strings.Contains(source, "NewFrontendOwner()") {
+		t.Fatal("frontend runtime owner must be injected by composition")
+	}
+	if strings.Contains(source, "func NewFrontend(") {
+		t.Fatal("production frontend constructor must live in internal/composition")
 	}
 }
 
