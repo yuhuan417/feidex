@@ -599,3 +599,4 @@ Codex server request
 - backend configuration 的 backend、Feishu scope、默认 workspace 和模型值读取已收敛到 `internal/app/backend` 自有的窄 `PermissionDependencies` helper，不再依赖 `appcore` 或旧 `app/modelconfig` 聚合包；菜单顺序、模型生效边界、权限协议和状态卡文本保持不变。
 - 模型配置的 Feishu 卡片与命令适配器已从 `internal/app/modelconfig` 移到 `internal/adapter/feishu/modelconfig`；application 继续持有目录解析和快照策略，adapter 仅负责 Feishu 交互与 config/backend 端口连接，旧 app package 已删除。
 - plan mode 已移除对 `appcore` 与 `app/workspace` 的依赖，改用显式 ConfigProvider、ContextProvider、domain conversation binding 和 application modelconfig adapter 能力；`/plan` 的 Codex collaboration mode 请求与 SM-04/SM-05 边界不变。
+- review command 已移除 `appcore` 依赖，ContextProvider 和显式 frontend/config/store/workspace capabilities 由 composition adapter 注入；inline review 的 `review/start` turn 绑定及 queued submission 生命周期保持不变。

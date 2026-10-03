@@ -15,8 +15,6 @@ import (
 	"sync"
 	"time"
 
-	appcore "feidex/internal/app/appcore"
-
 	apputil "feidex/internal/formatutil"
 
 	appreview "feidex/internal/adapter/feishu/review"
@@ -94,8 +92,11 @@ type CardRenderer interface {
 // composition root.
 type Dependencies struct {
 	ConfigProvider interface {
-		appcore.ConfigurationSource
-		appcore.FrontendIdentity
+		Config() *config.Config
+		ConfigMu() *sync.RWMutex
+		Backend() string
+		FrontendID() string
+		FrontendConfigIndex() int
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
@@ -117,6 +118,16 @@ type Dependencies struct {
 	MarkSubmissionQueuedReactionsFn   func(*domainsubmission.Submission)
 	CompleteAsyncCommandActionFn      func(*feishu.CardAction, string, string, string, string, map[string]any, func(string, string) map[string]any, func(string, string) map[string]any, string) (*callback.CardActionTriggerResponse, error)
 	CompleteAsyncRenderedCardActionFn func(*feishu.CardAction, string, string, map[string]any, func() (*callback.CardActionTriggerResponse, error), func(string, string) map[string]any, string) (*callback.CardActionTriggerResponse, error)
+	ContextProvider                   interface{ Context() context.Context }
+}
+
+func (d Dependencies) Context() context.Context {
+	if d.ContextProvider != nil {
+		if ctx := d.ContextProvider.Context(); ctx != nil {
+			return ctx
+		}
+	}
+	return context.Background()
 }
 
 func (d Dependencies) Config() *config.Config {
@@ -354,7 +365,7 @@ func startInlineReviewFromMessage(a Dependencies, msg *feishu.InboundMessage, ta
 	if err != nil {
 		return err
 	}
-	return a.ReviewOutbound().ReplyText(appcore.Context(a), msg.MessageID, confirmation, a.ReviewReplyInThreadEnabled(msg.ChatType))
+	return a.ReviewOutbound().ReplyText(a.Context(), msg.MessageID, confirmation, a.ReviewReplyInThreadEnabled(msg.ChatType))
 }
 
 // StartInlineReview starts an inline review for the given target.
@@ -468,7 +479,7 @@ func EnqueueReviewSubmission(a Dependencies, msg *feishu.InboundMessage, session
 		}
 	}
 	a.ReviewMarkSubmissionQueuedReactions(sub)
-	a.ReviewSendSubmissionQueuedNotice(appcore.Context(a), sub)
+	a.ReviewSendSubmissionQueuedNotice(a.Context(), sub)
 	return nil
 }
 
@@ -590,7 +601,7 @@ func (s ReviewFormService) BeginReviewForm(msg *feishu.InboundMessage, mode stri
 	if err != nil {
 		return err
 	}
-	msgID, err := s.app.ReviewOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReviewReplyInThreadEnabled(msg.ChatType))
+	msgID, err := s.app.ReviewOutbound().ReplyCard(s.app.Context(), msg.MessageID, card, s.app.ReviewReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}

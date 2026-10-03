@@ -97,6 +97,17 @@ func TestPlanModeDoesNotDependOnAppCoreOrAppWorkspace(t *testing.T) {
 	}
 }
 
+func TestReviewCommandUsesExplicitContextAndConfigurationCapabilities(t *testing.T) {
+	root := repositoryRoot(t)
+	violations, err := importsUnder(root, "internal/app/reviewcmd", []string{modulePath + "/internal/app/appcore"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("review command must not depend on appcore aggregation: %v", violations)
+	}
+}
+
 func TestModelSettingsEntrypointsDoNotMutateBusinessState(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, relative := range []string{"internal/app/bot_profile.go", "internal/app/binding_scoped_commands.go", "internal/app/binding_model_actions.go"} {
