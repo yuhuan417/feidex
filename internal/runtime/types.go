@@ -11,29 +11,6 @@ type BackendUpgradePendingPayload struct {
 	UpdateCommand  string `json:"update_command"`
 }
 
-// ClaudeHistoryRecord represents a single entry in a Claude session transcript.
-type ClaudeHistoryRecord struct {
-	EntryID    string
-	EntryType  string
-	Timestamp  string
-	PromptID   string
-	MessageID  string
-	ParentUUID string
-	StopReason string
-	Preview    string
-	Details    []string
-}
-
-// ClaudeHistoryTurnSummary summarizes a Claude turn for history display.
-type ClaudeHistoryTurnSummary struct {
-	Ordinal   int
-	TurnID    string
-	Status    string
-	Preview   string
-	Records   []ClaudeHistoryRecord
-	IsCurrent bool
-}
-
 // ClaudeSessionListMeta holds metadata for a Claude session list entry.
 type ClaudeSessionListMeta struct {
 	ID        string
@@ -53,16 +30,4 @@ type ClaudeModelOption struct {
 type ClaudePermissionModeOption struct {
 	Value string
 	Label string
-}
-
-// HistoryTurnSummary summarizes a Codex thread turn for history display.
-type HistoryTurnSummary struct {
-	Ordinal      int
-	TurnID       string
-	Status       string
-	Inputs       []string
-	Outputs      []string
-	ErrorText    string
-	IsCurrent    bool
-	InputPreview string
 }

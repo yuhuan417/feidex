@@ -2,6 +2,8 @@ package catalog
 
 import (
 	"bufio"
+	"feidex/internal/application/backendops"
+	domainhistory "feidex/internal/domain/history"
 	"feidex/internal/textutil"
 	"fmt"
 	"os"
@@ -40,7 +42,7 @@ func FindSessionFile(sessionID string) (string, *appruntime.ClaudeSessionListMet
 }
 
 // ReadHistoryTurns parses a Claude session JSONL file into turn summaries.
-func ReadHistoryTurns(filePath string, markLatestCurrent bool) ([]appruntime.ClaudeHistoryTurnSummary, error) {
+func ReadHistoryTurns(filePath string, markLatestCurrent bool) ([]backendops.HistoryTurn, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -49,8 +51,8 @@ func ReadHistoryTurns(filePath string, markLatestCurrent bool) ([]appruntime.Cla
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	turns := make([]appruntime.ClaudeHistoryTurnSummary, 0, 32)
-	var current *appruntime.ClaudeHistoryTurnSummary
+	turns := make([]backendops.HistoryTurn, 0, 32)
+	var current *backendops.HistoryTurn
 
 	flushCurrent := func() {
 		if current == nil {
@@ -74,21 +76,21 @@ func ReadHistoryTurns(filePath string, markLatestCurrent bool) ([]appruntime.Cla
 			continue
 		}
 		promptID := strings.TrimSpace(record.PromptID)
-		if promptID != "" && HistoryStartsTurn(entry) && (current == nil || current.TurnID != promptID) {
+		if promptID != "" && HistoryStartsTurn(entry) && (current == nil || current.ID != promptID) {
 			flushCurrent()
-			current = &appruntime.ClaudeHistoryTurnSummary{TurnID: promptID, Preview: record.Preview}
+			current = &backendops.HistoryTurn{ID: promptID, InputPreview: record.Preview}
 		}
 		if current == nil {
 			if promptID == "" {
 				continue
 			}
-			current = &appruntime.ClaudeHistoryTurnSummary{TurnID: promptID, Preview: record.Preview}
+			current = &backendops.HistoryTurn{ID: promptID, InputPreview: record.Preview}
 		}
-		if current.Preview == "" {
-			current.Preview = record.Preview
+		if current.InputPreview == "" {
+			current.InputPreview = record.Preview
 		}
-		if promptID != "" && current.TurnID == "" {
-			current.TurnID = promptID
+		if promptID != "" && current.ID == "" {
+			current.ID = promptID
 		}
 		current.Records = append(current.Records, record)
 		if record.EntryType == "max_turns_reached" {
@@ -136,12 +138,12 @@ func HistoryHasPromptContent(content any) bool {
 }
 
 // HistoryRecordFromEntry converts a raw JSONL entry into a structured record.
-func HistoryRecordFromEntry(entry map[string]any) (appruntime.ClaudeHistoryRecord, bool) {
+func HistoryRecordFromEntry(entry map[string]any) (domainhistory.Record, bool) {
 	if sidechain, _ := entry["isSidechain"].(bool); sidechain {
-		return appruntime.ClaudeHistoryRecord{}, false
+		return domainhistory.Record{}, false
 	}
 	recordType := strings.TrimSpace(StringValue(entry["type"]))
-	record := appruntime.ClaudeHistoryRecord{
+	record := domainhistory.Record{
 		EntryID:    strings.TrimSpace(StringValue(entry["uuid"])),
 		EntryType:  recordType,
 		Timestamp:  strings.TrimSpace(StringValue(entry["timestamp"])),
@@ -165,7 +167,7 @@ func HistoryRecordFromEntry(entry map[string]any) (appruntime.ClaudeHistoryRecor
 	case "max_turns_reached":
 		record.Details = []string{"Claude 达到最大 turn 限制"}
 	default:
-		return appruntime.ClaudeHistoryRecord{}, false
+		return domainhistory.Record{}, false
 	}
 	if len(record.Details) == 0 {
 		record.Details = []string{record.EntryType}

@@ -61,12 +61,13 @@ func (g Gateway) ReadThreadHistory(ctx context.Context, threadID string) (backen
 	if out.Thread.Name != nil {
 		name = strings.TrimSpace(*out.Thread.Name)
 	}
-	summaries := codexhistory.SummarizeThreadHistory(out.Thread.Turns, "")
-	result := backendops.ThreadHistory{ID: out.Thread.ID, Name: name, Preview: out.Thread.Preview, Cwd: out.Thread.Cwd}
-	for _, summary := range summaries {
-		result.Turns = append(result.Turns, backendops.HistoryTurn{Ordinal: summary.Ordinal, ID: summary.TurnID, Status: summary.Status, ErrorText: summary.ErrorText, InputPreview: summary.InputPreview, Inputs: append([]string(nil), summary.Inputs...), Outputs: append([]string(nil), summary.Outputs...)})
-	}
+	result := backendops.ThreadHistory{ID: out.Thread.ID, Name: name, Preview: out.Thread.Preview, Cwd: out.Thread.Cwd,
+		Turns: codexhistory.SummarizeThreadHistory(out.Thread.Turns, "")}
 	return result, err
+}
+
+func (g Gateway) ReadConversationHistory(ctx context.Context, threadID string) (backendops.ThreadHistory, error) {
+	return g.ReadThreadHistory(ctx, threadID)
 }
 
 func (g Gateway) StartCompaction(ctx context.Context, threadID string) error {

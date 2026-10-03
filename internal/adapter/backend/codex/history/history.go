@@ -5,21 +5,18 @@ import (
 	"fmt"
 	"strings"
 
+	"feidex/internal/application/backendops"
 	"feidex/internal/codexrpc"
-	appruntime "feidex/internal/runtime"
 	"feidex/internal/textutil"
 )
 
-// TurnSummary is an alias for the runtime type.
-type TurnSummary = appruntime.HistoryTurnSummary
-
 // SummarizeThreadHistory builds turn summaries from thread read turns.
-func SummarizeThreadHistory(turns []codexrpc.ThreadReadTurn, currentTurnID string) []TurnSummary {
-	summaries := make([]TurnSummary, 0, len(turns))
+func SummarizeThreadHistory(turns []codexrpc.ThreadReadTurn, currentTurnID string) []backendops.HistoryTurn {
+	summaries := make([]backendops.HistoryTurn, 0, len(turns))
 	for idx, turn := range turns {
-		summary := TurnSummary{
+		summary := backendops.HistoryTurn{
 			Ordinal:   idx + 1,
-			TurnID:    strings.TrimSpace(turn.ID),
+			ID:        strings.TrimSpace(turn.ID),
 			Status:    strings.TrimSpace(turn.Status),
 			IsCurrent: strings.TrimSpace(turn.ID) != "" && strings.TrimSpace(turn.ID) == strings.TrimSpace(currentTurnID),
 		}

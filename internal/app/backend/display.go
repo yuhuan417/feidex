@@ -1,12 +1,10 @@
 package backend
 
-import (
-	"feidex/internal/app/appcore"
-)
+import domainbackend "feidex/internal/domain/backend"
 
 // BackendDisplayName returns a human-readable name for the given backend.
 func BackendDisplayName(backend string) string {
-	backend = appcore.NormalizeRuntimeBackend(backend)
+	backend = domainbackend.NormalizeBackend(backend)
 	switch backend {
 	case "codex":
 		return "Codex"
@@ -19,5 +17,5 @@ func BackendDisplayName(backend string) string {
 
 // NormalizeRuntimeBackend normalizes a backend name to its canonical form.
 func NormalizeRuntimeBackend(value string) string {
-	return appcore.NormalizeRuntimeBackend(value)
+	return domainbackend.NormalizeBackend(value)
 }

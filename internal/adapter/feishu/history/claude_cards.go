@@ -1,85 +1,23 @@
-package claudesupport
+package history
 
 import (
-	"feidex/internal/domain/conversation"
+	appcards "feidex/internal/adapter/feishu/cards"
+	"feidex/internal/adapter/feishu/menuutil"
+	historyapp "feidex/internal/application/history"
+	"feidex/internal/feishu"
 	"feidex/internal/textutil"
 	"fmt"
 	"strconv"
 	"strings"
-
-	appcards "feidex/internal/adapter/feishu/cards"
-	"feidex/internal/codexrpc"
-	"feidex/internal/feishu"
-	appruntime "feidex/internal/runtime"
 )
 
-// ---------- callback types for history dependencies ----------
-
-// FetchClaudeSessionTurnsFunc fetches Claude session turns for a session key.
-type FetchClaudeSessionTurnsFunc func(sessionKey string) (*conversation.Session, *codexrpc.ThreadReadThread, []appruntime.ClaudeHistoryTurnSummary, error)
-
-// ThreadLabelFunc returns the display label for the active thread.
-type ThreadLabelFunc func(sess *conversation.Session) string
-
-// MenuCardBodyFunc formats a menu card body with breadcrumb navigation.
-type MenuCardBodyFunc func(action, body string) string
-
-type CardRenderer interface {
-	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
-}
-
-// ---------- HistoryService ----------
-
-// HistoryService manages Claude history operations with callbacks for
-// app/ dependencies.
-type HistoryService struct {
-	FetchClaudeSessionTurns FetchClaudeSessionTurnsFunc
-	ThreadLabel             ThreadLabelFunc
-	MenuCardBody            MenuCardBodyFunc
-	Renderer                CardRenderer
-	PageSize                int
-}
-
-// HistoryTurnIndexForOrdinal returns the turn index for the given ordinal.
-func (s *HistoryService) HistoryTurnIndexForOrdinal(sessionKey string, ordinal int) (int, error) {
-	_, _, turns, err := s.FetchClaudeSessionTurns(sessionKey)
-	if err != nil {
-		return 0, err
-	}
-	for idx, turn := range turns {
-		if turn.Ordinal == ordinal {
-			return idx, nil
-		}
-	}
-	return 0, fmt.Errorf("Turn #%d 不存在", ordinal)
-}
-
-// RenderHistoryCard renders the history list card for the given session and page.
-func (s *HistoryService) RenderHistoryCard(sessionKey string, page int) (map[string]any, error) {
-	sess, thread, turns, err := s.FetchClaudeSessionTurns(sessionKey)
-	if err != nil {
-		return nil, err
-	}
-	if page < 0 {
-		page = 0
-	}
+func renderClaudePage(sessionKey string, view historyapp.Page) map[string]any {
+	turns, page, start, end := view.Turns, view.Number, view.Start, view.End
 	total := len(turns)
-	start := page * s.PageSize
-	if start >= total && total > 0 {
-		page = (total - 1) / s.PageSize
-		start = page * s.PageSize
-	}
-	end := start + s.PageSize
-	if end > total {
-		end = total
-	}
-	label := s.ThreadLabel(sess)
-	if label == "-" {
-		label = textutil.FirstNonEmpty(derefString(thread.Name), thread.Preview, thread.ID)
-	}
+	label := view.Label
 	bodyLines := []string{
 		"当前 session: " + label,
-		"session: `" + thread.ID + "`",
+		"session: `" + view.ID + "`",
 		fmt.Sprintf("turn 数: `%d`", total),
 	}
 	if total == 0 {
@@ -100,7 +38,7 @@ func (s *HistoryService) RenderHistoryCard(sessionKey string, page int) (map[str
 	initialOption := ""
 	for idx := start; idx < end; idx++ {
 		turn := turns[idx]
-		turnLabel := fmt.Sprintf("Turn #%d | %s | %s", turn.Ordinal, textutil.FirstNonEmpty(turn.Status, "-"), textutil.FirstNonEmpty(turn.Preview, "-"))
+		turnLabel := fmt.Sprintf("Turn #%d | %s | %s", turn.Ordinal, textutil.FirstNonEmpty(turn.Status, "-"), textutil.FirstNonEmpty(turn.InputPreview, "-"))
 		if turn.IsCurrent {
 			turnLabel = "当前 · " + turnLabel
 			initialOption = strconv.Itoa(idx)
@@ -141,7 +79,7 @@ func (s *HistoryService) RenderHistoryCard(sessionKey string, page int) (map[str
 		},
 	})
 	card := appcards.NewMarkdownBodyCard("历史记录", "blue")
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.MenuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
+	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuutil.MenuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
 	if len(selectOptions) > 0 {
 		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
 			"history_detail_select",
@@ -152,32 +90,17 @@ func (s *HistoryService) RenderHistoryCard(sessionKey string, page int) (map[str
 		))
 	}
 	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildMarkdownBodyCardActionElement(buttons))
-	return card, nil
+	return card
 }
 
-// RenderHistoryDetailCard renders the history detail card for a specific turn
-// using the provided SimpleStatusCard callback for card construction.
-func (s *HistoryService) RenderHistoryDetailCard(sessionKey string, index int, simpleStatusCard SimpleStatusCardFunc) (map[string]any, error) {
-	if simpleStatusCard == nil && s.Renderer != nil {
-		simpleStatusCard = s.Renderer.SimpleStatusCard
-	}
-	sess, thread, turns, err := s.FetchClaudeSessionTurns(sessionKey)
-	if err != nil {
-		return nil, err
-	}
-	if index < 0 || index >= len(turns) {
-		return nil, fmt.Errorf("history turn index out of range")
-	}
+func renderClaudeDetail(sessionKey string, view historyapp.Detail) map[string]any {
+	turns, index, label := view.Turns, view.Index, view.Label
 	turn := turns[index]
-	label := s.ThreadLabel(sess)
-	if label == "-" {
-		label = textutil.FirstNonEmpty(derefString(thread.Name), thread.Preview, thread.ID)
-	}
 	bodyLines := []string{
 		"当前 session: " + label,
-		"session: `" + thread.ID + "`",
+		"session: `" + view.ID + "`",
 		fmt.Sprintf("Turn #%d", turn.Ordinal),
-		"turn_id: `" + textutil.FirstNonEmpty(turn.TurnID, fmt.Sprintf("claude-turn-%d", turn.Ordinal)) + "`",
+		"turn_id: `" + textutil.FirstNonEmpty(turn.ID, fmt.Sprintf("claude-turn-%d", turn.Ordinal)) + "`",
 		"状态: `" + textutil.FirstNonEmpty(turn.Status, "-") + "`",
 		fmt.Sprintf("记录数: `%d`", len(turn.Records)),
 		"",
@@ -239,16 +162,8 @@ func (s *HistoryService) RenderHistoryDetailCard(sessionKey string, index int, s
 		Value: map[string]any{
 			"action":      "history.page",
 			"session_key": sessionKey,
-			"page":        index / s.PageSize,
+			"page":        index / HistoryPageSize,
 		},
 	})
-	return simpleStatusCard("Turn 详情", "blue", s.MenuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons), nil
-}
-
-// derefString dereferences a string pointer, returning "" if nil.
-func derefString(v *string) string {
-	if v == nil {
-		return ""
-	}
-	return *v
+	return feishu.SimpleStatusCard("Turn 详情", "blue", menuutil.MenuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons)
 }

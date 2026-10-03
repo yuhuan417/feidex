@@ -38,7 +38,7 @@ func TestHistoryHelpersSummarizeTurnsAndInputs(t *testing.T) {
 	}
 
 	summaries := SummarizeThreadHistory(turns, "turn-2")
-	if len(summaries) != 2 || !summaries[0].IsCurrent || summaries[0].TurnID != "turn-2" {
+	if len(summaries) != 2 || !summaries[0].IsCurrent || summaries[0].ID != "turn-2" {
 		t.Fatalf("SummarizeThreadHistory() = %+v, want reversed with current turn first", summaries)
 	}
 	if !strings.Contains(summaries[1].InputPreview, "hello") || !strings.Contains(strings.Join(summaries[1].Inputs, "\n"), "[localImage] /tmp/pic.png") {

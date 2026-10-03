@@ -4,6 +4,7 @@ package backendops
 import (
 	"encoding/json"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/history"
 	"feidex/internal/domain/review"
 	"feidex/internal/domain/submission"
 )
@@ -24,6 +25,8 @@ type HistoryTurn struct {
 	Ordinal                             int
 	ID, Status, ErrorText, InputPreview string
 	Inputs, Outputs                     []string
+	Records                             []history.Record
+	IsCurrent                           bool
 }
 
 type ThreadHistory struct {

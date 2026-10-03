@@ -4,7 +4,7 @@ import (
 	"strings"
 	"sync"
 
-	"feidex/internal/app/appcore"
+	domainbackend "feidex/internal/domain/backend"
 )
 
 // RuntimeStateService is one frontend's synchronized switch state.
@@ -21,7 +21,7 @@ func (s *RuntimeStateService) BeginBackendSwitchState(target string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.switching = true
-	s.target = appcore.NormalizeRuntimeBackend(target)
+	s.target = domainbackend.NormalizeBackend(target)
 }
 func (s *RuntimeStateService) FinishBackendSwitchState() {
 	s.mu.Lock()

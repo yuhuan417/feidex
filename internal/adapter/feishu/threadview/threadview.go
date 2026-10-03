@@ -3,6 +3,7 @@
 package threadview
 
 import (
+	"feidex/internal/application/presentation"
 	"feidex/internal/textutil"
 	"path/filepath"
 	"strings"
@@ -25,16 +26,7 @@ func RenderThreadSettingValue(override, fallback string) string {
 }
 
 func CurrentThreadLabel(activeThreadName, activeThreadPreview, activeThreadID string) string {
-	if strings.TrimSpace(activeThreadName) != "" {
-		return truncate(activeThreadName, 32)
-	}
-	if strings.TrimSpace(activeThreadPreview) != "" {
-		return truncate(activeThreadPreview, 32)
-	}
-	if strings.TrimSpace(activeThreadID) != "" {
-		return truncate(activeThreadID, 32)
-	}
-	return "-"
+	return presentation.CurrentThreadLabel(activeThreadName, activeThreadPreview, activeThreadID)
 }
 
 func RenderThreadButtonLabel(name, preview, id string) string {

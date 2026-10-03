@@ -595,3 +595,4 @@ Codex server request
 - workspace config、management 和 presentation 的构造实例已归入 frontend `appComposition`；backend/config 失效时清理 workspace command capability cache，presentation 查询通过共享 scope 读取最新配置。
 - workspace presentation 现在在 frontend composition 初始化阶段一次性构造；配置或 backend 变化只影响其注入的查询快照，不再重建 Feishu renderer。
 - workspace selection 的生产调用已直接依赖 `application/workspace.SelectionService`；已删除 `internal/app/appcore/workspace_selection.go` 及其宿主 wrapper，app/workspacecmd 直接声明 selection capability。
+- history 查询已迁入 `application/history`：分页、详情、ordinal 解析、frontend scope 校验和当前 turn 标记由 use case 负责；Codex/Claude transcript reader 在 composition root 组装。Feishu history adapter 只负责命令路由和纯卡片渲染，移除了递归创建 history service 的回调环。查询结果会复制嵌套切片，避免 reader 缓存被当前 turn 标记或并发调用修改；该迁移只读取 thread/session，不改变 SM-03～SM-08 的生命周期边界。
