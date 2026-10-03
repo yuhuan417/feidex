@@ -14,7 +14,7 @@ import (
 	"feidex/internal/state"
 )
 
-type FrontendScope = app.FrontendScope
+type FrontendScope = runtime.FrontendScope
 
 type Factory[T runtime.ManagedFrontend] func(FrontendScope) (T, error)
 type Service[T runtime.ManagedFrontend] struct {
@@ -23,7 +23,7 @@ type Service[T runtime.ManagedFrontend] struct {
 }
 
 func NewFrontend(scope FrontendScope) (*app.App, error) {
-	return app.NewFeishuFrontend(scope)
+	return app.NewFeishuEntrypoint(scope)
 }
 
 func scopes(cfg *config.Config, cfgPath string) ([]FrontendScope, error) {

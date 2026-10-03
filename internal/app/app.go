@@ -62,19 +62,6 @@ type App struct {
 	runtimeOwnerMu         sync.Mutex
 }
 
-// FrontendScope is supplied by internal/composition. App consumes the
-// already-constructed frontend resources and only installs Feishu handlers.
-type FrontendScope struct {
-	Config          *config.Config
-	ConfigPath      string
-	Store           *state.Store
-	ConfigMutex     *sync.RWMutex
-	Frontend        config.ResolvedFrontend
-	FeishuTransport any
-	Registry        *frontendruntime.Registry
-	RuntimeOwner    *frontendruntime.FrontendOwner
-}
-
 func (a *App) configMutex() *sync.RWMutex {
 	if a == nil {
 		return nil
@@ -100,7 +87,7 @@ type appTrackers struct {
 	goals               *goalcmd.Tracker
 }
 
-func NewFeishuFrontend(scope FrontendScope) (*App, error) {
+func NewFeishuEntrypoint(scope frontendruntime.FrontendScope) (*App, error) {
 	cfg, cfgPath, store, frontend := scope.Config, scope.ConfigPath, scope.Store, scope.Frontend
 	if cfg == nil {
 		return nil, fmt.Errorf("nil config")

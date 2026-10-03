@@ -18,11 +18,11 @@ func New(cfg *config.Config, path string) (*App, error) {
 	return svc[0], nil
 }
 
-func newTestFrontend(scope FrontendScope) (*App, error) {
+func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 	scope.FeishuTransport = appfeishuwrap.WrapFeishuClient(newFeishuClient(scope.Frontend.Feishu))
 	scope.Registry = frontendruntime.NewRegistry(scope.FeishuTransport)
 	scope.RuntimeOwner = frontendruntime.NewFrontendOwner()
-	return NewFeishuFrontend(scope)
+	return NewFeishuEntrypoint(scope)
 }
 
 func newTestService(cfg *config.Config, path string) ([]*App, error) {
@@ -37,7 +37,7 @@ func newTestService(cfg *config.Config, path string) ([]*App, error) {
 	mu := &sync.RWMutex{}
 	apps := make([]*App, 0, len(frontends))
 	for _, frontend := range frontends {
-		a, err := newTestFrontend(FrontendScope{Config: cfg, ConfigPath: path, Store: store, ConfigMutex: mu, Frontend: frontend})
+		a, err := newTestFrontend(frontendruntime.FrontendScope{Config: cfg, ConfigPath: path, Store: store, ConfigMutex: mu, Frontend: frontend})
 		if err != nil {
 			return nil, err
 		}
