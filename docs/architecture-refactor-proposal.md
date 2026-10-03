@@ -574,3 +574,5 @@ Codex server request
 - application `CardAction` 不再暴露 Feishu SDK 的 `map[string]any`；新增 JSON-backed `application.Values`，在 Feishu adapter 边界完成 map 转换，并提供 string、bool、int、string-list 的 typed accessor。原始 Feishu callback 结构留在 adapter 包，避免 SDK 形状进入 application。
 - backend interaction event 增加 `Approval`、`UserInput`、`ElicitationURL`、`ElicitationForm` 和 `Rejected` typed 字段；approval renderer、backend event sink 和协议测试已改用这些字段。
 - 新增 Values round-trip 与 architecture guard，防止 application CardAction 回退到 SDK map；保留 session key normalization、表单多值和回调快速 ack 行为。
+- backend reply effect 与 interaction approval port 改用 `json.RawMessage`；Codex adapter 在协议边界解码并保留字符串数组语义，application 不再接受任意 Go reply value。
+- `presentation.Action` 的 action value 改用 `json.RawMessage`，Feishu map 只在 outbound adapter 还原；goal command 的消息发送统一使用已注入的 semantic outbound capability。

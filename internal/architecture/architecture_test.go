@@ -341,6 +341,21 @@ func TestApplicationBackendRepliesUseOpaqueJSON(t *testing.T) {
 	}
 }
 
+func TestPresentationActionsDoNotExposePlatformMaps(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal", "application", "presentation", "card.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	if strings.Contains(source, "Value       map[string]any") {
+		t.Fatal("presentation Action must not expose a platform map")
+	}
+	if !strings.Contains(source, "Value json.RawMessage") {
+		t.Fatal("presentation Action must use opaque JSON")
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	root, err := os.Getwd()
