@@ -609,4 +609,4 @@ Codex server request
 
 - 删除 `internal/app/appcore` 整个兼容桥接包。配置、backend、session identity 和 lifecycle helper 由 Feishu entrypoint 保留为窄的 frontend-scoped helper；升级本地 Binary 流程直接使用自身 `Context()`，群公告和 session migration 直接使用 domain identity。
 - `/workspace clone`、`/workspace new worktree` 参数解析以及目录选择后的 workspace ID 推导迁入 `internal/application/workspace`；command matcher、path picker、plan mode 和 upgrade local picker 不再依赖旧 `internal/app/workspace` 包。
-- 旧 workspace 包当前仅由 `workspacecmd` 的 clone/worktree orchestration 兼容别名使用，后续拆分 Git process supervision、pending payload decoding 和 workspace presentation 时继续收敛；本次未改变工作区创建、clone、worktree 或路径选择行为。
+- 旧 `internal/app/workspace` 包已删除。clone/worktree 的 Git process supervision 已迁入 `internal/runtime/workspace`，workspace payload、表单合并、命名和 takeover policy 已迁入 `internal/application/workspace`；pending payload decoding 仅保留在 `workspacecmd` 的 state adapter 中，未改变工作区创建、clone、worktree 或路径选择行为。

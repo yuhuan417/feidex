@@ -11,7 +11,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	domain "feidex/internal/domain/workspace"
 )
+
+type CloneProgressSnapshot = domain.CloneProgressSnapshot
 
 const CloneProgressKeepLines = 6
 const ClonePatchInterval = 1200 * time.Millisecond

@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const CommandUsage = "/workspace | /workspace list | /workspace new | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace sandbox [MODE] | /workspace policy [POLICY]"
+
 // ParseCloneArgs parses /workspace clone arguments into repository URL,
 // optional workspace ID, and optional parent directory.
 func ParseCloneArgs(args []string) (repoURL, workspaceID, parentDir string, err error) {

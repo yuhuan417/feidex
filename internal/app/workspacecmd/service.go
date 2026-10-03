@@ -5,18 +5,19 @@ package workspacecmd
 import (
 	"context"
 	"encoding/json"
-	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	frontendclients "feidex/internal/runtime"
+	"sort"
 	"strings"
 	"sync"
 
 	appbackend "feidex/internal/app/backend"
-	appworkspace "feidex/internal/app/workspace"
+	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	runtimeworkspace "feidex/internal/runtime/workspace"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -35,9 +36,9 @@ type (
 	ClonePlan                   = appworkspace.ClonePlan
 	CloneWorktreePlan           = appworkspace.CloneWorktreePlan
 	WorktreePlan                = appworkspace.WorktreePlan
-	CloneProgressReporter       = appworkspace.CloneProgressReporter
-	CloneOperation              = appworkspace.CloneOperation
-	CloneTracker                = appworkspace.CloneTracker
+	CloneProgressReporter       = runtimeworkspace.CloneProgressReporter
+	CloneOperation              = runtimeworkspace.CloneOperation
+	CloneTracker                = runtimeworkspace.CloneTracker
 	ThreadBinding               = appworkspace.ThreadBinding
 	PathPickerPayload           = appworkspace.PathPickerPayload
 )
@@ -45,8 +46,8 @@ type (
 // Constants from the workspace sub-package.
 const (
 	CommandUsage            = appworkspace.CommandUsage
-	CloneProgressKeepLines  = appworkspace.CloneProgressKeepLines
-	ClonePatchInterval      = appworkspace.ClonePatchInterval
+	CloneProgressKeepLines  = runtimeworkspace.CloneProgressKeepLines
+	ClonePatchInterval      = runtimeworkspace.ClonePatchInterval
 	PathPickerKind          = appworkspace.PathPickerKind
 	PathPickerModeDirectory = appworkspace.PathPickerModeDirectory
 	PathPickerModeFile      = appworkspace.PathPickerModeFile
@@ -60,11 +61,8 @@ var (
 	SandboxOptions               = appworkspace.SandboxOptions
 	ApprovalPolicyOptions        = appworkspace.ApprovalPolicyOptions
 	MultiAgentModeOptions        = appworkspace.MultiAgentModeOptions
-	ParseCloneArgs               = workspace.ParseCloneArgs
-	ParseWorktreeArgs            = workspace.ParseWorktreeArgs
-	NewPayloadFromPending        = appworkspace.NewPayloadFromPending
-	ClonePayloadFromPending      = appworkspace.ClonePayloadFromPending
-	WorktreePayloadFromPending   = appworkspace.WorktreePayloadFromPending
+	ParseCloneArgs               = appworkspace.ParseCloneArgs
+	ParseWorktreeArgs            = appworkspace.ParseWorktreeArgs
 	MergeNewFormValues           = appworkspace.MergeNewFormValues
 	MergeCloneFormValues         = appworkspace.MergeCloneFormValues
 	MergeWorktreeFormValues      = appworkspace.MergeWorktreeFormValues
@@ -75,17 +73,44 @@ var (
 	NewExistingWorkspaceNotice   = appworkspace.NewExistingWorkspaceNotice
 	NewTakeoverNotice            = appworkspace.NewTakeoverNotice
 	SessionReferencesWorkspace   = appworkspace.SessionReferencesWorkspace
-	SortThreadsByUpdated         = appworkspace.SortThreadsByUpdated
 	CloneRepoName                = appworkspace.CloneRepoName
 	CloneDefaultID               = appworkspace.CloneDefaultID
 	SuggestedWorktreeID          = appworkspace.SuggestedWorktreeID
 	SuggestedWorktreeBranch      = appworkspace.SuggestedWorktreeBranch
-	GitClone                     = appworkspace.GitClone
-	GitWorktreeAdd               = appworkspace.GitWorktreeAdd
-	NewCloneTracker              = appworkspace.NewCloneTracker
-	NewCloneOperation            = appworkspace.NewCloneOperation
-	ReadCloneOutput              = appworkspace.ReadCloneOutput
+	GitClone                     = runtimeworkspace.GitClone
+	GitWorktreeAdd               = runtimeworkspace.GitWorktreeAdd
+	NewCloneTracker              = runtimeworkspace.NewCloneTracker
+	NewCloneOperation            = runtimeworkspace.NewCloneOperation
+	ReadCloneOutput              = runtimeworkspace.ReadCloneOutput
 )
+
+func NewPayloadFromPending(pending *state.PendingRequest) NewPayload {
+	var payload NewPayload
+	if pending != nil && strings.TrimSpace(pending.PayloadJSON) != "" {
+		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
+	}
+	return payload
+}
+
+func ClonePayloadFromPending(pending *state.PendingRequest) ClonePayload {
+	var payload ClonePayload
+	if pending != nil && strings.TrimSpace(pending.PayloadJSON) != "" {
+		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
+	}
+	return payload
+}
+
+func WorktreePayloadFromPending(pending *state.PendingRequest) WorktreePayload {
+	var payload WorktreePayload
+	if pending != nil && strings.TrimSpace(pending.PayloadJSON) != "" {
+		_ = json.Unmarshal([]byte(pending.PayloadJSON), &payload)
+	}
+	return payload
+}
+
+func SortThreadsByUpdated(items []codexrpc.ThreadListEntry) {
+	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt > items[j].UpdatedAt })
+}
 
 // ---------------------------------------------------------------------------
 // Dependencies is the workspace command capability set. It is assembled at the
@@ -101,7 +126,7 @@ type Dependencies struct {
 		FrontendID() string
 		FrontendConfigIndex() int
 		Store() *state.Store
-		WorkspaceSelection() workspace.SelectionService
+		WorkspaceSelection() appworkspace.SelectionService
 		ConfigPath() string
 	}
 	Outbound         Outbound
@@ -913,9 +938,9 @@ func (s ManagementService) RenderMenuCard(sessionKey string) map[string]any {
 	return s.deps.Render.RenderMenuCard(sessionKey)
 }
 
-func (a Dependencies) WorkspaceSelection() workspace.SelectionService {
+func (a Dependencies) WorkspaceSelection() appworkspace.SelectionService {
 	if a.ConfigProvider == nil {
-		return workspace.SelectionService{}
+		return appworkspace.SelectionService{}
 	}
 	return a.ConfigProvider.WorkspaceSelection()
 }
