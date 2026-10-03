@@ -28,6 +28,50 @@ func TestModelSettingsRendererDoesNotReadConfigurationOrSessionState(t *testing.
 	}
 }
 
+func TestHistoryAdapterAndUseCaseBoundaries(t *testing.T) {
+	root := repositoryRoot(t)
+	violations, err := importsUnder(root, "internal/adapter/feishu/history", []string{
+		modulePath + "/internal/adapter/backend",
+		modulePath + "/internal/codexrpc",
+		modulePath + "/internal/runtime",
+		modulePath + "/internal/state",
+		modulePath + "/internal/app",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("history Feishu adapter must remain protocol and storage independent: %v", violations)
+	}
+	violations, err = importsUnder(root, "internal/application/history", []string{
+		modulePath + "/internal/adapter",
+		modulePath + "/internal/codexrpc",
+		modulePath + "/internal/runtime",
+		modulePath + "/internal/state",
+		modulePath + "/internal/app",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("history use case must consume semantic ports: %v", violations)
+	}
+}
+
+func TestHistoryBindingsDoNotReintroduceRecursiveRenderCallbacks(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "history_bindings.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, forbidden := range []string{"RenderHistory", "RenderDetail", "HistoryIndex", "return newHistoryService(app)"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("history composition still contains recursive callback %q", forbidden)
+		}
+	}
+}
+
 func TestModelSettingsEntrypointsDoNotMutateBusinessState(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, relative := range []string{"internal/app/bot_profile.go", "internal/app/binding_scoped_commands.go", "internal/app/binding_model_actions.go"} {
