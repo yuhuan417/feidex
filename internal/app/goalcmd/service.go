@@ -363,7 +363,7 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 			return s.replyGoalCard(msg, sessionKey, threadID, nil)
 		}
 		card := s.renderGoalEditCard(sessionKey, threadID, *goal)
-		_, err = a.Messaging().ReplyCard(appcore.Context(s.app), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
+		_, err = a.Outbound.ReplyCard(appcore.Context(s.app), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 		s.recordContext(sessionKey, threadID, msg)
 		return err
 	default:
@@ -377,7 +377,7 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 		}
 		if existing != nil && shouldConfirmBeforeReplacingGoal(*existing) {
 			card := s.renderGoalReplaceConfirmCard(sessionKey, threadID, *existing, objective)
-			_, err := a.Messaging().ReplyCard(appcore.Context(s.app), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
+			_, err := a.Outbound.ReplyCard(appcore.Context(s.app), msg.MessageID, card, a.ReplyInThreadEnabled(msg.ChatType))
 			s.recordContext(sessionKey, threadID, msg)
 			return err
 		}
@@ -394,11 +394,11 @@ func (s Service) CommandGoal(msg *feishu.InboundMessage, raw string, args []stri
 }
 
 func (s Service) replyGoalSetText(msg *feishu.InboundMessage, sessionKey, threadID string) error {
-	if s.app.StateProvider == nil || s.app.Messaging() == nil || msg == nil {
+	if s.app.StateProvider == nil || s.app.Outbound == nil || msg == nil {
 		return nil
 	}
 	s.recordContext(sessionKey, threadID, msg)
-	return s.app.Messaging().ReplyText(appcore.Context(s.app), msg.MessageID, "已设置 goal。", s.app.ReplyInThreadEnabled(msg.ChatType))
+	return s.app.Outbound.ReplyText(appcore.Context(s.app), msg.MessageID, "已设置 goal。", s.app.ReplyInThreadEnabled(msg.ChatType))
 }
 
 func goalCommandTail(raw string, args []string) string {
@@ -540,7 +540,7 @@ func goalFriendlyError(action string, err error) string {
 
 func (s Service) replyGoalCard(msg *feishu.InboundMessage, sessionKey, threadID string, goal *conversation.ThreadGoal) error {
 	card := s.renderGoalCard(sessionKey, threadID, goal)
-	_, err := s.app.Messaging().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.Outbound.ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
 }
@@ -555,7 +555,7 @@ func (s Service) replyGoalClearedCard(msg *feishu.InboundMessage, sessionKey, th
 		title = "Goal cleared"
 	}
 	card := s.app.Renderer().SimpleStatusCard(title, color, s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalBackButtons(sessionKey))
-	_, err := s.app.Messaging().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.Outbound.ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
 }
@@ -1130,7 +1130,7 @@ func (s Service) BindGoalContinuationTurn(threadID, turnID string) bool {
 }
 
 func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string, sess *conversation.Session, goal conversation.ThreadGoal) (Anchor, bool) {
-	if s.app.StateProvider == nil || s.app.Messaging() == nil || sess == nil {
+	if s.app.StateProvider == nil || s.app.Outbound == nil || sess == nil {
 		return Anchor{}, false
 	}
 	anchor := Anchor{
@@ -1150,7 +1150,7 @@ func (s Service) sendGoalContinuationAnchor(sessionKey, threadID, turnID string,
 	}
 	ordinal := s.app.Tracker().NextContinuationOrdinal(threadID)
 	card := s.renderGoalContinuationCard(sessionKey, threadID, turnID, goal, ordinal)
-	messageID, err := s.app.Messaging().SendCard(appcore.Context(s.app), anchor.ChatID, card)
+	messageID, err := s.app.Outbound.SendCard(appcore.Context(s.app), anchor.ChatID, card)
 	if err != nil {
 		return Anchor{}, false
 	}
