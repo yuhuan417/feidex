@@ -553,9 +553,9 @@ Codex server request
 - auto-retry and service-tier adapters now use semantic outbound ports; their app composition bindings route replies, sends, and patches through effect helpers.
 - MCP local file/image/video tools now depend on an explicit attachment sender capability instead of a broad Feishu client interface.
 - MCP service ownership and backend switch runtime state now live in `appComposition`; `App` keeps only frontend entrypoint state and lifecycle references for these concerns.
-- `internal/application` 的 `CardAction`、backend event 和 interaction payload 仍保留部分 `map[string]any`/`any`，完整的 semantic presentation model 尚未覆盖所有菜单、表单和协议 item。
+- `internal/application` 的 `backendops.Response.Payload` 和 interaction reply port 仍承载 backend-specific opaque JSON；它们属于协议回复边界，尚未进一步收敛成按 request kind 区分的 domain reply value。
 - workspace 的创建、默认值更新、删除和群绑定创建已迁移到 workspace application configuration use case 与 config storage adapter；backend selection、Quiet Mode、auto-retry、debug level 和 model config 的配置写入已通过配置 application ports/adapter 收口；workspace 查询展示、部分 backend maintenance、history/recovery 数据组装、model menu policy 和 runtime 配置读路径仍保留在 transitional app。
-- architecture guard 已能阻止跨层 import、具体 `App` 能力字段和旧宽接口回归，但还没有对所有 service callback 环和同步 outbound 做完整静态约束。
+- architecture guard 已能阻止跨层 import、具体 `App` 能力字段、SDK callback map 和 untyped backend event payload 回归，但还没有对所有 service callback 环和同步 outbound 做完整静态约束。
 
 ### 2026-10-03 本轮边界收敛
 
