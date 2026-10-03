@@ -212,7 +212,7 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 	if err != nil {
 		return err
 	}
-	if err := appcore.SetWorkspaceSelection(s.Deps, chatType, chatID, userID, id); err != nil {
+	if err := s.Deps.WorkspaceSelection().Select(chatType, chatID, userID, id); err != nil {
 		return err
 	}
 	if err := applyWorkspaceSwitch(s, sessionKey, sess, id); err != nil {

@@ -8,21 +8,26 @@ import (
 	"feidex/internal/textutil"
 	"strings"
 
-	"feidex/internal/app/appcore"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 )
 
 func makeWorkspaceSelectionKey(a *App, chatType, chatID, userID string) string {
-	return appcore.MakeWorkspaceSelectionKey(a, chatType, chatID, userID)
+	return workspace.SelectionKey(identity.FrontendID(a.FrontendID()), chatType, chatID, userID)
 }
 
 func resolveWorkspaceSelectionForMessage(a *App, msg *feishu.InboundMessage, fallback *conversation.Session) string {
-	return appcore.ResolveWorkspaceSelectionForMessage(a, msg, fallback)
+	if msg == nil {
+		return a.WorkspaceSelection().Resolve("", "", "", fallback)
+	}
+	return a.WorkspaceSelection().Resolve(msg.ChatType, msg.ChatID, msg.UserID, fallback)
 }
 
 func setWorkspaceSelectionForMessage(a *App, msg *feishu.InboundMessage, workspaceID string) error {
-	return appcore.SetWorkspaceSelectionForMessage(a, msg, workspaceID)
+	if msg == nil {
+		return nil
+	}
+	return a.WorkspaceSelection().Select(msg.ChatType, msg.ChatID, msg.UserID, workspaceID)
 }
 
 func resolveThreadWorkspaceID(sess *conversation.Session, fallback string) string {

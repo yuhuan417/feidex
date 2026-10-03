@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"feidex/internal/app/appcore"
+	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -24,20 +24,33 @@ func sameWorkspaceCWD(a, b string) bool {
 	return filepath.Clean(a) == filepath.Clean(b)
 }
 
-func selectedWorkspaceIDForMessage(app appcore.WorkspaceSelectionSource, msg *feishu.InboundMessage, sess *conversation.Session) string {
-	return appcore.ResolveWorkspaceSelectionForMessage(app, msg, sess)
+type workspaceSelectionSource interface {
+	WorkspaceSelection() workspaceapp.SelectionService
 }
 
-func selectedWorkspaceIDForSession(app appcore.WorkspaceSelectionSource, sess *conversation.Session) string {
-	return appcore.ResolveWorkspaceSelectionForSession(app, sess)
+func selectedWorkspaceIDForMessage(app workspaceSelectionSource, msg *feishu.InboundMessage, sess *conversation.Session) string {
+	if msg == nil {
+		return app.WorkspaceSelection().Resolve("", "", "", sess)
+	}
+	return app.WorkspaceSelection().Resolve(msg.ChatType, msg.ChatID, msg.UserID, sess)
 }
 
-func setSelectedWorkspaceForMessage(app appcore.WorkspaceSelectionSource, msg *feishu.InboundMessage, workspaceID string) error {
-	return appcore.SetWorkspaceSelectionForMessage(app, msg, workspaceID)
+func selectedWorkspaceIDForSession(app workspaceSelectionSource, sess *conversation.Session) string {
+	return app.WorkspaceSelection().ResolveSession(sess)
 }
 
-func setSelectedWorkspaceForSession(app appcore.WorkspaceSelectionSource, sess *conversation.Session, workspaceID string) error {
-	return appcore.SetWorkspaceSelectionForSession(app, sess, workspaceID)
+func setSelectedWorkspaceForMessage(app workspaceSelectionSource, msg *feishu.InboundMessage, workspaceID string) error {
+	if msg == nil {
+		return nil
+	}
+	return app.WorkspaceSelection().Select(msg.ChatType, msg.ChatID, msg.UserID, workspaceID)
+}
+
+func setSelectedWorkspaceForSession(app workspaceSelectionSource, sess *conversation.Session, workspaceID string) error {
+	if sess == nil {
+		return nil
+	}
+	return app.WorkspaceSelection().Select(sess.ChatType, sess.ChatID, sess.OwnerUserID, workspaceID)
 }
 
 type workspaceSwitchSessionService interface {
