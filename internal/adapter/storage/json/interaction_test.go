@@ -20,7 +20,7 @@ func TestInteractionRepositoryResolutionIsAtomicAndFrontendScoped(t *testing.T) 
 			t.Fatal(err)
 		}
 	}
-	svc := applicationinteraction.Service{Repository: InteractionRepository{Store: store, FrontendID: "a"}}
+	svc := applicationinteraction.Service{Deps: applicationinteraction.Dependencies{Repository: InteractionRepository{Store: store, FrontendID: "a"}}}
 	if _, err := svc.ReplyAccepted("r1"); err != nil {
 		t.Fatal(err)
 	}

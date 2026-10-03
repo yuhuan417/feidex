@@ -41,7 +41,7 @@ func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pe
 }
 
 func asyncInputService(a *App) asyncinput.Service {
-	return asyncinput.Service{Repository: a.State(), Backend: configuredBackend(a)}
+	return asyncinput.Service{Deps: asyncinput.Dependencies{Repository: a.State(), Backend: configuredBackend(a)}}
 }
 func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {
 	warning := func(text string) (*callback.CardActionTriggerResponse, error) {

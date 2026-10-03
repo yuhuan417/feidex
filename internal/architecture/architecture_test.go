@@ -263,6 +263,8 @@ func TestApplicationLifecycleServicesUseDependencyCarriers(t *testing.T) {
 	}{
 		{"internal/application/compaction/service.go", "type Service struct{ Deps Dependencies }"},
 		{"internal/application/conversation/service.go", "type Service struct{ Deps Dependencies }"},
+		{"internal/application/interaction/service.go", "type Service struct{ Deps Dependencies }"},
+		{"internal/application/asyncinput/service.go", "type Service struct{ Deps Dependencies }"},
 	}
 	for _, check := range checks {
 		data, err := os.ReadFile(filepath.Join(root, check.path))

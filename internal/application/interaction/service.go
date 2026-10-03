@@ -10,12 +10,11 @@ type Repository interface {
 	Requests() []interaction.Request
 }
 
-type Service struct {
-	Repository Repository
-}
+type Dependencies struct{ Repository Repository }
+type Service struct{ Deps Dependencies }
 
 func (s Service) ReplyAccepted(id string) (*interaction.Request, error) {
-	return s.Repository.UpdateRequest(id, interaction.Request.ReplyAccepted)
+	return s.Deps.Repository.UpdateRequest(id, interaction.Request.ReplyAccepted)
 }
 
 // Resolve handles the authoritative server resolution, or the equivalent
@@ -23,7 +22,7 @@ func (s Service) ReplyAccepted(id string) (*interaction.Request, error) {
 // A duplicate resolution returns nil so callers do not resume twice.
 func (s Service) Resolve(id string) (*interaction.Request, error) {
 	changed := false
-	request, err := s.Repository.UpdateRequest(id, func(r interaction.Request) interaction.Request {
+	request, err := s.Deps.Repository.UpdateRequest(id, func(r interaction.Request) interaction.Request {
 		next, didChange := r.Resolved()
 		changed = didChange
 		return next
@@ -35,7 +34,7 @@ func (s Service) Resolve(id string) (*interaction.Request, error) {
 }
 
 func (s Service) HasOpenRequest(threadID, turnID, excludeID string) bool {
-	for _, request := range s.Repository.Requests() {
+	for _, request := range s.Deps.Repository.Requests() {
 		if request.BlocksResume(threadID, turnID, excludeID) {
 			return true
 		}

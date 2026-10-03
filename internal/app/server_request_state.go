@@ -18,9 +18,9 @@ func isPendingRequestOpen(req *state.PendingRequest) bool {
 
 func (s runtimeStateService) interactionService() applicationinteraction.Service {
 	store := s.app.State()
-	return applicationinteraction.Service{Repository: storagejson.InteractionRepository{
+	return applicationinteraction.Service{Deps: applicationinteraction.Dependencies{Repository: storagejson.InteractionRepository{
 		Store: store.StateStore(), FrontendID: store.FrontendID(), LegacyFallback: store.LegacyFallbackEnabled(),
-	}}
+	}}}
 }
 
 func (s runtimeStateService) resolveServerPendingRequest(requestID string) *state.PendingRequest {
