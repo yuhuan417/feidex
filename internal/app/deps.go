@@ -15,7 +15,7 @@ import (
 	"feidex/internal/release"
 )
 
-// Backend clients come from appcore; Feishu transport is adapter-owned.
+// Backend clients come from the frontend composition; Feishu transport is adapter-owned.
 type CodexClient = frontendclients.CodexClient
 type ClaudeCore = frontendclients.ClaudeCore
 type FeishuClient = feishutransport.Client
