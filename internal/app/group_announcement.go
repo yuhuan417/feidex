@@ -14,7 +14,6 @@ import (
 	"time"
 
 	appstate "feidex/internal/adapter/storage/json/scoped"
-	"feidex/internal/app/appcore"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -614,7 +613,7 @@ func knownGroupAnnouncementChatIDs(a *App) []string {
 		}
 		chatID := strings.TrimSpace(sess.ChatID)
 		if chatID == "" {
-			_, _, chatID, _, _ = appcore.ParseSessionKey(sess.Key)
+			_, _, chatID, _, _ = parseSessionKey(sess.Key)
 		}
 		if !sessionMatchesGroupChat(a, sess, chatID) {
 			continue
@@ -647,13 +646,13 @@ func knownGroupAnnouncementChatIDs(a *App) []string {
 
 func sessionMatchesGroupChat(a *App, sess *conversation.Session, chatID string) bool {
 	chatID = strings.TrimSpace(chatID)
-	if a == nil || sess == nil || chatID == "" || !appcore.SessionBelongsToFrontend(a, sess.Key) {
+	if a == nil || sess == nil || chatID == "" || !sessionBelongsToFrontend(a, sess.Key) {
 		return false
 	}
 	sessChatID := strings.TrimSpace(sess.ChatID)
 	sessChatType := strings.ToLower(strings.TrimSpace(sess.ChatType))
 	if sessChatID == "" || sessChatType == "" {
-		_, keyChatType, keyChatID, _, _ := appcore.ParseSessionKey(sess.Key)
+		_, keyChatType, keyChatID, _, _ := parseSessionKey(sess.Key)
 		if sessChatID == "" {
 			sessChatID = keyChatID
 		}

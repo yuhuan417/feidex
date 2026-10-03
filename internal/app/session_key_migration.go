@@ -1,10 +1,9 @@
 package app
 
 import (
+	"feidex/internal/domain/identity"
 	"feidex/internal/textutil"
 	"strings"
-
-	"feidex/internal/app/appcore"
 )
 
 func canonicalizeStoredSessionKeys(a *App) error {
@@ -17,7 +16,7 @@ func canonicalizeStoredSessionKeys(a *App) error {
 			return key
 		}
 		chatID = strings.TrimSpace(chatID)
-		parsedFrontendID, _, parsedChatID, _, _ := appcore.ParseSessionKey(key)
+		parsedFrontendID, _, parsedChatID, _, _ := parseSessionKey(key)
 		if chatID == "" {
 			chatID = strings.TrimSpace(parsedChatID)
 		}
@@ -25,13 +24,13 @@ func canonicalizeStoredSessionKeys(a *App) error {
 			return key
 		}
 		frontendID := textutil.FirstNonEmpty(strings.TrimSpace(parsedFrontendID), strings.TrimSpace(frontendHint))
-		if frontendID == "" && appcore.AllowLegacyFrontendFallback(a) {
+		if frontendID == "" && allowLegacyFrontendFallback(a) {
 			frontendID = strings.TrimSpace(a.FrontendID())
 		}
 		if frontendID == "" {
 			return key
 		}
-		return appcore.CanonicalSessionKey(frontendID, "feishu:chat:"+chatID)
+		return identity.CanonicalSessionKey(frontendID, "feishu:chat:"+chatID)
 	})
 }
 
@@ -50,7 +49,7 @@ func canonicalSessionKeyForApp(a *App, key, chatType, chatID string) string {
 		return key
 	}
 	chatID = strings.TrimSpace(chatID)
-	parsedFrontendID, _, parsedChatID, _, _ := appcore.ParseSessionKey(key)
+	parsedFrontendID, _, parsedChatID, _, _ := parseSessionKey(key)
 	if chatID == "" {
 		chatID = strings.TrimSpace(parsedChatID)
 	}
@@ -58,10 +57,10 @@ func canonicalSessionKeyForApp(a *App, key, chatType, chatID string) string {
 		return key
 	}
 	frontendID := strings.TrimSpace(parsedFrontendID)
-	if frontendID == "" && a != nil && appcore.AllowLegacyFrontendFallback(a) {
+	if frontendID == "" && a != nil && allowLegacyFrontendFallback(a) {
 		frontendID = strings.TrimSpace(a.FrontendID())
 	}
-	return appcore.CanonicalSessionKey(frontendID, "feishu:chat:"+chatID)
+	return identity.CanonicalSessionKey(frontendID, "feishu:chat:"+chatID)
 }
 
 func isAuxiliarySessionKey(key string) bool {

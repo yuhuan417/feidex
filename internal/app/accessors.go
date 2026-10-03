@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	appstate "feidex/internal/adapter/storage/json/scoped"
-	"feidex/internal/app/appcore"
 	appbackend "feidex/internal/app/backend"
 	frontendruntime "feidex/internal/runtime"
 
@@ -99,7 +98,7 @@ func (a *App) BotProfile() *state.BotProfile {
 }
 
 // AgentBindingsForChat returns local binding configuration for one logical
-// chat. It is an optional appcore capability used by binding-aware helpers.
+// chat. It is a frontend-scoped capability used by binding-aware helpers.
 func (a *App) AgentBindingsForChat(chatType, chatID string) []*state.AgentBinding {
 	if a == nil {
 		return nil
@@ -234,7 +233,7 @@ func (a *App) SetBackend(backend string) {
 	}
 	a.configMutex().Lock()
 	defer a.configMutex().Unlock()
-	a.backend = appcore.NormalizeRuntimeBackend(backend)
+	a.backend = normalizeRuntimeBackend(backend)
 	a.backendDriver = appbackend.DriverForKind(a.backend)
 	a.invalidateThreadMenuService()
 	a.invalidateBackendConfigurationService()
