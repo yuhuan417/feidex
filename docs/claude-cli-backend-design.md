@@ -20,21 +20,21 @@
 
 - [DEVELOPER.md](/home/yuhuan/feidex/DEVELOPER.md)
 - [docs/codex-app-server-state-machine-audit.md](/home/yuhuan/feidex/docs/codex-app-server-state-machine-audit.md)
-- [internal/app/deps.go](/home/yuhuan/feidex/internal/app/deps.go)
-- [internal/app/codex_event_router.go](/home/yuhuan/feidex/internal/app/codex_event_router.go)
-- [internal/app/turn_item_state.go](/home/yuhuan/feidex/internal/app/turn_item_state.go)
+- [internal/feishuapp/deps.go](/home/yuhuan/feidex/internal/feishuapp/deps.go)
+- [internal/feishuapp/codex_event_router.go](/home/yuhuan/feidex/internal/feishuapp/codex_event_router.go)
+- [internal/feishuapp/turn_item_state.go](/home/yuhuan/feidex/internal/feishuapp/turn_item_state.go)
 - [internal/config/config.go](/home/yuhuan/feidex/internal/config/config.go)
 - [internal/state/store.go](/home/yuhuan/feidex/internal/state/store.go)
-- [internal/app/threadmenu/service.go](/home/yuhuan/feidex/internal/app/threadmenu/service.go)
-- [internal/app/workspacecmd/thread_service.go](/home/yuhuan/feidex/internal/app/workspacecmd/thread_service.go)
-- [internal/app/convbackend/service.go](/home/yuhuan/feidex/internal/app/convbackend/service.go)
-- [internal/app/historycmd/service.go](/home/yuhuan/feidex/internal/app/historycmd/service.go)
-- [internal/app/apphistory/history.go](/home/yuhuan/feidex/internal/app/apphistory/history.go)
-- [internal/app/reviewcmd/service.go](/home/yuhuan/feidex/internal/app/reviewcmd/service.go)
-- [internal/app/review_bindings.go](/home/yuhuan/feidex/internal/app/review_bindings.go)
-- [internal/app/compact.go](/home/yuhuan/feidex/internal/app/compact.go)
-- [internal/app/skillscmd/service.go](/home/yuhuan/feidex/internal/app/skillscmd/service.go)
-- [internal/app/skills/skills.go](/home/yuhuan/feidex/internal/app/skills/skills.go)
+- [internal/feishuapp/threadmenu/service.go](/home/yuhuan/feidex/internal/feishuapp/threadmenu/service.go)
+- [internal/feishuapp/workspacecmd/thread_service.go](/home/yuhuan/feidex/internal/feishuapp/workspacecmd/thread_service.go)
+- [internal/feishuapp/convbackend/service.go](/home/yuhuan/feidex/internal/feishuapp/convbackend/service.go)
+- [internal/feishuapp/historycmd/service.go](/home/yuhuan/feidex/internal/feishuapp/historycmd/service.go)
+- [internal/feishuapp/apphistory/history.go](/home/yuhuan/feidex/internal/feishuapp/apphistory/history.go)
+- [internal/feishuapp/reviewcmd/service.go](/home/yuhuan/feidex/internal/feishuapp/reviewcmd/service.go)
+- [internal/feishuapp/review_bindings.go](/home/yuhuan/feidex/internal/feishuapp/review_bindings.go)
+- [internal/feishuapp/compact.go](/home/yuhuan/feidex/internal/feishuapp/compact.go)
+- [internal/feishuapp/skillscmd/service.go](/home/yuhuan/feidex/internal/feishuapp/skillscmd/service.go)
+- [internal/feishuapp/skills/skills.go](/home/yuhuan/feidex/internal/feishuapp/skills/skills.go)
 - [claude-cli-protocol/protocol/docs/PROTOCOL_SPECIFICATION.md](/home/yuhuan/feidex/claude-cli-protocol/protocol/docs/PROTOCOL_SPECIFICATION.md)
 - [claude-cli-protocol/sdks/golang/protocol/messages.go](/home/yuhuan/feidex/claude-cli-protocol/sdks/golang/protocol/messages.go)
 - [claude-cli-protocol/sdks/golang/protocol/stream.go](/home/yuhuan/feidex/claude-cli-protocol/sdks/golang/protocol/stream.go)
@@ -92,7 +92,7 @@ backend-neutral 抽象只覆盖共享的产品骨架，不代表最终产品能�
 
 ### 1. 传输接口很薄，但产品语义高度 Codex 化
 
-[internal/app/deps.go](/home/yuhuan/feidex/internal/app/deps.go) 中 `codexClient` 接口只有几个通用方法:
+[internal/feishuapp/deps.go](/home/yuhuan/feidex/internal/feishuapp/deps.go) 中 `codexClient` 接口只有几个通用方法:
 
 - `SetHandlers`
 - `Start`
@@ -113,7 +113,7 @@ backend-neutral 抽象只覆盖共享的产品骨架，不代表最终产品能�
 - `turn/plan/updated` 是执行中 checklist 更新通知，只负责展示步骤状态。
 - 两者没有协议上的等价关系；`turn/plan/updated` 不是 plan mode，也不是 `item(type=plan)` 的别名。
 
-[internal/app/codex_event_router.go](/home/yuhuan/feidex/internal/app/codex_event_router.go) 和 [internal/app/turn_item_state.go](/home/yuhuan/feidex/internal/app/turn_item_state.go) 已经把这些语义写进了产品层。
+[internal/feishuapp/codex_event_router.go](/home/yuhuan/feidex/internal/feishuapp/codex_event_router.go) 和 [internal/feishuapp/turn_item_state.go](/home/yuhuan/feidex/internal/feishuapp/turn_item_state.go) 已经把这些语义写进了产品层。
 
 ### 2. Claude CLI stream-json 是另一种协议模型
 
@@ -210,8 +210,8 @@ internal/
 
 - [internal/codexrpc](/home/yuhuan/feidex/internal/codexrpc) 不应该继续直接暴露到 `internal/app`。
 - Claude backend 最好也有一层“原始协议客户端”和“一层产品 adapter”分离，这样后续协议漂移时影响面更小。
-- [internal/app/codex_event_router.go](/home/yuhuan/feidex/internal/app/codex_event_router.go) 最终应演进成 backend-neutral router，而不是继续硬编码 Codex 方法名。
-- `internal/application/features/data.go` / `internal/app/feature_registry_bindings.go` 这类能力注册层不是可选装饰，而是防止“最后只剩交集能力”的关键结构。
+- [internal/feishuapp/codex_event_router.go](/home/yuhuan/feidex/internal/feishuapp/codex_event_router.go) 最终应演进成 backend-neutral router，而不是继续硬编码 Codex 方法名。
+- `internal/application/features/data.go` / `internal/feishuapp/feature_registry_bindings.go` 这类能力注册层不是可选装饰，而是防止“最后只剩交集能力”的关键结构。
 
 ### backend-neutral 契约
 
@@ -385,7 +385,7 @@ Claude 的交互请求（`can_use_tool`、`AskUserQuestion`、`ExitPlanMode`）�
 
 - **读循环不被阻塞**：交互 handler 在独立 goroutine 上等待用户回答（`internal/claudecli/session.go`），否则一张没人回答的卡片会冻结整个 session 的 stdout 读取——后续 `result`、`task_notification`、`control_response` 全部读不到，连 CLI 进程退出都发现不了。stdin 写入由 `ndjsonWriter` 的内部锁串行化。
 - **不自动 deny**：请求到达时优先绑定当前 turn 的活跃 submission；绑定不到时（后台 Agent 比父 turn 活得久，或 turn 在用户思考期间已收尾）改用会话自身的投递锚点（store `state.Session` 的 `ChatID` / `RootMessageID` / `OwnerUserID` / `ActiveThreadID`，与后台任务完成通知同一套字段）投递卡片。只有连会话锚点都没有（启动自检、probe session）才拒绝，并记录 warn 日志。
-- **pending 不随 turn 清理**：turn 收尾时保留仍 open 的 Claude 交互 pending 及其 message link（`internal/app/lifecycle/pending.go` 的 `OutlivesTurn`），后台 Agent 的审批与延迟回答因此仍然有效。`TurnID` 保留原值即可：过期 turn 不会触发 thread 兜底查找，后续清理也不会再命中。
+- **pending 不随 turn 清理**：turn 收尾时保留仍 open 的 Claude 交互 pending 及其 message link（`internal/feishuapp/lifecycle/pending.go` 的 `OutlivesTurn`），后台 Agent 的审批与延迟回答因此仍然有效。`TurnID` 保留原值即可：过期 turn 不会触发 thread 兜底查找，后续清理也不会再命中。
 - **会话真正结束才失效**：`ResetSession`、会话事件循环退出、transport failure 会走 `Service.expireSessionInteractions` → `ExpireClaudeInteractionCards`，把对应卡片标为 expired 并 patch 成状态卡，避免留一张点了才报错的死卡。这不是自动 deny：此时 CLI 请求已经随进程一起消失。
 - **CLI 撤回即释放**：CLI 用 `control_cancel_request` 声明它不再等待某个请求的答复（最典型的是 turn 被中断时仍挂着的 `can_use_tool`）。收到后 `internal/claudecli` 释放对应 handler 并且**不再写回 `control_response`**（CLI 会忽略撤回请求的响应），`clauderuntime` 用 `context.Cause` 区分"被撤回"与"会话重置"，把卡片置为 expired 并 patch 成"请求已撤回"，goroutine 不会一直挂着。对我们自己发出的请求（`set_model` 等），同样的消息会解除等待方的阻塞。
 - **精确归属（已实测）**：`can_use_tool` 带 `tool_use_id`（必填）与 `agent_id`（仅 subagent 有）。实测 claude 2.1.285：**`agent_id` 与 `system/task_started.task_id` 完全相等**，而 `tool_use_id` 是 subagent 自己的那次工具调用（不是 Task 工具块的 id），所以关联键只能是 `agent_id`。subagent 的请求因此按 `agent_id` 路由到生成它的那个 task：`state.BackgroundTasks[agent_id].Target` 里已经保存了 spawn 时的 turn / chat / trigger message / user / workspace；spawn turn 的 submission 还活着就照常绑定（前台 subagent 被中断时也能绑对），已经收尾就 detached 投递到那个会话。卡片正文会附一行「来源：后台 Agent「<描述>」」。
@@ -402,19 +402,19 @@ Claude 的交互请求（`can_use_tool`、`AskUserQuestion`、`ExitPlanMode`）�
 
 影响最大的点:
 
-- [internal/app/deps.go](/home/yuhuan/feidex/internal/app/deps.go)
-- [internal/app/codex_event_router.go](/home/yuhuan/feidex/internal/app/codex_event_router.go)
-- [internal/app/threadmenu/service.go](/home/yuhuan/feidex/internal/app/threadmenu/service.go)
-- [internal/app/workspacecmd/thread_service.go](/home/yuhuan/feidex/internal/app/workspacecmd/thread_service.go)
-- [internal/app/convbackend/service.go](/home/yuhuan/feidex/internal/app/convbackend/service.go)
-- [internal/app/historycmd/service.go](/home/yuhuan/feidex/internal/app/historycmd/service.go)
-- [internal/app/apphistory/history.go](/home/yuhuan/feidex/internal/app/apphistory/history.go)
-- [internal/app/reviewcmd/service.go](/home/yuhuan/feidex/internal/app/reviewcmd/service.go)
-- [internal/app/review_bindings.go](/home/yuhuan/feidex/internal/app/review_bindings.go)
-- [internal/app/compact.go](/home/yuhuan/feidex/internal/app/compact.go)
-- [internal/app/skillscmd/service.go](/home/yuhuan/feidex/internal/app/skillscmd/service.go)
-- [internal/app/skills/skills.go](/home/yuhuan/feidex/internal/app/skills/skills.go)
-- [internal/app/model_config.go](/home/yuhuan/feidex/internal/app/model_config.go)
+- [internal/feishuapp/deps.go](/home/yuhuan/feidex/internal/feishuapp/deps.go)
+- [internal/feishuapp/codex_event_router.go](/home/yuhuan/feidex/internal/feishuapp/codex_event_router.go)
+- [internal/feishuapp/threadmenu/service.go](/home/yuhuan/feidex/internal/feishuapp/threadmenu/service.go)
+- [internal/feishuapp/workspacecmd/thread_service.go](/home/yuhuan/feidex/internal/feishuapp/workspacecmd/thread_service.go)
+- [internal/feishuapp/convbackend/service.go](/home/yuhuan/feidex/internal/feishuapp/convbackend/service.go)
+- [internal/feishuapp/historycmd/service.go](/home/yuhuan/feidex/internal/feishuapp/historycmd/service.go)
+- [internal/feishuapp/apphistory/history.go](/home/yuhuan/feidex/internal/feishuapp/apphistory/history.go)
+- [internal/feishuapp/reviewcmd/service.go](/home/yuhuan/feidex/internal/feishuapp/reviewcmd/service.go)
+- [internal/feishuapp/review_bindings.go](/home/yuhuan/feidex/internal/feishuapp/review_bindings.go)
+- [internal/feishuapp/compact.go](/home/yuhuan/feidex/internal/feishuapp/compact.go)
+- [internal/feishuapp/skillscmd/service.go](/home/yuhuan/feidex/internal/feishuapp/skillscmd/service.go)
+- [internal/feishuapp/skills/skills.go](/home/yuhuan/feidex/internal/feishuapp/skills/skills.go)
+- [internal/feishuapp/model_config.go](/home/yuhuan/feidex/internal/feishuapp/model_config.go)
 
 建议做法:
 

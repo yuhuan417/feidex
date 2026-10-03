@@ -341,29 +341,29 @@ Codex 的标准行为是“清空当前上下文，开一个新的 session/threa
 协议与事件:
 
 - `internal/codexrpc/client.go`
-- `internal/app/backend/codex_event_router.go`
-- `internal/app/codex_event_router.go`
+- `internal/feishuapp/backend/codex_event_router.go`
+- `internal/feishuapp/codex_event_router.go`
 
 turn stream / lifecycle:
 
-- `internal/app/turnstream/service.go`
+- `internal/feishuapp/turnstream/service.go`
 - `internal/application/turn/service.go`
 
 本地 pending 与卡片动作:
 
-- `internal/app/action_registry_pending.go`
-- `internal/app/serverrequest_bindings.go`
-- `internal/app/card_action_async.go`
-- `internal/app/planmode/exit.go` 和 root `internal/app/plan_mode_bindings.go`
+- `internal/feishuapp/action_registry_pending.go`
+- `internal/feishuapp/serverrequest_bindings.go`
+- `internal/feishuapp/card_action_async.go`
+- `internal/feishuapp/planmode/exit.go` 和 root `internal/feishuapp/plan_mode_bindings.go`
 
 thread / submission 调度:
 
-- `internal/app/workspacecmd/thread_service.go`
+- `internal/feishuapp/workspacecmd/thread_service.go`
 - 当前 thread submission 入队相关服务
 
 测试与文档:
 
-- `internal/app/plan_mode_test.go`
+- `internal/feishuapp/plan_mode_test.go`
 - 新增 plan-mode exit 行为测试
 - `docs/codex-app-server-state-machine-audit.md`
 

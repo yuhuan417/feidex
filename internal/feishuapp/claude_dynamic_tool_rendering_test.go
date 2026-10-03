@@ -1,0 +1,281 @@
+package feishuapp
+
+import (
+	"context"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnitem"
+	"feidex/internal/config"
+)
+
+func TestBuildTurnItemCardPayloadWithWorkspaceUsesClaudeDynamicToolTemplates(t *testing.T) {
+	workspace := t.TempDir()
+
+	readPayload, ok := turnitem.BuildTurnItemCardPayload("item-read", map[string]any{
+		"type":   "dynamic_tool_call",
+		"tool":   "Read",
+		"status": "completed",
+		"input": map[string]any{
+			"file_path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
+			"cwd":       filepath.Join(workspace, "internal", "app"),
+		},
+	}, workspace)
+	if !ok {
+		t.Fatal("expected categorized dynamic tool payload")
+	}
+	if readPayload.Title != "代码工具" || readPayload.Color != "orange" {
+		t.Fatalf("unexpected read payload meta: %+v", readPayload)
+	}
+	if !strings.Contains(readPayload.SummaryText, "- 工具: `Read`") {
+		t.Fatalf("expected Read tool line, got: %q", readPayload.SummaryText)
+	}
+	if !strings.Contains(readPayload.SummaryText, "- 读取: `internal/app/quiet_mode.go`") {
+		t.Fatalf("expected workspace-relative file line, got: %q", readPayload.SummaryText)
+	}
+	if !strings.Contains(readPayload.SummaryText, "status=completed") {
+		t.Fatalf("expected status line, got: %q", readPayload.SummaryText)
+	}
+
+	mcpPayload, ok := turnitem.BuildTurnItemCardPayload("item-mcp", map[string]any{
+		"type":   "dynamic_tool_call",
+		"tool":   "mcp__demo_tools__greet",
+		"status": "completed",
+		"input": map[string]any{
+			"query": "hello world",
+		},
+	}, workspace)
+	if !ok {
+		t.Fatal("expected MCP dynamic tool payload")
+	}
+	if mcpPayload.Title != "MCP 工具" || mcpPayload.Color != "blue" {
+		t.Fatalf("unexpected MCP payload meta: %+v", mcpPayload)
+	}
+	if !strings.Contains(mcpPayload.SummaryText, "- 工具: `demo_tools/greet`") {
+		t.Fatalf("expected display MCP tool name, got: %q", mcpPayload.SummaryText)
+	}
+	if !strings.Contains(mcpPayload.SummaryText, "- query: `hello world`") {
+		t.Fatalf("expected summarized MCP input, got: %q", mcpPayload.SummaryText)
+	}
+
+	unknownPayload, ok := turnitem.BuildTurnItemCardPayload("item-raw", map[string]any{
+		"type":   "dynamic_tool_call",
+		"tool":   "StrangeTool",
+		"status": "completed",
+		"input": map[string]any{
+			"foo": "bar",
+		},
+	}, workspace)
+	if !ok {
+		t.Fatal("expected raw fallback dynamic tool payload")
+	}
+	if unknownPayload.Title != "Claude 工具" || unknownPayload.Color != "grey" {
+		t.Fatalf("unexpected raw fallback meta: %+v", unknownPayload)
+	}
+	if strings.TrimSpace(unknownPayload.SummaryText) != "" {
+		t.Fatalf("expected empty summary for raw fallback, got: %q", unknownPayload.SummaryText)
+	}
+	if !strings.Contains(unknownPayload.DetailText, `"tool": "StrangeTool"`) || !strings.Contains(unknownPayload.DetailText, `"foo": "bar"`) {
+		t.Fatalf("expected raw JSON detail fallback, got: %q", unknownPayload.DetailText)
+	}
+	meta, body := turnitem.CompactTurnItemCardContent(unknownPayload)
+	if meta != "" || !strings.Contains(body, `"tool": "StrangeTool"`) {
+		t.Fatalf("turnitem.CompactTurnItemCardContent(raw fallback) = %q / %q", meta, body)
+	}
+}
+
+func TestBuildQuietWorkingCardLinesSupportsClaudeDynamicTools(t *testing.T) {
+	workspace := t.TempDir()
+
+	_, readLines := turn.BuildWorkingCardLines("item-read", map[string]any{
+		"type": "dynamic_tool_call",
+		"tool": "Read",
+		"input": map[string]any{
+			"file_path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
+		},
+	}, workspace)
+	if len(readLines) != 1 || readLines[0] != "Read `quiet_mode.go`" {
+		t.Fatalf("read progress lines = %#v", readLines)
+	}
+
+	_, bashLines := turn.BuildWorkingCardLines("item-bash", map[string]any{
+		"type": "dynamic_tool_call",
+		"tool": "Bash",
+		"input": map[string]any{
+			"command": "go test ./internal/app",
+			"cwd":     filepath.Join(workspace, "internal", "app"),
+		},
+	}, workspace)
+	if bashLines != nil {
+		t.Fatalf("bash progress lines = %#v, want nil", bashLines)
+	}
+
+	_, todoLines := turn.BuildWorkingCardLines("item-todo", map[string]any{
+		"type": "dynamic_tool_call",
+		"tool": "TodoWrite",
+		"input": map[string]any{
+			"todos": []any{
+				map[string]any{"content": "核对日志", "status": "in_progress"},
+				map[string]any{"content": "补卡片", "status": "pending"},
+			},
+		},
+	}, workspace)
+	if todoLines != nil {
+		t.Fatalf("todo progress lines should be disabled once TodoWrite is rendered as a normal card, got %#v", todoLines)
+	}
+
+	_, taskLines := turn.BuildWorkingCardLines("item-task", map[string]any{
+		"type": "dynamic_tool_call",
+		"tool": "Agent",
+		"input": map[string]any{
+			"description": "排查飞书卡片渲染",
+		},
+	}, workspace)
+	joinedTask := strings.Join(taskLines, "\n")
+	if !strings.Contains(joinedTask, "Spawn subtask: `排查飞书卡片渲染`") {
+		t.Fatalf("task progress lines = %q", joinedTask)
+	}
+
+	_, taskUpdateLines := turn.BuildWorkingCardLines("item-task-update", map[string]any{
+		"type": "dynamic_tool_call",
+		"tool": "TaskUpdate",
+		"input": map[string]any{
+			"taskId":     "7",
+			"status":     "in_progress",
+			"activeForm": "排查飞书卡片渲染",
+		},
+	}, workspace)
+	joinedTaskUpdate := strings.Join(taskUpdateLines, "\n")
+	if !strings.Contains(joinedTaskUpdate, "Update task `7` -> `in_progress`") || !strings.Contains(joinedTaskUpdate, "Progress `排查飞书卡片渲染`") {
+		t.Fatalf("task update progress lines = %q", joinedTaskUpdate)
+	}
+
+	_, unknownLines := turn.BuildWorkingCardLines("item-unknown", map[string]any{
+		"type": "dynamic_tool_call",
+		"tool": "StrangeTool",
+		"input": map[string]any{
+			"foo": "bar",
+		},
+	}, workspace)
+	if unknownLines != nil {
+		t.Fatalf("unknown dynamic tool should stay verbose-only, got: %#v", unknownLines)
+	}
+}
+
+func TestCompleteTurnItemProgressModeAggregatesSelectedClaudeDynamicToolsOnly(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	workspace := a.cfg.Workspaces[0].Cwd
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
+		"id":   "item-read",
+		"type": "dynamic_tool_call",
+		"tool": "Read",
+		"input": map[string]any{
+			"file_path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
+		},
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after dynamic read = %d, want 1", len(ff.replyCards))
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, "Read `quiet_mode.go`") {
+		t.Fatalf("working card body after dynamic read = %q", body)
+	}
+
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
+		"id":   "item-task",
+		"type": "dynamic_tool_call",
+		"tool": "TaskUpdate",
+		"input": map[string]any{
+			"taskId": "7",
+			"status": "in_progress",
+		},
+	})
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched card count after task update = %d, want 1", len(ff.patchedCards))
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, "Update task `7` -> `in_progress`") {
+		t.Fatalf("working card body after task update = %q", body)
+	}
+
+	replyCount := len(ff.replyCards)
+	patchCount := len(ff.patchedCards)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-unknown", map[string]any{
+		"id":   "item-unknown",
+		"type": "dynamic_tool_call",
+		"tool": "StrangeTool",
+		"input": map[string]any{
+			"foo": "bar",
+		},
+	})
+	if len(ff.replyCards) != replyCount || len(ff.patchedCards) != patchCount {
+		t.Fatalf("unknown dynamic tool should not change progress cards, reply=%d patch=%d", len(ff.replyCards), len(ff.patchedCards))
+	}
+}
+
+func TestCompleteTurnItemProgressModePromotesClaudeTodoWriteToNormalCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeProgress
+	workspace := a.cfg.Workspaces[0].Cwd
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-read", map[string]any{
+		"id":   "item-read",
+		"type": "dynamic_tool_call",
+		"tool": "Read",
+		"input": map[string]any{
+			"file_path": filepath.Join(workspace, "internal", "app", "quiet_mode.go"),
+		},
+	})
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count after initial read = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("initial card title = %q, want to contain %q", got, turn.QuietWorkingCardTitle)
+	}
+
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-todo", map[string]any{
+		"id":   "item-todo",
+		"type": "dynamic_tool_call",
+		"tool": "TodoWrite",
+		"input": map[string]any{
+			"todos": []any{
+				map[string]any{"content": "核对日志", "status": "in_progress"},
+				map[string]any{"content": "补消息卡片", "status": "pending"},
+			},
+		},
+	})
+	if len(ff.replyCards) != 2 {
+		t.Fatalf("reply card count after TodoWrite = %d, want 2", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[1]); got != "["+a.cfg.Workspaces[0].ID+"] 待办更新" {
+		t.Fatalf("TodoWrite card title = %q", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(body, "[in_progress] 核对日志") || !strings.Contains(body, "[pending] 补消息卡片") {
+		t.Fatalf("TodoWrite card body = %q", body)
+	}
+
+	newTurnStreamService(a).completeTurnItem(context.Background(), "thread-1", "turn-1", "item-task", map[string]any{
+		"id":   "item-task",
+		"type": "dynamic_tool_call",
+		"tool": "TaskUpdate",
+		"input": map[string]any{
+			"taskId": "7",
+			"status": "in_progress",
+		},
+	})
+	if len(ff.replyCards) != 3 {
+		t.Fatalf("reply card count after TodoWrite-following task update = %d, want 3", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[2]); !strings.Contains(got, turn.QuietWorkingCardTitle) {
+		t.Fatalf("expected a fresh working card after TodoWrite, got title %q, want to contain %q", got, turn.QuietWorkingCardTitle)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[2]); !strings.Contains(body, "Update task `7` -> `in_progress`") {
+		t.Fatalf("fresh working card body = %q", body)
+	}
+}

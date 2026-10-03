@@ -1,0 +1,51 @@
+package feishuapp
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestFinalCardPatchMergesBodyAndFooterUpdates(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+
+	svc := newFinalCardPatchService(a)
+	svc.RegisterFinalCardPatchState("card-1", sub, "最终答复", "green", true, "original body", []string{"elapsed: 1s"})
+	if !svc.MarkFinalCardPreviewPending("card-1") {
+		t.Fatal("expected preview patch state to exist")
+	}
+	if !svc.UpdateFinalCardPatchFooterLines("card-1", []string{"context used: 13.0%", "elapsed: 1s"}) {
+		t.Fatal("expected footer update to be accepted")
+	}
+	if !svc.UpdateFinalCardPatchBody("card-1", "rewritten body") {
+		t.Fatal("expected body update to be accepted")
+	}
+	svc.MarkFinalCardPreviewDone("card-1")
+
+	waitForTestCondition(t, "final card patch with rewritten body", func() bool {
+		for _, p := range ff.patchedCardsSnapshot() {
+			if strings.Contains(cardMarkdownContent(t, p), "rewritten body") {
+				return true
+			}
+		}
+		return false
+	})
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
+		t.Fatal("expected patched final card")
+	}
+
+	last := patched[len(patched)-1]
+	body := cardMarkdownContent(t, last)
+	footer := cardFooterTextForTest(last)
+	if !strings.Contains(body, "rewritten body") {
+		t.Logf("all %d patched cards:", len(patched))
+		for i, p := range patched {
+			t.Logf("  [%d] body=%q footer=%q", i, cardMarkdownContent(t, p), cardFooterTextForTest(p))
+		}
+		t.Fatalf("patched body = %q, want rewritten body (footer=%q)", body, footer)
+	}
+	if !strings.Contains(footer, "context used: 13.0%") || !strings.Contains(footer, "elapsed: 1s") {
+		t.Fatalf("patched footer = %q", footer)
+	}
+}

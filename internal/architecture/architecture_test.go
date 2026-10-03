@@ -31,6 +31,36 @@ func TestDeletedHostBridgesCannotReturn(t *testing.T) {
 	}
 }
 
+func TestInternalAppIsOnlyTheFeishuThinBoundary(t *testing.T) {
+	root := repositoryRoot(t)
+	appRoot := filepath.Join(root, "internal", "app")
+	entries, err := os.ReadDir(appRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		if entry.Name() != "doc.go" && entry.Name() != "entrypoint.go" {
+			t.Fatalf("internal/app must remain a thin Feishu boundary; found %s", entry.Name())
+		}
+	}
+	violations, err := importsUnder(root, "internal/app", []string{
+		modulePath + "/internal/application",
+		modulePath + "/internal/config",
+		modulePath + "/internal/runtime",
+		modulePath + "/internal/state",
+		modulePath + "/internal/codexrpc",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("internal/app must not own application/runtime construction: %v", violations)
+	}
+}
+
 func TestModelSettingsRendererDoesNotReadConfigurationOrSessionState(t *testing.T) {
 	violations, err := importsUnder(repositoryRoot(t), "internal/adapter/feishu/modelsettings", []string{
 		modulePath + "/internal/config", modulePath + "/internal/state", modulePath + "/internal/adapter/storage",
@@ -76,7 +106,7 @@ func TestHistoryAdapterAndUseCaseBoundaries(t *testing.T) {
 
 func TestHistoryBindingsDoNotReintroduceRecursiveRenderCallbacks(t *testing.T) {
 	root := repositoryRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "history_bindings.go"))
+	data, err := os.ReadFile(filepath.Join(root, "internal", "feishuapp", "history_bindings.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +131,7 @@ func TestBackendConfigurationDoesNotDependOnTransitionalConfigurationHelpers(t *
 
 func TestWorkspaceCommandCompositionHasNoIndirectInitBridge(t *testing.T) {
 	root := repositoryRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "workspacecmd_bindings.go"))
+	data, err := os.ReadFile(filepath.Join(root, "internal", "feishuapp", "workspacecmd_bindings.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +145,7 @@ func TestWorkspaceCommandCompositionHasNoIndirectInitBridge(t *testing.T) {
 
 func TestTurnCompositionDoesNotPassAppAggregateToUseCase(t *testing.T) {
 	root := repositoryRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "turn_lifecycle.go"))
+	data, err := os.ReadFile(filepath.Join(root, "internal", "feishuapp", "turn_lifecycle.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +157,7 @@ func TestTurnCompositionDoesNotPassAppAggregateToUseCase(t *testing.T) {
 
 func TestFrontendRuntimeOwnerConstructionStaysInComposition(t *testing.T) {
 	root := repositoryRoot(t)
-	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "app.go"))
+	data, err := os.ReadFile(filepath.Join(root, "internal", "feishuapp", "app.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +269,7 @@ func TestDebugCommandDoesNotDependOnLegacyAppHelpers(t *testing.T) {
 
 func TestModelSettingsEntrypointsDoNotMutateBusinessState(t *testing.T) {
 	root := repositoryRoot(t)
-	for _, relative := range []string{"internal/app/bot_profile.go", "internal/app/binding_scoped_commands.go", "internal/app/binding_model_actions.go"} {
+	for _, relative := range []string{"internal/feishuapp/bot_profile.go", "internal/feishuapp/binding_scoped_commands.go", "internal/feishuapp/binding_model_actions.go"} {
 		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, relative), nil, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -440,7 +470,7 @@ func TestSessionOwnedAsyncPathsUseActorAwarePorts(t *testing.T) {
 	}{
 		{"internal/application/submission/queue.go", []string{"RunSessionAsync", "runSessionAsync("}, nil},
 		{"internal/application/turn/service.go", []string{"RunSessionAsync"}, nil},
-		{"internal/app/session_async.go", []string{"sessionActorRuntime().Run"}, nil},
+		{"internal/feishuapp/session_async.go", []string{"sessionActorRuntime().Run"}, nil},
 		{"internal/adapter/feishu/backend/selection.go", nil, []string{"go func()"}},
 		{"internal/runtime/codex/recovery.go", []string{"RunSessionAsync"}, nil},
 		{"internal/adapter/feishu/backend/failure.go", []string{"RunSessionAsync"}, nil},

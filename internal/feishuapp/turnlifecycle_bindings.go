@@ -1,0 +1,71 @@
+package feishuapp
+
+import (
+	domainsubmission "feidex/internal/domain/submission"
+
+	"context"
+	"feidex/internal/domain/conversation"
+
+	appturnlifecycle "feidex/internal/application/turn"
+)
+
+// ---------------------------------------------------------------------------
+// Provider adapters — satisfy application turn use case ports
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// *App methods satisfying runtime and delivery ports
+// ---------------------------------------------------------------------------
+
+func (a *App) MarkSessionThreadLive(sessionKey, threadID string) {
+	markSessionThreadLive(a, sessionKey, threadID)
+}
+
+func (a *App) TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID string) string {
+	return turnStopAttentionUserID(a, sub, turnID)
+}
+
+func (a *App) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
+	return sendEmptyFinalCardWithReuse(a, ctx, sub, footerLines, reuseMessageID)
+}
+
+func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, reuseMessageID string) []string {
+	reuseIDs := []string(nil)
+	if reuseMessageID != "" {
+		reuseIDs = []string{reuseMessageID}
+	}
+	results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, text, footerLines, replyInThreadForSubmission(a, sub), reuseIDs)
+	ids := make([]string, 0, len(results))
+	for _, result := range results {
+		ids = append(ids, result.MessageID)
+	}
+	return ids
+}
+
+func (a *App) NextQueuedSubmissionSessionKey(sessionKey string) string {
+	return newSubmissionQueueServiceFromApp(a).NextQueuedSessionKey(sessionKey)
+}
+
+func (a *App) BindStandaloneCompactTurn(threadID, turnID string) bool {
+	return newCompactionService(a).BindStandaloneCompactTurn(threadID, turnID)
+}
+
+func (a *App) BindGoalContinuationTurn(threadID, turnID string) bool {
+	return newGoalService(a).BindGoalContinuationTurn(threadID, turnID)
+}
+
+func (a *App) FinishStandaloneCompactTurn(threadID, turnID, status string) bool {
+	return newCompactionService(a).FinishStandaloneCompactTurn(threadID, turnID, status)
+}
+
+func (a *App) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
+	return findSubmissionByTurn(a, threadID, turnID)
+}
+
+func (a *App) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush appturnlifecycle.TurnStreamFlushResult) bool {
+	return processCodexPlanModeExitOnTurnCompleted(a, sessionKey, sub, threadID, turnID, status, flush)
+}
+
+func (a *App) LogSessionState(event, sessionKey string, sess *conversation.Session) {
+	logSessionState(event, sessionKey, sess)
+}

@@ -1,0 +1,146 @@
+package feishuapp
+
+import (
+	"context"
+	"feidex/internal/domain/conversation"
+	domainsubmission "feidex/internal/domain/submission"
+	"strings"
+	"testing"
+
+	"feidex/internal/config"
+	"feidex/internal/feishu"
+)
+
+func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
+
+	reply := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.TODO(), sub, "Reply", "green", true, "", nil, false)
+	if got := cardHeaderTitle(t, reply); got != "Reply" {
+		t.Fatalf("reply card title = %q, want Reply", got)
+	}
+	elements := reply["body"].(map[string]any)["elements"].([]map[string]any)
+	if len(elements) != 1 || elements[0]["content"] != " " {
+		t.Fatalf("reply placeholder elements = %#v, want single blank markdown", elements)
+	}
+	if body := cardMarkdownContent(t, reply); strings.Contains(body, "当前模式: plan") {
+		t.Fatalf("reply placeholder body = %q, want no plan banner", body)
+	}
+
+	compact := cardRendererForApp(a).renderCompactMarkdownCard(sub, "Status", "orange", " status=running ", "hello", []feishu.Button{{Text: "More", Type: "default"}})
+	if got := cardHeaderTitle(t, compact); got != "Status" {
+		t.Fatalf("compact card title = %q, want Status", got)
+	}
+	body := compact["body"].(map[string]any)["elements"].([]map[string]any)
+	if len(body) != 3 {
+		t.Fatalf("compact card elements = %#v, want meta + markdown + button row", body)
+	}
+	if body[0]["tag"] != "div" || body[1]["tag"] != "markdown" || body[2]["tag"] != "column_set" {
+		t.Fatalf("compact card layout = %#v, want div/markdown/column_set", body)
+	}
+	if content := cardMarkdownContent(t, compact); strings.Contains(content, "当前模式: plan") {
+		t.Fatalf("compact card content = %q, want no plan banner", content)
+	}
+}
+
+func TestPlanModeSessionCardsPrefixWorkspaceAndPlan(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	sessionKey := "feishu:chat:chat"
+	workspaceID := a.cfg.Workspaces[0].ID
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             workspaceID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: workspaceID,
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{
+			Mode:  "plan",
+			Model: "gpt-5.4",
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	cases := []struct {
+		name string
+		card map[string]any
+	}{
+		{name: "root", card: renderCommandMenuCard(a, sessionKey)},
+		{name: "tools", card: renderToolsMenuCard(a, sessionKey)},
+		{name: "status", card: renderStatusCard(a, sessionKey)},
+		{name: "quiet", card: renderQuietModeMenuCard(a, sessionKey)},
+		{name: "interrupt", card: renderInterruptPreparingCard(a, sessionKey, "menu.tools")},
+		{name: "compact", card: renderCompactPreparingCard(a, sessionKey)},
+		{name: "help", card: renderHelpCard(a, sessionKey)},
+	}
+	for _, tc := range cases {
+		if got := cardHeaderTitle(t, tc.card); !strings.HasPrefix(got, "["+workspaceID+"] [plan] ") {
+			t.Fatalf("%s card title = %q, want [%s] [plan] prefix", tc.name, got, workspaceID)
+		}
+		if body := cardMarkdownContent(t, tc.card); strings.Contains(body, "当前模式: plan") {
+			t.Fatalf("%s card body = %q, want no plan banner", tc.name, body)
+		}
+	}
+}
+
+func TestPrepareReplyCardMarkdownKeepsPreviewLinksWithLineNumbers(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
+
+	body := prepareReplyCardMarkdown(a, nil, sub, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)", true)
+	if !strings.Contains(body, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)") {
+		t.Fatalf("prepareReplyCardMarkdown(preview link) = %q, want preview link preserved", body)
+	}
+	if strings.Contains(body, "`internal/app/outbound_cards.go:117`") {
+		t.Fatalf("prepareReplyCardMarkdown(preview link) = %q, want no duplicate local-path neutralization", body)
+	}
+}
+
+func TestPrepareReplyCardMarkdownLinkifiesInlineCodeURLsImmediatelyForPreview(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
+
+	body := prepareReplyCardMarkdown(a, nil, sub, "卡片链接：`https://github.com/yuhuan417/feidex`", true)
+	if !strings.Contains(body, "[https://github.com/yuhuan417/feidex](https://github.com/yuhuan417/feidex)") {
+		t.Fatalf("prepareReplyCardMarkdown(inline-code url) = %q, want markdown link", body)
+	}
+	if strings.Contains(body, "`https://github.com/yuhuan417/feidex`") {
+		t.Fatalf("prepareReplyCardMarkdown(inline-code url) = %q, want no inline-code URL", body)
+	}
+}
+
+func TestPrepareSubmissionCardMarkdownLinkifiesInlineCodeURLsForContentCards(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
+
+	body := prepareSubmissionCardMarkdown(a, sub, "授权链接：`https://accounts.feishu.cn/oauth/v1/device/verify?x=1`")
+	if !strings.Contains(body, "[https://accounts.feishu.cn/oauth/v1/device/verify?x=1](https://accounts.feishu.cn/oauth/v1/device/verify?x=1)") {
+		t.Fatalf("prepareSubmissionCardMarkdown(inline-code url) = %q, want markdown link", body)
+	}
+	if strings.Contains(body, "`https://accounts.feishu.cn/oauth/v1/device/verify?x=1`") {
+		t.Fatalf("prepareSubmissionCardMarkdown(inline-code url) = %q, want no inline-code URL", body)
+	}
+}
+
+func TestRenderContentCardsLinkifyInlineCodeURLs(t *testing.T) {
+	cfg := config.Default()
+	cfg.Workspaces[0].Cwd = t.TempDir()
+	a := &App{cfg: cfg}
+	sub := &domainsubmission.Submission{WorkspaceID: "default"}
+
+	replyCard := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, "反馈中", "blue", true, "打开：`https://example.test/reply`", nil, false)
+	if body := cardMarkdownContent(t, replyCard); !strings.Contains(body, "[https://example.test/reply](https://example.test/reply)") {
+		t.Fatalf("reply content card body = %q, want clickable markdown link", body)
+	}
+
+	compactCard := cardRendererForApp(a).renderCompactMarkdownCard(sub, "工作中", "blue", "", "打开：`https://example.test/compact`", nil)
+	if body := cardMarkdownContent(t, compactCard); !strings.Contains(body, "[https://example.test/compact](https://example.test/compact)") {
+		t.Fatalf("compact content card body = %q, want clickable markdown link", body)
+	}
+}

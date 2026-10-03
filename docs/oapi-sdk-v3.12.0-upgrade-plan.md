@@ -123,7 +123,7 @@ func NewCache(config *Config) {
 
 #### 3.1.1 运行形态:单进程多应用
 
-`NewService` 遍历 `cfg.ResolvedFrontends()` 为每个 frontend 建一个 App(`internal/app/service.go:33-40`),而 `FrontendConfig` 内嵌 `FeishuConfig`,即**每个 frontend 一套自己的 appID/appSecret**;adapter 经工厂逐个创建(`internal/app/deps.go:44`)。
+`NewService` 遍历 `cfg.ResolvedFrontends()` 为每个 frontend 建一个 App(`internal/feishuapp/service.go:33-40`),而 `FrontendConfig` 内嵌 `FeishuConfig`,即**每个 frontend 一套自己的 appID/appSecret**;adapter 经工厂逐个创建(`internal/feishuapp/deps.go:44`)。
 
 同时 `sharedFeishuTokenCache` 是包级单例(`internal/feishu/token_refresh.go:21`),所有应用的 client 都传同一个实例(`token_refresh.go:95`)。加之 SDK 在请求时取用的是**包级全局** `tokenManager`(`core/reqtranslator.go:149`),因此**所有应用的 token 共处一个 map,靠 appID 区分**。
 
@@ -358,7 +358,7 @@ channel 的 `NormalizedMessage`(`channel/types/types.go:55`)与项目的 `Inboun
 | 事件接入:`OnMessage` / `OnReaction` / `OnBotAdded` | **采用** | 含归一化、自回复抑制、被 @ 判定、按会话串行、事件级去重(`IsDuplicate` + `processLock` + `pipelineManager`),不弱于现有实现 |
 | `OnReject` + `PolicyConfig` / `SafetyConfig` | **采用**(新增能力) | 项目无对应物 |
 | 生命周期回调 `OnReady` / `OnError` / `OnReconnecting` / `OnReconnected` / `OnDisconnected` | **采用** | 见 3.4.3,且是唯一可用途径 |
-| `GetBotIdentity` | **采用** | 项目无对应物(现有 bot 信息获取另在 `internal/app/bot_profile.go`) |
+| `GetBotIdentity` | **采用** | 项目无对应物(现有 bot 信息获取另在 `internal/feishuapp/bot_profile.go`) |
 | **`DownloadFile`** | **不采用** | 二者调用的 API 不同:channel 用 `Im.V1.Image.Get(image_key)` / `Im.V1.File.Get(file_key)`,**不接受 message_id**;项目用 `Im.V1.MessageResource.Get`,必须带 `MessageId + FileKey + Type`(`adapter.go:987`),这是从收到的消息里取附件的正确接口。此外 channel 只返回裸 `[]byte`,不提供项目所需的文件名解析(`resolveDownloadedFileName`),也不参与 token 自愈重试 |
 | **`Send` / `Stream` 发送路径** | **不采用** | channel 只有重试(`outbound.Retry`),**无 QPS 节流**;项目有 `create` / `patch` / `announcement` 三档 QPS 限流(`feishuMessageCreateQPS = 5` 等)与按 messageID 分桶的 patch pacer(`ensurePatchPacer`)。替换会丢限流保护 |
 | **`OnCardAction` 卡片回调** | **不采用** | D4 与 3.4.2,toast 无法经其回写 |
@@ -582,7 +582,7 @@ TestWSWallClockAction                     ← D7 决定删除
 
 **`Start` 的错误语义变化(需决策处理方式)**
 
-现状:`Adapter.Start(ctx)` 在 `adapter.go:320` 调用 `validateWSStartup`,做一次**完整预检**——拉取 endpoint + 实际拨号 + 立即关闭,10 秒超时。失败则同步返回 error,`startFrontend`(`internal/app/frontend_helpers.go:18`)会检查它,因此**启动期即可得知飞书连不上**。
+现状:`Adapter.Start(ctx)` 在 `adapter.go:320` 调用 `validateWSStartup`,做一次**完整预检**——拉取 endpoint + 实际拨号 + 立即关闭,10 秒超时。失败则同步返回 error,`startFrontend`(`internal/feishuapp/frontend_helpers.go:18`)会检查它,因此**启动期即可得知飞书连不上**。
 
 SDK 的 `ch.Start(ctx)` 内部自连且**阻塞到连接结束**,不提供"只校验不连接"的接口。若直接替换,`Start` 会立即返回 nil,**启动失败从同步错误变成只能靠 `OnError` 异步感知**——daemon 会认为启动成功,而实际连不上。
 
@@ -632,18 +632,18 @@ SDK 的 `ch.Start(ctx)` 内部自连且**阻塞到连接结束**,不提供"只�
 
 原 P4 为"按需取用 channel 内的独立工具",一度因"接入点不明确"降级。实现阶段找到了明确接入点,遂落地。
 
-**接入点:文本兜底路径。** 卡片发送失败时会退回纯文本发送,而该路径把**完整正文**整段塞进一条消息(`internal/app/delivery.go:80`、`internal/app/reply_chunk_delivery.go:84`),`SendText` / `ReplyTextWithID` 内也没有长度处理。后果是:长回复 + 卡片发送失败 = 兜底消息自身也超限失败,**用户什么都收不到,且无任何报错**。
+**接入点:文本兜底路径。** 卡片发送失败时会退回纯文本发送,而该路径把**完整正文**整段塞进一条消息(`internal/feishuapp/delivery.go:80`、`internal/feishuapp/reply_chunk_delivery.go:84`),`SendText` / `ReplyTextWithID` 内也没有长度处理。后果是:长回复 + 卡片发送失败 = 兜底消息自身也超限失败,**用户什么都收不到,且无任何报错**。
 
 **实现**:
 
-- `replyTextChunked`(`internal/app/delivery.go`)按 `outbound.SplitWithCodeFences` 切分后逐条发送。选它而非项目自有的切分,是因为它**在代码块边界断开、并在下一段重开同样的语言标记**,正合 agent 输出满是代码块的形态;项目自有的切分是按卡片 payload 字节预算(`ReplyCardMaxPayloadBytes = 20000`),两者轴不同,不冲突。
+- `replyTextChunked`(`internal/feishuapp/delivery.go`)按 `outbound.SplitWithCodeFences` 切分后逐条发送。选它而非项目自有的切分,是因为它**在代码块边界断开、并在下一段重开同样的语言标记**,正合 agent 输出满是代码块的形态;项目自有的切分是按卡片 payload 字节预算(`ReplyCardMaxPayloadBytes = 20000`),两者轴不同,不冲突。
 - 新增 `ReplyTextMaxBytes = 20000`(`internal/adapter/feishu/delivery/reply_card_split.go`)。**注意这是投递策略而非实测的 API 上限**——`im.message.create` 文本内容的确切限制未经验证,取值与卡片预算同量级以便统一推理。
 - 返回首个已送达消息 id:首段失败则传播错误;后续段失败时,已送达的部分按成功上报并打 `warn`,以免调用方丢掉已发消息的链接记录。
 
 | 工具 | 结论 |
 | --- | --- |
 | `outbound.SplitWithCodeFences` | **已接入**(见上) |
-| `safety.DedupCache(capacity, ttl)` | **不采用**。能力弱于项目现有实现(只有 `IsDuplicate(key) bool`;项目的 `internal/app/inbounddedup/deduper.go` 是 `Claim`/`MarkDone` 状态机,`:38`、`:60`)。 |
+| `safety.DedupCache(capacity, ttl)` | **不采用**。能力弱于项目现有实现(只有 `IsDuplicate(key) bool`;项目的 `internal/feishuapp/inbounddedup/deduper.go` 是 `Claim`/`MarkDone` 状态机,`:38`、`:60`)。 |
 
 **与 D9 的关系**:D9 排除的是 channel 的**发送路径**(`Send` / `Stream`,因其无 QPS 节流),`SplitWithCodeFences` 是同一个包里的纯函数,不在排除范围内。实际发送仍走项目自己的 `ReplyTextWithID`,限流保护不变。
 

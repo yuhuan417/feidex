@@ -13,6 +13,7 @@
 
 - `internal/composition` 是唯一 composition root，负责创建 frontend scope、repository、application use case、adapter、runtime owner 并注入依赖。
 - `internal/app` 只保留 Feishu 入口和极薄的输入转换/分发门面。它不持有业务状态、服务注册表、backend client、业务 tracker 或跨 owner callback，也不负责组装 backend wire 请求。
+- `internal/feishuapp` 承接现有 Feishu frontend 的协议绑定实现，但只能由 `internal/composition` 构造；它不是独立 composition root，也不向外提供兼容转发层。
 - `internal/domain` 负责聚合、值对象和不变量；`internal/application` 负责产品用例、策略、查询和 semantic effects；`internal/adapter` 负责 Feishu、Codex、Claude、配置和存储协议转换；`internal/runtime` 负责 frontend 生命周期、进程、取消、恢复、并发和 effect 执行。
 - `internal/state` 和其他 repository 只负责持久化、clone、normalize 和原子更新，不发送消息、不渲染卡片、不调用 backend 或启动进程。
 - 每个 frontend 拥有独立的 backend runtime、session actors、pending requests、message links 和 runtime cache；同一 session 的状态转换串行，不同 session 和 frontend 之间互不共享 mutable runtime。
@@ -385,7 +386,7 @@ Codex server request
 同时满足以下条件，才算达到最终目标：
 
 - 生产构造路径完全由 `internal/composition` 负责；`internal/app` 不再创建或缓存 application service、backend client、runtime tracker 或兼容镜像。
-- `internal/app` 只把 Feishu 事实转换为 typed input，并把 application effects 交给 runtime/adapter；不存在把 `*App` 传入多个子服务的新增路径。
+- `internal/app` 只绑定 Feishu callback；`internal/feishuapp` 只把 Feishu 事实转换为 typed input，并把 application effects 交给 runtime/adapter；不存在把 `*App` 传入多个子服务的新增路径。
 - application、adapter、runtime 和 repository 的依赖方向符合第 2 节，任何跨 owner 控制流都通过显式 port、command、event、query 或 effect。
 - 每个 session、submission、turn、interaction 和 frontend runtime 状态只有一个 owner；保存先于外部 effect，重试使用稳定幂等身份。
 - backend wire、Feishu SDK、卡片 JSON、CLI stream 和存储 DTO 都停留在对应 adapter/runtime 边界，application 只处理语义化类型。

@@ -1,0 +1,237 @@
+package feishuapp
+
+import (
+	"feidex/internal/adapter/feishu/debugviewcmd"
+	"feidex/internal/adapter/feishu/goalcmd"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
+	"feidex/internal/codexrpc"
+	"feidex/internal/config"
+	"feidex/internal/feishu"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
+)
+
+func appendFeatureBindingsTools(bindings map[string]featureBinding) {
+	bindings["menu.review"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"review": {
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, args)
+				},
+			},
+		},
+		RenderActions: []string{"menu.review"},
+		Render: func(actionName string, a *App, sessionKey string) (map[string]any, bool) {
+			if actionName != "menu.review" {
+				return nil, false
+			}
+			return newReviewFormService(a).RenderReviewMenuCard(sessionKey), true
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			sessionKey := actionSessionKey(action)
+			switch actionName {
+			case "menu.review":
+				return newMenuActionService(s.app).completeMenuReview(action, sessionKey)
+			case "menu.review.uncommitted":
+				return appreviewcmd.CompleteMenuReviewUncommitted(newReviewAppAdapter(s.app), action, sessionKey)
+			case "menu.review.base":
+				return appreviewcmd.CompleteMenuReviewBase(newReviewAppAdapter(s.app), action, sessionKey)
+			case "menu.review.commit":
+				return appreviewcmd.CompleteMenuReviewCommit(newReviewAppAdapter(s.app), action, sessionKey)
+			case "menu.review.custom":
+				return completeMenuCommand(s.app, action, sessionKey, "/review custom", "menu.review")
+			default:
+				return nil, nil
+			}
+		},
+	}
+	bindings["menu.quiet"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"quiet": {
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return commandQuiet(a, msg, args)
+				},
+			},
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			switch actionName {
+			case "menu.quiet":
+				return newMenuActionService(s.app).completeMenuQuiet(action, actionSessionKey(action))
+			case "quiet.set":
+				return newMenuActionService(s.app).completeQuietSet(action, config.QuietMode(actionStringValue(action, "mode")))
+			default:
+				return nil, nil
+			}
+		},
+	}
+	bindings["plan"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"plan": {
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return commandPlan(a, msg, args)
+				},
+			},
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			if actionName != "menu.plan" {
+				return nil, nil
+			}
+			return completeMenuPlanAsync(s.app, action, actionSessionKey(action))
+		},
+	}
+	bindings["goal"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"goal": {
+				HandleRaw: func(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
+					return commandGoalRaw(a, msg, raw, args)
+				},
+			},
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			sessionKey := actionSessionKey(action)
+			switch actionName {
+			case "menu.goal":
+				return completeMenuGoalAsync(s.app, action, sessionKey)
+			case "goal.pause":
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusPaused)
+				})
+			case "goal.resume":
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusActive)
+				})
+			case "goal.clear":
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在清除 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalClearAction(action)
+				})
+			case "goal.edit":
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在打开 goal 编辑", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalEditAction(action)
+				})
+			case "goal.replace.confirm":
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在替换 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalReplaceConfirm(action)
+				})
+			case "goal.replace.cancel":
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保留当前 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalReplaceCancel(action)
+				})
+			case "goal.edit.submit":
+				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保存 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
+					return goalSvc.CompleteGoalEditSubmit(action)
+				})
+			default:
+				return nil, nil
+			}
+		},
+	}
+	bindings["menu.compact"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"compact": {
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return commandCompact(a, msg, args)
+				},
+			},
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			if actionName != "menu.compact" {
+				return nil, nil
+			}
+			return newMenuActionService(s.app).completeMenuCompact(action, actionSessionKey(action))
+		},
+	}
+	bindings["menu.download"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"download": {
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return debugviewcmd.CommandDownload(newDebugViewAppAdapter(a), msg, args)
+				},
+			},
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			if actionName != "menu.download" {
+				return nil, nil
+			}
+			return debugviewcmd.CompleteMenuDownload(newDebugViewAppAdapter(s.app), action, actionSessionKey(action))
+		},
+	}
+	bindings["menu.history"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"history": {
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return newHistoryService(a).CommandHistory(msg, args)
+				},
+			},
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			sessionKey := actionSessionKey(action)
+			switch actionName {
+			case "menu.history":
+				return newMenuActionService(s.app).completeMenuHistory(action, sessionKey)
+			case "history.page":
+				return newMenuActionService(s.app).completeHistoryPage(action, sessionKey, actionIntValue(action, "page"))
+			case "history.detail":
+				return newMenuActionService(s.app).completeHistoryDetail(action, sessionKey, actionIntValue(action, "index"))
+			case "history.detail.select":
+				errResp, index, ok := actionIndexOption(action, "未收到有效 turn 选项")
+				if !ok {
+					return errResp, nil
+				}
+				return newMenuActionService(s.app).completeHistoryDetail(action, sessionKey, index)
+			default:
+				return nil, nil
+			}
+		},
+	}
+	bindings["menu.skills"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"skills": {
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return newSkillsService(a).CommandSkills(msg, args)
+				},
+			},
+		},
+		RenderActions: []string{"menu.skills"},
+		Render: func(actionName string, a *App, sessionKey string) (map[string]any, bool) {
+			if actionName != "menu.skills" {
+				return nil, false
+			}
+			card, err := newSkillsService(a).RenderSkillsCard(sessionKey, false)
+			if err != nil {
+				return nil, false
+			}
+			return card, true
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			sessionKey := actionSessionKey(action)
+			switch actionName {
+			case "menu.skills":
+				if !menuActionVisibleForBackend(actionName, configuredBackend(s.app)) {
+					return completeMenuCommand(s.app, action, sessionKey, "/skills", "menu.tools")
+				}
+				return newSkillsService(s.app).CompleteSkillsOpen(action, sessionKey)
+			case "skills.select":
+				return newSkillsService(s.app).CompleteSkillsSelect(action, sessionKey, action.Option)
+			case "skills.reload":
+				return newSkillsService(s.app).CompleteSkillsReload(action, sessionKey)
+			default:
+				return nil, nil
+			}
+		},
+	}
+	bindings["menu.usage"] = featureBinding{
+		Commands: map[string]featureCommandBinding{
+			"usage": {
+				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
+					return newUsageService(a).CommandUsage(msg, args)
+				},
+			},
+		},
+		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			if actionName != "menu.usage" {
+				return nil, nil
+			}
+			return newMenuActionService(s.app).completeMenuUsage(action, actionSessionKey(action))
+		},
+	}
+}

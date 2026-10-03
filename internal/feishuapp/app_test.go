@@ -1,0 +1,3762 @@
+package feishuapp
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	domainbackend "feidex/internal/domain/backend"
+	catalog "feidex/internal/domain/modelconfig"
+	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
+
+	appapprovalview "feidex/internal/adapter/feishu/approvalview"
+	"feidex/internal/adapter/feishu/attachments"
+
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
+
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+
+	appmaintenance "feidex/internal/adapter/feishu/maintenance"
+	"feidex/internal/adapter/feishu/pendingforms"
+
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+
+	appthreadview "feidex/internal/adapter/feishu/threadview"
+	"feidex/internal/adapter/feishu/turnitem"
+
+	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
+
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
+	"feidex/internal/codexrpc"
+	"feidex/internal/config"
+	"feidex/internal/daemon"
+	"feidex/internal/domain/conversation"
+	"feidex/internal/feishu"
+	"feidex/internal/logcontrol"
+	"feidex/internal/release"
+	"feidex/internal/state"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
+)
+
+func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
+	origCodex := newCodexClient
+	origFeishu := newFeishuClient
+	defer func() {
+		newCodexClient = origCodex
+		newFeishuClient = origFeishu
+	}()
+
+	fc := &fakeCodexClient{}
+	ff := &fakeFeishuClient{}
+	newCodexClient = func(config.CodexConfig) CodexClient { return fc }
+	newFeishuClient = func(config.FeishuConfig) FeishuClient { return ff }
+
+	cfg := config.Default()
+	cfg.Feishu.Backend = domainbackend.BackendCodex
+	cfg.DataDir = t.TempDir()
+	app, err := New(cfg, filepath.Join(t.TempDir(), "config.toml"))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	notifier, ok := app.registry.FeishuTransport.(*appfeishuwrap.NotifyingFeishuClient)
+	codex, _ := app.registry.Codex.(CodexClient)
+	if codex != fc || !ok || notifier.Base != ff {
+		t.Fatalf("New() did not use injected clients: %+v", app)
+	}
+	if fc.onNotification == nil || fc.onRequest == nil {
+		t.Fatal("expected codex handlers to be configured")
+	}
+	if ff.onMessage == nil {
+		t.Fatal("expected feishu handlers to be configured")
+	}
+	if ff.localFileLinkStatePath != "" {
+		t.Fatalf("local file link state path = %q, want empty for stateless link management", ff.localFileLinkStatePath)
+	}
+}
+
+func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	fc.startErr = errors.New("codex start failed")
+	if err := a.Start(context.Background()); err == nil {
+		t.Fatal("expected Start() to fail on codex start error")
+	}
+
+	a, ff, _ := newTestApp(t)
+	ff.startErr = errors.New("feishu start failed")
+	if err := a.Start(context.Background()); err == nil {
+		t.Fatal("expected Start() to fail on feishu start error")
+	}
+
+	a, ff, fc = newTestApp(t)
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("Start(success) error = %v", err)
+	}
+	if !fc.started || !ff.started {
+		t.Fatalf("expected both clients to start, codex=%v feishu=%v", fc.started, ff.started)
+	}
+	if err := a.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	if !fc.closed || !ff.stopped {
+		t.Fatalf("expected both clients to stop, codex=%v feishu=%v", fc.closed, ff.stopped)
+	}
+
+	a, _, _ = newTestApp(t)
+	oldAttachmentDir := filepath.Join(a.cfg.Workspaces[0].Cwd, attachments.AttachmentsDirName, "sess", "old")
+	if err := os.MkdirAll(oldAttachmentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(oldAttachmentDir) error = %v", err)
+	}
+	oldTime := time.Now().Add(-appmaintenance.AttachmentRetention - time.Hour)
+	if err := os.Chtimes(oldAttachmentDir, oldTime, oldTime); err != nil {
+		t.Fatalf("Chtimes(oldAttachmentDir) error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{ID: "req-1", Status: "pending", ExpiresAt: time.Now().Add(time.Hour).Unix()}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:            "sess-1",
+		Status:         "idle",
+		ActiveThreadID: "thread-1",
+	}); err != nil {
+		t.Fatalf("UpsertSession(sess-1) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                     "sess-2",
+		Status:                  "running",
+		ActiveThreadID:          "thread-2",
+		ActiveSubmissionID:      "sub-1",
+		ActiveTurnID:            "turn-1",
+		Queue:                   []string{"sub-2"},
+		StagedImages:            []conversation.SessionStagedImage{{Name: "img"}},
+		ActiveThreadWorkspaceID: "",
+	}); err != nil {
+		t.Fatalf("UpsertSession(sess-2) error = %v", err)
+	}
+
+	recoverRuntimeState(a)
+
+	sess1 := a.store.GetSession("sess-1")
+	if sess1.WorkspaceID != defaultWorkspaceID(a) || sess1.ActiveThreadID != "" {
+		t.Fatalf("recoverRuntimeState(sess-1) = %+v, want workspace repair and cleared thread context", sess1)
+	}
+	sess2 := a.store.GetSession("sess-2")
+	if sess2.Status != "idle" || sess2.ActiveTurnID != "" || len(sess2.Queue) != 0 || len(sess2.StagedImages) != 0 {
+		t.Fatalf("recoverRuntimeState(sess-2) = %+v, want cleared runtime state", sess2)
+	}
+	if pending := a.store.PendingByID("req-1"); pending == nil || pending.Status != "expired" {
+		t.Fatalf("pending request after recover = %+v, want expired", pending)
+	}
+	if _, err := os.Stat(oldAttachmentDir); !os.IsNotExist(err) {
+		t.Fatalf("expected old attachment dir to be removed, stat err = %v", err)
+	}
+}
+
+func TestRecoverRuntimeStateResumesActiveThreadOnStartup(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-startup-resume"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ActiveThreadID:          "thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:                  "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	var calls []string
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		calls = append(calls, method)
+		if method != "thread/resume" {
+			t.Fatalf("unexpected startup method: %s", method)
+		}
+		got, _ := params.(map[string]any)
+		if got["threadId"] != "thread-1" {
+			t.Fatalf("thread/resume params = %+v, want thread-1", got)
+		}
+		result := out.(*codexrpc.ThreadStartResult)
+		result.Thread.ID = "thread-1"
+		result.Thread.Name = "Recovered"
+		result.Thread.Preview = "preview"
+		return nil
+	}
+
+	recoverRuntimeState(a)
+
+	if len(calls) != 1 || calls[0] != "thread/resume" {
+		t.Fatalf("startup recovery calls = %+v, want thread/resume", calls)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveThreadName != "Recovered" || sess.ActiveThreadPreview != "preview" {
+		t.Fatalf("session after startup resume = %+v", sess)
+	}
+	if !sessionHasLiveThread(a, sessionKey, "thread-1") {
+		t.Fatal("expected resumed thread to be marked live")
+	}
+}
+
+func TestRecoverRuntimeStateStartsFreshThreadWhenResumeFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-startup-fresh"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                        sessionKey,
+		WorkspaceID:                a.cfg.Workspaces[0].ID,
+		ActiveThreadID:             "thread-old",
+		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadApprovalPolicy: "never",
+		ActiveThreadSandboxMode:    "read-only",
+		ActiveThreadServiceTier:    "fast",
+		Status:                     "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	var calls []string
+	var startParams map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		calls = append(calls, method)
+		switch method {
+		case "thread/resume":
+			return errors.New("thread not found")
+		case "thread/start":
+			startParams, _ = params.(map[string]any)
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			result.Thread.Name = "Fresh"
+			result.Thread.Preview = "preview"
+			return nil
+		default:
+			t.Fatalf("unexpected startup method: %s", method)
+			return nil
+		}
+	}
+
+	recoverRuntimeState(a)
+
+	if len(calls) != 2 || calls[0] != "thread/resume" || calls[1] != "thread/start" {
+		t.Fatalf("startup recovery calls = %+v, want resume then start", calls)
+	}
+	if startParams["approvalPolicy"] != "never" || startParams["sandbox"] != "read-only" || startParams["serviceTier"] != "fast" || startParams["cwd"] != a.cfg.Workspaces[0].Cwd {
+		t.Fatalf("thread/start params = %+v, want session overrides and workspace cwd", startParams)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "thread-new" || sess.ActiveThreadName != "Fresh" || sess.ActiveThreadPreview != "preview" {
+		t.Fatalf("session after startup fresh thread = %+v", sess)
+	}
+	if !sessionHasLiveThread(a, sessionKey, "thread-new") {
+		t.Fatal("expected fresh thread to be marked live")
+	}
+}
+
+func TestAppMiscMessageHelpers(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+
+	if err := replyError(a, nil, nil); err != nil {
+		t.Fatalf("replyError(nil, nil) error = %v", err)
+	}
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group"}
+	if err := replyError(a, msg, errors.New("boom")); err != nil {
+		t.Fatalf("replyError(reply) error = %v", err)
+	}
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "执行失败: boom") {
+		t.Fatalf("replyError() did not send reply text: %+v", ff.replyTexts)
+	}
+
+	ff.replyTexts = nil
+	ff.sentTexts = nil
+	if err := replyError(a, &feishu.InboundMessage{ChatID: "chat-1"}, errors.New("boom2")); err != nil {
+		t.Fatalf("replyError(send) error = %v", err)
+	}
+	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "执行失败: boom2") {
+		t.Fatalf("replyError() did not send fallback text: %+v", ff.sentTexts)
+	}
+
+	if !isStaleInboundMessage(a.started, &feishu.InboundMessage{CreatedAt: a.started.Add(-31 * time.Second).Unix()}) {
+		t.Fatal("expected stale inbound message")
+	}
+	if isStaleInboundMessage(a.started, &feishu.InboundMessage{CreatedAt: a.started.Unix()}) {
+		t.Fatal("expected fresh inbound message")
+	}
+	if got := nonZero(0, 0, 3, 4); got != 3 {
+		t.Fatalf("nonZero() = %d, want 3", got)
+	}
+
+	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"})
+	if sessionKey != "feishu:chat:chat" {
+		t.Fatalf("makeSessionKey(group) = %q", sessionKey)
+	}
+	sessionKey = makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"})
+	if sessionKey != "feishu:chat:chat" {
+		t.Fatalf("makeSessionKey(p2p) = %q", sessionKey)
+	}
+	a.frontendID = "frontend-a"
+	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:chat:chat" {
+		t.Fatalf("makeSessionKey(frontend group) = %q", got)
+	}
+	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"}); got != "feishu:frontend:frontend-a:chat:chat" {
+		t.Fatalf("makeSessionKey(frontend p2p) = %q", got)
+	}
+}
+
+func TestSendCommandMenuAndStartupReadyNotifications(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	if err := sendCommandMenu(a, &feishu.InboundMessage{MessageID: "m-1", ChatType: "group"}); err != nil {
+		t.Fatalf("sendCommandMenu() error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("expected one reply card, got %d", len(ff.replyCards))
+	}
+
+	if err := a.store.UpsertSession(&conversation.Session{Key: "s1", ChatID: "chat-2", ChatType: "p2p"}); err != nil {
+		t.Fatalf("UpsertSession(s1) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{Key: "s2", ChatID: "chat-1", ChatType: "p2p"}); err != nil {
+		t.Fatalf("UpsertSession(s2) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{Key: "s3", ChatID: "chat-1", ChatType: "p2p"}); err != nil {
+		t.Fatalf("UpsertSession(s3) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{Key: "s4", ChatID: "chat-group", ChatType: "group"}); err != nil {
+		t.Fatalf("UpsertSession(s4) error = %v", err)
+	}
+	sendStartupReadyNotifications(a)
+	if len(ff.sentTexts) != 2 {
+		t.Fatalf("expected startup notifications only to p2p chats, got %+v", ff.sentTexts)
+	}
+}
+
+func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+
+	if err := commandWorkspace(a, msg, []string{"list"}); err != nil {
+		t.Fatalf("commandWorkspace(list) error = %v", err)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatalf("commandWorkspace(list) cards = %+v, want workspace menu card", ff.replyCards)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-alt-new"
+			result.Thread.Name = "Alt Thread"
+			result.Thread.Preview = "Alt Preview"
+			return nil
+		default:
+			t.Fatalf("unexpected codex method: %s", method)
+			return nil
+		}
+	}
+	if err := commandWorkspace(a, msg, []string{"use", "alt"}); err != nil {
+		t.Fatalf("commandWorkspace(use) error = %v", err)
+	}
+	sess := a.store.GetSession(makeSessionKey(a, msg))
+	if sess == nil || sess.WorkspaceID != "alt" {
+		t.Fatalf("workspace switch did not persist session: %+v", sess)
+	}
+	if sess.ActiveThreadID != "thread-alt-new" || sess.ActiveThreadWorkspaceID != "alt" {
+		t.Fatalf("workspace switch should auto-bind new thread: %+v", sess)
+	}
+
+	ff.replyCards = nil
+	if err := commandWorkspace(a, msg, nil); err != nil {
+		t.Fatalf("commandWorkspace(menu) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("expected workspace menu card, got %d", len(ff.replyCards))
+	}
+	if got := cardSelectStaticForTest(ff.replyCards[0]); len(got) != 1 {
+		t.Fatalf("workspace menu selects = %+v, want 1 select", got)
+	}
+
+	ff.replyCards = nil
+	if err := commandWorkspace(a, msg, []string{"sandbox"}); err != nil {
+		t.Fatalf("commandWorkspace(sandbox) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("expected sandbox menu card, got %d", len(ff.replyCards))
+	}
+
+	ff.replyCards = nil
+	if err := commandWorkspace(a, msg, []string{"policy"}); err != nil {
+		t.Fatalf("commandWorkspace(policy) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("expected policy menu card, got %d", len(ff.replyCards))
+	}
+
+	ff.replyCards = nil
+	if err := commandWorkspace(a, msg, []string{"new"}); err != nil {
+		t.Fatalf("commandWorkspace(new) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("expected workspace new card, got %d", len(ff.replyCards))
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected codex method: %s", method)
+		}
+		result := out.(*codexrpc.ThreadListResult)
+		result.Data = nil
+		return nil
+	}
+	ff.replyTexts = nil
+	ff.replyCards = nil
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
+		t.Fatalf("commandThreads(empty) error = %v", err)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatalf("commandThreads(empty) card = %+v", ff.replyCards)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "no switchable threads available.") {
+		t.Fatalf("commandThreads(empty) body = %q", body)
+	}
+}
+
+func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "repo /tmp/test-workspace Repo Name"}
+	pending := &state.PendingRequest{ID: "req-1", FeishuMsgID: "card-1", SessionKey: makeSessionKey(a, msg)}
+	if err := a.store.UpsertPending(pending); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-repo"
+			result.Thread.Name = "Repo Thread"
+			result.Thread.Preview = "Repo Preview"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	if err := newWorkspaceManagementService(a).CompleteWorkspaceNewText(msg, pending); err != nil {
+		t.Fatalf("completeWorkspaceNewText() error = %v", err)
+	}
+	a.waitAsync()
+	if config.FindWorkspace(a.cfg, "repo") == nil {
+		t.Fatal("expected workspace to be appended to config")
+	}
+	if got := a.store.GetSession(makeSessionKey(a, msg)); got == nil || got.WorkspaceID != "repo" {
+		t.Fatalf("workspace session after creation = %+v, want switched workspace", got)
+	}
+	if got := a.store.GetSession(makeSessionKey(a, msg)); got == nil || got.ActiveThreadID != "thread-repo" || got.ActiveThreadWorkspaceID != "repo" {
+		t.Fatalf("workspace session should auto-bind thread after creation = %+v", got)
+	}
+	if len(ff.patchedCards) == 0 || len(ff.replyTexts) == 0 {
+		t.Fatalf("expected workspace creation to patch card and reply, patches=%d replies=%d", len(ff.patchedCards), len(ff.replyTexts))
+	}
+
+	sessionKey := makeSessionKey(a, msg)
+	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
+	ff.sendCards = nil
+	ff.replyCards = nil
+	ff.replyTexts = nil
+	fc.replyErrors = nil
+	onCommandApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"ls -la","cwd":"/repo","reason":"need approval"}`)})
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected command approval to reply with a card")
+	}
+	if got, _ := ff.replyCards[0]["schema"].(string); got != "2.0" {
+		t.Fatalf("approval card schema = %#v, want 2.0", ff.replyCards[0]["schema"])
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] 等待审批" {
+		t.Fatalf("command approval card title = %q", got)
+	}
+	if got := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "命令审批") || !strings.Contains(got, "ls -la") || !strings.Contains(got, "/repo") {
+		t.Fatalf("command approval card body = %q", got)
+	}
+	if len(ff.replyTexts) != 0 {
+		t.Fatalf("command approval should not send extra text, got replies=%+v", ff.replyTexts)
+	}
+	if pending := a.store.PendingByID("cmd-1"); pending == nil || pending.Kind != "command" {
+		t.Fatalf("command approval pending = %+v, want command request", pending)
+	}
+	if refreshed := a.store.GetSubmission(sub.ID); refreshed.Status != "waiting_approval" {
+		t.Fatalf("submission status = %q, want waiting_approval", refreshed.Status)
+	}
+
+	ff.sendCards = nil
+	ff.replyCards = nil
+	onPermissionsApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","reason":"sandbox","permissions":{"mode":"write","network":true,"sandbox":{"type":"workspace-write"},"writable_roots":["/repo","/tmp/work"]}}`)})
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected permissions approval to reply with a card")
+	}
+	if got, _ := ff.replyCards[0]["schema"].(string); got != "2.0" {
+		t.Fatalf("permissions card schema = %#v, want 2.0", ff.replyCards[0]["schema"])
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] 权限请求" {
+		t.Fatalf("permissions approval card title = %q", got)
+	}
+	if got := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "权限审批") || !strings.Contains(got, "mode") || !strings.Contains(got, "network") || !strings.Contains(got, "/repo") {
+		t.Fatalf("permissions approval card body = %q", got)
+	}
+	if len(ff.replyTexts) != 0 {
+		t.Fatalf("permissions approval should not send extra text, got replies=%+v", ff.replyTexts)
+	}
+
+	ff.sendCards = nil
+	ff.replyCards = nil
+	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","questions":[{"id":"q1","question":"Choose","options":[{"label":"A","description":"First option"},{"label":"B","description":"Second option"}]}]}`)})
+	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" {
+		t.Fatalf("tool user input pending = %+v, want quick-pick request", pending)
+	}
+	if got := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "Choose") || !strings.Contains(got, "1. A - First option") || !strings.Contains(got, "2. B - Second option") {
+		t.Fatalf("tool user input quick-pick body = %q", got)
+	}
+
+	ff.sendCards = nil
+	ff.replyCards = nil
+	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-2"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"A"},{"id":"q2","question":"B"}]}`)})
+	if pending := a.store.PendingByID("input-2"); pending == nil || pending.Kind != "tool_request_user_input_form" {
+		t.Fatalf("tool user input form pending = %+v, want form request", pending)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("tool user input form cards = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(got, `<at id=user-1></at>`) {
+		t.Fatalf("tool user input form body = %q", got)
+	}
+	form := toolUserInputFormForTest(t, ff.replyCards[0])
+	if inputs := toolUserInputFormInputsForTest(t, form); len(inputs) != 2 {
+		t.Fatalf("tool user input form inputs = %+v, want 2", inputs)
+	}
+
+	ff.sendCards = nil
+	ff.replyCards = nil
+	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-3"`), Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-5","questions":[{"id":"q1","question":"Pick targets","multiSelect":true,"options":[{"label":"A"},{"label":"B"},{"label":"C"}]}]}`)})
+	if pending := a.store.PendingByID("input-3"); pending == nil || pending.Kind != "tool_request_user_input_form" {
+		t.Fatalf("tool user input multi-select pending = %+v, want form request", pending)
+	}
+	form = toolUserInputFormForTest(t, ff.replyCards[0])
+	if toggle := toolUserInputToggleButtonsForTest(t, form); len(toggle) != 3 {
+		t.Fatalf("tool user input multi-select toggle buttons = %+v, want 3", toggle)
+	}
+
+	ff.sendCards = nil
+	ff.replyCards = nil
+	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"visit","url":"https://example.test"}`)})
+	if pending := a.store.PendingByID("elicit-1"); pending == nil || pending.Kind != "mcp_elicitation_url" {
+		t.Fatalf("elicitation url pending = %+v, want url request", pending)
+	}
+	if got := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "visit") {
+		t.Fatalf("elicitation url body = %q", got)
+	}
+
+	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-2"`), Params: json.RawMessage(`{"mode":"form","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"fill","requestedSchema":{"properties":{"name":{"type":"string"}}}}`)})
+	if pending := a.store.PendingByID("elicit-2"); pending == nil || pending.Kind != "mcp_elicitation_form" {
+		t.Fatalf("elicitation form pending = %+v, want form request", pending)
+	}
+	if got := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(got, `<at id=user-1></at>`) || !strings.Contains(got, "fill") {
+		t.Fatalf("elicitation form body = %q", got)
+	}
+}
+
+func TestCompleteWorkspaceNewTextExistingWorkspacePromptsSwitch(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	existingDir := t.TempDir()
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "repo Repo Name"}
+	pending := &state.PendingRequest{
+		ID:          "req-existing-1",
+		Kind:        "workspace_new",
+		FeishuMsgID: "card-1",
+		SessionKey:  makeSessionKey(a, msg),
+		PayloadJSON: mustJSON(appworkspacecmd.NewPayload{
+			RootPath:    "/",
+			SelectedCWD: existingDir,
+		}),
+	}
+	if err := a.store.UpsertPending(pending); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+
+	if err := newWorkspaceManagementService(a).CompleteWorkspaceNewText(msg, pending); err != nil {
+		t.Fatalf("completeWorkspaceNewText() error = %v", err)
+	}
+	if pending := a.store.PendingByID("req-existing-1"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("pending after existing workspace prompt = %+v, want resolved", pending)
+	}
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patchedCards = %d, want 1", len(ff.patchedCards))
+	}
+	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, existingDir) || !strings.Contains(body, "是否直接切换到这个工作区") {
+		t.Fatalf("patched switch body = %q", body)
+	}
+	if len(ff.replyTexts) != 1 || !strings.Contains(ff.replyTexts[0], "工作区已存在且目录一致") {
+		t.Fatalf("replyTexts = %+v, want existing workspace hint", ff.replyTexts)
+	}
+}
+
+func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+
+	origClone := workspaceGitClone
+	defer func() { workspaceGitClone = origClone }()
+
+	var gotRepoURL string
+	var gotTargetDir string
+	workspaceGitClone = func(_ context.Context, repoURL, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
+		gotRepoURL = repoURL
+		gotTargetDir = targetDir
+		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
+	}
+
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		switch method {
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-clone"
+			result.Thread.Name = "Clone Thread"
+			result.Thread.Preview = "Clone Preview"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	repoURL := "git@github.com:example/repo.git"
+	if err := commandWorkspace(a, msg, []string{"clone", repoURL}); err != nil {
+		t.Fatalf("commandWorkspace(clone) error = %v", err)
+	}
+	a.waitAsync()
+
+	wantTargetDir := filepath.Join(baseDir, "repo")
+	if gotRepoURL != repoURL {
+		t.Fatalf("workspaceGitClone repoURL = %q, want %q", gotRepoURL, repoURL)
+	}
+	if gotTargetDir != wantTargetDir {
+		t.Fatalf("workspaceGitClone targetDir = %q, want %q", gotTargetDir, wantTargetDir)
+	}
+	if ws := config.FindWorkspace(a.cfg, "repo"); ws == nil || ws.Cwd != wantTargetDir {
+		t.Fatalf("cloned workspace = %+v, want cwd %q", ws, wantTargetDir)
+	}
+	if sess := a.store.GetSession(makeSessionKey(a, msg)); sess == nil || sess.WorkspaceID != "repo" || sess.ActiveThreadID != "thread-clone" || sess.ActiveThreadWorkspaceID != "repo" {
+		t.Fatalf("session after clone = %+v", sess)
+	}
+	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "已从仓库创建并切换到工作区 repo") || !strings.Contains(ff.replyTexts[0], wantTargetDir) {
+		t.Fatalf("workspace clone replyTexts = %+v", ff.replyTexts)
+	}
+}
+
+func TestCommandWorkspaceCloneExistingDirectoryOpensWorkspaceNewCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	existingDir := filepath.Join(baseDir, "repo")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(existingDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	if err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+		t.Fatalf("commandWorkspace(clone existing dir) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	inputs := workspaceNewFormInputs(t, ff.replyCards[0])
+	if got, _ := inputs["workspace_id"]["default_value"].(string); got != "repo" {
+		t.Fatalf("workspace_id default_value = %q, want repo", got)
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, existingDir) {
+		t.Fatalf("workspace new takeover body = %q, want target dir %q", body, existingDir)
+	}
+}
+
+func TestCommandWorkspaceCloneExistingWorkspacePromptsSwitch(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	existingDir := filepath.Join(baseDir, "repo")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	if err := os.MkdirAll(existingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(existingDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	if err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+		t.Fatalf("commandWorkspace(clone existing workspace) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(body, existingDir) || !strings.Contains(body, "是否直接切换到这个工作区") {
+		t.Fatalf("workspace existing switch body = %q", body)
+	}
+	if !cardHasButtonText(ff.replyCards[0], "切换到该工作区") {
+		t.Fatalf("workspace existing switch buttons = %#v", cardButtonsForTest(ff.replyCards[0]))
+	}
+}
+
+func TestCommandWorkspaceCloneRejectsExistingWorkspaceID(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: t.TempDir()})
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+
+	err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"})
+	if err == nil {
+		t.Fatal("expected existing workspace id to fail clone")
+	}
+	if !strings.Contains(err.Error(), `workspace "repo" 已存在`) {
+		t.Fatalf("clone existing workspace error = %v", err)
+	}
+}
+
+func TestHandleServerRequestAndAppNotificationsErrorPaths(t *testing.T) {
+	a, _, fc := newTestApp(t)
+
+	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"req-1"`), Method: "unknown"})
+	if len(fc.replyErrors) == 0 || fc.replyErrors[0].code != -32601 {
+		t.Fatalf("handleServerRequest(unknown) replyErrors = %+v", fc.replyErrors)
+	}
+
+	fc.replyErrors = nil
+	onCommandApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-cmd"`), Params: json.RawMessage(`{`)})
+	if len(fc.replyErrors) == 0 || fc.replyErrors[0].code != -32602 {
+		t.Fatalf("onCommandApproval(invalid params) = %+v", fc.replyErrors)
+	}
+
+	fc.replyErrors = nil
+	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-elicit"`), Params: json.RawMessage(`{"mode":"other"}`)})
+	if len(fc.replyErrors) == 0 || fc.replyErrors[0].code != -32601 {
+		t.Fatalf("onMcpElicitationRequest(unsupported mode) = %+v", fc.replyErrors)
+	}
+
+	a.HandleFeishuRecall(nil)
+	a.HandleFeishuReaction(&feishu.MessageReaction{EmojiType: "smile"})
+}
+
+func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	sessionKey := "sess-p2p"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "thread-p2p",
+		ActiveTurnID:       "turn-p2p",
+		ActiveSubmissionID: "sub-p2p",
+		OwnerUserID:        "user-1",
+		ChatID:             "chat-p2p",
+		ChatType:           "p2p",
+		Status:             "running",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
+		ID:               "sub-p2p",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "thread-p2p",
+		TurnID:           "turn-p2p",
+		UserID:           "user-1",
+		ChatID:           "chat-p2p",
+		TriggerMessageID: "trigger-p2p",
+		Status:           "running",
+	})
+	if err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+
+	a.ServerRequestService().SendApprovalCard("command", json.RawMessage(`"req-p2p"`), "thread-p2p", "turn-p2p", "item-1", "命令审批\n`pwd`")
+
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("approval card count = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardHeaderTitle(t, ff.replyCards[0]); got != "["+a.cfg.Workspaces[0].ID+"] 等待审批" {
+		t.Fatalf("approval card title = %q", got)
+	}
+	if got := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(got, "命令审批") || !strings.Contains(got, `<at id=user-1></at>`) {
+		t.Fatalf("approval card in p2p body = %q", got)
+	}
+	if pending := a.store.PendingByID("req-p2p"); pending == nil || pending.FeishuMsgID == "" {
+		t.Fatalf("pending approval = %+v", pending)
+	}
+	if got := a.store.GetSubmission(subID); got == nil || got.Status != "waiting_approval" {
+		t.Fatalf("submission status = %+v, want waiting_approval", got)
+	}
+}
+
+func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Feishu.DebugAllowFrom = []string{"user-1"}
+	prevLevel := appdebugviewcmd.RuntimeLogLevelText()
+	t.Cleanup(func() {
+		_ = logcontrol.SetName(prevLevel)
+		if a.cfg != nil {
+			a.cfg.Log.Level = appdebugviewcmd.RuntimeLogLevelText()
+		}
+	})
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		if method == "thread/fork" {
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-fork"
+			result.Thread.Name = "Forked"
+			result.Thread.Preview = "fork preview"
+		}
+		return nil
+	}
+	action := &feishu.CardAction{
+		UserID:    "user-1",
+		ChatID:    "chat-1",
+		MessageID: "msg-1",
+		ActionValue: map[string]any{
+			"session_key": "feishu:frontend:default:chat:chat-1",
+		},
+	}
+
+	if resp, err := newCardActionService(a).dispatch(nil); err != nil || resp == nil {
+		t.Fatalf("dispatchCardAction(nil) = %#v, %v", resp, err)
+	}
+	if resp, err := newCardActionService(a).dispatch(&feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("dispatchCardAction(unknown) = %#v, %v", resp, err)
+	}
+	newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
+	if resp, err := newCardActionService(a).dispatch(&feishu.CardAction{
+		ActionValue: map[string]any{"action": "menu.root"},
+	}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "当前正在切换到 Codex backend") {
+		t.Fatalf("dispatchCardAction(blocked) = %#v, %v", resp, err)
+	}
+	newRuntimeStateService(a).finishBackendSwitchState()
+
+	for name, fn := range map[string]func() (*callback.CardActionTriggerResponse, error){
+		"menu.root": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuRoot(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.tools": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuTools(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.thread": func() (*callback.CardActionTriggerResponse, error) {
+			return appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
+			const downloadSessionKey = "feishu:chat:chat-1"
+			if err := a.store.UpsertSession(&conversation.Session{
+				Key:         downloadSessionKey,
+				WorkspaceID: a.cfg.Workspaces[0].ID,
+				ChatID:      "chat-1",
+				ChatType:    "group",
+			}); err != nil {
+				t.Fatalf("UpsertSession(download) error = %v", err)
+			}
+			return appdebugviewcmd.CompleteMenuDownload(newDebugViewAppAdapter(a), &feishu.CardAction{
+				UserID:      "user-1",
+				ChatID:      "chat-1",
+				MessageID:   "msg-download",
+				ActionValue: map[string]any{"session_key": downloadSessionKey, "parent_action": "menu.tools"},
+			}, downloadSessionKey)
+		},
+		"menu.fork": func() (*callback.CardActionTriggerResponse, error) {
+			const forkSessionKey = "feishu:chat:chat-1"
+			if err := a.store.UpsertSession(&conversation.Session{
+				Key:                     forkSessionKey,
+				WorkspaceID:             a.cfg.Workspaces[0].ID,
+				ChatID:                  "chat-1",
+				ChatType:                "group",
+				RootMessageID:           "fork-root",
+				ActiveThreadID:          "thread-1",
+				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+			}); err != nil {
+				t.Fatalf("UpsertSession(fork) error = %v", err)
+			}
+			return completeMenuFork(a, &feishu.CardAction{ActionValue: map[string]any{
+				"session_key":   forkSessionKey,
+				"parent_action": "menu.thread",
+			}}, forkSessionKey)
+		},
+		"menu.compact": func() (*callback.CardActionTriggerResponse, error) {
+			const compactSessionKey = "feishu:chat:chat-1"
+			if err := a.store.UpsertSession(&conversation.Session{
+				Key:                     compactSessionKey,
+				WorkspaceID:             a.cfg.Workspaces[0].ID,
+				ChatID:                  "chat-1",
+				ChatType:                "group",
+				RootMessageID:           "compact-root",
+				ActiveThreadID:          "thread-1",
+				ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+			}); err != nil {
+				t.Fatalf("UpsertSession(compact) error = %v", err)
+			}
+			return newMenuActionService(a).completeMenuCompact(&feishu.CardAction{ActionValue: map[string]any{
+				"session_key":   compactSessionKey,
+				"parent_action": "menu.tools",
+			}}, compactSessionKey)
+		},
+		"menu.group.model": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuGroupModel(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.group.system": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuGroupSystem(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.quiet": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuQuiet(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.fast": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuFast(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.model": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuModel(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.status": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuStatus(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.debug": func() (*callback.CardActionTriggerResponse, error) {
+			return newDebugService(a).CompleteMenuDebug(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.debug.logs": func() (*callback.CardActionTriggerResponse, error) {
+			return newDebugService(a).CompleteMenuDebugLogs(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.help": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuHelp(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.history": func() (*callback.CardActionTriggerResponse, error) {
+			return newMenuActionService(a).completeMenuHistory(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.skills": func() (*callback.CardActionTriggerResponse, error) {
+			return newSkillsService(a).CompleteSkillsOpen(action, action.ActionValue["session_key"].(string))
+		},
+		"menu.workspace": func() (*callback.CardActionTriggerResponse, error) {
+			return newWorkspaceConfigService(a).CompleteMenuWorkspace(action, action.ActionValue["session_key"].(string))
+		},
+		"workspace.new": func() (*callback.CardActionTriggerResponse, error) {
+			return newWorkspaceManagementService(a).CompleteWorkspaceNew(action, action.ActionValue["session_key"].(string))
+		},
+		"workspace.delete.menu": func() (*callback.CardActionTriggerResponse, error) {
+			return newWorkspaceConfigService(a).CompleteWorkspaceDeleteMenu(action.ActionValue["session_key"].(string))
+		},
+		"workspace.clone": func() (*callback.CardActionTriggerResponse, error) {
+			return newWorkspaceManagementService(a).CompleteWorkspaceClone(action, action.ActionValue["session_key"].(string))
+		},
+		"workspace.worktree": func() (*callback.CardActionTriggerResponse, error) {
+			return newWorkspaceManagementService(a).CompleteWorkspaceWorktree(action, action.ActionValue["session_key"].(string))
+		},
+		"workspace.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
+			return newWorkspaceManagementService(a).CompleteWorkspaceSandboxMenu(action, action.ActionValue["session_key"].(string))
+		},
+		"workspace.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
+			return newWorkspaceManagementService(a).CompleteWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
+		},
+		"thread.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
+			return appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
+		},
+		"thread.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
+			return appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
+		},
+	} {
+		resp, err := fn()
+		if err != nil || resp == nil || resp.Toast == nil {
+			t.Fatalf("%s = %#v, %v", name, resp, err)
+		}
+		wantToastType := "info"
+		if name == "thread.sandbox.menu" || name == "thread.policy.menu" || name == "menu.history" {
+			wantToastType = "warning"
+		}
+		if name == "menu.compact" || name == "menu.fork" || name == "menu.debug" {
+			wantToastType = "success"
+		}
+		if name == "menu.debug.logs" {
+			wantToastType = "info"
+		}
+		if resp.Toast.Type != wantToastType {
+			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
+		}
+		switch name {
+		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.clone", "workspace.worktree", "workspace.delete.menu", "workspace.sandbox.menu", "workspace.policy.menu":
+			if resp.Card == nil {
+				t.Fatalf("%s should update current card", name)
+			}
+		}
+	}
+}
+
+func TestProcessMessageBlockedWhileBackendSwitching(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
+
+	msg := &feishu.InboundMessage{
+		MessageID: "msg-1",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+		Text:      "hello",
+	}
+	err := newFeishuEventRouter(a).processMessage(msg)
+	if err == nil || !strings.Contains(err.Error(), "当前正在切换到 Codex backend") {
+		t.Fatalf("processMessage() error = %v, want backend switch block", err)
+	}
+}
+
+func TestWorkspaceMenuCardsIncludeBackNavigation(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
+	sessionKey := "feishu:chat:chat"
+	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	workspaceCard := newWorkspaceRenderService(a).RenderWorkspaceMenuCard(sessionKey)
+	workspaceActions := cardButtonsForTest(workspaceCard)
+	foundBackToMenu := false
+	foundClone := false
+	foundDelete := false
+	for _, action := range workspaceActions {
+		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		if value["action"] == "menu.root" {
+			foundBackToMenu = true
+		}
+		if value["action"] == "workspace.clone" {
+			foundClone = true
+		}
+		if value["action"] == "workspace.delete.menu" {
+			foundDelete = true
+		}
+	}
+	if !foundBackToMenu {
+		t.Fatalf("workspace menu missing back button: %+v", workspaceActions)
+	}
+	if !foundClone {
+		t.Fatalf("workspace menu missing clone button: %+v", workspaceActions)
+	}
+	if !foundDelete {
+		t.Fatalf("workspace menu missing delete button: %+v", workspaceActions)
+	}
+
+	sandboxCard, err := newWorkspaceRenderService(a).RenderWorkspaceSandboxMenuCard(sessionKey)
+	if err != nil {
+		t.Fatalf("renderWorkspaceSandboxMenuCard() error = %v", err)
+	}
+	sandboxActions := cardButtonsForTest(sandboxCard)
+	foundBackToWorkspace := false
+	for _, action := range sandboxActions {
+		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		if value["action"] == "menu.workspace" {
+			foundBackToWorkspace = true
+		}
+	}
+	if !foundBackToWorkspace {
+		t.Fatalf("workspace sandbox menu missing back button: %+v", sandboxActions)
+	}
+}
+
+func TestWorkspaceDeleteMenuUsesSelectStatic(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	currentDir := t.TempDir()
+	dropDir := t.TempDir()
+	a.cfg.Workspaces = []config.Workspace{
+		{ID: "default", Name: "Default", Cwd: currentDir, ApprovalPolicy: "on-request", SandboxMode: "workspace-write"},
+		{ID: "drop", Name: "Drop", Cwd: dropDir, ApprovalPolicy: "on-request", SandboxMode: "workspace-write"},
+	}
+	sessionKey := "feishu:chat:chat"
+	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	card, err := newWorkspaceRenderService(a).RenderWorkspaceDeleteMenuCard(sessionKey)
+	if err != nil {
+		t.Fatalf("renderWorkspaceDeleteMenuCard() error = %v", err)
+	}
+	selects := cardSelectStaticForTest(card)
+	if len(selects) != 1 {
+		t.Fatalf("workspace delete menu selects = %+v, want 1", selects)
+	}
+	if got, _ := selects[0]["name"].(string); got != "workspace_delete_select" {
+		t.Fatalf("workspace delete select name = %q, want workspace_delete_select", got)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != 1 {
+		t.Fatalf("workspace delete select options = %+v, want 1 removable workspace", options)
+	}
+	if got, _ := options[0]["value"].(string); got != "drop" {
+		t.Fatalf("workspace delete select option value = %q, want drop", got)
+	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "当前工作区不可删除") {
+		t.Fatalf("workspace delete menu body = %q", body)
+	}
+}
+
+func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	sessionKey := "feishu:chat:chat"
+
+	rootCard := renderCommandMenuCard(a, sessionKey)
+	if body := cardMarkdownContent(t, rootCard); !strings.Contains(body, "当前位置：主菜单") || strings.Contains(body, "当前模式: plan") {
+		t.Fatalf("root menu missing breadcrumb: %q", body)
+	}
+	rootActions := cardButtonsForTest(rootCard)
+	for _, action := range rootActions {
+		text, _ := action["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		if !strings.HasSuffix(label, "›") {
+			t.Fatalf("root submenu label missing indicator: %q", label)
+		}
+		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		if actionName, _ := value["action"].(string); actionName == "menu.group.backend" {
+			t.Fatalf("root menu should not expose backend group directly: %#v", rootActions)
+		}
+	}
+	lastRootValue, _ := rootActions[len(rootActions)-1]["value"].(map[string]any)
+	if len(lastRootValue) == 0 {
+		behaviors, _ := rootActions[len(rootActions)-1]["behaviors"].([]map[string]any)
+		if len(behaviors) > 0 {
+			lastRootValue, _ = behaviors[0]["value"].(map[string]any)
+		}
+	}
+	if got, _ := lastRootValue["action"].(string); got != "menu.group.system" {
+		t.Fatalf("root menu last action = %q, want menu.group.system", got)
+	}
+
+	toolsCard := renderToolsMenuCard(a, sessionKey)
+	if body := cardMarkdownContent(t, toolsCard); !strings.Contains(body, "当前位置：主菜单 / 常用工具") || strings.Contains(body, "当前模式: plan") {
+		t.Fatalf("tools menu missing breadcrumb: %q", body)
+	}
+	contextActions := cardButtonsForTest(toolsCard)
+	indicatorByAction := map[string]bool{}
+	labelByAction := map[string]string{}
+	actionOrder := make([]string, 0, len(contextActions))
+	for _, action := range contextActions {
+		text, _ := action["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		actionName, _ := value["action"].(string)
+		actionOrder = append(actionOrder, actionName)
+		indicatorByAction[actionName] = strings.HasSuffix(label, "›")
+		labelByAction[actionName] = label
+	}
+	if indicatorByAction["menu.quiet"] != true || indicatorByAction["menu.plan"] || indicatorByAction["menu.goal"] || indicatorByAction["menu.history"] != true || indicatorByAction["menu.usage"] != true {
+		t.Fatalf("expected tools submenu indicators, got %#v", indicatorByAction)
+	}
+	if indicatorByAction["menu.interrupt"] || indicatorByAction["menu.download"] || indicatorByAction["menu.compact"] || indicatorByAction["menu.goal"] {
+		t.Fatalf("direct tools commands should not show submenu indicator, got %#v", indicatorByAction)
+	}
+	if !strings.Contains(labelByAction["menu.quiet"], "/quiet") || !strings.Contains(labelByAction["menu.plan"], "/plan") || !strings.Contains(labelByAction["menu.goal"], "/goal") || !strings.Contains(labelByAction["menu.history"], "/history") || !strings.Contains(labelByAction["menu.usage"], "/usage") || !strings.Contains(labelByAction["menu.interrupt"], "/stop") || !strings.Contains(labelByAction["menu.download"], "/download") || !strings.Contains(labelByAction["menu.compact"], "/compact") {
+		t.Fatalf("expected real command labels in tools menu, got %#v", labelByAction)
+	}
+	quietIndex, planIndex, goalIndex, compactIndex := -1, -1, -1, -1
+	for i, actionName := range actionOrder {
+		switch actionName {
+		case "menu.quiet":
+			quietIndex = i
+		case "menu.plan":
+			planIndex = i
+		case "menu.goal":
+			goalIndex = i
+		case "menu.compact":
+			compactIndex = i
+		}
+	}
+	if !(quietIndex >= 0 && planIndex > quietIndex && goalIndex > planIndex && compactIndex > goalIndex) {
+		t.Fatalf("unexpected tools order: %#v", actionOrder)
+	}
+	lastToolsText, _ := contextActions[len(contextActions)-1]["text"].(map[string]any)["content"].(string)
+	if lastToolsText != "返回上一级" {
+		t.Fatalf("tools menu last button = %q, want 返回上一级", lastToolsText)
+	}
+
+	modelCard := newBackendConfigurationService(a).renderModelMenuCard(sessionKey)
+	modelActions := cardButtonsForTest(modelCard)
+	modelLabelByAction := map[string]string{}
+	for _, action := range modelActions {
+		text, _ := action["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		value, _ := action["value"].(map[string]any)
+		if len(value) == 0 {
+			behaviors, _ := action["behaviors"].([]map[string]any)
+			if len(behaviors) > 0 {
+				value, _ = behaviors[0]["value"].(map[string]any)
+			}
+		}
+		actionName, _ := value["action"].(string)
+		modelLabelByAction[actionName] = label
+	}
+	if !strings.Contains(modelLabelByAction["menu.model"], "/model") || !strings.Contains(modelLabelByAction["menu.fast"], "/fast config") {
+		t.Fatalf("expected real command labels in model menu, got %#v", modelLabelByAction)
+	}
+
+	helpCard := renderHelpCard(a, sessionKey)
+	if body := cardMarkdownContent(t, helpCard); !strings.Contains(body, "当前位置：主菜单 / 系统运维 / 命令帮助") || strings.Contains(body, "当前模式: plan") {
+		t.Fatalf("help card missing breadcrumb: %q", body)
+	}
+}
+
+func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	sessionKey := "feishu:chat:chat"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                           sessionKey,
+		WorkspaceID:                   a.cfg.Workspaces[0].ID,
+		ActiveThreadID:                "thread-1",
+		ActiveThreadWorkspaceID:       a.cfg.Workspaces[0].ID,
+		ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{Mode: "plan", Model: "gpt-5.4"},
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	workspacePrefix := "[" + a.cfg.Workspaces[0].ID + "] [plan] "
+	cases := []struct {
+		name  string
+		title string
+		body  string
+	}{
+		{name: "root", title: cardHeaderTitle(t, renderCommandMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderCommandMenuCard(a, sessionKey))},
+		{name: "tools", title: cardHeaderTitle(t, renderToolsMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderToolsMenuCard(a, sessionKey))},
+		{name: "status", title: cardHeaderTitle(t, renderStatusCard(a, sessionKey)), body: cardMarkdownContent(t, renderStatusCard(a, sessionKey))},
+		{name: "interrupt", title: cardHeaderTitle(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。")), body: cardMarkdownContent(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。"))},
+		{name: "compact", title: cardHeaderTitle(t, renderCompactPreparingCard(a, sessionKey)), body: cardMarkdownContent(t, renderCompactPreparingCard(a, sessionKey))},
+	}
+	for _, tc := range cases {
+		if !strings.HasPrefix(tc.title, workspacePrefix) {
+			t.Fatalf("%s card title = %q, want %q prefix", tc.name, tc.title, workspacePrefix)
+		}
+		if strings.Contains(tc.body, "当前模式: plan") {
+			t.Fatalf("%s card body = %q, want no plan banner", tc.name, tc.body)
+		}
+	}
+}
+
+func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	setCodex(a, nil)
+	setClaudeCore(a, &fakeClaudeCore{})
+	sessionKey := "feishu:chat:chat"
+
+	toolsCard := renderToolsMenuCard(a, sessionKey)
+	toolsLabels := cardButtonLabelsByAction(toolsCard)
+	for _, actionName := range []string{"menu.review", "menu.skills"} {
+		if _, ok := toolsLabels[actionName]; ok {
+			t.Fatalf("unexpected Claude tools action %q in %+v", actionName, toolsLabels)
+		}
+	}
+	for _, actionName := range []string{"menu.history", "menu.usage", "menu.quiet"} {
+		if _, ok := toolsLabels[actionName]; !ok {
+			t.Fatalf("missing Claude tools action %q in %+v", actionName, toolsLabels)
+		}
+	}
+
+	modelCard := newBackendConfigurationService(a).renderModelMenuCard(sessionKey)
+	modelLabels := cardButtonLabelsByAction(modelCard)
+	if _, ok := modelLabels["menu.fast"]; ok {
+		t.Fatalf("unexpected Claude model action menu.fast in %+v", modelLabels)
+	}
+	if _, ok := modelLabels["menu.model"]; !ok {
+		t.Fatalf("missing Claude model action menu.model in %+v", modelLabels)
+	}
+}
+
+func TestClaudeStaleReviewMenuActionPassthroughsAndFallsBackToToolsMenu(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	setCodex(a, nil)
+	claude := &fakeClaudeCore{}
+	setClaudeCore(a, claude)
+	sessionKey := "feishu:chat:chat"
+
+	resp, err := newMenuActionService(a).completeMenuReview(&feishu.CardAction{
+		ActionValue: map[string]any{"session_key": sessionKey},
+	}, sessionKey)
+	if err != nil {
+		t.Fatalf("completeMenuReview() error = %v", err)
+	}
+	if resp == nil || resp.Card == nil {
+		t.Fatalf("completeMenuReview() = %#v, want fallback card response", resp)
+	}
+	if len(claude.startTurnCalls) != 1 || claude.startTurnCalls[0].prompt != "/review" {
+		t.Fatalf("Claude startTurn calls = %#v, want /review passthrough", claude.startTurnCalls)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	body := cardMarkdownContent(t, cardData)
+	if !strings.Contains(body, "当前位置：主菜单 / 常用工具") || strings.Contains(body, "当前位置：主菜单 / 常用工具 / 代码审查") {
+		t.Fatalf("stale review fallback body = %q", body)
+	}
+}
+
+func TestApprovalAndUserInputActions(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
+
+	for _, req := range []*state.PendingRequest{
+		{ID: "command-1", Kind: "command", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "命令审批\n`ls`\nneed approval"})},
+		{ID: "file-1", Kind: "file", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "文件变更审批\nneed review"})},
+		{ID: "perm-1", Kind: "permissions", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(map[string]any{"body": "权限审批\n需要写权限", "permissions": map[string]any{"mode": "write"}})},
+		{ID: "input-1", Kind: "tool_request_user_input", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", OwnerUserID: "user-1", Status: "pending", PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{Questions: []pendingforms.ToolUserInputQuestion{{ID: "q-1", Question: "Choose", Options: []pendingforms.ToolUserInputOption{{Label: "A", Description: "First option"}, {Label: "B", Description: "Second option"}}}}})},
+	} {
+		if err := a.store.UpsertPending(req); err != nil {
+			t.Fatalf("UpsertPending(%s) error = %v", req.ID, err)
+		}
+	}
+
+	action := &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-1"}}
+	resp, err := a.ServerRequestService().CompleteApprovalAction(action, "approval.command.accept_session")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(command) = %#v, %v", resp, err)
+	}
+	if len(fc.replies) == 0 {
+		t.Fatal("expected command approval to reply to codex")
+	}
+	if pending := a.store.PendingByID("command-1"); pending == nil || pending.Status != "replied" {
+		t.Fatalf("command pending = %+v, want replied", pending)
+	}
+	if got := string(fc.replies[0].id); got != `"command-1"` {
+		t.Fatalf("codex reply id = %s, want %q", got, `"command-1"`)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected command approval response card")
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "已允许本会话执行") || !strings.Contains(got, "命令审批") || !strings.Contains(got, "`ls`") {
+		t.Fatalf("command approval resolved card = %q", got)
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "command-2",
+		Kind:        "command",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(map[string]any{"request": map[string]any{
+			"command": "git status --short",
+			"cwd":     "/workspace/feidex",
+			"reason":  "inspect working tree",
+		}}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(command-2) error = %v", err)
+	}
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-2"}}, "approval.command.accept")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(command-2) = %#v, %v", resp, err)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected command approval response card from raw request payload")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "git status --short") || !strings.Contains(got, "/workspace/feidex") {
+		t.Fatalf("command approval resolved-from-request card = %q", got)
+	}
+
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(file) = %#v, %v", resp, err)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected file approval response card")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "已拒绝") || !strings.Contains(got, "文件变更审批") {
+		t.Fatalf("file approval resolved card = %q", got)
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "file-2",
+		Kind:        "file",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(map[string]any{"request": map[string]any{
+			"reason": "need review",
+			"changes": []map[string]any{
+				{"path": "internal/app/actions.go", "kind": "modified"},
+				{"path": "README.md", "kind": "added"},
+			},
+		}}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(file-2) error = %v", err)
+	}
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-2"}}, "approval.file.accept")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(file-2) = %#v, %v", resp, err)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected file approval response card from raw request payload")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "internal/app/actions.go") || !strings.Contains(got, "README.md") {
+		t.Fatalf("file approval resolved-from-request card = %q", got)
+	}
+
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(permissions) = %#v, %v", resp, err)
+	}
+	if refreshed := a.store.GetSubmission(sub.ID); refreshed.Status != "running" {
+		t.Fatalf("submission status after permissions reply = %q, want running", refreshed.Status)
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "perm-2",
+		Kind:        "permissions",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(map[string]any{
+			"request": map[string]any{
+				"reason": "need write access",
+				"permissions": map[string]any{
+					"mode":           "write",
+					"networkAccess":  false,
+					"writable_roots": []string{"/workspace"},
+				},
+			},
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(perm-2) error = %v", err)
+	}
+	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-2"}}, "approval.permissions.accept_turn")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(perm-2) = %#v, %v", resp, err)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected permissions response card from raw request payload")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "mode") || !strings.Contains(got, "/workspace") || !strings.Contains(got, "network") {
+		t.Fatalf("permissions resolved-from-request card = %q", got)
+	}
+
+	resp, err = a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "input-1", "question_id": "q-1", "answer": "A"},
+	})
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeUserInputAnswer() = %#v, %v", resp, err)
+	}
+	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Status != "replied" {
+		t.Fatalf("user input pending = %+v, want replied", pending)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected quick user input response card")
+	}
+	cardData, _ = resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "A - First option") || !strings.Contains(got, "Choose") {
+		t.Fatalf("quick user input response card body = %q", got)
+	}
+
+	if got := appapprovalview.ApprovalDecisionText("approval.command.accept"); got != "已允许本次执行" {
+		t.Fatalf("appapprovalview.ApprovalDecisionText(command.accept) = %q", got)
+	}
+	if got := appapprovalview.ApprovalDecisionText("approval.command.cancel"); got != "已拒绝并中断任务" {
+		t.Fatalf("appapprovalview.ApprovalDecisionText(command.cancel) = %q", got)
+	}
+	if got := appapprovalview.ApprovalDecisionText("approval.permissions.accept_session"); got != "已授权本会话权限请求" {
+		t.Fatalf("appapprovalview.ApprovalDecisionText(permissions.accept_session) = %q", got)
+	}
+	if got := appapprovalview.ApprovalDecisionText("other"); got != "已拒绝" {
+		t.Fatalf("appapprovalview.ApprovalDecisionText(default) = %q", got)
+	}
+}
+
+func TestCompleteApprovalActionSupportsExtendedCommandDecisions(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	fc.replies = nil
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "missing"},
+	}, "approval.command.decline")
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("completeApprovalAction(expired) = %#v, %v", resp, err)
+	}
+	if len(fc.replies) != 0 {
+		t.Fatalf("expired command approval should not reply, got %d replies", len(fc.replies))
+	}
+}
+
+func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	payload := pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{
+			{
+				ID:       "mode",
+				Question: "Choose mode",
+				Options:  []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}},
+			},
+			{
+				ID:       "secret",
+				Question: "Provide secret",
+				IsSecret: true,
+			},
+		},
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:           "input-form-1",
+		RequestIDRaw: `"input-form-1"`,
+		Kind:         "tool_request_user_input_form",
+		SessionKey:   "sess-1",
+		ThreadID:     "thread-1",
+		TurnID:       "turn-1",
+		OwnerUserID:  "user-1",
+		PayloadJSON:  mustJSON(payload),
+		Status:       "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending(input-form-1) error = %v", err)
+	}
+
+	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "input-form-1"},
+		FormValue: map[string]any{
+			"mode":   "Safe",
+			"secret": "top-secret",
+		},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeUserInputAnswer(form) = %#v, %v", resp, err)
+	}
+	if len(fc.replies) != 1 {
+		t.Fatalf("codex form replies = %+v, want 1", fc.replies)
+	}
+	replyPayload, _ := fc.replies[0].result.(map[string]any)
+	answers, _ := replyPayload["answers"].(map[string]any)
+	modeEntry, _ := answers["mode"].(map[string]any)
+	modeAnswers, _ := modeEntry["answers"].([]string)
+	if len(modeAnswers) != 1 || modeAnswers[0] != "Safe" {
+		t.Fatalf("mode answers = %+v, want Safe", modeAnswers)
+	}
+	secretEntry, _ := answers["secret"].(map[string]any)
+	secretAnswers, _ := secretEntry["answers"].([]string)
+	if len(secretAnswers) != 1 || secretAnswers[0] != "top-secret" {
+		t.Fatalf("secret answers = %+v, want top-secret", secretAnswers)
+	}
+	if pending := a.store.PendingByID("input-form-1"); pending == nil || pending.Status != "replied" {
+		t.Fatalf("pending after form submit = %+v, want replied", pending)
+	}
+	if resp.Card == nil {
+		t.Fatal("expected submitted status card")
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "`mode`: Safe") || !strings.Contains(got, "`secret`: [redacted]") || !strings.Contains(got, "Choose mode") || !strings.Contains(got, "Provide secret") {
+		t.Fatalf("form submitted card body = %q", got)
+	}
+}
+
+func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	payload := pendingforms.ToolUserInputPayload{
+		Questions: []pendingforms.ToolUserInputQuestion{
+			{
+				ID:          "targets",
+				Question:    "Pick targets",
+				Options:     []pendingforms.ToolUserInputOption{{Label: "A"}, {Label: "B"}},
+				MultiSelect: true,
+			},
+		},
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "input-toggle-1",
+		Kind:        "tool_request_user_input_form",
+		SessionKey:  "sess-1",
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		PayloadJSON: mustJSON(payload),
+		Status:      "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending(input-toggle-1) error = %v", err)
+	}
+
+	resp, err := a.ServerRequestService().CompleteUserInputMultiToggle(&feishu.CardAction{
+		UserID: "user-1",
+		ActionValue: map[string]any{
+			"request_id":   "input-toggle-1",
+			"question_id":  "targets",
+			"option_label": "A",
+			"multi_drafts": map[string]any{},
+		},
+	})
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("completeUserInputMultiToggle() = %#v, %v", resp, err)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	form := toolUserInputFormForTest(t, cardData)
+	buttons := toolUserInputFormButtonsForTest(t, form)
+	toggle := buttons["toggle_targets_a"]
+	if toggle == nil {
+		t.Fatalf("toggle button missing from patched card: %+v", buttons)
+	}
+	if got := toggle["type"]; got != "primary" {
+		t.Fatalf("toggle button type = %#v, want primary", got)
+	}
+}
+
+func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         "sess-1",
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession(sess-1) error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "file-cancel",
+		Kind:        "file",
+		SessionKey:  "sess-1",
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(map[string]any{"body": "文件变更审批\nneed review"}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(file-cancel) error = %v", err)
+	}
+
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "file-cancel"},
+	}, "approval.file.cancel")
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction(file.cancel) = %#v, %v", resp, err)
+	}
+	if len(fc.replies) != 1 {
+		t.Fatalf("file cancel reply count = %d, want 1", len(fc.replies))
+	}
+	reply, _ := fc.replies[0].result.(map[string]any)
+	if got := strings.TrimSpace(turnitem.StringValue(reply["decision"])); got != "cancel" {
+		t.Fatalf("file cancel decision = %q, want cancel", got)
+	}
+	cardData, _ := resp.Card.Data.(map[string]any)
+	if got := cardHeaderTitle(t, cardData); got != "["+a.cfg.Workspaces[0].ID+"] 审批已处理" {
+		t.Fatalf("file cancel resolved title = %q", got)
+	}
+	if got := cardMarkdownContent(t, cardData); !strings.Contains(got, "已拒绝并中断任务") || !strings.Contains(got, "该 turn 会立即中断") {
+		t.Fatalf("file cancel resolved card = %q", got)
+	}
+}
+
+func TestCompleteApprovalActionPreservesNumericRequestID(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "thread-1",
+		ActiveTurnID:       "turn-1",
+		ActiveSubmissionID: "sub-1",
+		Status:             "waiting_approval",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
+		ID:          "sub-1",
+		SessionKey:  sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		Status:      "waiting_approval",
+	}); err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:           "0",
+		RequestIDRaw: "0",
+		Kind:         "command",
+		SessionKey:   sessionKey,
+		ThreadID:     "thread-1",
+		TurnID:       "turn-1",
+		OwnerUserID:  "user-1",
+		Status:       "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "0"},
+	}, "approval.command.accept")
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeApprovalAction() = %#v, %v", resp, err)
+	}
+	if len(fc.replies) != 1 {
+		t.Fatalf("reply count = %d, want 1", len(fc.replies))
+	}
+	if got := string(fc.replies[0].id); got != "0" {
+		t.Fatalf("codex reply id = %s, want numeric 0", got)
+	}
+}
+
+func TestCompleteApprovalActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                sessionKey,
+		WorkspaceID:        a.cfg.Workspaces[0].ID,
+		ActiveThreadID:     "thread-1",
+		ActiveTurnID:       "turn-1",
+		ActiveSubmissionID: "sub-1",
+		Status:             "waiting_approval",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
+		ID:          "sub-1",
+		SessionKey:  sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		Status:      "waiting_approval",
+	}); err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "command-1",
+		Kind:        "command",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+	fc.replyErr = errors.New("write failed")
+
+	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "command-1"},
+	}, "approval.command.accept")
+	if err != nil {
+		t.Fatalf("completeApprovalAction() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("completeApprovalAction() = %#v, want warning toast", resp)
+	}
+	if pending := a.store.PendingByID("command-1"); pending == nil || pending.Status != "pending" {
+		t.Fatalf("pending after failed reply = %+v, want pending", pending)
+	}
+	if sub := a.store.GetSubmission("sub-1"); sub == nil || sub.Status != "waiting_approval" {
+		t.Fatalf("submission after failed reply = %+v, want waiting_approval", sub)
+	}
+}
+
+func TestCommandUpgradeShowsConfirmationForNewVersion(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOOS := currentGOOS
+	origGOARCH := currentGOARCH
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOOS = origGOOS
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	newReleaseClient = func() releaseClient {
+		return &fakeReleaseClient{info: &release.ReleaseInfo{
+			Version:        "v0.2.0",
+			HTMLURL:        "https://example.test/releases/v0.2.0",
+			BinaryName:     "feidex-linux-aarch64",
+			BinaryURL:      "https://github.com/example/feidex-linux-aarch64",
+			ExpectedSHA256: "abc123",
+		}}
+	}
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "0.1.0" }
+	currentGOOS = func() string { return "linux" }
+	currentGOARCH = func() string { return "arm64" }
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newUpgradeService(a).CommandUpgrade(msg, nil); err != nil {
+		t.Fatalf("commandUpgrade() error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(body, "当前版本: `0.1.0`") || !strings.Contains(body, "最新版本: `v0.2.0`") || !strings.Contains(body, "目标平台: `linux/arm64`") || !strings.Contains(body, "目标包: `feidex-linux-aarch64`") {
+		t.Fatalf("upgrade card body = %q", body)
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == "upgrade_release" {
+			pending = req
+			break
+		}
+	}
+	if pending == nil {
+		t.Fatal("expected upgrade pending request to be created")
+	}
+}
+
+func TestCommandUpgradeSupportsSpecifiedVersion(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOOS := currentGOOS
+	origGOARCH := currentGOARCH
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOOS = origGOOS
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	releaseStub := &fakeReleaseClient{
+		latestErr: errors.New("latest query should not be called"),
+		versionInfo: map[string]*release.ReleaseInfo{
+			"v0.3.0": {
+				Version:        "v0.3.0",
+				HTMLURL:        "https://example.test/releases/v0.3.0",
+				BinaryName:     "feidex-linux-amd64",
+				BinaryURL:      "https://github.com/example/feidex-linux-amd64",
+				ExpectedSHA256: "def456",
+			},
+		},
+	}
+	newReleaseClient = func() releaseClient { return releaseStub }
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "v9.9.9" }
+	currentGOOS = func() string { return "linux" }
+	currentGOARCH = func() string { return "amd64" }
+
+	msg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"v0.3.0"}); err != nil {
+		t.Fatalf("commandUpgrade(specified version) error = %v", err)
+	}
+	if releaseStub.latestCalls != 0 {
+		t.Fatalf("latest release call count = %d, want 0", releaseStub.latestCalls)
+	}
+	if len(releaseStub.versionCalls) != 1 || releaseStub.versionCalls[0] != "v0.3.0" {
+		t.Fatalf("version calls = %#v, want v0.3.0", releaseStub.versionCalls)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(body, "当前版本: `v9.9.9`") || !strings.Contains(body, "指定版本: `v0.3.0`") || !strings.Contains(body, "已跳过最新版本检查") {
+		t.Fatalf("upgrade card body = %q", body)
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == "upgrade_release" {
+			pending = req
+			break
+		}
+	}
+	if pending == nil || !strings.Contains(pending.PayloadJSON, "\"target_version\":\"v0.3.0\"") {
+		t.Fatalf("pending = %+v, want target v0.3.0", pending)
+	}
+}
+
+func TestCommandUpgradeSupportsDevRelease(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOOS := currentGOOS
+	origGOARCH := currentGOARCH
+	origUpgradeDisplayLocation := appupgradecmd.DisplayLocation
+	origUpgradecmdDisplayLocation := appupgradecmd.DisplayLocation
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOOS = origGOOS
+		currentGOARCH = origGOARCH
+		appupgradecmd.DisplayLocation = origUpgradeDisplayLocation
+		appupgradecmd.DisplayLocation = origUpgradecmdDisplayLocation
+	}()
+
+	a, ff, _ := newTestApp(t)
+	releaseStub := &fakeReleaseClient{
+		latestErr: errors.New("latest query should not be called"),
+		devInfo: &release.ReleaseInfo{
+			Version:        "dev-20260415T080000-a1b2c3d4e5f6",
+			ReleaseTag:     release.DevReleaseTag,
+			PublishedAt:    time.Date(2026, time.April, 15, 0, 0, 0, 0, time.UTC),
+			SourceCommit:   "a1b2c3d4e5f67890",
+			HTMLURL:        "https://example.test/releases/dev-latest",
+			BinaryName:     "feidex-linux-amd64",
+			BinaryURL:      "https://github.com/example/feidex-linux-amd64",
+			ExpectedSHA256: "dev123",
+			Prerelease:     true,
+		},
+	}
+	newReleaseClient = func() releaseClient { return releaseStub }
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "v0.3.0" }
+	currentGOOS = func() string { return "linux" }
+	currentGOARCH = func() string { return "amd64" }
+	appupgradecmd.DisplayLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
+
+	msg := &feishu.InboundMessage{MessageID: "m-dev", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"dev"}); err != nil {
+		t.Fatalf("commandUpgrade(dev) error = %v", err)
+	}
+	if releaseStub.latestCalls != 0 {
+		t.Fatalf("latest release call count = %d, want 0", releaseStub.latestCalls)
+	}
+	if releaseStub.devCalls != 1 {
+		t.Fatalf("dev release call count = %d, want 1", releaseStub.devCalls)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	for _, want := range []string{"开发版本: `dev-20260415T080000-a1b2c3d4e5f6`", "Release Tag: `dev-latest`", "发布时间(本机时区): `2026-04-15 08:00:00`", "提交: `a1b2c3d4e5f6`", "当前指向的开发版构建"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("upgrade dev card body = %q, want %q", body, want)
+		}
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == "upgrade_release" {
+			pending = req
+			break
+		}
+	}
+	if pending == nil || !strings.Contains(pending.PayloadJSON, "\"target_version\":\"dev-20260415T080000-a1b2c3d4e5f6\"") || !strings.Contains(pending.PayloadJSON, "\"release_tag\":\"dev-latest\"") {
+		t.Fatalf("pending = %+v, want dev release payload", pending)
+	}
+}
+
+func TestCommandUpgradeSupportsLocalPicker(t *testing.T) {
+	origManager := newDaemonManager
+	origGOOS := currentGOOS
+	origGOARCH := currentGOARCH
+	defer func() {
+		newDaemonManager = origManager
+		currentGOOS = origGOOS
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	ff.replyCardIDs = []string{"upgrade-local-picker-card"}
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentGOOS = func() string { return "linux" }
+	currentGOARCH = func() string { return "amd64" }
+
+	msg := &feishu.InboundMessage{MessageID: "m-upgrade-local", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := newUpgradeService(a).CommandUpgrade(msg, []string{"local"}); err != nil {
+		t.Fatalf("commandUpgrade(local) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	if got := cardSelectStaticForTest(ff.replyCards[0]); len(got) != 1 {
+		t.Fatalf("expected path picker select element, got %#v", got)
+	}
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind == appupgradecmd.UpgradeLocalBinaryPendingKind {
+			pending = req
+			break
+		}
+	}
+	if pending == nil {
+		t.Fatal("expected local picker pending request")
+	}
+	if pending.FeishuMsgID != "upgrade-local-picker-card" {
+		t.Fatalf("pending FeishuMsgID = %q, want upgrade-local-picker-card", pending.FeishuMsgID)
+	}
+	var payload appworkspacecmd.PathPickerPayload
+	if err := json.Unmarshal([]byte(pending.PayloadJSON), &payload); err != nil {
+		t.Fatalf("Unmarshal(local picker payload) error = %v", err)
+	}
+	if payload.RootPath != a.cfg.Workspaces[0].Cwd {
+		t.Fatalf("picker root = %q, want %q", payload.RootPath, a.cfg.Workspaces[0].Cwd)
+	}
+}
+
+func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOOS := currentGOOS
+	origGOARCH := currentGOARCH
+	defer func() {
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOOS = origGOOS
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	ff.replyCardIDs = []string{"upgrade-local-path-card"}
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "v0.3.0" }
+	currentGOOS = func() string { return "linux" }
+	currentGOARCH = func() string { return "amd64" }
+
+	localArtifact := filepath.Join(a.cfg.Workspaces[0].Cwd, "dist", "feidex linux amd64")
+	if err := os.MkdirAll(filepath.Dir(localArtifact), 0o755); err != nil {
+		t.Fatalf("MkdirAll(localArtifact) error = %v", err)
+	}
+	if err := os.WriteFile(localArtifact, []byte("local-binary"), 0o755); err != nil {
+		t.Fatalf("WriteFile(localArtifact) error = %v", err)
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-upgrade-path", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	if err := handleCommand(a, msg, "/upgrade path dist/feidex linux amd64"); err != nil {
+		t.Fatalf("handleCommand(/upgrade path ...) error = %v", err)
+	}
+	if len(ff.replyCards) != 1 {
+		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
+	}
+	body := cardMarkdownContent(t, ff.replyCards[0])
+	if !strings.Contains(body, "来源: 本地文件") || !strings.Contains(body, "文件: `feidex linux amd64`") {
+		t.Fatalf("upgrade local path body = %q", body)
+	}
+
+	var pending *state.PendingRequest
+	for _, req := range a.store.AllPendingRequests() {
+		if req.Kind != "upgrade_release" {
+			continue
+		}
+		var payload appupgradecmd.UpgradePendingPayload
+		if err := json.Unmarshal([]byte(req.PayloadJSON), &payload); err != nil {
+			t.Fatalf("Unmarshal(upgrade payload) error = %v", err)
+		}
+		if payload.SourcePath == "" {
+			continue
+		}
+		pending = req
+		if payload.DownloadURL != "" {
+			t.Fatalf("payload.DownloadURL = %q, want empty", payload.DownloadURL)
+		}
+		if payload.SourceName != "feidex linux amd64" {
+			t.Fatalf("payload.SourceName = %q, want feidex linux amd64", payload.SourceName)
+		}
+		if _, err := os.Stat(payload.SourcePath); err != nil {
+			t.Fatalf("staged local artifact stat error = %v", err)
+		}
+		break
+	}
+	if pending == nil {
+		t.Fatal("expected local upgrade pending request")
+	}
+	if pending.FeishuMsgID != "upgrade-local-path-card" {
+		t.Fatalf("pending FeishuMsgID = %q, want upgrade-local-path-card", pending.FeishuMsgID)
+	}
+}
+
+func TestCompleteUpgradeActionStartsBackgroundUpgrade(t *testing.T) {
+	origUpgrade := startDaemonUpgrade
+	defer func() { startDaemonUpgrade = origUpgrade }()
+
+	a, _, _ := newTestApp(t)
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "upgrade-1",
+		Kind:        "upgrade_release",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(appupgradecmd.UpgradePendingPayload{
+			TargetVersion:  "v0.2.0",
+			BinaryPath:     "/tmp/feidex",
+			DownloadURL:    "https://github.com/example/feidex-linux-amd64",
+			ExpectedSHA256: "abc123",
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending() error = %v", err)
+	}
+	started := false
+	startDaemonUpgrade = func(spec daemon.UpgradeSpec) (string, error) {
+		started = true
+		if spec.Version != "v0.2.0" || spec.BinaryPath != "/tmp/feidex" {
+			t.Fatalf("unexpected upgrade spec: %+v", spec)
+		}
+		return "feidex-upgrade-1", nil
+	}
+
+	resp, err := newUpgradeService(a).CompleteUpgradeAction(&feishu.CardAction{
+		UserID:      "user-1",
+		ActionValue: map[string]any{"request_id": "upgrade-1"},
+	}, "upgrade.confirm")
+	if err != nil {
+		t.Fatalf("completeUpgradeAction() error = %v", err)
+	}
+	if !started {
+		t.Fatal("expected background upgrade to start")
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeUpgradeAction() = %#v, want success", resp)
+	}
+	if pending := a.store.PendingByID("upgrade-1"); pending == nil || pending.Status != "upgrading" {
+		t.Fatalf("upgrade pending = %+v, want upgrading", pending)
+	}
+}
+
+func TestCompleteMenuUpgradeReturnsPreparingCardAndPatchesAsync(t *testing.T) {
+	origRelease := newReleaseClient
+	origManager := newDaemonManager
+	origVersion := currentVersion
+	origGOARCH := currentGOARCH
+	defer func() {
+		newReleaseClient = origRelease
+		newDaemonManager = origManager
+		currentVersion = origVersion
+		currentGOARCH = origGOARCH
+	}()
+
+	a, ff, _ := newTestApp(t)
+	blocking := &blockingReleaseClient{
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+		info: &release.ReleaseInfo{
+			Version:        "v0.2.0",
+			HTMLURL:        "https://example.test/releases/v0.2.0",
+			BinaryName:     "feidex-linux-amd64",
+			BinaryURL:      "https://github.com/example/feidex-linux-amd64",
+			ExpectedSHA256: "abc123",
+		},
+	}
+	newReleaseClient = func() releaseClient { return blocking }
+	newDaemonManager = func(string) (daemon.Manager, error) {
+		return &fakeDaemonManagerForApp{status: &daemon.Status{Installed: true, Running: true, PID: os.Getpid()}}, nil
+	}
+	currentVersion = func() string { return "0.1.0" }
+	currentGOARCH = func() string { return "amd64" }
+
+	resp, err := newMenuActionService(a).completeMenuUpgrade(&feishu.CardAction{
+		UserID:      "user-1",
+		MessageID:   "msg-upgrade",
+		ActionValue: map[string]any{"session_key": "sess-1"},
+	})
+	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Type != "info" || resp.Card == nil {
+		t.Fatalf("completeMenuUpgrade(async) = %#v, %v", resp, err)
+	}
+	card, _ := resp.Card.Data.(map[string]any)
+	if body := cardMarkdownContent(t, card); !strings.Contains(body, "正在检查可升级版本") {
+		t.Fatalf("upgrade preparing body = %q", body)
+	}
+	if patched := ff.patchedCardsSnapshot(); len(patched) != 0 {
+		t.Fatalf("patched cards before release completes = %+v, want none", patched)
+	}
+
+	<-blocking.started
+	close(blocking.release)
+
+	waitForTestCondition(t, "async upgrade card patch", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0
+	})
+	patched := ff.patchedCardsSnapshot()
+	if len(patched) == 0 {
+		t.Fatal("expected upgrade card to be patched asynchronously")
+	}
+	if body := cardMarkdownContent(t, patched[len(patched)-1]); !strings.Contains(body, "最新版本: `v0.2.0`") {
+		t.Fatalf("patched upgrade body = %q", body)
+	}
+}
+
+func TestPendingFormCompletionHelpers(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "tool-form-1",
+		Kind:        "tool_request_user_input_form",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		FeishuMsgID: "card-tool-form-1",
+		Status:      "pending",
+		PayloadJSON: mustJSON(pendingforms.ToolUserInputPayload{Questions: []pendingforms.ToolUserInputQuestion{{ID: "choice"}}}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(tool form) error = %v", err)
+	}
+	if err := a.ServerRequestService().CompleteToolUserInputText(&feishu.InboundMessage{Text: "option-a"}, a.store.PendingByID("tool-form-1")); err != nil {
+		t.Fatalf("completeToolUserInputText() error = %v", err)
+	}
+	if len(fc.replies) == 0 {
+		t.Fatal("expected completeToolUserInputText to reply to codex")
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "elicitation-form-1",
+		Kind:        "mcp_elicitation_form",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		FeishuMsgID: "card-elicitation",
+		Status:      "pending",
+		PayloadJSON: mustJSON(pendingforms.ElicitationFormPayload{
+			Schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+		}),
+	}); err != nil {
+		t.Fatalf("UpsertPending(elicitation form) error = %v", err)
+	}
+	if err := a.ServerRequestService().CompleteElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicitation-form-1")); err != nil {
+		t.Fatalf("completeElicitationFormText() error = %v", err)
+	}
+
+	if err := a.store.UpsertPending(&state.PendingRequest{
+		ID:          "url-1",
+		Kind:        "mcp_elicitation_url",
+		SessionKey:  sessionKey,
+		ThreadID:    "thread-1",
+		TurnID:      "turn-1",
+		OwnerUserID: "user-1",
+		Status:      "pending",
+	}); err != nil {
+		t.Fatalf("UpsertPending(url) error = %v", err)
+	}
+	resp, err := a.ServerRequestService().CompleteElicitationURLAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeElicitationURLAction() = %#v, %v", resp, err)
+	}
+
+	if refreshed := a.store.GetSubmission(sub.ID); refreshed.Status != "running" {
+		t.Fatalf("submission after pending form completion = %q, want running", refreshed.Status)
+	}
+	if len(ff.patchedCards) == 0 {
+		t.Fatal("expected pending form completion to patch cards")
+	}
+	if got := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(got, "`choice`: option-a") || !strings.Contains(got, "请补充以下输入") {
+		t.Fatalf("patched tool user input card = %q", got)
+	}
+}
+
+func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
+		ID:               "sub-queued",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		UserID:           "user-1",
+		ChatID:           "chat-1",
+		TriggerMessageID: "trigger-1",
+		InputText:        "hello",
+		Status:           "queued",
+	})
+	if err != nil {
+		t.Fatalf("CreateSubmission() error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		Queue:       []string{subID},
+		Status:      "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	var calls []string
+	paramsSeen := map[string]any{}
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		calls = append(calls, method)
+		paramsSeen[method] = params
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+			result.Thread.Name = "Thread Name"
+			result.Thread.Preview = "Preview"
+			return nil
+		case "turn/start":
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-1"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	if got := buildTurnSandboxPolicy("read-only"); got["type"] != "readOnly" {
+		t.Fatalf("buildTurnSandboxPolicy(read-only) = %+v", got)
+	}
+	if got := buildTurnSandboxPolicy("workspace-write"); got["type"] != "workspaceWrite" {
+		t.Fatalf("buildTurnSandboxPolicy(workspace-write) = %+v", got)
+	}
+	if got := buildTurnSandboxPolicy("danger-full-access"); got["type"] != "dangerFullAccess" {
+		t.Fatalf("buildTurnSandboxPolicy(danger-full-access) = %+v", got)
+	}
+	if got := buildTurnSandboxPolicy("bad"); got != nil {
+		t.Fatalf("buildTurnSandboxPolicy(bad) = %+v, want nil", got)
+	}
+
+	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", nil, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
+		t.Fatal("expected startSubmissionTurn(nil submission) to fail")
+	}
+	if _, err := startSubmissionTurn(a, context.Background(), sessionKey, "thread-1", &domainsubmission.Submission{ID: "empty"}, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "", "", "", ""); err == nil {
+		t.Fatal("expected startSubmissionTurn(empty input) to fail")
+	}
+
+	if err := startNextSubmission(a, sessionKey); err != nil {
+		t.Fatalf("startNextSubmission() error = %v", err)
+	}
+	if len(calls) != 2 || calls[0] != "thread/start" || calls[1] != "turn/start" {
+		t.Fatalf("codex calls = %+v, want thread/start then turn/start", calls)
+	}
+	if _, ok := paramsSeen["thread/start"].(map[string]any)["serviceTier"]; ok {
+		t.Fatalf("thread/start serviceTier should be omitted when unset: %+v", paramsSeen["thread/start"])
+	}
+	if _, ok := paramsSeen["turn/start"].(map[string]any)["serviceTier"]; ok {
+		t.Fatalf("turn/start serviceTier should be omitted when unset: %+v", paramsSeen["turn/start"])
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || sess.ActiveThreadID != "thread-1" || sess.ActiveTurnID != "turn-1" || sess.Status != "turn_in_progress" {
+		t.Fatalf("session after startNextSubmission = %+v", sess)
+	}
+	sub := a.store.GetSubmission(subID)
+	if sub == nil || sub.ThreadID != "thread-1" || sub.TurnID != "turn-1" || sub.Status != "running" {
+		t.Fatalf("submission after startNextSubmission = %+v", sub)
+	}
+
+	finishTurn(a, "thread-1", "turn-1", "completed")
+	time.Sleep(20 * time.Millisecond)
+	sub = a.store.GetSubmission(subID)
+	if sub != nil {
+		t.Fatalf("submission after finishTurn should be released from runtime store, got %+v", sub)
+	}
+	sess = a.store.GetSession(sessionKey)
+	if sess == nil || sess.Status != "idle" || sess.ActiveTurnID != "" {
+		t.Fatalf("session after finishTurn = %+v", sess)
+	}
+	if len(ff.replyCards) == 0 && len(ff.replyTextWithIDs) == 0 {
+		t.Fatal("expected finishTurn to send final output")
+	}
+}
+
+func TestStartSubmissionTurnIncludesFastServiceTier(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	var gotParams map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/start" {
+			return nil
+		}
+		gotParams, _ = params.(map[string]any)
+		if result, ok := out.(*codexrpc.TurnStartResult); ok {
+			result.Turn.ID = "turn-fast"
+		}
+		return nil
+	}
+	sub := &domainsubmission.Submission{ID: "sub-1", InputText: "hello"}
+	if _, err := startSubmissionTurn(a, context.Background(), "sess-1", "thread-1", sub, a.cfg.Workspaces[0].Cwd, "on-request", "workspace-write", "fast", "", "", ""); err != nil {
+		t.Fatalf("startSubmissionTurn() error = %v", err)
+	}
+	if gotParams == nil {
+		t.Fatal("expected turn/start params to be captured")
+	}
+	if got, _ := gotParams["serviceTier"].(string); got != "fast" {
+		t.Fatalf("serviceTier = %q, want fast", got)
+	}
+}
+
+func TestNotificationHelpers(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
+	if err := a.store.UpsertPending(&state.PendingRequest{ID: "req-1", Kind: "command", SessionKey: sessionKey, ThreadID: "thread-1", TurnID: "turn-1", Status: "pending"}); err != nil {
+		t.Fatalf("UpsertPending(notification) error = %v", err)
+	}
+
+	handleNotification(a, "turn/plan/updated", json.RawMessage(`{"turnId":"turn-1","plan":[{"step":"a","status":"completed"}]}`))
+	handleNotification(a, "error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"boom"}}`))
+	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"req-1"}`))
+
+	stream := newTurnStreamService(a).turnStreamTracker().Streams["turn-1"]
+	if stream == nil || !strings.Contains(stream.PendingPlan, "a") {
+		t.Fatalf("turn stream after notifications = %+v", stream)
+	}
+	if pending := a.store.PendingByID("req-1"); pending == nil || pending.Status != "resolved" {
+		t.Fatalf("resolved pending = %+v, want resolved", pending)
+	}
+	updated := a.store.GetSubmission(sub.ID)
+	if updated == nil || updated.Status != "running" && updated.Status != "failed" {
+		t.Fatalf("submission after error notification = %+v", updated)
+	}
+
+	newSubmissionQueueServiceFromApp(a).UpdateSubmissionByTurn("thread-1", "turn-1", func(s *domainsubmission.Submission) { s.Status = "custom" })
+	if got := a.store.GetSubmission(sub.ID); got == nil || got.Status != "custom" {
+		t.Fatalf("updateSubmissionByTurn() = %+v, want updated status", got)
+	}
+
+	startNextSubmissionAsync(a, "", "test")
+	if got := textutil.Truncate("  abcdef  ", 3); got != "  …" {
+		t.Fatalf("textutil.Truncate() = %q, want \"  …\"", got)
+	}
+	if _, err := a.HandleCardAction(&feishu.CardAction{Name: "unknown"}); err != nil {
+		t.Fatalf("handleCardAction() error = %v", err)
+	}
+	if len(fc.replyErrors) != 0 {
+		t.Fatalf("unexpected codex reply errors: %+v", fc.replyErrors)
+	}
+}
+
+func TestHandleFeishuMessageReplySteersToLinkedTurn(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	targetSessionKey := "feishu:chat:chat-1"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:            targetSessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ChatID:         "chat-1",
+		ChatType:       "group",
+		OwnerUserID:    "user-1",
+		ActiveThreadID: "thread-1",
+		ActiveTurnID:   "turn-1",
+		Status:         "turn_in_progress",
+	}); err != nil {
+		t.Fatalf("UpsertSession(target) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:  "root-msg",
+		SessionKey: targetSessionKey,
+		ThreadID:   "thread-1",
+		TurnID:     "turn-1",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink(target) error = %v", err)
+	}
+
+	steered := false
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/steer" {
+			return nil
+		}
+		steered = true
+		got, _ := params.(map[string]any)
+		if got["threadId"] != "thread-1" || got["expectedTurnId"] != "turn-1" {
+			t.Fatalf("turn/steer params = %+v", got)
+		}
+		return nil
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:       "reply-1",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "follow up",
+		RootMessageID:   "root-msg",
+		ParentMessageID: "target-msg",
+	})
+
+	if !steered {
+		t.Fatal("expected reply message to steer")
+	}
+	if sess := a.store.GetSession(targetSessionKey); sess == nil || len(sess.Queue) != 0 {
+		t.Fatalf("target session queue = %+v, want no queued submissions", sess)
+	}
+	if link := a.store.GetMessageLink("root-msg"); link == nil || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
+		t.Fatalf("root message link = %+v, want root turn binding", link)
+	}
+}
+
+func TestHandleFeishuMessageReplySteersWithStagedImages(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	targetSessionKey := "feishu:chat:chat-1"
+	bucketSessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:            targetSessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ChatID:         "chat-1",
+		ChatType:       "group",
+		OwnerUserID:    "user-1",
+		ActiveThreadID: "thread-1",
+		ActiveTurnID:   "turn-1",
+		Status:         "turn_in_progress",
+	}); err != nil {
+		t.Fatalf("UpsertSession(target) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         bucketSessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "queued",
+		StagedImages: []conversation.SessionStagedImage{
+			{SourceMessageID: "img-1", RootMessageID: "img-1", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
+			{SourceMessageID: "img-2", RootMessageID: "img-2", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession(staged bucket) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		MessageID:  "root-msg",
+		SessionKey: targetSessionKey,
+		ThreadID:   "thread-1",
+		TurnID:     "turn-1",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink(target) error = %v", err)
+	}
+
+	var seenInputs []map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "turn/steer" {
+			return nil
+		}
+		got, _ := params.(map[string]any)
+		if got["threadId"] != "thread-1" || got["expectedTurnId"] != "turn-1" {
+			t.Fatalf("turn/steer params = %+v", got)
+		}
+		if items, ok := got["input"].([]map[string]any); ok {
+			seenInputs = items
+		}
+		return nil
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:       "reply-1",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "follow up",
+		RootMessageID:   "root-msg",
+		ParentMessageID: "target-msg",
+	})
+
+	if len(seenInputs) != 3 {
+		t.Fatalf("turn/steer inputs = %+v, want text + 2 images", seenInputs)
+	}
+	if seenInputs[0]["type"] != "text" || seenInputs[1]["type"] != "localImage" || seenInputs[2]["type"] != "localImage" {
+		t.Fatalf("turn/steer input types = %+v, want text + 2 localImage", seenInputs)
+	}
+	if bucket := a.store.GetSession(bucketSessionKey); bucket == nil || len(bucket.StagedImages) != 0 {
+		t.Fatalf("staged bucket after steer = %+v, want empty", bucket)
+	}
+}
+
+func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	targetSessionKey := "feishu:chat:chat-1"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:            targetSessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ChatID:         "chat-1",
+		ChatType:       "group",
+		OwnerUserID:    "user-1",
+		ActiveThreadID: "thread-current",
+		ActiveTurnID:   "turn-current",
+		Status:         "turn_in_progress",
+	}); err != nil {
+		t.Fatalf("UpsertSession(target) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		Backend:    domainbackend.BackendCodex,
+		MessageID:  "root-msg",
+		SessionKey: targetSessionKey,
+		ThreadID:   "thread-old",
+		TurnID:     "turn-old",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink(target) error = %v", err)
+	}
+
+	steerAttempts := 0
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method == "turn/steer" {
+			steerAttempts++
+			return errors.New("no active turn to steer")
+		}
+		return nil
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:       "reply-2",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "fallback to queue",
+		RootMessageID:   "root-msg",
+		ParentMessageID: "target-msg",
+	}
+	a.HandleFeishuMessage(msg)
+
+	if steerAttempts != 1 {
+		t.Fatalf("steer attempts = %d, want 1", steerAttempts)
+	}
+	targetSess := a.store.GetSession(targetSessionKey)
+	if targetSess == nil || len(targetSess.Queue) != 1 {
+		t.Fatalf("target session after fallback = %+v, want one queued submission", targetSess)
+	}
+	sub := a.store.GetSubmission(targetSess.Queue[0])
+	if sub == nil || sub.WorkspaceID != a.cfg.Workspaces[0].ID {
+		t.Fatalf("reply fallback submission = %+v, want workspace %q", sub, a.cfg.Workspaces[0].ID)
+	}
+}
+
+func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	if _, err := setGroupPrimary(a, "group", "chat-1", true); err != nil {
+		t.Fatalf("setGroupPrimary(chat-1) error = %v", err)
+	}
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          defaultBindingID(a.FrontendID(), "group", "chat-1"),
+		FrontendID:  a.FrontendID(),
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		WorkspaceID: "default",
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding(chat-1) error = %v", err)
+	}
+	rootASessionKey := makeSessionKey(a, &feishu.InboundMessage{
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		MessageID:     "root-a",
+		RootMessageID: "root-a",
+	})
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                     rootASessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-1",
+		ChatType:                "group",
+		OwnerUserID:             "user-1",
+		RootMessageID:           "root-a",
+		ActiveThreadID:          "thread-a",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveTurnID:            "turn-a",
+		ActiveSubmissionID:      "sub-a",
+		Status:                  conversation.SessionStatusTurnInProgress.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession(root-a) error = %v", err)
+	}
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
+		ID:               "sub-a",
+		SessionKey:       rootASessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		ThreadID:         "thread-a",
+		TurnID:           "turn-a",
+		UserID:           "user-1",
+		ChatID:           "chat-1",
+		TriggerMessageID: "root-a",
+		Status:           domainsubmission.SubmissionStatusRunning.String(),
+	}); err != nil {
+		t.Fatalf("CreateSubmission(root-a) error = %v", err)
+	}
+
+	threadStartCwds := []string{}
+	threadStartIDs := []string{"thread-b", "thread-c"}
+	turnStartIDs := []string{"turn-b", "turn-c"}
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "thread/start":
+			got, _ := params.(map[string]any)
+			cwd, _ := got["cwd"].(string)
+			threadStartCwds = append(threadStartCwds, strings.TrimSpace(cwd))
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = threadStartIDs[0]
+			threadStartIDs = threadStartIDs[1:]
+			return nil
+		case "turn/start":
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = turnStartIDs[0]
+			turnStartIDs = turnStartIDs[1:]
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	if _, err := newBindingService(a).activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "alt"); err != nil {
+		t.Fatalf("activateBindingWorkspace(group -> alt) error = %v", err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "root-b",
+		RootMessageID: "root-b",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "run in B",
+	})
+
+	rootBSessionKey := makeSessionKey(a, &feishu.InboundMessage{
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		MessageID:     "root-b",
+		RootMessageID: "root-b",
+	})
+	if rootBSessionKey != rootASessionKey {
+		t.Fatalf("root-b session key = %q, want shared group session %q", rootBSessionKey, rootASessionKey)
+	}
+	if _, err := newBindingService(a).activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "default"); err != nil {
+		t.Fatalf("activateBindingWorkspace(group -> default) error = %v", err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID:     "root-c",
+		RootMessageID: "root-c",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "run in A",
+	})
+
+	if len(threadStartCwds) != 0 {
+		t.Fatalf("thread/start cwds before root-a completes = %+v, want no calls", threadStartCwds)
+	}
+	rootCSessionKey := makeSessionKey(a, &feishu.InboundMessage{
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		MessageID:     "root-c",
+		RootMessageID: "root-c",
+	})
+	if rootCSessionKey != rootASessionKey {
+		t.Fatalf("root-c session key = %q, want shared group session %q", rootCSessionKey, rootASessionKey)
+	}
+	sess := a.store.GetSession(rootASessionKey)
+	if sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || len(sess.Queue) != 2 {
+		t.Fatalf("group session should keep active workspace A and queue two submissions: %+v", sess)
+	}
+	rootBSub := a.store.GetSubmission(sess.Queue[0])
+	if rootBSub == nil || rootBSub.WorkspaceID != "alt" || rootBSub.TriggerMessageID != "root-b" {
+		t.Fatalf("root-b submission should be queued on workspace B: %+v", rootBSub)
+	}
+	rootCSub := a.store.GetSubmission(sess.Queue[1])
+	if rootCSub == nil || rootCSub.WorkspaceID != a.cfg.Workspaces[0].ID || rootCSub.TriggerMessageID != "root-c" {
+		t.Fatalf("root-c submission should be queued on workspace A: %+v", rootCSub)
+	}
+
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-a","turn":{"id":"turn-a","status":"completed"}}`))
+	a.waitAsync()
+
+	if len(threadStartCwds) != 1 {
+		t.Fatalf("thread/start cwds after root-a completes = %+v, want root-b call", threadStartCwds)
+	}
+	if threadStartCwds[0] != a.cfg.Workspaces[1].Cwd {
+		t.Fatalf("root-b thread/start cwd = %q, want alt cwd %q", threadStartCwds[0], a.cfg.Workspaces[1].Cwd)
+	}
+	sess = a.store.GetSession(rootASessionKey)
+	if sess == nil || sess.ActiveThreadWorkspaceID != "alt" || sess.ActiveTurnID != "turn-b" || len(sess.Queue) != 1 || sess.Queue[0] != rootCSub.ID {
+		t.Fatalf("group session should run root-b and keep root-c queued: %+v", sess)
+	}
+
+	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-b","turn":{"id":"turn-b","status":"completed"}}`))
+	a.waitAsync()
+
+	if len(threadStartCwds) != 2 {
+		t.Fatalf("thread/start cwds after root-b completes = %+v, want root-c call", threadStartCwds)
+	}
+	if threadStartCwds[1] != a.cfg.Workspaces[0].Cwd {
+		t.Fatalf("root-c thread/start cwd = %q, want default cwd %q", threadStartCwds[1], a.cfg.Workspaces[0].Cwd)
+	}
+	if sess := a.store.GetSession(rootASessionKey); sess == nil || sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveTurnID != "turn-c" || len(sess.Queue) != 0 {
+		t.Fatalf("group session should run root-c in workspace A after root-b completes: %+v", sess)
+	}
+}
+
+func TestHandleFeishuMessageP2PQueuesSubmissionOnSelectedWorkspace(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
+	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             a.cfg.Workspaces[0].ID,
+		ChatID:                  "chat-1",
+		ChatType:                "p2p",
+		OwnerUserID:             "user-1",
+		ActiveThreadID:          "thread-a",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+		ActiveTurnID:            "turn-a",
+		ActiveSubmissionID:      "sub-a",
+		Status:                  conversation.SessionStatusTurnInProgress.String(),
+	}); err != nil {
+		t.Fatalf("UpsertSession(p2p active) error = %v", err)
+	}
+
+	if err := setWorkspaceSelectionForMessage(a, &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}, "alt"); err != nil {
+		t.Fatalf("setWorkspaceSelectionForMessage() error = %v", err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID: "msg-b",
+		ChatID:    "chat-1",
+		ChatType:  "p2p",
+		UserID:    "user-1",
+		Text:      "queue in B",
+	})
+
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || len(sess.Queue) != 1 {
+		t.Fatalf("session after enqueue = %+v, want one queued submission", sess)
+	}
+	if sess.WorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID {
+		t.Fatalf("active p2p session should keep workspace A lineage: %+v", sess)
+	}
+	sub := a.store.GetSubmission(sess.Queue[0])
+	if sub == nil || sub.WorkspaceID != "alt" {
+		t.Fatalf("queued submission = %+v, want workspace alt", sub)
+	}
+}
+
+func TestStartNextSubmissionRefreshesRootTurnBinding(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{
+		MessageID:     "root-msg",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "hello",
+		RootMessageID: "root-msg",
+	}
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+			return nil
+		case "turn/start":
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-1"
+			return nil
+		default:
+			return nil
+		}
+	}
+	if err := enqueueSubmission(a, msg); err != nil {
+		t.Fatalf("enqueueSubmission() error = %v", err)
+	}
+	if link := a.store.GetMessageLink("root-msg"); link == nil || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
+		t.Fatalf("root turn binding = %+v, want current turn", link)
+	}
+}
+
+func TestTopLevelStagedImagesBindRootsToNextTurn(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "queued",
+		StagedImages: []conversation.SessionStagedImage{
+			{SourceMessageID: "a", RootMessageID: "a", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
+			{SourceMessageID: "b", RootMessageID: "b", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession(staged bucket) error = %v", err)
+	}
+
+	var seenInputs []map[string]any
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-1"
+			return nil
+		case "turn/start":
+			got, _ := params.(map[string]any)
+			if items, ok := got["input"].([]map[string]any); ok {
+				seenInputs = items
+			}
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-1"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:     "c",
+		ChatID:        "chat-1",
+		ChatType:      "group",
+		UserID:        "user-1",
+		Text:          "describe images",
+		RootMessageID: "c",
+	}
+	if err := enqueueSubmission(a, msg); err != nil {
+		t.Fatalf("enqueueSubmission() error = %v", err)
+	}
+	if len(seenInputs) != 3 || seenInputs[0]["type"] != "text" || seenInputs[1]["type"] != "localImage" || seenInputs[2]["type"] != "localImage" {
+		t.Fatalf("thread/start inputs = %+v, want text + 2 images", seenInputs)
+	}
+	for _, rootID := range []string{"a", "b", "c"} {
+		link := a.store.GetMessageLink(rootID)
+		if link == nil || link.ThreadID != "thread-1" || link.TurnID != "turn-1" {
+			t.Fatalf("root %s binding = %+v, want thread-1/turn-1", rootID, link)
+		}
+	}
+	if bucket := a.store.GetSession(sessionKey); bucket == nil || len(bucket.StagedImages) != 0 {
+		t.Fatalf("staged bucket after consume = %+v, want empty", bucket)
+	}
+}
+
+func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	replySessionKey := "feishu:chat:chat-1"
+	bucketSessionKey := newReplyContinuationService(a).PendingInputSessionKey(&feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"})
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         replySessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession(reply session) error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         bucketSessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		OwnerUserID: "user-1",
+		Status:      "queued",
+		StagedImages: []conversation.SessionStagedImage{
+			{SourceMessageID: "a", RootMessageID: "a", Name: "a.png", LocalPath: "/tmp/a.png", CreatedAt: 1},
+			{SourceMessageID: "b", RootMessageID: "b", Name: "b.png", LocalPath: "/tmp/b.png", CreatedAt: 2},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertSession(staged bucket) error = %v", err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		Backend:    domainbackend.BackendCodex,
+		MessageID:  "reply-root",
+		SessionKey: replySessionKey,
+		ThreadID:   "thread-old",
+		TurnID:     "turn-old",
+	}); err != nil {
+		t.Fatalf("UpsertMessageLink(root binding) error = %v", err)
+	}
+
+	steerAttempts := 0
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "turn/steer":
+			steerAttempts++
+			return errors.New("no active turn to steer")
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			return nil
+		case "turn/start":
+			got, _ := params.(map[string]any)
+			items, _ := got["input"].([]map[string]any)
+			if len(items) != 3 {
+				t.Fatalf("fallback turn/start inputs = %+v, want text + 2 images", items)
+			}
+			result := out.(*codexrpc.TurnStartResult)
+			result.Turn.ID = "turn-new"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	msg := &feishu.InboundMessage{
+		MessageID:       "reply-msg",
+		ChatID:          "chat-1",
+		ChatType:        "group",
+		UserID:          "user-1",
+		Text:            "follow up after closed turn",
+		RootMessageID:   "reply-root",
+		ParentMessageID: "some-parent",
+	}
+	a.HandleFeishuMessage(msg)
+
+	if steerAttempts != 1 {
+		t.Fatalf("steer attempts = %d, want 1", steerAttempts)
+	}
+	if link := a.store.GetMessageLink("reply-root"); link == nil || link.ThreadID != "thread-new" || link.TurnID != "turn-new" {
+		t.Fatalf("reply root binding = %+v, want new turn binding", link)
+	}
+	for _, stagedRoot := range []string{"a", "b"} {
+		if link := a.store.GetMessageLink(stagedRoot); link != nil {
+			t.Fatalf("staged root %s should not be rebound on fallback, got %+v", stagedRoot, link)
+		}
+	}
+}
+
+func TestAdditionalCommandHelpers(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1"})
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                        sessionKey,
+		WorkspaceID:                a.cfg.Workspaces[0].ID,
+		ActiveThreadID:             "thread-1",
+		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadSandboxMode:    "read-only",
+		ActiveThreadApprovalPolicy: "never",
+		ActiveTurnID:               "turn-1",
+		ChatID:                     "chat-1",
+		ChatType:                   "group",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).ShowThreadSandboxMenu(msg); err != nil {
+		t.Fatalf("showThreadSandboxMenu() error = %v", err)
+	}
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).ShowThreadPolicyMenu(msg); err != nil {
+		t.Fatalf("showThreadPolicyMenu() error = %v", err)
+	}
+	if len(ff.replyCards) < 2 {
+		t.Fatalf("expected thread menu cards, got %d", len(ff.replyCards))
+	}
+	for _, card := range ff.replyCards[:2] {
+		body := cardMarkdownContent(t, card)
+		if !strings.Contains(body, "workspace 默认:") || !strings.Contains(body, "当前覆盖:") || !strings.Contains(body, "生效值:") {
+			t.Fatalf("thread permission menu body = %q, want workspace/current/effective values", body)
+		}
+	}
+
+	if got := appthreadview.RenderThreadButtonLabel("Very Long Thread Name", "", "id"); got == "" {
+		t.Fatal("appthreadview.RenderThreadButtonLabel() should produce a label")
+	}
+	if got := appthreadview.RenderThreadListEntry("", "preview text", "id"); !strings.Contains(got, "preview") {
+		t.Fatalf("appthreadview.RenderThreadListEntry() = %q, want preview text", got)
+	}
+
+	emptyMsg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-2", ChatType: "group", RootMessageID: "root-2", UserID: "user-2"}
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandAppend(emptyMsg, "  more text  "); err == nil {
+		t.Fatal("expected commandAppend without active session to fail")
+	}
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "turn/steer", "turn/interrupt":
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			result.Thread.Name = "New Thread"
+			result.Thread.Preview = "new preview"
+			return nil
+		default:
+			t.Fatalf("unexpected codex method in command helper test: %s", method)
+			return nil
+		}
+	}
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandAppend(msg, "  more text  "); err != nil {
+		t.Fatalf("commandAppend() error = %v", err)
+	}
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
+		t.Fatalf("commandInterrupt() error = %v", err)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	conversation.ResetActiveOperations(sess)
+	sess.Status = "idle"
+	if err := a.store.UpsertSession(sess); err != nil {
+		t.Fatalf("UpsertSession(reset) error = %v", err)
+	}
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreadsNew(msg); err != nil {
+		t.Fatalf("commandThreadsNew() error = %v", err)
+	}
+}
+
+func TestMoreActionAndModelHandlers(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	models := catalog.ModelListResult{
+		Data: []catalog.ModelListEntry{
+			{
+				ID:                     "gpt-5",
+				DisplayName:            "GPT-5",
+				DefaultReasoningEffort: "medium",
+				SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
+					{ReasoningEffort: "low"},
+					{ReasoningEffort: "medium"},
+					{ReasoningEffort: "high"},
+				},
+				IsDefault: true,
+			},
+		},
+	}
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "model/list":
+			*out.(*catalog.ModelListResult) = models
+			return nil
+		case "collaborationMode/list":
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
+					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
+				},
+			}
+			return nil
+		case "thread/start":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-new"
+			result.Thread.Name = "New Thread"
+			result.Thread.Preview = "new preview"
+			return nil
+		case "thread/resume":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-9"
+			result.Thread.Name = "Resumed"
+			result.Thread.Preview = "preview"
+			return nil
+		case "thread/fork":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-fork"
+			result.Thread.Name = "Forked"
+			result.Thread.Preview = "fork preview"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	resp, err := newBackendConfigurationService(a).completeGlobalModelSet(&feishu.CardAction{}, "gpt-5")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeGlobalModelSet() = %#v, %v", resp, err)
+	}
+	resp, err = newBackendConfigurationService(a).completeGlobalReasoningEffortSet(&feishu.CardAction{}, "high")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeGlobalReasoningEffortSet() = %#v, %v", resp, err)
+	}
+	resp, err = newMenuActionService(a).completeQuietSet(&feishu.CardAction{}, config.QuietModeProgress)
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeQuietSet() = %#v, %v", resp, err)
+	}
+	if a.cfg.Feishu.Quiet != config.QuietModeProgress {
+		t.Fatalf("expected quiet mode to be progress, got %q", a.cfg.Feishu.Quiet)
+	}
+
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                 sessionKey,
+		WorkspaceID:         a.cfg.Workspaces[0].ID,
+		ActiveThreadID:      "thread-9",
+		OwnerUserID:         "user-1",
+		ChatID:              "chat-1",
+		ChatType:            "group",
+		Status:              "idle",
+		ActiveThreadPreview: "",
+	}); err != nil {
+		t.Fatalf("UpsertSession(thread resume) error = %v", err)
+	}
+	resp, err = appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		ActionValue: map[string]any{"thread_name": "Selected", "thread_preview": "chosen"},
+	}, sessionKey, "thread-9")
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeThreadResume() = %#v, %v", resp, err)
+	}
+	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "thread-9" || got.Status != "idle" {
+		t.Fatalf("session after completeThreadResume = %+v", got)
+	}
+	resp, err = completeMenuFork(a, &feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-1",
+		ActionValue: map[string]any{"parent_action": "menu.thread"},
+	}, sessionKey)
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeMenuFork() = %#v, %v", resp, err)
+	}
+	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "thread-fork" || got.Status != "idle" {
+		t.Fatalf("session after completeMenuFork = %+v", got)
+	}
+
+	seedActiveSubmission(t, a, sessionKey, "thread-9", "turn-1")
+	ff.sendCards = nil
+	ff.replyCards = nil
+	onFileApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-approval"`), Params: json.RawMessage(`{"threadId":"thread-9","turnId":"turn-1","itemId":"item-2","reason":"need review","changes":[{"path":"internal/app/notifications.go","kind":"modified"},{"path":"README.md","kind":"added"}]}`)})
+	if pending := a.store.PendingByID("file-approval"); pending == nil || pending.Kind != "file" {
+		t.Fatalf("file approval pending = %+v, want file request", pending)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected file approval to reply with a card")
+	}
+	if got := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(got, "文件列表") || !strings.Contains(got, "`internal/app/notifications.go` · 修改") || !strings.Contains(got, "`README.md` · 新增") {
+		t.Fatalf("file approval card body = %q", got)
+	}
+
+	sess := a.store.GetSession(sessionKey)
+	sess.ActiveTurnID = ""
+	sess.ActiveSubmissionID = ""
+	sess.Status = "idle"
+	if err := a.store.UpsertSession(sess); err != nil {
+		t.Fatalf("UpsertSession(reset for menu new) error = %v", err)
+	}
+	resp, err = appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
+	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("completeMenuNew() = %#v, %v", resp, err)
+	}
+}
+
+func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
+	sessionKey := makeSessionKey(a, msg)
+	bindingID := defaultBindingID(a.FrontendID(), "group", "chat-1")
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          bindingID,
+		FrontendID:  a.FrontendID(),
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                        sessionKey,
+		BindingID:                  bindingID,
+		WorkspaceID:                a.cfg.Workspaces[0].ID,
+		ActiveThreadID:             "thread-1",
+		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadApprovalPolicy: "on-request",
+		ActiveThreadSandboxMode:    "workspace-write",
+		ChatID:                     "chat-1",
+		ChatType:                   "group",
+		Status:                     "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		switch method {
+		case "model/list":
+			*out.(*catalog.ModelListResult) = catalog.ModelListResult{
+				Data: []catalog.ModelListEntry{{
+					ID:                     "gpt-5",
+					DisplayName:            "GPT-5",
+					DefaultReasoningEffort: "medium",
+					SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
+						{ReasoningEffort: "medium"},
+					},
+					IsDefault: true,
+				}},
+			}
+			return nil
+		case "collaborationMode/list":
+			*out.(*catalog.CollaborationModeListResponse) = catalog.CollaborationModeListResponse{
+				Data: []catalog.CollaborationModeMask{
+					{Name: "Plan", Mode: stringPtr("plan"), ReasoningEffort: stringPtr("medium")},
+				},
+			}
+			return nil
+		case "thread/list":
+			*out.(*codexrpc.ThreadListResult) = codexrpc.ThreadListResult{}
+			return nil
+		case "thread/fork":
+			result := out.(*codexrpc.ThreadStartResult)
+			result.Thread.ID = "thread-fork"
+			result.Thread.Name = "Forked"
+			result.Thread.Preview = "fork preview"
+			return nil
+		default:
+			return nil
+		}
+	}
+
+	for _, raw := range []string{
+		"",
+		"/menu",
+		"/help",
+		"/status",
+		"/model",
+		"/quiet",
+		"/debug",
+		"/download",
+		"/fork",
+		"/threads",
+		"/thread fork",
+		"/thread sandbox",
+		"/thread policy",
+		"/workspace",
+		"/workspace list",
+		"/workspace sandbox",
+		"/workspace policy",
+	} {
+		if err := handleCommand(a, msg, raw); err != nil && raw != "/threads" {
+			t.Fatalf("handleCommand(%q) error = %v", raw, err)
+		}
+	}
+	if err := handleCommand(a, msg, "/unknown"); err == nil {
+		t.Fatal("expected unknown command to fail")
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected handleCommand to send at least one reply card")
+	}
+
+	// Real discard paths for recall/reaction.
+	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
+		ID:               "queued-sub",
+		SessionKey:       sessionKey,
+		WorkspaceID:      a.cfg.Workspaces[0].ID,
+		SourceMessageIDs: []string{"queued-msg"},
+		Status:           "queued",
+	})
+	if err != nil {
+		t.Fatalf("CreateSubmission(queued) error = %v", err)
+	}
+	sess := a.store.GetSession(sessionKey)
+	sess.StagedImages = []conversation.SessionStagedImage{{SourceMessageID: "staged-msg", Name: "image.png"}}
+	sess.Queue = []string{subID}
+	sess.Status = "queued"
+	if err := a.store.UpsertSession(sess); err != nil {
+		t.Fatalf("UpsertSession(with pending) error = %v", err)
+	}
+
+	a.HandleFeishuRecall(&feishu.MessageRecall{MessageID: "staged-msg", ChatID: "chat-1"})
+	updated := a.store.GetSession(sessionKey)
+	if len(updated.StagedImages) != 0 {
+		t.Fatalf("handleFeishuRecall() did not discard staged image: %+v", updated.StagedImages)
+	}
+
+	a.HandleFeishuReaction(&feishu.MessageReaction{MessageID: "queued-msg", EmojiType: discardReactionEmoji, ChatID: "chat-1"})
+	updated = a.store.GetSession(sessionKey)
+	if len(updated.Queue) != 0 {
+		t.Fatalf("handleFeishuReaction() did not discard queued submission: %+v", updated.Queue)
+	}
+}
+
+func TestCommandHelpRendersHelpCard(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "m-help", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+
+	if err := commandHelp(a, msg, nil); err != nil {
+		t.Fatalf("commandHelp() error = %v", err)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected help card to be sent")
+	}
+	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
+	for _, want := range []string{"/help", "/history", "/skills", "/debug", "/debug logs", "/download", "/fork", "/compact", "/goal", "/workspace use ID", "/thread policy", "/upgrade", "/upgrade dev", "/upgrade local", "/upgrade path ./dist/feidex-linux-amd64", "$skill-name <内容>"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("help body missing %q: %q", want, body)
+		}
+	}
+	for _, unwanted := range []string{"/threads all", "/threads new", "/threads fork", "/threads sandbox", "/threads policy"} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("help body should not expose legacy thread subcommand %q: %q", unwanted, body)
+		}
+	}
+}
+
+func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "m-history", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:            sessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadID: "thread-1",
+		ActiveTurnID:   "turn-2",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/read" {
+			return nil
+		}
+		result := out.(*codexrpc.ThreadReadResult)
+		name := "Demo Thread"
+		result.Thread.ID = "thread-1"
+		result.Thread.Name = &name
+		result.Thread.Preview = "preview"
+		result.Thread.Cwd = a.cfg.Workspaces[0].Cwd
+		result.Thread.Turns = []codexrpc.ThreadReadTurn{
+			{
+				ID:     "turn-1",
+				Status: "completed",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", ID: "item-u1", Content: json.RawMessage(`[{"type":"text","text":"first input","text_elements":[]}]`)},
+					{Type: "agentMessage", ID: "item-a1", Text: "first answer"},
+				},
+			},
+			{
+				ID:     "turn-2",
+				Status: "running",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", ID: "item-u2", Content: json.RawMessage(`[{"type":"text","text":"second input","text_elements":[]}]`)},
+				},
+			},
+		}
+		return nil
+	}
+
+	if err := newHistoryService(a).CommandHistory(msg, nil); err != nil {
+		t.Fatalf("commandHistory() error = %v", err)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected history card to be sent")
+	}
+	body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1])
+	for _, want := range []string{"当前位置：主菜单 / 常用工具 / 历史记录", "当前页: `1-2 / 2`", "当前 turn: `Turn #2`", "在线下拉菜单中选择要查看的 turn。"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("history body missing %q: %q", want, body)
+		}
+	}
+	selects := cardSelectStaticForTest(ff.replyCards[len(ff.replyCards)-1])
+	if len(selects) != 1 {
+		t.Fatalf("history card selects = %+v, want 1 select", selects)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != 2 {
+		t.Fatalf("history options = %+v, want 2 options", options)
+	}
+	wantLabels := []string{"当前 · Turn #2 | running | second input", "Turn #1 | completed | first input"}
+	for i, want := range wantLabels {
+		text, _ := options[i]["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		if !strings.Contains(label, want) {
+			t.Fatalf("history option %d = %q, want %q", i, label, want)
+		}
+	}
+}
+
+func TestCompleteHistoryDetailShowsInputs(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:            sessionKey,
+		WorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadID: "thread-1",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/read" {
+			return nil
+		}
+		result := out.(*codexrpc.ThreadReadResult)
+		result.Thread.ID = "thread-1"
+		result.Thread.Turns = []codexrpc.ThreadReadTurn{
+			{
+				ID:     "turn-1",
+				Status: "completed",
+				Items: []codexrpc.ThreadReadItem{
+					{Type: "userMessage", ID: "u1", Content: json.RawMessage(`[{"type":"text","text":"hello","text_elements":[]},{"type":"image","url":"https://example.test/a.png"}]`)},
+					{Type: "agentMessage", ID: "a1", Text: "world"},
+				},
+			},
+		}
+		return nil
+	}
+
+	resp, err := newMenuActionService(a).completeHistoryDetail(&feishu.CardAction{}, sessionKey, 0)
+	if err != nil || resp == nil || resp.Card == nil {
+		t.Fatalf("completeHistoryDetail() = %#v, %v", resp, err)
+	}
+	card, _ := resp.Card.Data.(map[string]any)
+	body := cardMarkdownContent(t, card)
+	for _, want := range []string{"输入：", "hello", "[image] https://example.test/a.png", "回复：", "world"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("history detail missing %q: %q", want, body)
+		}
+	}
+}
+
+func TestSmallHelperBranches(t *testing.T) {
+	if got := appthreadview.RenderThreadButtonLabel("", "", "thread-id-1234567890"); got == "" {
+		t.Fatal("appthreadview.RenderThreadButtonLabel(id fallback) should not be empty")
+	}
+	if got := appthreadview.RenderThreadListEntry("name", "preview", "12345678abcdef"); !strings.Contains(got, "name") || !strings.Contains(got, "[12345678]") {
+		t.Fatalf("appthreadview.RenderThreadListEntry(name+preview) = %q", got)
+	}
+	if got := appthreadview.RenderThreadListEntry("", "", "thread-1"); !strings.Contains(got, "thread-1") {
+		t.Fatalf("appthreadview.RenderThreadListEntry(id fallback) = %q", got)
+	}
+	if got := appthreadview.ShortThreadID("12345678abcdef"); got != "12345678" {
+		t.Fatalf("appthreadview.ShortThreadID() = %q, want 12345678", got)
+	}
+}
+
+func TestCommandThreadsDisplaysThreadList(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                        sessionKey,
+		WorkspaceID:                a.cfg.Workspaces[0].ID,
+		ActiveThreadID:             "thread-current",
+		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadName:           "Current Thread",
+		ActiveThreadPreview:        "Current Preview",
+		ActiveThreadSandboxMode:    "workspace-write",
+		ActiveThreadApprovalPolicy: "on-request",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		result := out.(*codexrpc.ThreadListResult)
+		result.Data = []codexrpc.ThreadListEntry{
+			{ID: "thread-current", Name: "Current Thread", Preview: "Current Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+			{ID: "thread-older", Name: "Older", Preview: "Older Preview", UpdatedAt: 10, Cwd: a.cfg.Workspaces[0].Cwd},
+		}
+		return nil
+	}
+
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
+		t.Fatalf("commandThreads(display) error = %v", err)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected thread list card to be sent")
+	}
+	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "select a thread from the dropdown to switch.") || strings.Contains(body, "Older Preview") {
+		t.Fatalf("thread list body = %q, want summary without duplicated list", body)
+	}
+	if got := cardSelectStaticForTest(ff.replyCards[len(ff.replyCards)-1]); len(got) != 1 {
+		t.Fatalf("thread list selects = %+v, want 1 select", got)
+	}
+}
+
+func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "feishu:chat:chat"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                        sessionKey,
+		WorkspaceID:                a.cfg.Workspaces[0].ID,
+		ActiveThreadID:             "12345678abcdef",
+		ActiveThreadWorkspaceID:    a.cfg.Workspaces[0].ID,
+		ActiveThreadName:           "Current Thread",
+		ActiveThreadPreview:        "Current Preview",
+		ActiveThreadSandboxMode:    "workspace-write",
+		ActiveThreadApprovalPolicy: "on-request",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		result := out.(*codexrpc.ThreadListResult)
+		result.Data = []codexrpc.ThreadListEntry{
+			{ID: "12345678abcdef", Name: "Current Thread", Preview: "Current Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+			{ID: "older-thread-9999", Name: "Older", Preview: "Older Preview", UpdatedAt: 10, Cwd: a.cfg.Workspaces[0].Cwd},
+		}
+		return nil
+	}
+
+	card, err := renderThreadsCard(a, sessionKey, false)
+	if err != nil {
+		t.Fatalf("renderThreadsCard() error = %v", err)
+	}
+	labels := cardButtonLabelsByAction(card)
+	for _, actionName := range []string{"menu.fork", "thread.sandbox.menu", "thread.policy.menu"} {
+		if _, ok := labels[actionName]; !ok {
+			t.Fatalf("expected thread action %q in %+v", actionName, labels)
+		}
+	}
+	selects := cardSelectStaticForTest(card)
+	if len(selects) != 1 {
+		t.Fatalf("thread card selects = %+v, want 1", selects)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) < 1 {
+		t.Fatalf("thread card options = %+v, want at least 1", options)
+	}
+	text, _ := options[0]["text"].(map[string]any)
+	label, _ := text["content"].(string)
+	if !strings.Contains(label, "[12345678]") {
+		t.Fatalf("thread option label = %q, want short id", label)
+	}
+}
+
+func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	sessionKey := "feishu:chat:chat"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		result := out.(*codexrpc.ThreadListResult)
+		result.Data = []codexrpc.ThreadListEntry{
+			{ID: "12345678abcdef", Name: "Current Thread", Preview: "Current Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+		}
+		return nil
+	}
+
+	card, err := renderThreadsCard(a, sessionKey, false)
+	if err != nil {
+		t.Fatalf("renderThreadsCard() error = %v", err)
+	}
+	labels := cardButtonLabelsByAction(card)
+	for _, actionName := range []string{"menu.fork", "thread.sandbox.menu", "thread.policy.menu"} {
+		if _, ok := labels[actionName]; ok {
+			t.Fatalf("unexpected thread action %q in %+v", actionName, labels)
+		}
+	}
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "no active thread, so /thread fork, /thread sandbox, /thread policy, /thread multiagent are not shown.") {
+		t.Fatalf("thread card body = %q, want missing-active-thread hint", body)
+	}
+}
+
+func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
+	a, ff, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
+	sessionKey := makeSessionKey(a, msg)
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	attempts := 0
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		attempts++
+		result := out.(*codexrpc.ThreadListResult)
+		if attempts < 3 {
+			result.Data = nil
+			return nil
+		}
+		result.Data = []codexrpc.ThreadListEntry{
+			{ID: "thread-default", Name: "Default Thread", Preview: "Default Preview", UpdatedAt: 20, Cwd: a.cfg.Workspaces[0].Cwd},
+			{ID: "thread-alt", Name: "Alt Thread", Preview: "Alt Preview", UpdatedAt: 10, Cwd: a.cfg.Workspaces[1].Cwd},
+		}
+		return nil
+	}
+
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
+		t.Fatalf("commandThreads(filter) error = %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("thread/list attempts = %d, want 3", attempts)
+	}
+	if len(ff.replyCards) == 0 {
+		t.Fatal("expected thread list card to be sent")
+	}
+	elements := cardElementsForTest(ff.replyCards[0])
+	body := elements[0]["content"].(string)
+	if !strings.Contains(body, "list count: `1`") || !strings.Contains(body, "select a thread from the dropdown to switch.") {
+		t.Fatalf("thread list body = %q, want summary only", body)
+	}
+	selects := cardSelectStaticForTest(ff.replyCards[0])
+	if len(selects) != 1 {
+		t.Fatalf("thread list selects = %+v, want 1", selects)
+	}
+	options, _ := selects[0]["options"].([]map[string]any)
+	if len(options) != 1 {
+		t.Fatalf("thread list options = %+v, want 1 filtered option", options)
+	}
+	if got, _ := options[0]["value"].(string); got != "thread-default" {
+		t.Fatalf("thread list option value = %q, want thread-default", got)
+	}
+}
+
+func TestCompleteThreadResumeRejectsThreadFromDifferentWorkspace(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
+	sessionKey := "sess-1"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:         sessionKey,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+		OwnerUserID: "user-1",
+		ChatID:      "chat-1",
+		ChatType:    "group",
+		Status:      "idle",
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		t.Fatalf("unexpected method: %s", method)
+		return nil
+	}
+
+	resp, err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{
+		UserID: "user-1",
+		ChatID: "chat-1",
+		ActionValue: map[string]any{
+			"thread_name":    "Alt Thread",
+			"thread_preview": "Alt Preview",
+			"thread_cwd":     a.cfg.Workspaces[1].Cwd,
+		},
+	}, sessionKey, "thread-alt")
+	if err != nil {
+		t.Fatalf("completeThreadResume() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "warning" {
+		t.Fatalf("expected warning toast, got %#v", resp)
+	}
+	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "" {
+		t.Fatalf("session after rejected resume = %+v, want no active thread", got)
+	}
+}

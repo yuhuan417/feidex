@@ -2,17 +2,16 @@
 
 本文记录当前 `internal/app` 的稳定边界。目标 ownership 和依赖方向以 [architecture-refactor-proposal.md](architecture-refactor-proposal.md) 与 [DEVELOPER.md](../DEVELOPER.md) 为准；新代码不得通过新增 shim、service locator 或宽 `App` 接口扩大 root。
 
-## Root `internal/app`
+## Thin root `internal/app`
 
-root app 是 Feishu entrypoint 和 composition glue，保留以下职责：
+root app 只保留 Feishu callback binding：
 
-- `feishu_event_router.go`、`input_dispatcher.go`、`action_registry*.go`、`command*.go`：入口、typed input 路由和 command/menu/action 注册。
-- `app.go`、`deps.go`、`accessors.go`、`*_bindings.go`：构造根与 consumer-owned ports 的接线。
-- `submission_bindings.go`、`turn_lifecycle.go`、`server_request_state.go`、`turn_stream.go`：仍需对照 Codex 状态机的生命周期编排。
-- `backend_runtime*.go`、`codex_runtime_recovery.go`、`clauderuntime_bindings.go`：runtime 安装、启动、失败和恢复的显式绑定。
-- `notifications.go`、`backend_events.go`、`backend_selection.go`：跨 owner 的入口协调。
+- `entrypoint.go`：只定义 Feishu transport 的窄 handler 接口并安装四类 Feishu callback。
+- `doc.go`：声明边界和依赖方向。
 
-root 不应新增 owner-local renderer/DTO、backend wire 参数、Feishu SDK 细节、纯策略 helper 或隐式 callback 环。异步状态变更使用 frontend-owned `SessionActors`；frontend-wide maintenance/recovery 只能在明确 scope 下运行。
+应用入口实现位于 `internal/feishuapp`，由 `internal/composition` 直接构造；它不属于 `internal/app` 的兼容转发层。`internal/app` 不持有业务状态、服务注册表、backend client、业务 tracker 或跨 owner callback。
+
+`internal/feishuapp` 是 Feishu frontend 的实现包，承接现有 Feishu command/card 协议绑定；其生产实例只能由 `internal/composition` 创建。新的 domain/application/runtime 能力不得继续增加到该包，应落到对应 owner。
 
 ## Application owners
 
@@ -41,6 +40,6 @@ Feishu adapter 的命令和菜单必须同时提供直接 command 入口；慢 c
 
 ## Runtime and composition
 
-`internal/composition` 构造 frontend scope、state gateway、adapter 和 runtime owner。`internal/runtime/frontend_owner.go` 持有 `SessionActors`、`FrontendRuntime`、live threads、retry/recovery、client registry 和 effect deduper；不同 frontend 不共享 mutable runtime。`internal/runtime/turnbinding` 只持有 turn binding，`internal/runtime/workspace` 只持有进程型 workspace 操作。
+`internal/composition` 构造 frontend scope、state gateway、adapter、`internal/feishuapp` frontend 和 runtime owner。`internal/runtime/frontend_owner.go` 持有 `SessionActors`、`FrontendRuntime`、live threads、retry/recovery、client registry 和 effect deduper；不同 frontend 不共享 mutable runtime。`internal/runtime/turnbinding` 只持有 turn binding，`internal/runtime/workspace` 只持有进程型 workspace 操作。
 
 新增能力提交前应能回答：它修改哪个 domain aggregate、由哪个 application owner 处理、需要哪些 ports、产生哪些 effects、由哪个 adapter 执行、是否影响 Codex 状态机，以及 frontend/chat/session scope 是什么。

@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"feidex/internal/app"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	feishuapp "feidex/internal/feishuapp"
 )
 
 type cardSender interface {
@@ -248,7 +248,7 @@ func defaultCardDemoBody(kind, command, reason string) string {
 
 func buildCardDemoCard(cfg *config.Config, opts options) (map[string]any, string, error) {
 	if !usesLegacyCardDemo(opts.Kind) {
-		card, resolvedKind, err := app.BuildOutboundCardDemo(cfg, app.OutboundCardDemoOptions{
+		card, resolvedKind, err := feishuapp.BuildOutboundCardDemo(cfg, feishuapp.OutboundCardDemoOptions{
 			Kind:        opts.Kind,
 			WorkspaceID: opts.Workspace,
 			ChatID:      opts.ChatID,

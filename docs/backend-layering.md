@@ -19,24 +19,24 @@
 
 ## 2. Feishu entry and composition layer
 
-`internal/app` 只负责 Feishu entrypoint、composition binding 和必须保持协议顺序的跨 owner 编排。`internal/composition` 创建 frontend scope 与 runtime owner。卡片与消息由 `internal/adapter/feishu` 转换和执行，不能从 application 直接调用 SDK。
+`internal/app` 只负责 Feishu callback binding；`internal/feishuapp` 承接现有 Feishu command/card 协议绑定，且只能由 `internal/composition` 创建。`internal/composition` 创建 frontend scope 与 runtime owner。卡片与消息由 `internal/adapter/feishu` 转换和执行，不能从 application 直接调用 SDK。
 
 代表文件：
 
-- `internal/app/input_dispatcher.go`
-- `internal/app/backend_events.go`
-- `internal/app/submission_bindings.go`
-- `internal/app/turn_lifecycle.go`
-- `internal/app/server_request_state.go`
-- `internal/app/backend_runtime.go`
+- `internal/feishuapp/input_dispatcher.go`
+- `internal/feishuapp/backend_events.go`
+- `internal/feishuapp/submission_bindings.go`
+- `internal/feishuapp/turn_lifecycle.go`
+- `internal/feishuapp/server_request_state.go`
+- `internal/feishuapp/backend_runtime.go`
 
 涉及 thread/turn/approval/review/compaction/tool input/server request 的改动，必须同步检查 [Codex 状态机审计](codex-app-server-state-machine-audit.md)。
 
 ## 3. Backend capability and configuration
 
-backend 选择与 capability 位于 `internal/application/backendcaps`、`internal/application/backendconfig`、`internal/application/modelconfig` 和 `internal/app/backend_*` 的 composition glue。这里负责当前 frontend 的可用能力、配置 scope、模型 snapshot、idle-only backend switch 和失败策略；不实现具体 RPC 或 CLI wire。
+backend 选择与 capability 位于 `internal/application/backendcaps`、`internal/application/backendconfig`、`internal/application/modelconfig` 和 `internal/feishuapp/backend_*` 的 composition glue。这里负责当前 frontend 的可用能力、配置 scope、模型 snapshot、idle-only backend switch 和失败策略；不实现具体 RPC 或 CLI wire。
 
-`internal/app/backend_selection.go` 只连接 `internal/adapter/feishu/backend/selection.go` 的 semantic card/effect ports。backend failure、maintenance 和 runtime selection 的长任务必须遵守 frontend/session scope；不得静默 fallback 到 Codex。
+`internal/feishuapp/backend_selection.go` 只连接 `internal/adapter/feishu/backend/selection.go` 的 semantic card/effect ports。backend failure、maintenance 和 runtime selection 的长任务必须遵守 frontend/session scope；不得静默 fallback 到 Codex。
 
 ## 4. Backend adapters
 

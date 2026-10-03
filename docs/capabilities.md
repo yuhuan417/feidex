@@ -9,31 +9,31 @@
 
 主要代码 / 测试来源:
 
-- `internal/app/commands.go`
-- `internal/app/command_registry.go`
-- `internal/app/menu_specs.go`
-- `internal/app/menu_actions.go`
-- `internal/app/conversation_terms.go`
+- `internal/feishuapp/commands.go`
+- `internal/feishuapp/command_registry.go`
+- `internal/feishuapp/menu_specs.go`
+- `internal/feishuapp/menu_actions.go`
+- `internal/feishuapp/conversation_terms.go`
 - `internal/application/features/data.go`
-- `internal/app/feature_registry_bindings_tools.go`
-- `internal/app/action_registry_workspace.go`
-- `internal/app/backendcaps/capability.go`
-- `internal/app/backend/driver.go`
-- `internal/app/backend/permission_driver.go`
-- `internal/app/backend/configuration.go`
-- `internal/app/claude_runtime.go`
-- `internal/app/claude_session_catalog.go`
-- `internal/app/claude_model_config.go`
-- `internal/app/claude_permission_config.go`
-- `internal/app/workspacecmd/service.go`
-- `internal/app/commands_test.go`
-- `internal/app/menu_command_direct_access_test.go`
-- `internal/app/claude_history_test.go`
-- `internal/app/claude_session_catalog_test.go`
-- `internal/app/model_config_test.go`
-- `internal/app/goal_test.go`
-- `internal/app/plan_mode_test.go`
-- `internal/app/app_more_test.go`
+- `internal/feishuapp/feature_registry_bindings_tools.go`
+- `internal/feishuapp/action_registry_workspace.go`
+- `internal/feishuapp/backendcaps/capability.go`
+- `internal/feishuapp/backend/driver.go`
+- `internal/feishuapp/backend/permission_driver.go`
+- `internal/feishuapp/backend/configuration.go`
+- `internal/feishuapp/claude_runtime.go`
+- `internal/feishuapp/claude_session_catalog.go`
+- `internal/feishuapp/claude_model_config.go`
+- `internal/feishuapp/claude_permission_config.go`
+- `internal/feishuapp/workspacecmd/service.go`
+- `internal/feishuapp/commands_test.go`
+- `internal/feishuapp/menu_command_direct_access_test.go`
+- `internal/feishuapp/claude_history_test.go`
+- `internal/feishuapp/claude_session_catalog_test.go`
+- `internal/feishuapp/model_config_test.go`
+- `internal/feishuapp/goal_test.go`
+- `internal/feishuapp/plan_mode_test.go`
+- `internal/feishuapp/app_more_test.go`
 
 ## 总规则
 

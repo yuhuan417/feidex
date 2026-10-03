@@ -6,8 +6,8 @@
 
 主要入口与实现：
 
-- `internal/feishu/events.go`、`internal/app/action_registry.go`：事件注册和 callback ack。
-- `internal/app/input_dispatcher.go`、`internal/app/card_action_async.go`、`internal/app/menu_actions.go`：typed action dispatch 与异步边界。
+- `internal/feishu/events.go`、`internal/feishuapp/action_registry.go`：事件注册和 callback ack。
+- `internal/feishuapp/input_dispatcher.go`、`internal/feishuapp/card_action_async.go`、`internal/feishuapp/menu_actions.go`：typed action dispatch 与异步边界。
 - `internal/application/cardaction/dispatcher.go`、`internal/application/features/`：action 分类、能力 gate 和 command/menu 语义。
 - `internal/adapter/feishu/goalcmd/`、`planmode/`、`reviewcmd/`、`upgradecmd/`、`workspacecmd/`、`debugviewcmd/`：Feishu command/card adapter。
 - `internal/adapter/feishu/outbound/`、`delivery/`、`finalcardpatch/`：semantic effect 执行和卡片 patch。
@@ -55,4 +55,4 @@ Claude 的模型/effort/permission/auxiliary-model card action 如果触发 runt
 - 异步工作如果修改 session/submission/turn，必须通过 frontend-owned session actor；frontend-wide maintenance/recovery 任务按 session 重新投递。
 - 变更 `review`、`upgrade`、`download`、`clone`、`compact`、`interrupt`、`goal`、`plan` 或 Claude control-response 边界时，同时更新本文和对应测试。
 
-已有行为由 `internal/app/card_action_async_test.go`、`internal/app/claude_permission_menu_async_test.go`、`internal/app/async_user_input_test.go`、workspace/review/upgrade 测试覆盖；事件注册与 handler 一致性由 `internal/feishu/events_test.go` 守卫。
+已有行为由 `internal/feishuapp/card_action_async_test.go`、`internal/feishuapp/claude_permission_menu_async_test.go`、`internal/feishuapp/async_user_input_test.go`、workspace/review/upgrade 测试覆盖；事件注册与 handler 一致性由 `internal/feishu/events_test.go` 守卫。

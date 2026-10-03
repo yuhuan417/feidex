@@ -22,7 +22,7 @@ func TestSkillAdapterUsesApplicationAndOwnsNoBusinessState(t *testing.T) {
 
 func TestCommandBindingsDoNotOwnRecognitionOrBackendPolicy(t *testing.T) {
 	root := repositoryRoot(t)
-	for _, relative := range []string{"internal/app/feature_registry_bindings.go", "internal/app/command_registry.go"} {
+	for _, relative := range []string{"internal/feishuapp/feature_registry_bindings.go", "internal/feishuapp/command_registry.go"} {
 		data, err := os.ReadFile(filepath.Join(root, relative))
 		if err != nil {
 			t.Fatal(err)

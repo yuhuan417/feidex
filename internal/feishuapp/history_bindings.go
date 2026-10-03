@@ -1,0 +1,27 @@
+package feishuapp
+
+import (
+	"context"
+	codexadapter "feidex/internal/adapter/backend/codex"
+	history "feidex/internal/adapter/feishu/history"
+	"feidex/internal/compositionkit"
+	"feidex/internal/domain/identity"
+	"feidex/internal/feishu"
+)
+
+type historyOutbound struct{ app *App }
+
+func (o historyOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+}
+
+func newHistoryService(app *App) history.Service {
+	return compositionkit.NewHistory(compositionkit.HistoryDependencies{
+		Frontend: identity.FrontendID(app.FrontendID()), AllowLegacyFallback: allowLegacyFrontendFallback(app),
+		Context: app.Context, Outbound: historyOutbound{app: app},
+		Repository: app.State(), Backend: func() string { return configuredBackend(app) },
+		CodexClient:   func() codexadapter.RPCClient { return currentCodexClient(app) },
+		SessionKey:    func(msg *feishu.InboundMessage) string { return makeSessionKey(app, msg) },
+		ReplyInThread: func(chatType string) bool { return replyInThreadEnabled(app, chatType) },
+	})
+}

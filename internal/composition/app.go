@@ -10,6 +10,7 @@ import (
 	"feidex/internal/app"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	feishuapp "feidex/internal/feishuapp"
 	"feidex/internal/runtime"
 	"feidex/internal/state"
 )
@@ -22,29 +23,34 @@ type Service[T runtime.ManagedFrontend] struct {
 	Frontends []T
 }
 
-func NewFrontend(scope FrontendScope) (*app.App, error) {
-	frontend, err := app.NewFeishuShell(scope)
+func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
+	frontend, err := feishuapp.NewFeishuShell(scope)
 	if err != nil {
 		return nil, err
 	}
-	// All production objects are assembled here. internal/app only exposes
-	// boundary factories and attaches the resulting parts to its Feishu shell.
-	app.AttachTrackers(frontend, app.NewTrackers(frontend))
-	app.AttachEffectRunner(frontend, app.NewEffectRunner(frontend))
-	app.AttachStateView(frontend, app.NewStateView(frontend))
-	app.AttachWorkspacePresentation(frontend, app.NewWorkspacePresentation(frontend))
-	app.AttachDispatcher(frontend, app.NewDispatcher(frontend))
-	if err := app.CanonicalizeStoredSessionKeys(frontend); err != nil {
+	// All production objects are assembled here. internal/app only binds the
+	// already composed Feishu event transport to the frontend entrypoint.
+	feishuapp.AttachTrackers(frontend, feishuapp.NewTrackers(frontend))
+	feishuapp.AttachEffectRunner(frontend, feishuapp.NewEffectRunner(frontend))
+	feishuapp.AttachStateView(frontend, feishuapp.NewStateView(frontend))
+	feishuapp.AttachWorkspacePresentation(frontend, feishuapp.NewWorkspacePresentation(frontend))
+	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
+	if err := feishuapp.CanonicalizeStoredSessionKeys(frontend); err != nil {
 		return nil, err
 	}
-	if backend := app.BackendKind(frontend); backend != "" {
-		handle, err := app.BuildBackendRuntimeHandle(frontend, backend)
+	if backend := feishuapp.BackendKind(frontend); backend != "" {
+		handle, err := feishuapp.BuildBackendRuntimeHandle(frontend, backend)
 		if err != nil {
 			return nil, err
 		}
-		app.InstallBackendRuntime(frontend, handle)
+		feishuapp.InstallBackendRuntime(frontend, handle)
 	}
-	app.InstallFeishuHandlers(frontend)
+	feishuapp.InstallFeishuPolicies(frontend)
+	transport, ok := scope.FeishuTransport.(app.HandlerSet)
+	if !ok {
+		return nil, fmt.Errorf("frontend composition has no Feishu handler transport")
+	}
+	app.BindHandlers(transport, frontend)
 	return frontend, nil
 }
 

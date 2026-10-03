@@ -127,7 +127,7 @@
 - **后台自查**:开发者后台 → 应用 → 权限管理 / 事件与回调 / 版本管理与发布。
 - **命令行自查**(核对某个部署的实际状态):先取应用信息接口的 `online_version_id`,再调
   `GET /open-apis/application/v6/applications/{app_id}/app_versions/{version_id}`,返回的 `scopes`、`events`、`event_infos` 就是该版本**实际生效**的权限与事件订阅。
-- **权限错误会卡片化提示**:Feidex 会把带 scope 申请链接的权限错误转成飞书卡片(`internal/app/maintenance/runtime_service.go`),按卡片里的链接申请权限后**记得发布版本**。
+- **权限错误会卡片化提示**:Feidex 会把带 scope 申请链接的权限错误转成飞书卡片(`internal/feishuapp/maintenance/runtime_service.go`),按卡片里的链接申请权限后**记得发布版本**。
 
 常见错误码:
 

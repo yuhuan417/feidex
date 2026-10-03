@@ -1,0 +1,706 @@
+package feishuapp
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"feidex/internal/domain/conversation"
+	identity "feidex/internal/domain/identity"
+	"feidex/internal/textutil"
+	"fmt"
+	"log/slog"
+	"net"
+	"strings"
+	"sync"
+	"time"
+
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/config"
+	"feidex/internal/feishu"
+	"feidex/internal/state"
+)
+
+const (
+	groupAnnouncementDefaultDebounce    = 2 * time.Second
+	groupAnnouncementDefaultMinInterval = 15 * time.Second
+	groupAnnouncementRefreshTimeout     = 20 * time.Second
+	groupAnnouncementDivider            = "----------------------------------------"
+	groupAnnouncementFieldWidth         = 10
+	groupAnnouncementCommonChatType     = "group_common"
+	groupAnnouncementCommonMarker       = "feidex-status-common-region"
+	groupAnnouncementCommonTitle        = "Feidex Group Status"
+)
+
+type groupAnnouncementTracker struct {
+	mu          sync.Mutex
+	debounce    time.Duration
+	minInterval time.Duration
+	timers      map[string]*time.Timer
+	running     map[string]bool
+	queued      map[string]bool
+	lastAttempt map[string]time.Time
+}
+
+func newGroupAnnouncementTracker() *groupAnnouncementTracker {
+	return &groupAnnouncementTracker{
+		debounce:    groupAnnouncementDefaultDebounce,
+		minInterval: groupAnnouncementDefaultMinInterval,
+		timers:      map[string]*time.Timer{},
+		running:     map[string]bool{},
+		queued:      map[string]bool{},
+		lastAttempt: map[string]time.Time{},
+	}
+}
+
+func scheduleGroupAnnouncementStatusRefresh(a *App, chatID, reason string) {
+	if a == nil || a.Trackers() == nil || a.Trackers().groupAnnouncements == nil {
+		return
+	}
+	a.Trackers().groupAnnouncements.Schedule(a, chatID, reason)
+}
+
+// markGroupAnnouncementBotAbsent records that Feishu reports the app is no
+// longer a member of chatID, so later refreshes skip it instead of retrying a
+// request that cannot succeed. Cleared by clearGroupAnnouncementBotAbsent when
+// the bot is added back.
+func markGroupAnnouncementBotAbsent(a *App, st *appstate.Store, chatID string) {
+	chatID = strings.TrimSpace(chatID)
+	if a == nil || st == nil || chatID == "" {
+		return
+	}
+	record := st.GroupAnnouncementBlock("group", chatID)
+	if record == nil {
+		record = &state.GroupAnnouncementBlock{
+			ID:         appstate.DefaultGroupAnnouncementBlockID(a.FrontendID(), "group", chatID),
+			FrontendID: strings.TrimSpace(a.FrontendID()),
+			ChatID:     chatID,
+			ChatType:   "group",
+		}
+	}
+	if record.BotAbsent {
+		return
+	}
+	record.BotAbsent = true
+	if err := st.SaveGroupAnnouncementBlock(record); err != nil {
+		slog.Warn("failed to record group announcement bot absence", "chat_id", chatID, "error", err)
+		return
+	}
+	slog.Info("group announcement refresh disabled: bot is no longer a member of the chat", "chat_id", chatID)
+}
+
+// clearGroupAnnouncementBotAbsent re-enables refreshes for a chat the bot has
+// been added back to.
+func clearGroupAnnouncementBotAbsent(a *App, chatID string) {
+	chatID = strings.TrimSpace(chatID)
+	if a == nil || chatID == "" {
+		return
+	}
+	st := a.State()
+	if st == nil {
+		return
+	}
+	record := st.GroupAnnouncementBlock("group", chatID)
+	if record == nil || !record.BotAbsent {
+		return
+	}
+	record.BotAbsent = false
+	if err := st.SaveGroupAnnouncementBlock(record); err != nil {
+		slog.Warn("failed to clear group announcement bot absence", "chat_id", chatID, "error", err)
+		return
+	}
+	slog.Info("group announcement refresh re-enabled: bot rejoined the chat", "chat_id", chatID)
+}
+
+func scheduleAllGroupAnnouncementStatusRefreshes(a *App, reason string) {
+	for _, chatID := range knownGroupAnnouncementChatIDs(a) {
+		scheduleGroupAnnouncementStatusRefresh(a, chatID, reason)
+	}
+}
+
+func scheduleStartupGroupAnnouncementRefreshes(a *App) {
+	scheduleAllGroupAnnouncementStatusRefreshes(a, "startup")
+}
+
+func (t *groupAnnouncementTracker) Schedule(a *App, chatID, reason string) {
+	chatID = strings.TrimSpace(chatID)
+	if t == nil || a == nil || chatID == "" {
+		return
+	}
+	now := time.Now()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.timers == nil {
+		t.timers = map[string]*time.Timer{}
+	}
+	if t.running == nil {
+		t.running = map[string]bool{}
+	}
+	if t.queued == nil {
+		t.queued = map[string]bool{}
+	}
+	if t.lastAttempt == nil {
+		t.lastAttempt = map[string]time.Time{}
+	}
+	if t.running[chatID] {
+		t.queued[chatID] = true
+		return
+	}
+	delay := t.debounce
+	if delay < 0 {
+		delay = 0
+	}
+	if last := t.lastAttempt[chatID]; !last.IsZero() && t.minInterval > 0 {
+		if remaining := t.minInterval - now.Sub(last); remaining > delay {
+			delay = remaining
+		}
+	}
+	if timer := t.timers[chatID]; timer != nil {
+		timer.Stop()
+	}
+	t.timers[chatID] = time.AfterFunc(delay, func() {
+		t.Execute(a, chatID)
+	})
+	slog.Debug("group announcement refresh scheduled",
+		"frontend_id", strings.TrimSpace(a.FrontendID()),
+		"chat_id", chatID,
+		"reason", strings.TrimSpace(reason),
+		"delay_ms", delay.Milliseconds(),
+	)
+}
+
+func (t *groupAnnouncementTracker) Execute(a *App, chatID string) {
+	chatID = strings.TrimSpace(chatID)
+	if t == nil || a == nil || chatID == "" {
+		return
+	}
+	t.mu.Lock()
+	if t.timers == nil {
+		t.timers = map[string]*time.Timer{}
+	}
+	if t.running == nil {
+		t.running = map[string]bool{}
+	}
+	if t.queued == nil {
+		t.queued = map[string]bool{}
+	}
+	if t.lastAttempt == nil {
+		t.lastAttempt = map[string]time.Time{}
+	}
+	if t.timers != nil {
+		delete(t.timers, chatID)
+	}
+	t.running[chatID] = true
+	t.queued[chatID] = false
+	t.lastAttempt[chatID] = time.Now()
+	t.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(a.Context(), groupAnnouncementRefreshTimeout)
+	err := refreshGroupAnnouncementStatusNow(ctx, a, chatID)
+	cancel()
+	if err != nil {
+		slog.Warn("group announcement refresh failed",
+			"frontend_id", strings.TrimSpace(a.FrontendID()),
+			"chat_id", chatID,
+			"error", err,
+		)
+	}
+
+	t.mu.Lock()
+	queued := t.queued[chatID]
+	t.running[chatID] = false
+	t.queued[chatID] = false
+	t.mu.Unlock()
+	if queued {
+		t.Schedule(a, chatID, "coalesced")
+	}
+}
+
+func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID string) error {
+	chatID = strings.TrimSpace(chatID)
+	if a == nil || a.feishu == nil || chatID == "" {
+		return nil
+	}
+	updatedAt := time.Now()
+	status := buildGroupAnnouncementStatus(a, chatID, updatedAt)
+	if status.marker == "" || status.content == "" {
+		return nil
+	}
+	st := a.State()
+	if st == nil {
+		return nil
+	}
+	// A chat the bot has left stays in state forever (there is no handler for
+	// being removed), so skip it rather than paying for a request that can only
+	// fail. handleBotGroupAdded clears the mark when the bot is added back.
+	if existing := st.GroupAnnouncementBlock("group", chatID); existing != nil && existing.BotAbsent {
+		return nil
+	}
+	var (
+		blocks       []feishu.AnnouncementBlock
+		blocksErr    error
+		blocksLoaded bool
+	)
+	loadBlocks := func() ([]feishu.AnnouncementBlock, error) {
+		if blocksLoaded {
+			return blocks, blocksErr
+		}
+		blocksLoaded = true
+		blocks, blocksErr = a.feishu.ListAnnouncementBlocks(ctx, chatID)
+		return blocks, blocksErr
+	}
+	if err := refreshGroupAnnouncementCommonStatusNow(ctx, a, st, chatID, updatedAt, loadBlocks); err != nil {
+		if feishu.IsAnnouncementBotAbsent(err) {
+			markGroupAnnouncementBotAbsent(a, st, chatID)
+			return nil
+		}
+		return err
+	}
+	record := st.GroupAnnouncementBlock("group", chatID)
+	if record == nil {
+		record = &state.GroupAnnouncementBlock{
+			ID:         appstate.DefaultGroupAnnouncementBlockID(a.FrontendID(), "group", chatID),
+			FrontendID: strings.TrimSpace(a.FrontendID()),
+			ChatID:     chatID,
+			ChatType:   "group",
+		}
+	}
+	blocks, err := loadBlocks()
+	if err != nil {
+		if feishu.IsAnnouncementRateLimit(err) {
+			slog.Warn("group announcement refresh skipped by rate limit", "chat_id", chatID, "op", "list", "error", err)
+			return nil
+		}
+		if feishu.IsAnnouncementBotAbsent(err) {
+			markGroupAnnouncementBotAbsent(a, st, chatID)
+			return nil
+		}
+		return err
+	}
+	block := findAnnouncementBlock(blocks, groupAnnouncementMarkerCandidates(status)...)
+	if strings.TrimSpace(block.BlockID) == "" {
+		block = findAnnouncementBlockByID(blocks, record.BlockID)
+	}
+	blockID := strings.TrimSpace(block.BlockID)
+	if blockID != "" && strings.TrimSpace(record.LastContentHash) == status.stableHash && strings.Contains(block.Text, status.stableContent) {
+		return nil
+	}
+	if blockID == "" {
+		created, err := a.feishu.CreateAnnouncementTextBlock(ctx, chatID, chatID, status.content, "")
+		if err != nil {
+			if feishu.IsAnnouncementRateLimit(err) {
+				slog.Warn("group announcement refresh skipped by rate limit", "chat_id", chatID, "op", "create", "error", err)
+				return nil
+			}
+			if feishu.IsAnnouncementBotAbsent(err) {
+				markGroupAnnouncementBotAbsent(a, st, chatID)
+				return nil
+			}
+			return err
+		}
+		blockID = strings.TrimSpace(created.BlockID)
+	} else if err := a.feishu.UpdateAnnouncementTextBlock(ctx, chatID, blockID, status.content, ""); err != nil {
+		if feishu.IsAnnouncementRateLimit(err) {
+			slog.Warn("group announcement refresh skipped by rate limit", "chat_id", chatID, "op", "update", "error", err)
+			return nil
+		}
+		if feishu.IsAnnouncementBotAbsent(err) {
+			markGroupAnnouncementBotAbsent(a, st, chatID)
+			return nil
+		}
+		return err
+	}
+	if blockID == "" {
+		return nil
+	}
+	record.FrontendID = strings.TrimSpace(a.FrontendID())
+	record.ChatID = chatID
+	record.ChatType = "group"
+	record.BotOpenID = status.botOpenID
+	record.BlockID = blockID
+	record.Marker = status.marker
+	record.LastContentHash = status.stableHash
+	record.LastUpdatedAt = status.updatedAt.Unix()
+	return st.SaveGroupAnnouncementBlock(record)
+}
+
+func refreshGroupAnnouncementCommonStatusNow(ctx context.Context, a *App, st *appstate.Store, chatID string, updatedAt time.Time, loadBlocks func() ([]feishu.AnnouncementBlock, error)) error {
+	if !isGroupPrimary(a, "group", chatID) {
+		return nil
+	}
+	status := buildGroupAnnouncementCommonStatus(a, chatID, updatedAt)
+	if status.marker == "" || status.content == "" {
+		return nil
+	}
+	if loadBlocks == nil {
+		loadBlocks = func() ([]feishu.AnnouncementBlock, error) {
+			return a.feishu.ListAnnouncementBlocks(ctx, chatID)
+		}
+	}
+	blocks, err := loadBlocks()
+	if err != nil {
+		if feishu.IsAnnouncementRateLimit(err) {
+			slog.Warn("group announcement common refresh skipped by rate limit", "chat_id", chatID, "op", "list", "error", err)
+			return nil
+		}
+		return err
+	}
+	record := st.GroupAnnouncementBlock(groupAnnouncementCommonChatType, chatID)
+	block := findAnnouncementBlock(blocks, status.marker)
+	if strings.TrimSpace(block.BlockID) == "" && record != nil {
+		block = findAnnouncementBlockByID(blocks, record.BlockID)
+	}
+	blockID := strings.TrimSpace(block.BlockID)
+	if blockID == "" {
+		created, err := a.feishu.CreateAnnouncementTextBlockAt(ctx, chatID, chatID, status.content, "", 0)
+		if err != nil {
+			if feishu.IsAnnouncementRateLimit(err) {
+				slog.Warn("group announcement common refresh skipped by rate limit", "chat_id", chatID, "op", "create", "error", err)
+				return nil
+			}
+			return err
+		}
+		blockID = strings.TrimSpace(created.BlockID)
+	} else if !strings.Contains(block.Text, status.stableContent) {
+		if err := a.feishu.UpdateAnnouncementTextBlock(ctx, chatID, blockID, status.content, ""); err != nil {
+			if feishu.IsAnnouncementRateLimit(err) {
+				slog.Warn("group announcement common refresh skipped by rate limit", "chat_id", chatID, "op", "update", "error", err)
+				return nil
+			}
+			return err
+		}
+	}
+	if blockID == "" {
+		return nil
+	}
+	if record == nil {
+		record = &state.GroupAnnouncementBlock{
+			ID:         appstate.DefaultGroupAnnouncementBlockID(a.FrontendID(), groupAnnouncementCommonChatType, chatID),
+			FrontendID: strings.TrimSpace(a.FrontendID()),
+			ChatID:     chatID,
+			ChatType:   groupAnnouncementCommonChatType,
+		}
+	}
+	record.FrontendID = strings.TrimSpace(a.FrontendID())
+	record.ChatID = chatID
+	record.ChatType = groupAnnouncementCommonChatType
+	record.BotOpenID = status.botOpenID
+	record.BlockID = blockID
+	record.Marker = status.marker
+	record.LastContentHash = status.stableHash
+	record.LastUpdatedAt = status.updatedAt.Unix()
+	return st.SaveGroupAnnouncementBlock(record)
+}
+
+type groupAnnouncementStatus struct {
+	marker        string
+	content       string
+	stableContent string
+	stableHash    string
+	frontendID    string
+	botOpenID     string
+	updatedAt     time.Time
+}
+
+func buildGroupAnnouncementCommonStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
+	botOpenID := currentBotOpenID(a)
+	stableLines := []string{
+		groupAnnouncementCommonTitle,
+		groupAnnouncementField("Primary Bot", currentBotDisplayName(a)),
+		groupAnnouncementField("Marker", groupAnnouncementCommonMarker),
+	}
+	stableContent := strings.Join(stableLines, "\n")
+	content := stableContent + "\n" + groupAnnouncementField("Updated", updatedAt.Format(time.RFC3339))
+	return groupAnnouncementStatus{
+		marker:        groupAnnouncementCommonMarker,
+		content:       content,
+		stableContent: stableContent,
+		stableHash:    hashGroupAnnouncementStableContent(stableContent),
+		botOpenID:     botOpenID,
+		updatedAt:     updatedAt,
+	}
+}
+
+func buildGroupAnnouncementStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
+	frontendID := textutil.FirstNonEmpty(strings.TrimSpace(a.FrontendID()), config.DefaultFrontendID)
+	botOpenID := groupAnnouncementBotOpenID(a, chatID)
+	botName := groupAnnouncementBotName(a, botOpenID)
+	marker := groupAnnouncementMarker(botName, botOpenID)
+	stableLines := []string{
+		groupAnnouncementDivider,
+		groupAnnouncementField("Bot", botName),
+		groupAnnouncementField("Machine IP", textutil.FirstNonEmpty(localAnnouncementMachineIP(), "unknown")),
+		groupAnnouncementField("Workspace", groupAnnouncementWorkspaceDir(a, chatID)),
+		groupAnnouncementField("Backend", textutil.FirstNonEmpty(configuredBackend(a), "unset")),
+		groupAnnouncementField("Thread", textutil.FirstNonEmpty(groupAnnouncementThreadID(a, chatID), "none")),
+		groupAnnouncementField("Marker", marker),
+	}
+	stableContent := strings.Join(stableLines, "\n")
+	content := stableContent + "\n" + groupAnnouncementField("Updated", updatedAt.Format(time.RFC3339))
+	return groupAnnouncementStatus{
+		marker:        marker,
+		content:       content,
+		stableContent: stableContent,
+		stableHash:    hashGroupAnnouncementStableContent(stableContent),
+		frontendID:    frontendID,
+		botOpenID:     botOpenID,
+		updatedAt:     updatedAt,
+	}
+}
+
+func groupAnnouncementField(key, value string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		key = "Field"
+	}
+	value = strings.TrimSpace(value)
+	if len(key) >= groupAnnouncementFieldWidth {
+		return key + ": " + value
+	}
+	return fmt.Sprintf("%-*s: %s", groupAnnouncementFieldWidth, key, value)
+}
+
+func groupAnnouncementBotOpenID(a *App, chatID string) string {
+	_ = chatID
+	return strings.TrimSpace(currentBotOpenID(a))
+}
+
+func groupAnnouncementMarker(botName, botOpenID string) string {
+	nameToken := groupAnnouncementMarkerToken(textutil.FirstNonEmpty(strings.TrimSpace(botName), "bot"))
+	idToken := groupAnnouncementMarkerToken(textutil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown"))
+	return "feidex-status-region:" + textutil.FirstNonEmpty(nameToken, "bot") + ":" + textutil.FirstNonEmpty(idToken, "unknown")
+}
+
+func groupAnnouncementLegacyMarker(frontendID, botOpenID string) string {
+	return "feidex-status-region:" + textutil.FirstNonEmpty(strings.TrimSpace(frontendID), config.DefaultFrontendID) + ":" + textutil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
+}
+
+func groupAnnouncementMarkerToken(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		keep := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.'
+		if keep {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func groupAnnouncementBotName(a *App, botOpenID string) string {
+	if a != nil && a.feishu != nil {
+		if name := strings.TrimSpace(a.feishu.BotName()); name != "" {
+			return name
+		}
+	}
+	return textutil.FirstNonEmpty(strings.TrimSpace(botOpenID), "unknown")
+}
+
+func hashGroupAnnouncementStableContent(content string) string {
+	sum := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(sum[:])
+}
+
+func groupAnnouncementMarkerCandidates(status groupAnnouncementStatus) []string {
+	markers := []string{strings.TrimSpace(status.marker)}
+	frontendID := textutil.FirstNonEmpty(strings.TrimSpace(status.frontendID), config.DefaultFrontendID)
+	markers = append(markers,
+		groupAnnouncementLegacyMarker(frontendID, status.botOpenID),
+		groupAnnouncementLegacyMarker(frontendID, ""),
+	)
+	out := make([]string, 0, len(markers))
+	seen := map[string]struct{}{}
+	for _, marker := range markers {
+		marker = strings.TrimSpace(marker)
+		if marker == "" {
+			continue
+		}
+		if _, ok := seen[marker]; ok {
+			continue
+		}
+		seen[marker] = struct{}{}
+		out = append(out, marker)
+	}
+	return out
+}
+
+func findAnnouncementBlockByID(blocks []feishu.AnnouncementBlock, blockID string) feishu.AnnouncementBlock {
+	blockID = strings.TrimSpace(blockID)
+	if blockID == "" {
+		return feishu.AnnouncementBlock{}
+	}
+	for _, block := range blocks {
+		if strings.TrimSpace(block.BlockID) == blockID {
+			block.BlockID = blockID
+			return block
+		}
+	}
+	return feishu.AnnouncementBlock{}
+}
+
+func findAnnouncementBlock(blocks []feishu.AnnouncementBlock, markers ...string) feishu.AnnouncementBlock {
+	if len(markers) == 0 {
+		return feishu.AnnouncementBlock{}
+	}
+	for _, block := range blocks {
+		for _, marker := range markers {
+			marker = strings.TrimSpace(marker)
+			if marker != "" && strings.Contains(block.Text, marker) && strings.TrimSpace(block.BlockID) != "" {
+				block.BlockID = strings.TrimSpace(block.BlockID)
+				return block
+			}
+		}
+	}
+	return feishu.AnnouncementBlock{}
+}
+
+func groupAnnouncementWorkspaceDir(a *App, chatID string) string {
+	if a == nil || strings.TrimSpace(chatID) == "" {
+		return "unconfigured"
+	}
+	binding := agentBindingForChat(a, "group", chatID)
+	if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
+		return "unconfigured"
+	}
+	if ws := config.FindWorkspace(a.cfg, binding.WorkspaceID); ws != nil && strings.TrimSpace(ws.Cwd) != "" {
+		return strings.TrimSpace(ws.Cwd)
+	}
+	return "unavailable:" + strings.TrimSpace(binding.WorkspaceID)
+}
+
+func groupAnnouncementThreadID(a *App, chatID string) string {
+	if a == nil || strings.TrimSpace(chatID) == "" {
+		return ""
+	}
+	var best *conversation.Session
+	for _, sess := range a.State().Sessions() {
+		if !sessionMatchesGroupChat(a, sess, chatID) || strings.TrimSpace(sess.ActiveThreadID) == "" {
+			continue
+		}
+		if best == nil || sess.UpdatedAt > best.UpdatedAt {
+			best = sess
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	return strings.TrimSpace(best.ActiveThreadID)
+}
+
+func knownGroupAnnouncementChatIDs(a *App) []string {
+	if a == nil || a.State() == nil {
+		return nil
+	}
+	st := a.State()
+	seen := map[string]struct{}{}
+	for _, binding := range st.AgentBindings() {
+		if binding == nil || strings.ToLower(strings.TrimSpace(binding.ChatType)) != "group" || strings.TrimSpace(binding.ChatID) == "" {
+			continue
+		}
+		seen[strings.TrimSpace(binding.ChatID)] = struct{}{}
+	}
+	for _, sess := range st.Sessions() {
+		if sess == nil {
+			continue
+		}
+		chatID := strings.TrimSpace(sess.ChatID)
+		if chatID == "" {
+			_, _, chatID, _, _ = identity.ParseSessionKey(sess.Key)
+		}
+		if !sessionMatchesGroupChat(a, sess, chatID) {
+			continue
+		}
+		if chatID != "" {
+			seen[chatID] = struct{}{}
+		}
+	}
+	if st.StateStore() != nil {
+		frontendID := strings.TrimSpace(a.FrontendID())
+		for _, record := range st.StateStore().AllGroupAnnouncementBlocks() {
+			if record == nil || strings.TrimSpace(record.FrontendID) != frontendID || strings.TrimSpace(record.ChatID) == "" {
+				continue
+			}
+			switch strings.ToLower(strings.TrimSpace(record.ChatType)) {
+			case "group", groupAnnouncementCommonChatType:
+				seen[strings.TrimSpace(record.ChatID)] = struct{}{}
+			}
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for chatID := range seen {
+		out = append(out, chatID)
+	}
+	return out
+}
+
+func sessionMatchesGroupChat(a *App, sess *conversation.Session, chatID string) bool {
+	chatID = strings.TrimSpace(chatID)
+	if a == nil || sess == nil || chatID == "" || !sessionBelongsToFrontend(a, sess.Key) {
+		return false
+	}
+	sessChatID := strings.TrimSpace(sess.ChatID)
+	sessChatType := strings.ToLower(strings.TrimSpace(sess.ChatType))
+	if sessChatID == "" || sessChatType == "" {
+		_, keyChatType, keyChatID, _, _ := identity.ParseSessionKey(sess.Key)
+		if sessChatID == "" {
+			sessChatID = keyChatID
+		}
+		if sessChatType == "" {
+			sessChatType = keyChatType
+		}
+	}
+	if sessChatID != chatID {
+		return false
+	}
+	if sessChatType == "group" {
+		return true
+	}
+	if sessChatType != "" {
+		return false
+	}
+	return agentBindingForChat(a, "group", chatID) != nil || hasGroupPrimaryState(a, "group", chatID)
+}
+
+func localAnnouncementMachineIP() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			if ipv4 := ip.To4(); ipv4 != nil {
+				return ipv4.String()
+			}
+		}
+	}
+	return ""
+}

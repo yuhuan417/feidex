@@ -14,7 +14,8 @@ internal/adapter/feishu/            Feishu 事件、卡片、渲染和 outbound 
 internal/adapter/storage/           JSON/scoped repository 适配
 internal/runtime/                   frontend 生命周期、session actor、进程、恢复和 effects
 internal/composition/               frontend/runtime/application 构造根
-internal/app/                       Feishu 入口和仍需协议敏感编排的过渡层
+internal/app/                       仅 Feishu callback 的薄入口
+internal/feishuapp/                 Feishu frontend 实现（由 composition 构造）
 internal/state/                     本地持久化 Store 与 runtime state gateway
 internal/feishu/                    SDK transport、权限和平台事件声明
 internal/codexrpc/                  Codex App Server transport/types
@@ -29,7 +30,7 @@ internal/architecture/              依赖与职责架构测试
 - `internal/application` 只消费 domain 和 consumer-owned ports，产出 typed input、semantic effects 与 detached presentation；不持有 Feishu SDK、backend wire DTO 或 `*App`。
 - `internal/adapter` 将外部协议转换为 application 值并执行 effects；Feishu adapter 不导出业务状态 owner，backend adapter 不把产品规则放回协议层。
 - `internal/runtime` 持有每个 frontend 的 `FrontendOwner`、生命周期 cancellation、`SessionActors`、backend process/client、recovery、retry 和 effect deduper。相同 session 的状态转换在 actor 内串行，不同 session/frontend 可并行且互相隔离。
-- `internal/composition` 负责构造和注入 owner。`internal/app` 负责入口、协议敏感协调和少量跨 owner glue，不新增 God interface、service locator 或 alias shim。
+- `internal/composition` 负责构造和注入 owner 以及 `internal/feishuapp` frontend。`internal/app` 只负责 Feishu callback binding，不新增 God interface、service locator 或 alias shim。
 - `internal/state.Store` 负责锁、clone、normalize、持久化和 scoped repository 操作，不执行网络、卡片、RPC 或进程操作。
 
 ## 关键控制流
