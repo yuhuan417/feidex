@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	configadapter "feidex/internal/adapter/config"
 	retryview "feidex/internal/adapter/feishu/autoretry"
 	"feidex/internal/application"
@@ -15,9 +16,30 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type autoRetryOutbound struct{ app *App }
+
+func (o autoRetryOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
+	return patchCardEffect(ctx, o.app, messageID, card)
+}
+func (o autoRetryOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+}
+func (o autoRetryOutbound) SendCard(ctx context.Context, chatID string, card map[string]any) (string, error) {
+	return sendCardWithIDEffect(ctx, o.app, chatID, card)
+}
+
+type autoRetryCardRenderer struct{ app *App }
+
+func (r autoRetryCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
+	if r.app == nil || r.app.feishu == nil {
+		return nil
+	}
+	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
+}
+
 func newAutoRetryService(a *App) retryview.Service {
 	view := retryview.Service{
-		Context: a.Context, Client: a.feishu, MenuBody: menuCardBody,
+		Context: a.Context, Outbound: autoRetryOutbound{app: a}, Renderer: autoRetryCardRenderer{app: a}, MenuBody: menuCardBody,
 		Settings: func() retryview.Settings {
 			cfg := feishuConfig(a)
 			return retryview.Settings{FrontendID: a.FrontendID(), Backend: configuredBackend(a), Title: a.BackendDriver().Runtime().AutoRetryTitle(), Enabled: cfg != nil && cfg.AutoRetry}

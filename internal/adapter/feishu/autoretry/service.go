@@ -13,10 +13,12 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type Client interface {
+type Outbound interface {
 	PatchCard(context.Context, string, map[string]any) error
 	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
 	SendCard(context.Context, string, map[string]any) (string, error)
+}
+type CardRenderer interface {
 	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }
 type Settings struct {
@@ -26,7 +28,8 @@ type Settings struct {
 type Service struct {
 	retry.Engine
 	Context     func() context.Context
-	Client      Client
+	Outbound    Outbound
+	Renderer    CardRenderer
 	Settings    func() Settings
 	SaveEnabled func(bool) error
 	SessionKey  func(*feishu.InboundMessage) string
@@ -47,21 +50,21 @@ func (s Service) context() context.Context {
 func (s Service) AutoRetryTitle() string                    { return s.Settings().Title }
 func (s Service) UpdateAutoRetryEnabled(enabled bool) error { return s.SaveEnabled(enabled) }
 func (s Service) RetryStatus(snapshot RetryState, phase, notice string) string {
-	if s.Client == nil {
+	if s.Outbound == nil {
 		return ""
 	}
 	ctx, cancel := context.WithTimeout(s.context(), 5*time.Second)
 	defer cancel()
 	card := s.RenderAutoRetryLoopCard(snapshot, phase, notice)
-	if snapshot.StatusMessageID != "" && s.Client.PatchCard(ctx, snapshot.StatusMessageID, card) == nil {
+	if snapshot.StatusMessageID != "" && s.Outbound.PatchCard(ctx, snapshot.StatusMessageID, card) == nil {
 		return snapshot.StatusMessageID
 	}
 	var id string
 	var err error
 	if snapshot.TriggerMessageID != "" {
-		id, err = s.Client.ReplyCard(ctx, snapshot.TriggerMessageID, card, false)
+		id, err = s.Outbound.ReplyCard(ctx, snapshot.TriggerMessageID, card, false)
 	} else if snapshot.ChatID != "" {
-		id, err = s.Client.SendCard(ctx, snapshot.ChatID, card)
+		id, err = s.Outbound.SendCard(ctx, snapshot.ChatID, card)
 	}
 	if err != nil {
 		return ""
@@ -134,7 +137,7 @@ func (s Service) RenderAutoRetryLoopCard(snapshot RetryState, phase, notice stri
 	case "interrupted", "stopped":
 		color = "grey"
 	}
-	return s.Client.SimpleStatusCard(s.AutoRetryTitle(), color, strings.Join(lines, "\n"), nil)
+	return s.Renderer.SimpleStatusCard(s.AutoRetryTitle(), color, strings.Join(lines, "\n"), nil)
 }
 
 // RenderAutoRetryConfigCard builds the configuration card for auto-retry.
@@ -192,7 +195,7 @@ func (s Service) RenderAutoRetryConfigCard(sessionKey string) map[string]any {
 			Value: map[string]any{"action": "menu.group.backend", "session_key": sessionKey},
 		},
 	}
-	return s.Client.SimpleStatusCard(s.AutoRetryTitle(), "blue", s.MenuBody("menu.auto_retry", strings.Join(lines, "\n")), buttons)
+	return s.Renderer.SimpleStatusCard(s.AutoRetryTitle(), "blue", s.MenuBody("menu.auto_retry", strings.Join(lines, "\n")), buttons)
 }
 
 // CompleteAutoRetrySet handles the card action to toggle auto-retry on or off.
@@ -220,7 +223,7 @@ func (s Service) CommandAutoRetry(msg *feishu.InboundMessage, args []string) err
 	}
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "status" {
 		card := s.RenderAutoRetryConfigCard(s.SessionKey(msg))
-		_, err := s.Client.ReplyCard(s.context(), msg.MessageID, card, false)
+		_, err := s.Outbound.ReplyCard(s.context(), msg.MessageID, card, false)
 		return err
 	}
 	enabled := false

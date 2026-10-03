@@ -21,15 +21,27 @@ var ToggleServiceTier = appruntime.ToggleServiceTier
 var RenderServiceTierValue = appruntime.RenderServiceTierValue
 var RenderServiceTierReplyValue = appruntime.RenderServiceTierReplyValue
 
-type Client interface {
+type Outbound interface {
 	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
 	ReplyText(context.Context, string, string, bool) error
 }
+
+// Client is retained as a source-compatible alias for package-local callers;
+// it is already a semantic outbound port and carries no transport type.
+type Client = Outbound
 type Service struct {
 	threadsettings.Service
 	Context    func() context.Context
-	Client     Client
+	Outbound   Outbound
+	Client     Outbound
 	SessionKey func(*application.InboundMessage) string
+}
+
+func (s Service) outbound() Outbound {
+	if s.Outbound != nil {
+		return s.Outbound
+	}
+	return s.Client
 }
 
 func (s Service) context() context.Context {
@@ -59,7 +71,7 @@ func (s Service) CommandFast(msg *application.InboundMessage, args []string) err
 	}
 	key := s.SessionKey(msg)
 	if mode == "config" {
-		_, err := s.Client.ReplyCard(s.context(), msg.MessageID, s.RenderMenuCard(key), false)
+		_, err := s.outbound().ReplyCard(s.context(), msg.MessageID, s.RenderMenuCard(key), false)
 		return err
 	}
 	var sess *conversation.Session
@@ -76,7 +88,7 @@ func (s Service) CommandFast(msg *application.InboundMessage, args []string) err
 	if err != nil {
 		return err
 	}
-	return s.Client.ReplyText(s.context(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+RenderServiceTierReplyValue(sess.ActiveThreadServiceTier)+"。", false)
+	return s.outbound().ReplyText(s.context(), msg.MessageID, "当前 thread ServiceTier 已切换为 "+RenderServiceTierReplyValue(sess.ActiveThreadServiceTier)+"。", false)
 }
 func RenderMenuCard(sessionKey string, sess *conversation.Session) map[string]any {
 	body := "配置当前 thread 的 service tier。"
