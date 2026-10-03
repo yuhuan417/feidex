@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -82,7 +81,7 @@ func (d unsupportedConversationDriver) WorkspaceSwitchBindingFailureNotice() str
 	return "。当前 frontend 还没有设置 backend，请先选择。"
 }
 
-func (d unsupportedConversationDriver) WorkspaceSwitchBindingNotice(*appworkspace.ThreadBinding) string {
+func (d unsupportedConversationDriver) WorkspaceSwitchBindingNotice(*conversation.ThreadBinding) string {
 	return "。当前 frontend 还没有设置 backend，请先选择。"
 }
 

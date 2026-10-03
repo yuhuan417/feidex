@@ -1,13 +1,19 @@
 package backend
 
 import (
-	"feidex/internal/app/appcore"
+	"context"
+	"feidex/internal/config"
 	"feidex/internal/state"
+	"sync"
 )
 
 type SelectionSource interface {
-	appcore.ConfigurationSource
-	appcore.FrontendIdentity
+	Config() *config.Config
+	ConfigMu() *sync.RWMutex
+	Backend() string
+	FrontendConfigIndex() int
+	FrontendID() string
+	Context() context.Context
 	Store() *state.Store
 	SetBackend(string)
 	ConfigPath() string

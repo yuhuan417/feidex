@@ -8,9 +8,8 @@ import (
 
 	"feidex/internal/adapter/feishu/cardactions"
 	appthreadview "feidex/internal/adapter/feishu/threadview"
-	appcore "feidex/internal/app/appcore"
-	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
+	domainworkspace "feidex/internal/domain/workspace"
 	"feidex/internal/feishu"
 	appruntime "feidex/internal/runtime"
 
@@ -91,14 +90,14 @@ func (claudeConversationDriver) WorkspaceSwitchBindingFailureNotice() string {
 	return "。自动绑定会话失败，可稍后重试。"
 }
 
-func (codexConversationDriver) WorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string {
+func (codexConversationDriver) WorkspaceSwitchBindingNotice(binding *conversation.ThreadBinding) string {
 	if binding != nil && binding.Resumed {
 		return "。已自动恢复该工作区最近使用的线程。"
 	}
 	return "。已自动创建新线程。"
 }
 
-func (claudeConversationDriver) WorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string {
+func (claudeConversationDriver) WorkspaceSwitchBindingNotice(binding *conversation.ThreadBinding) string {
 	if binding != nil && binding.Resumed {
 		return "。已自动恢复该工作区最近使用的会话。"
 	}
@@ -114,7 +113,7 @@ func (claudePermissionDriver) SupportedScopes() []PermissionScope {
 }
 
 func (codexPermissionDriver) WorkspaceCommandUsage() string {
-	return appworkspace.CommandUsage
+	return workspaceCommandUsage
 }
 
 func (claudePermissionDriver) WorkspaceCommandUsage() string {
@@ -335,7 +334,7 @@ func (d claudePermissionDriver) HandleConversationCommand(req ConversationPermis
 
 func (d codexPermissionDriver) CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	valid := strings.TrimSpace(sandboxMode) == ""
-	for _, opt := range appworkspace.SandboxOptions() {
+	for _, opt := range domainworkspace.SandboxOptions() {
 		if opt.Value == sandboxMode {
 			valid = true
 			break
@@ -361,7 +360,7 @@ func (d codexPermissionDriver) CompleteWorkspaceSandboxSet(sessionKey, workspace
 
 func (d codexPermissionDriver) CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	valid := strings.TrimSpace(approvalPolicy) == ""
-	for _, opt := range appworkspace.ApprovalPolicyOptions() {
+	for _, opt := range domainworkspace.ApprovalPolicyOptions() {
 		if opt.Value == approvalPolicy {
 			valid = true
 			break
@@ -387,7 +386,7 @@ func (d codexPermissionDriver) CompleteWorkspacePolicySet(sessionKey, workspaceI
 
 func (d codexPermissionDriver) CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode string, deps WorkspacePermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	valid := false
-	for _, opt := range appworkspace.MultiAgentModeOptions() {
+	for _, opt := range domainworkspace.MultiAgentModeOptions() {
 		if opt.Value == mode {
 			valid = true
 			break
@@ -471,7 +470,7 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.Permissions.Config())
+	workspaceID := defaultWorkspaceIDFromConfig(deps.Permissions.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -491,13 +490,13 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 	}
 	override := appthreadview.RenderThreadSettingValue(sess.ActiveThreadSandboxMode, "")
 	body := "配置当前 thread 默认 sandbox。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`\nworkspace 默认: `" + workspaceDefault + "`\n当前覆盖: " + override + "\n生效值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(appworkspace.SandboxOptions())+2)
+	buttons := make([]feishu.Button, 0, len(domainworkspace.SandboxOptions())+2)
 	followType, followLabel := "default", "跟随 workspace"
 	if strings.TrimSpace(sess.ActiveThreadSandboxMode) == "" {
 		followType, followLabel = "primary", "当前 · 跟随 workspace"
 	}
 	buttons = append(buttons, feishu.Button{Text: followLabel, Type: followType, Value: cardactions.ThreadActionValue{Action: "thread.sandbox.set", SessionKey: sessionKey, ThreadID: threadID}.Map()})
-	for _, opt := range appworkspace.SandboxOptions() {
+	for _, opt := range domainworkspace.SandboxOptions() {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == current {
@@ -531,7 +530,7 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.Permissions.Config())
+	workspaceID := defaultWorkspaceIDFromConfig(deps.Permissions.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -551,13 +550,13 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 	}
 	override := appthreadview.RenderThreadSettingValue(sess.ActiveThreadApprovalPolicy, "")
 	body := "配置当前 thread 默认 approval policy。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`\nworkspace 默认: `" + workspaceDefault + "`\n当前覆盖: " + override + "\n生效值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(appworkspace.ApprovalPolicyOptions())+2)
+	buttons := make([]feishu.Button, 0, len(domainworkspace.ApprovalPolicyOptions())+2)
 	followType, followLabel := "default", "跟随 workspace"
 	if strings.TrimSpace(sess.ActiveThreadApprovalPolicy) == "" {
 		followType, followLabel = "primary", "当前 · 跟随 workspace"
 	}
 	buttons = append(buttons, feishu.Button{Text: followLabel, Type: followType, Value: cardactions.ThreadActionValue{Action: "thread.policy.set", SessionKey: sessionKey, ThreadID: threadID}.Map()})
-	for _, opt := range appworkspace.ApprovalPolicyOptions() {
+	for _, opt := range domainworkspace.ApprovalPolicyOptions() {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == current {
@@ -591,7 +590,7 @@ func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey strin
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.Permissions.Config())
+	workspaceID := defaultWorkspaceIDFromConfig(deps.Permissions.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -606,8 +605,8 @@ func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey strin
 	}
 	current := conversation.EffectiveMultiAgentMode(sess, workspaceValue)
 	body := "配置当前 thread 默认 multi-agent mode。\n\nthread: `" + threadID + "`\n当前值: `" + current + "`"
-	buttons := make([]feishu.Button, 0, len(appworkspace.MultiAgentModeOptions())+1)
-	for _, opt := range appworkspace.MultiAgentModeOptions() {
+	buttons := make([]feishu.Button, 0, len(domainworkspace.MultiAgentModeOptions())+1)
+	for _, opt := range domainworkspace.MultiAgentModeOptions() {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == current {
@@ -641,7 +640,7 @@ func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey 
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.Permissions.Config())
+	workspaceID := defaultWorkspaceIDFromConfig(deps.Permissions.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
@@ -727,7 +726,7 @@ func (d codexPermissionDriver) RenderConversationPermissionModeMenu(string, Conv
 
 func (d codexPermissionDriver) CompleteConversationSandboxSet(sessionKey, threadID, sandboxMode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	valid := strings.TrimSpace(sandboxMode) == ""
-	for _, opt := range appworkspace.SandboxOptions() {
+	for _, opt := range domainworkspace.SandboxOptions() {
 		if opt.Value == sandboxMode {
 			valid = true
 			break
@@ -756,7 +755,7 @@ func (d codexPermissionDriver) CompleteConversationSandboxSet(sessionKey, thread
 
 func (d codexPermissionDriver) CompleteConversationPolicySet(sessionKey, threadID, approvalPolicy string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	valid := strings.TrimSpace(approvalPolicy) == ""
-	for _, opt := range appworkspace.ApprovalPolicyOptions() {
+	for _, opt := range domainworkspace.ApprovalPolicyOptions() {
 		if opt.Value == approvalPolicy {
 			valid = true
 			break
@@ -785,7 +784,7 @@ func (d codexPermissionDriver) CompleteConversationPolicySet(sessionKey, threadI
 
 func (d codexPermissionDriver) CompleteConversationMultiAgentSet(sessionKey, threadID, mode string, deps ConversationPermissionUpdateDeps) (*callback.CardActionTriggerResponse, error) {
 	valid := false
-	for _, opt := range appworkspace.MultiAgentModeOptions() {
+	for _, opt := range domainworkspace.MultiAgentModeOptions() {
 		if opt.Value == mode {
 			valid = true
 			break
@@ -903,4 +902,11 @@ func driverClaudePermissionOverrideValue(raw string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func defaultWorkspaceIDFromConfig(cfg *config.Config) string {
+	if cfg != nil && len(cfg.Workspaces) > 0 && strings.TrimSpace(cfg.Workspaces[0].ID) != "" {
+		return cfg.Workspaces[0].ID
+	}
+	return "default"
 }

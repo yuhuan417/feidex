@@ -5,11 +5,11 @@ import (
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/application/backendconfig"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	"fmt"
 	"log/slog"
 	"strings"
 
-	"feidex/internal/app/appcore"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -121,11 +121,11 @@ func (s SelectionService) BackendSwitchBlockedReason() string {
 
 // RenderBackendSelectionCard builds the backend selection interactive card.
 func (s SelectionService) RenderBackendSelectionCard(sessionKey, notice string) map[string]any {
-	current := appcore.ConfiguredBackend(s.Source)
+	current := configuredBackend(s.Source)
 	choices := s.AvailableBackends()
-	frontendID := appcore.FirstNonEmpty(strings.TrimSpace(s.Source.FrontendID()), config.DefaultFrontendID)
+	frontendID := firstNonEmpty(strings.TrimSpace(s.Source.FrontendID()), config.DefaultFrontendID)
 	lines := []string{
-		"当前 backend: `" + appcore.FirstNonEmpty(current, "unset") + "`",
+		"当前 backend: `" + firstNonEmpty(current, "unset") + "`",
 		"当前 frontend: `" + frontendID + "`",
 	}
 	if len(choices) == 0 {
@@ -215,21 +215,21 @@ func (s SelectionService) ReplyBackendSelectionCard(msg *feishu.InboundMessage, 
 	}
 	sessionKey := ""
 	if msg != nil {
-		sessionKey = appcore.MakeSessionKey(s.Source, msg)
+		sessionKey = makeSessionKey(s.Source, msg)
 	}
-	card := s.RenderBackendSelectionCard(sessionKey, appcore.FirstNonEmpty(strings.TrimSpace(reason), "当前 frontend 还没有设置 backend，请先选择。"))
+	card := s.RenderBackendSelectionCard(sessionKey, firstNonEmpty(strings.TrimSpace(reason), "当前 frontend 还没有设置 backend，请先选择。"))
 	if msg != nil && strings.TrimSpace(msg.MessageID) != "" {
 		if s.deps.Effects.ReplyCard == nil {
 			return fmt.Errorf("backend card reply not configured")
 		}
-		_, err := s.deps.Effects.ReplyCard(appcore.Context(s.Source), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Source, msg.ChatType))
+		_, err := s.deps.Effects.ReplyCard(s.Source.Context(), msg.MessageID, card, false)
 		return err
 	}
 	if msg != nil && strings.TrimSpace(msg.ChatID) != "" {
 		if s.deps.Effects.SendCard == nil {
 			return fmt.Errorf("backend card send not configured")
 		}
-		_, err := s.deps.Effects.SendCard(appcore.Context(s.Source), msg.ChatID, card)
+		_, err := s.deps.Effects.SendCard(s.Source.Context(), msg.ChatID, card)
 		return err
 	}
 	return fmt.Errorf("backend not configured")
@@ -275,7 +275,7 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 			Card:  RawCard(s.RenderBackendSelectionCard(sessionKey, BackendDisplayName(target)+" 当前不可用，请先确认本机安装。")),
 		}, nil
 	}
-	if current := appcore.ConfiguredBackend(s.Source); current == target && s.BackendRuntimeReady(target) {
+	if current := configuredBackend(s.Source); current == target && s.BackendRuntimeReady(target) {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "当前已经在使用 " + BackendDisplayName(target)},
 			Card:  RawCard(s.RenderBackendSelectionCard(sessionKey, "当前已经在使用 `"+target+"`。")),
@@ -288,7 +288,7 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 		}, nil
 	}
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		if err := s.SwitchBackend(appcore.Context(s.Source), target); err != nil {
+		if err := s.SwitchBackend(s.Source.Context(), target); err != nil {
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "error", Content: err.Error()},
 				Card:  RawCard(s.RenderBackendSelectionCard(sessionKey, "切换失败: "+err.Error())),
@@ -302,7 +302,7 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 
 	messageID := strings.TrimSpace(action.MessageID)
 	go func() {
-		err := s.SwitchBackend(appcore.Context(s.Source), target)
+		err := s.SwitchBackend(s.Source.Context(), target)
 		notice := "已切换到 `" + target + "`。"
 		if err != nil {
 			notice = "切换失败: " + err.Error()
@@ -317,7 +317,7 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 			slog.Warn("backend switch patch unavailable", "message_id", messageID)
 			return
 		}
-		if patchErr := s.deps.Effects.PatchCard(appcore.Context(s.Source), messageID, s.RenderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
+		if patchErr := s.deps.Effects.PatchCard(s.Source.Context(), messageID, s.RenderBackendSelectionCard(sessionKey, notice)); patchErr != nil {
 			slog.Warn("backend switch patch failed",
 				"frontend_id", s.Source.FrontendID(),
 				"target_backend", target,
@@ -352,7 +352,7 @@ func (s SelectionService) SwitchBackend(ctx context.Context, target string) erro
 		return fmt.Errorf("%s", reason)
 	}
 
-	current := appcore.ConfiguredBackend(s.Source)
+	current := configuredBackend(s.Source)
 	if current == target && s.BackendRuntimeReady(target) {
 		return nil
 	}
@@ -380,7 +380,7 @@ func (s SelectionService) SwitchBackend(ctx context.Context, target string) erro
 		return fmt.Errorf("SnapshotRuntime callback not set")
 	}
 	oldHandle := s.deps.Runtime.SnapshotRuntime()
-	oldBackend := appcore.CurrentRuntimeBackend(s.Source)
+	oldBackend := runtimeBackend(s.Source)
 	if err := s.SetConfiguredBackend(target); err != nil {
 		_ = newHandle.Close()
 		return err
@@ -425,7 +425,7 @@ func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target str
 	}
 	out := make([]*conversation.Session, 0, 8)
 	for _, sess := range store.AllSessions() {
-		if sess == nil || !appcore.SessionBelongsToFrontend(s.Source, sess.Key) {
+		if sess == nil || !sessionBelongsToFrontend(s.Source, sess.Key) {
 			continue
 		}
 		cp := conversation.CloneSession(sess)
@@ -438,7 +438,7 @@ func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target str
 		if !conversation.RestoreBackendThread(cp, target) {
 			conversation.ClearThreadContext(cp)
 		}
-		cp.Status = appcore.FirstNonEmpty(strings.TrimSpace(cp.Status), "idle")
+		cp.Status = firstNonEmpty(strings.TrimSpace(cp.Status), "idle")
 		out = append(out, cp)
 	}
 	return out
@@ -447,4 +447,29 @@ func (s SelectionService) FrontendSessionsAfterBackendSwitch(current, target str
 // SetConfiguredBackend persists the target backend to config.
 func (s SelectionService) SetConfiguredBackend(target string) error {
 	return (backendconfig.Service{Repository: configadapter.NewBackendRepository(s.Source)}).SetBackend(target)
+}
+
+func runtimeBackend(source SelectionSource) string {
+	if source == nil {
+		return ""
+	}
+	return NormalizeRuntimeBackend(source.Backend())
+}
+func makeSessionKey(source SelectionSource, msg *feishu.InboundMessage) string {
+	if msg == nil {
+		return ""
+	}
+	if strings.TrimSpace(msg.SessionKey) != "" {
+		return identity.CanonicalSessionKey(source.FrontendID(), msg.SessionKey)
+	}
+	chatID := strings.TrimSpace(msg.ChatID)
+	if chatID == "" {
+		return ""
+	}
+	return "feishu:frontend:" + strings.TrimSpace(source.FrontendID()) + ":chat:" + chatID
+}
+func sessionBelongsToFrontend(source SelectionSource, key string) bool {
+	frontend, _, _, _, _ := identity.ParseSessionKey(key)
+	current := strings.TrimSpace(source.FrontendID())
+	return frontend == current || (frontend == "" && current != "")
 }

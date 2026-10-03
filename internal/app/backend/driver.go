@@ -7,13 +7,14 @@ import (
 	"strings"
 	"sync"
 
-	appworkspace "feidex/internal/app/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
+
+const workspaceCommandUsage = "/workspace | /workspace list | /workspace new | /workspace new worktree [BRANCH] [ID] | /workspace clone GIT_URL [ID] [--parent DIR] | /workspace use ID | /workspace delete [ID] | /workspace sandbox [MODE] | /workspace policy [POLICY]"
 
 type PermissionScope string
 
@@ -50,7 +51,7 @@ type ConversationDriver interface {
 	SummaryLabel() string
 	WorkspaceSwitchInFlightNotice() string
 	WorkspaceSwitchBindingFailureNotice() string
-	WorkspaceSwitchBindingNotice(binding *appworkspace.ThreadBinding) string
+	WorkspaceSwitchBindingNotice(binding *conversation.ThreadBinding) string
 }
 
 type PermissionDependencies interface {

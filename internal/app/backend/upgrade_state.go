@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	applifecycle "feidex/internal/app/lifecycle"
 	"feidex/internal/domain/interaction"
 	"feidex/internal/state"
 )
@@ -132,7 +131,7 @@ func (s MaintenanceStateService) BlockingPendingCount() int {
 	}
 	count := 0
 	for _, req := range s.Repository.PendingRequests() {
-		if req == nil || !interaction.IsServerResolvedPendingKind(req.Kind) || !applifecycle.IsPendingRequestOpen(req) {
+		if req == nil || !interaction.IsServerResolvedPendingKind(req.Kind) || !interaction.IsPendingRequestOpen(req.Status) {
 			continue
 		}
 		count++
