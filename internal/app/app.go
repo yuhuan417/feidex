@@ -67,7 +67,6 @@ type App struct {
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
 	runtimeOwnerMu         sync.Mutex
-	sessionActorsMu        sync.Mutex
 	sessionActors          *frontendruntime.SessionActors // legacy mirror; runtimeOwner is authoritative
 }
 

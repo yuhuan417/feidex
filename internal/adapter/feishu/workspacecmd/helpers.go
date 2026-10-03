@@ -36,10 +36,6 @@ func selectedWorkspaceIDForMessage(app workspaceSelectionSource, msg *feishu.Inb
 	return app.WorkspaceSelection().Resolve(msg.ChatType, msg.ChatID, msg.UserID, sess)
 }
 
-func selectedWorkspaceIDForSession(app workspaceSelectionSource, sess *conversation.Session) string {
-	return app.WorkspaceSelection().ResolveSession(sess)
-}
-
 func applyWorkspaceSwitch(lifecycle *workspaceapp.Lifecycle, clear func(string), sess *conversation.Session, workspaceID string) error {
 	if lifecycle == nil {
 		return fmt.Errorf("workspace lifecycle is unavailable")

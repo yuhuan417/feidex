@@ -1,12 +1,10 @@
 package app
 
 import (
+	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	identity "feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
-	appruntime "feidex/internal/runtime"
-
-	"feidex/internal/config"
 	frontendruntime "feidex/internal/runtime"
 	"strings"
 )
@@ -90,13 +88,13 @@ func effectiveThreadMultiAgentMode(sess *conversation.Session, ws *config.Worksp
 func normalizeClaudePermissionModeValue(value string) string {
 	switch strings.TrimSpace(value) {
 	case "", "default":
-		return string(appruntime.ClaudePermissionModeDefault)
-	case string(appruntime.ClaudePermissionModeAcceptEdits):
-		return string(appruntime.ClaudePermissionModeAcceptEdits)
-	case string(appruntime.ClaudePermissionModeBypass):
-		return string(appruntime.ClaudePermissionModeBypass)
-	case string(appruntime.ClaudePermissionModePlan):
-		return string(appruntime.ClaudePermissionModePlan)
+		return string(frontendruntime.ClaudePermissionModeDefault)
+	case string(frontendruntime.ClaudePermissionModeAcceptEdits):
+		return string(frontendruntime.ClaudePermissionModeAcceptEdits)
+	case string(frontendruntime.ClaudePermissionModeBypass):
+		return string(frontendruntime.ClaudePermissionModeBypass)
+	case string(frontendruntime.ClaudePermissionModePlan):
+		return string(frontendruntime.ClaudePermissionModePlan)
 	default:
 		return strings.TrimSpace(value)
 	}
