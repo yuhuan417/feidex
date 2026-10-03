@@ -603,3 +603,4 @@ Codex server request
 - goal command 已移除 `appcore` 依赖，继续通过显式 ContextProvider、outbound、state 和 tracker ports 执行 goal set/clear 与 continuation；SM-25 goal 通知、SM-04 continuation turn 绑定和新 outbound 根卡行为不变。
 - thread/session menu 已移除 `appcore` 与旧 `app/workspace` 依赖，ConfigProvider、frontend identity、workspace selection 和 conversation binding 改由显式 capability/domain 类型提供；thread resume/fork/interrupt 的生命周期边界保持不变。
 - workspace command 的 config/management/service 三个入口已移除 `appcore` 依赖，session key、legacy frontend fallback、lifecycle context 和 JSON payload 通过本包的显式 capability helper 处理；工作区创建、clone、权限和群绑定行为保持不变。
+- debug/usage command 已移除 `appcore`、旧 thread menu 和旧 workspace 包依赖；日志级别、usage、文件分享和 path picker 继续通过显式 runtime/config/outbound/artifact ports 执行，慢速下载仍保持异步 patch 流程。

@@ -8,7 +8,9 @@ import (
 	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/application/runtimeconfig"
 	"feidex/internal/application/workspace"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	domainworkspace "feidex/internal/domain/workspace"
 	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
@@ -20,11 +22,9 @@ import (
 	appcards "feidex/internal/adapter/feishu/cards"
 	appdebugview "feidex/internal/adapter/feishu/debugview"
 	appdelivery "feidex/internal/adapter/feishu/delivery"
+	appthreadview "feidex/internal/adapter/feishu/threadview"
 	turnitem "feidex/internal/adapter/feishu/turnitem"
 	apppathpick "feidex/internal/adapter/filesystem/pathpicker"
-	appcore "feidex/internal/app/appcore"
-	appthreadmenu "feidex/internal/app/threadmenu"
-	appworkspace "feidex/internal/app/workspace"
 	appusageview "feidex/internal/application/presentation/usageview"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
@@ -98,7 +98,7 @@ type WorkspaceConfigProvider interface {
 
 // WorkspaceRenderProvider narrows workspace render access.
 type WorkspaceRenderProvider interface {
-	RenderPathPickerCard(requestID string, payload appworkspace.PathPickerPayload) (map[string]any, error)
+	RenderPathPickerCard(requestID string, payload domainworkspace.PathPickerPayload) (map[string]any, error)
 }
 
 // ---------------------------------------------------------------------------
@@ -109,8 +109,11 @@ type WorkspaceRenderProvider interface {
 // composition root. The service does not depend on the application root.
 type Dependencies struct {
 	ConfigProvider interface {
-		appcore.ConfigurationSource
-		appcore.FrontendIdentity
+		Config() *config.Config
+		ConfigMu() *sync.RWMutex
+		Backend() string
+		FrontendID() string
+		FrontendConfigIndex() int
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
@@ -133,6 +136,7 @@ type Dependencies struct {
 	PrimaryConversationMissingLabelFn func(string) string
 	DefaultWorkspaceIDFn              func() string
 	ConfigPathFn                      func() string
+	ContextProvider                   interface{ Context() context.Context }
 }
 
 func (d Dependencies) Config() *config.Config {
@@ -170,6 +174,14 @@ func (d Dependencies) Store() *state.Store {
 		return nil
 	}
 	return d.ConfigProvider.Store()
+}
+func (d Dependencies) Context() context.Context {
+	if d.ContextProvider != nil {
+		if ctx := d.ContextProvider.Context(); ctx != nil {
+			return ctx
+		}
+	}
+	return context.Background()
 }
 func (d Dependencies) DebugOutbound() Outbound                      { return d.Outbound }
 func (d Dependencies) DebugArtifacts() ArtifactSharer               { return d.ArtifactSharer }
@@ -248,14 +260,14 @@ func (d Dependencies) DebugConfigPath() string {
 // Exported type aliases for sub-package types
 // ---------------------------------------------------------------------------
 
-// PathPickerPayload aliases appworkspace.PathPickerPayload.
-type PathPickerPayload = appworkspace.PathPickerPayload
+// PathPickerPayload aliases domainworkspace.PathPickerPayload.
+type PathPickerPayload = domainworkspace.PathPickerPayload
 
 // PathPickerModeFile is the file picker mode constant.
-const PathPickerModeFile = appworkspace.PathPickerModeFile
+const PathPickerModeFile = domainworkspace.PathPickerModeFile
 
 // PathPickerStyleDropdown is the dropdown picker style constant.
-const PathPickerStyleDropdown = appworkspace.PathPickerStyleDropdown
+const PathPickerStyleDropdown = domainworkspace.PathPickerStyleDropdown
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -361,16 +373,47 @@ var FormatDownloadSize = appdelivery.FormatDownloadSize
 var ResolvePathPickerRoot = apppathpick.ResolvePathPickerRoot
 
 // SessionCurrentThreadLabel returns the display label for the active thread.
-var SessionCurrentThreadLabel = appthreadmenu.SessionCurrentThreadLabel
+var SessionCurrentThreadLabel = func(sess *conversation.Session) string {
+	if sess == nil {
+		return "-"
+	}
+	return appthreadview.CurrentThreadLabel(sess.ActiveThreadName, sess.ActiveThreadPreview, sess.ActiveThreadID)
+}
 
 // TurnContextUsagePercent calculates the context window usage percentage.
 var TurnContextUsagePercent = appclauderuntime.TurnContextUsagePercent
 
 // ConfiguredBackend returns the configured backend name.
-var ConfiguredBackend = appcore.ConfiguredBackend
+func ConfiguredBackend(source Dependencies) string {
+	if source.ConfigProvider == nil {
+		return ""
+	}
+	if value := strings.TrimSpace(source.ConfigProvider.Backend()); value != "" {
+		return domainbackend.NormalizeBackend(value)
+	}
+	cfg := source.ConfigProvider.Config()
+	if cfg == nil {
+		return ""
+	}
+	index := source.ConfigProvider.FrontendConfigIndex()
+	if index >= 0 && index < len(cfg.Frontends) {
+		return domainbackend.NormalizeBackend(cfg.Frontends[index].FeishuConfig.Backend)
+	}
+	return domainbackend.NormalizeBackend(cfg.Feishu.Backend)
+}
 
 // DebugAllowFrom returns the debug allow list from config.
-var DebugAllowFrom = appcore.DebugAllowFrom
+func DebugAllowFrom(source Dependencies) []string {
+	if source.ConfigProvider == nil || source.ConfigProvider.Config() == nil {
+		return nil
+	}
+	cfg := source.ConfigProvider.Config()
+	index := source.ConfigProvider.FrontendConfigIndex()
+	if index >= 0 && index < len(cfg.Frontends) {
+		return cfg.Frontends[index].FeishuConfig.DebugAllowFrom
+	}
+	return cfg.Feishu.DebugAllowFrom
+}
 
 // ---------------------------------------------------------------------------
 // DebugService — manages /debug command actions
@@ -407,7 +450,7 @@ func (s DebugService) CommandDebug(msg *feishu.InboundMessage, args []string) er
 	}
 	if !NewDebugService(s.app).DebugAccessAllowed(msg.UserID) {
 		card := NewDebugService(s.app).RenderDebugAccessDeniedCard(s.app.DebugMakeSessionKey(msg), msg.UserID)
-		_, err := s.app.DebugOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+		_, err := s.app.DebugOutbound().ReplyCard(s.app.Context(), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	enabled, err := DesiredDebugEnabled(args)
@@ -415,7 +458,7 @@ func (s DebugService) CommandDebug(msg *feishu.InboundMessage, args []string) er
 		return err
 	}
 	level := NewDebugService(s.app).SetRuntimeDebug(enabled)
-	return s.app.DebugOutbound().ReplyText(appcore.Context(s.app), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	return s.app.DebugOutbound().ReplyText(s.app.Context(), msg.MessageID, "服务端 slog 日志级别已切换为 `"+level+"`。", s.app.DebugReplyInThreadEnabled(msg.ChatType))
 }
 
 // CompleteMenuDebug handles the debug menu card action.
@@ -433,11 +476,11 @@ func (s DebugService) CommandDebugLogs(msg *feishu.InboundMessage, args []string
 	}
 	if !NewDebugService(s.app).DebugAccessAllowed(msg.UserID) {
 		card := NewDebugService(s.app).RenderDebugAccessDeniedCard(s.app.DebugMakeSessionKey(msg), msg.UserID)
-		_, err := s.app.DebugOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+		_, err := s.app.DebugOutbound().ReplyCard(s.app.Context(), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 		return err
 	}
 	card := NewDebugService(s.app).RenderDebugLogsCard(s.app.DebugMakeSessionKey(msg))
-	_, err := s.app.DebugOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.DebugOutbound().ReplyCard(s.app.Context(), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -605,7 +648,7 @@ func (s UsageService) CommandUsage(msg *feishu.InboundMessage, args []string) er
 		return fmt.Errorf("usage: /usage")
 	}
 	card := NewUsageService(s.app).RenderUsageCard(s.app.DebugMakeSessionKey(msg))
-	_, err := s.app.DebugOutbound().ReplyCard(appcore.Context(s.app), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
+	_, err := s.app.DebugOutbound().ReplyCard(s.app.Context(), msg.MessageID, card, s.app.DebugReplyInThreadEnabled(msg.ChatType))
 	return err
 }
 
@@ -675,7 +718,7 @@ func CommandDownload(a Dependencies, msg *feishu.InboundMessage, args []string) 
 	if err != nil {
 		return err
 	}
-	msgID, err := a.DebugOutbound().ReplyCard(appcore.Context(a), msg.MessageID, card, a.DebugReplyInThreadEnabled(msg.ChatType))
+	msgID, err := a.DebugOutbound().ReplyCard(a.Context(), msg.MessageID, card, a.DebugReplyInThreadEnabled(msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -756,7 +799,7 @@ func CompleteDownloadFileConfirm(a Dependencies, action *feishu.CardAction, pend
 // FinishDownloadFileShare completes the download file sharing workflow.
 func FinishDownloadFileShare(a Dependencies, requestID, messageID string, payload PathPickerPayload, selectedPath, workspaceCWD string, req feishu.SharedFileRequest) {
 	appState := a.DebugAppState()
-	ctx, cancel := context.WithTimeout(appcore.Context(a), 30*time.Second)
+	ctx, cancel := context.WithTimeout(a.Context(), 30*time.Second)
 	defer cancel()
 	slog.Debug("download share started",
 		"request_id", requestID,
@@ -785,10 +828,10 @@ func FinishDownloadFileShare(a Dependencies, requestID, messageID string, payloa
 				"message_id", messageID,
 				"error", renderErr,
 			)
-			_ = a.DebugOutbound().PatchCard(appcore.Context(a), messageID, RenderDownloadFailedCard(a, selectedPath, workspaceCWD, err.Error()))
+			_ = a.DebugOutbound().PatchCard(a.Context(), messageID, RenderDownloadFailedCard(a, selectedPath, workspaceCWD, err.Error()))
 			return
 		}
-		_ = a.DebugOutbound().PatchCard(appcore.Context(a), messageID, card)
+		_ = a.DebugOutbound().PatchCard(a.Context(), messageID, card)
 		return
 	}
 	slog.Debug("download share completed",
@@ -804,7 +847,7 @@ func FinishDownloadFileShare(a Dependencies, requestID, messageID string, payloa
 	if strings.TrimSpace(messageID) == "" {
 		return
 	}
-	_ = a.DebugOutbound().PatchCard(appcore.Context(a), messageID, RenderDownloadReadyCard(a, selectedPath, workspaceCWD, result))
+	_ = a.DebugOutbound().PatchCard(a.Context(), messageID, RenderDownloadReadyCard(a, selectedPath, workspaceCWD, result))
 }
 
 // RenderDownloadPreparingCard renders the download preparing card.

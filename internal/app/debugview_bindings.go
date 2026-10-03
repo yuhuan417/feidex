@@ -48,7 +48,7 @@ func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 		return appdebugviewcmd.Dependencies{}
 	}
 	return appdebugviewcmd.Dependencies{
-		ConfigProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: debugOutbound{app: app}, ArtifactSharer: debugArtifactSharer{app: app}, CardRenderer: debugCardRenderer{app: app}, StateProvider: app.State(),
+		ConfigProvider: app, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: debugOutbound{app: app}, ArtifactSharer: debugArtifactSharer{app: app}, CardRenderer: debugCardRenderer{app: app}, StateProvider: app.State(),
 		RuntimeStateProvider: debugRuntimeStateAdapter{app: app}, ConversationBackendProvider: debugConversationBackendAdapter{app: app},
 		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{app: app}, WorkspaceRenderProvider: debugWorkspaceRenderAdapter{app: app},
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(app, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(app, v) },
