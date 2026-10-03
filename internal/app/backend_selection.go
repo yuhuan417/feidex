@@ -45,7 +45,7 @@ func buildBackendSelectionService(app *App) backendSelectionService {
 
 	s := backendSelectionService{app: app}
 	s.inner = backend.NewSelectionService(backend.SelectionDeps{
-		App:    app,
+		Source: app,
 		Switch: &app.composition.switchState,
 		Runtime: backend.SelectionRuntimeDeps{
 			ListAvailableBackends: func() []backend.AvailableBackend {

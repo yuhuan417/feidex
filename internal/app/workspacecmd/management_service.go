@@ -888,13 +888,13 @@ func (s *ManagementService) CompleteWorkspaceMultiAgentSet(action *feishu.CardAc
 
 func (s *ManagementService) CompleteWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
 	return s.Deps.PermissionDriver().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
-		App:                     s.Deps,
+		Permissions:             s.Deps,
 		Session:                 s.GetSession,
 		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		ApplyRuntime:            func(sessionKey, mode string) error { return nil },
 		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
 			return s.Deps.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-				App:            s.Deps,
+				Permissions:    s.Deps,
 				FormatMenuBody: s.FormatMenuBody,
 			})
 		},
@@ -1693,7 +1693,7 @@ func validateWorktreeDirectoryName(name string) error {
 // renderSandboxMenuCard is a helper that re-renders the sandbox menu card.
 func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	return s.Deps.PermissionDriver().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.Deps,
+		Permissions:    s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }
@@ -1701,7 +1701,7 @@ func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string
 // renderPolicyMenuCard is a helper that re-renders the policy menu card.
 func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]any, error) {
 	return s.Deps.PermissionDriver().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.Deps,
+		Permissions:    s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }
@@ -1709,7 +1709,7 @@ func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]
 // renderMultiAgentMenuCard is a helper that re-renders the multi-agent menu card.
 func (s *ManagementService) renderMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
 	return s.Deps.PermissionDriver().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.Deps,
+		Permissions:    s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }

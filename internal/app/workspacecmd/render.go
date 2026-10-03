@@ -786,7 +786,7 @@ func sortWorkspacesByRecent(workspaces []config.Workspace, recentIDs []string, c
 // RenderWorkspaceSandboxMenuCard renders the sandbox configuration menu card.
 func (s *RenderService) RenderWorkspaceSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	return s.Deps.PermissionDriver().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.Deps,
+		Permissions:    s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }
@@ -794,7 +794,7 @@ func (s *RenderService) RenderWorkspaceSandboxMenuCard(sessionKey string) (map[s
 // RenderWorkspacePolicyMenuCard renders the policy configuration menu card.
 func (s *RenderService) RenderWorkspacePolicyMenuCard(sessionKey string) (map[string]any, error) {
 	return s.Deps.PermissionDriver().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.Deps,
+		Permissions:    s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }
@@ -802,7 +802,7 @@ func (s *RenderService) RenderWorkspacePolicyMenuCard(sessionKey string) (map[st
 // RenderWorkspaceMultiAgentMenuCard renders the multi-agent mode configuration menu card.
 func (s *RenderService) RenderWorkspaceMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
 	return s.Deps.PermissionDriver().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.Deps,
+		Permissions:    s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }

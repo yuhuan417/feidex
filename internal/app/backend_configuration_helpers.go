@@ -40,8 +40,8 @@ func buildBackendConfigurationService(app *App) backendConfigurationService {
 	driver := app.BackendDriver()
 
 	inner := appbackend.NewConfigurationService(appbackend.ConfigurationDeps{
-		App:    app,
-		Driver: driver,
+		Permissions: app,
+		Driver:      driver,
 		Formatting: appbackend.ConfigurationFormattingDeps{
 			FormatMenuBody: menuCardBody,
 		},

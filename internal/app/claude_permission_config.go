@@ -125,7 +125,7 @@ func patchClaudePermissionMenuRuntimeFailure(a *App, messageID, sessionKey strin
 
 func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	return a.BackendDriver().Permission().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
-		App:            a,
+		Permissions:    a,
 		Session:        a.State().Session,
 		FormatMenuBody: func(action, body string) string { return menuCardBodyForBackend(configuredBackend(a), action, body) },
 	})
@@ -147,7 +147,7 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 
 func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	return a.BackendDriver().Permission().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            a,
+		Permissions:    a,
 		FormatMenuBody: func(action, body string) string { return menuCardBodyForBackend(configuredBackend(a), action, body) },
 	})
 }

@@ -563,3 +563,4 @@ Codex server request
 - backend event application service 的十余个匿名 callback 字段收敛为单一 consumer-owned `EventSink` port；Feishu/app 入口只负责组装 sink 实现，事件分发器不再持有隐式 service callback 集合。
 - workspace command capability carrier 从兼容性的 `App` 重命名为 `Dependencies`，Config/Management/Render service 内部统一使用 `Deps` 字段；composition 仍负责注入 outbound、renderer、state 和 runtime ports。
 - architecture tests 新增 application 禁止同步 Feishu outbound 调用、backend event 必须使用单一 sink port 的守卫。
+- backend configuration/selection 与 permission driver 的 capability carrier 去掉 `App` 字段命名，统一改为 `Permissions`/`Source`；thread menu 和 workspace command 的权限渲染注入同步更新，避免继续把 capability interface 当作宿主聚合。

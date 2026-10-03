@@ -97,12 +97,12 @@ type ConversationPermissionCommandRequest struct {
 }
 
 type WorkspacePermissionRenderDeps struct {
-	App            PermissionDependencies
+	Permissions    PermissionDependencies
 	FormatMenuBody func(action, body string) string
 }
 
 type ConversationPermissionRenderDeps struct {
-	App            PermissionDependencies
+	Permissions    PermissionDependencies
 	Session        func(sessionKey string) *conversation.Session
 	FormatMenuBody func(action, body string) string
 }
@@ -115,7 +115,7 @@ type WorkspacePermissionUpdateDeps struct {
 }
 
 type WorkspacePermissionModeUpdateDeps struct {
-	App                     PermissionDependencies
+	Permissions             PermissionDependencies
 	Session                 func(sessionKey string) *conversation.Session
 	UpdateWorkspaceDefaults func(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error)
 	ApplyRuntime            func(sessionKey, mode string) error
@@ -131,7 +131,7 @@ type ConversationPermissionUpdateDeps struct {
 }
 
 type ConversationPermissionModeUpdateDeps struct {
-	App                  PermissionDependencies
+	Permissions          PermissionDependencies
 	Session              func(sessionKey string) *conversation.Session
 	SaveSession          func(sess *conversation.Session) error
 	NormalizeRequested   func(raw string) (mode string, warning string, err error)

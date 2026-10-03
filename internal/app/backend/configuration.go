@@ -31,8 +31,8 @@ const (
 // ConfigurationService handles backend-specific configuration display and
 // model/workspace configuration card rendering.
 type ConfigurationService struct {
-	App  PermissionDependencies
-	deps ConfigurationDeps
+	Permissions PermissionDependencies
+	deps        ConfigurationDeps
 }
 
 type ConfigurationFormattingDeps struct {
@@ -62,20 +62,20 @@ type ConfigurationCodexDeps struct {
 }
 
 type ConfigurationDeps struct {
-	App        PermissionDependencies
-	Driver     Driver
-	Formatting ConfigurationFormattingDeps
-	Commands   ConfigurationCommandDeps
-	Claude     ConfigurationClaudeDeps
-	Codex      ConfigurationCodexDeps
+	Permissions PermissionDependencies
+	Driver      Driver
+	Formatting  ConfigurationFormattingDeps
+	Commands    ConfigurationCommandDeps
+	Claude      ConfigurationClaudeDeps
+	Codex       ConfigurationCodexDeps
 }
 
 // NewConfigurationService creates a new ConfigurationService.
 func NewConfigurationService(deps ConfigurationDeps) ConfigurationService {
-	if deps.Driver == nil && deps.App != nil {
-		deps.Driver = DriverForKind(appcore.ConfiguredBackend(deps.App))
+	if deps.Driver == nil && deps.Permissions != nil {
+		deps.Driver = DriverForKind(appcore.ConfiguredBackend(deps.Permissions))
 	}
-	return ConfigurationService{App: deps.App, deps: deps}
+	return ConfigurationService{Permissions: deps.Permissions, deps: deps}
 }
 
 func (s ConfigurationService) FormatMenuBody(action, body string) string {
@@ -86,7 +86,7 @@ func (s ConfigurationService) FormatMenuBody(action, body string) string {
 }
 
 func (s ConfigurationService) HandleModelCommand(msg *feishu.InboundMessage, args []string) error {
-	switch appcore.ConfiguredBackend(s.App) {
+	switch appcore.ConfiguredBackend(s.Permissions) {
 	case domainbackend.BackendCodex:
 		if s.deps.Commands.HandleCodexModelCommand == nil {
 			return fmt.Errorf("Codex model command handler not configured")
@@ -98,7 +98,7 @@ func (s ConfigurationService) HandleModelCommand(msg *feishu.InboundMessage, arg
 		}
 		return s.deps.Commands.HandleClaudeModelCommand(msg, args)
 	default:
-		return unsupportedBackendError(appcore.ConfiguredBackend(s.App))
+		return unsupportedBackendError(appcore.ConfiguredBackend(s.Permissions))
 	}
 }
 
@@ -124,8 +124,8 @@ func (s ConfigurationService) CompleteClaudeEffortSet(action *feishu.CardAction,
 }
 
 func (s ConfigurationService) CompleteClaudeModelOptionAdd(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	if appcore.ConfiguredBackend(s.App) != domainbackend.BackendClaude {
-		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
+	if appcore.ConfiguredBackend(s.Permissions) != domainbackend.BackendClaude {
+		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.Permissions)), nil
 	}
 	if s.deps.Claude.CompleteModelOptionAdd == nil {
 		return nil, fmt.Errorf("Claude model option add handler not configured")
@@ -134,8 +134,8 @@ func (s ConfigurationService) CompleteClaudeModelOptionAdd(action *feishu.CardAc
 }
 
 func (s ConfigurationService) CompleteClaudeModelOptionRemove(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	if appcore.ConfiguredBackend(s.App) != domainbackend.BackendClaude {
-		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
+	if appcore.ConfiguredBackend(s.Permissions) != domainbackend.BackendClaude {
+		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.Permissions)), nil
 	}
 	if s.deps.Claude.CompleteModelOptionRemove == nil {
 		return nil, fmt.Errorf("Claude model option remove handler not configured")
@@ -240,7 +240,7 @@ func autoRetryEnabled(app appcore.ConfigurationSource) bool {
 }
 
 func (s ConfigurationService) renderBackendRequiredCard(sessionKey string) map[string]any {
-	body := s.FormatMenuBody("menu.group.model", unsupportedBackendUserMessage(appcore.ConfiguredBackend(s.App)))
+	body := s.FormatMenuBody("menu.group.model", unsupportedBackendUserMessage(appcore.ConfiguredBackend(s.Permissions)))
 	buttons := []feishu.Button{
 		{Text: "后端选择 /backend", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.group.backend", SessionKey: sessionKey}.Map()},
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
@@ -250,8 +250,8 @@ func (s ConfigurationService) renderBackendRequiredCard(sessionKey string) map[s
 
 func (s ConfigurationService) backendRequiredStatusBody() string {
 	return strings.Join([]string{
-		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.App), "unset") + "`",
-		unsupportedBackendUserMessage(appcore.ConfiguredBackend(s.App)),
+		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.Permissions), "unset") + "`",
+		unsupportedBackendUserMessage(appcore.ConfiguredBackend(s.Permissions)),
 	}, "\n")
 }
 
@@ -279,7 +279,7 @@ func (s ConfigurationService) HandleBackendWorkspacePermissionCommand(msg *feish
 // AppendBackendWorkspaceSummaryLines appends backend-specific workspace
 // summary lines to the given slice.
 func (s ConfigurationService) AppendBackendWorkspaceSummaryLines(lines []string, currentWS *config.Workspace) []string {
-	return s.deps.Driver.Permission().AppendWorkspaceSummaryLines(s.App, lines, currentWS)
+	return s.deps.Driver.Permission().AppendWorkspaceSummaryLines(s.Permissions, lines, currentWS)
 }
 
 // BackendWorkspaceConfigButtons returns the workspace configuration buttons
@@ -308,7 +308,7 @@ func (s ConfigurationService) BackendWorkspaceSwitchBindingNotice(binding *appwo
 
 // RenderModelMenuCard renders the model menu card for the active backend.
 func (s ConfigurationService) RenderModelMenuCard(sessionKey string) map[string]any {
-	switch appcore.ConfiguredBackend(s.App) {
+	switch appcore.ConfiguredBackend(s.Permissions) {
 	case domainbackend.BackendCodex:
 		return s.RenderCodexModelMenuCard(sessionKey)
 	case domainbackend.BackendClaude:
@@ -320,7 +320,7 @@ func (s ConfigurationService) RenderModelMenuCard(sessionKey string) map[string]
 
 // RenderClaudeModelMenuCard renders the Claude model menu card.
 func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[string]any {
-	cfg := configurationSnapshot(s.App)
+	cfg := configurationSnapshot(s.Permissions)
 	modelValue := firstNonEmpty(appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
 	effortValue := firstNonEmpty(appmodelconfig.ConfiguredClaudeEffort(cfg), "(default)")
 	body := strings.Join([]string{
@@ -339,11 +339,11 @@ func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[s
 
 // RenderCodexModelMenuCard renders the Codex model menu card.
 func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[string]any {
-	cfg := configurationSnapshot(s.App)
+	cfg := configurationSnapshot(s.Permissions)
 	modelValue := firstNonEmpty(appmodelconfig.ConfiguredGlobalModel(cfg), "(default)")
 	effortValue := firstNonEmpty(appmodelconfig.ConfiguredGlobalReasoningEffort(cfg), "(default)")
 	fastValue := "-"
-	if store := s.App.Store(); store != nil {
+	if store := s.Permissions.Store(); store != nil {
 		if sess := store.GetSession(strings.TrimSpace(sessionKey)); sess != nil {
 			fastValue = appruntime.RenderServiceTierValue(sess.ActiveThreadServiceTier)
 		}
@@ -365,7 +365,7 @@ func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[st
 // CompleteGlobalModelSet completes a global model set action, dispatching
 // by backend.
 func (s ConfigurationService) CompleteGlobalModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	switch appcore.ConfiguredBackend(s.App) {
+	switch appcore.ConfiguredBackend(s.Permissions) {
 	case domainbackend.BackendCodex:
 		return s.CompleteCodexGlobalModelSet(action, modelID)
 	case domainbackend.BackendClaude:
@@ -374,7 +374,7 @@ func (s ConfigurationService) CompleteGlobalModelSet(action *feishu.CardAction, 
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Claude model set handler not configured"}}, nil
 	default:
-		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
+		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.Permissions)), nil
 	}
 }
 
@@ -389,7 +389,7 @@ func (s ConfigurationService) CompleteCodexGlobalModelSet(action *feishu.CardAct
 // CompleteGlobalReasoningEffortSet completes a global reasoning effort set
 // action, dispatching by backend.
 func (s ConfigurationService) CompleteGlobalReasoningEffortSet(action *feishu.CardAction, reasoningEffort string) (*callback.CardActionTriggerResponse, error) {
-	switch appcore.ConfiguredBackend(s.App) {
+	switch appcore.ConfiguredBackend(s.Permissions) {
 	case domainbackend.BackendCodex:
 		return s.CompleteCodexGlobalReasoningEffortSet(action, reasoningEffort)
 	case domainbackend.BackendClaude:
@@ -398,7 +398,7 @@ func (s ConfigurationService) CompleteGlobalReasoningEffortSet(action *feishu.Ca
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "Claude effort set handler not configured"}}, nil
 	default:
-		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.App)), nil
+		return unsupportedBackendActionResponse(appcore.ConfiguredBackend(s.Permissions)), nil
 	}
 }
 
@@ -414,7 +414,7 @@ func (s ConfigurationService) CompleteCodexGlobalReasoningEffortSet(action *feis
 // StatusCardBody returns the status card body text for the given session,
 // dispatching by backend.
 func (s ConfigurationService) StatusCardBody(sess *conversation.Session) string {
-	switch appcore.ConfiguredBackend(s.App) {
+	switch appcore.ConfiguredBackend(s.Permissions) {
 	case domainbackend.BackendCodex:
 		return s.RenderCodexStatusBody(sess)
 	case domainbackend.BackendClaude:
@@ -426,7 +426,7 @@ func (s ConfigurationService) StatusCardBody(sess *conversation.Session) string 
 
 // RenderClaudeStatusBody renders the Claude status card body.
 func (s ConfigurationService) RenderClaudeStatusBody(sess *conversation.Session) string {
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
+	workspaceID := appcore.DefaultWorkspaceID(s.Permissions)
 	conversationLabel := "-"
 	conversationID := "-"
 	status := "idle"
@@ -441,14 +441,14 @@ func (s ConfigurationService) RenderClaudeStatusBody(sess *conversation.Session)
 		status = firstNonEmpty(sess.Status, "idle")
 		queueLen = len(sess.Queue)
 	}
-	cfg := configurationSnapshot(s.App)
+	cfg := configurationSnapshot(s.Permissions)
 	ws = config.FindWorkspace(cfg, workspaceID)
 	model := firstNonEmpty(appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
 	effort := firstNonEmpty(appmodelconfig.ConfiguredClaudeEffort(cfg), "(follow Claude default)")
-	feishuCfg := appcore.FeishuConfig(s.App)
+	feishuCfg := appcore.FeishuConfig(s.Permissions)
 	lines := []string{
 		"状态: `" + status + "`",
-		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.App), "unset") + "`",
+		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.Permissions), "unset") + "`",
 		"版本: `" + buildinfo.CurrentVersion() + "`",
 		"log level: " + appdebugview.RenderRuntimeLogLevelValue(),
 		"工作区: `" + workspaceID + "`",
@@ -456,18 +456,18 @@ func (s ConfigurationService) RenderClaudeStatusBody(sess *conversation.Session)
 		"session_id: `" + conversationID + "`",
 		"Claude model: `" + model + "`",
 		"Claude effort: `" + effort + "`",
-		"auto retry: `" + map[bool]string{true: "on", false: "off"}[autoRetryEnabled(s.App)] + "`",
+		"auto retry: `" + map[bool]string{true: "on", false: "off"}[autoRetryEnabled(s.Permissions)] + "`",
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
 	}
-	lines = s.deps.Driver.Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
+	lines = s.deps.Driver.Permission().AppendStatusLines(s.Permissions, lines[:len(lines)-1], sess, ws)
 	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
 	return strings.Join(lines, "\n")
 }
 
 // RenderCodexStatusBody renders the Codex status card body.
 func (s ConfigurationService) RenderCodexStatusBody(sess *conversation.Session) string {
-	workspaceID := appcore.DefaultWorkspaceID(s.App)
+	workspaceID := appcore.DefaultWorkspaceID(s.Permissions)
 	conversationLabel := "-"
 	conversationID := "-"
 	status := "idle"
@@ -482,7 +482,7 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *conversation.Session) 
 		status = firstNonEmpty(sess.Status, "idle")
 		queueLen = len(sess.Queue)
 	}
-	cfg := configurationSnapshot(s.App)
+	cfg := configurationSnapshot(s.Permissions)
 	ws = config.FindWorkspace(cfg, workspaceID)
 	model := appmodelconfig.ConfiguredGlobalModel(cfg)
 	effort := appmodelconfig.ConfiguredGlobalReasoningEffort(cfg)
@@ -492,10 +492,10 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *conversation.Session) 
 	if effort == "" {
 		effort = "(follow model default)"
 	}
-	feishuCfg := appcore.FeishuConfig(s.App)
+	feishuCfg := appcore.FeishuConfig(s.Permissions)
 	lines := []string{
 		"状态: `" + status + "`",
-		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.App), "unset") + "`",
+		"backend: `" + firstNonEmpty(appcore.ConfiguredBackend(s.Permissions), "unset") + "`",
 		"版本: `" + buildinfo.CurrentVersion() + "`",
 		"log level: " + appdebugview.RenderRuntimeLogLevelValue(),
 		"工作区: `" + workspaceID + "`",
@@ -503,11 +503,11 @@ func (s ConfigurationService) RenderCodexStatusBody(sess *conversation.Session) 
 		"thread_id: `" + conversationID + "`",
 		"Bot 默认模型: `" + model + "`",
 		"Bot 默认推理强度: `" + effort + "`",
-		"auto retry: `" + map[bool]string{true: "on", false: "off"}[autoRetryEnabled(s.App)] + "`",
+		"auto retry: `" + map[bool]string{true: "on", false: "off"}[autoRetryEnabled(s.Permissions)] + "`",
 		"quiet: `" + appquietmode.StatusText(appquietmode.Mode(feishuCfg)) + "`",
 		"queue_len: `" + fmt.Sprintf("%d", queueLen) + "`",
 	}
-	lines = s.deps.Driver.Permission().AppendStatusLines(s.App, lines[:len(lines)-1], sess, ws)
+	lines = s.deps.Driver.Permission().AppendStatusLines(s.Permissions, lines[:len(lines)-1], sess, ws)
 	lines = append(lines, "queue_len: `"+fmt.Sprintf("%d", queueLen)+"`")
 	return strings.Join(lines, "\n")
 }

@@ -97,7 +97,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 			},
 			ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
 				card, err := s.Deps.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-					App:            s.Deps,
+					Permissions:    s.Deps,
 					FormatMenuBody: s.FormatMenuBody,
 				})
 				if err != nil {

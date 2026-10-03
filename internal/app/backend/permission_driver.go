@@ -389,10 +389,10 @@ func (d claudePermissionDriver) HandleConversationCommand(req ConversationPermis
 }
 
 func (d codexPermissionDriver) RenderWorkspaceSandboxMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
-	if deps.App == nil {
+	if deps.Permissions == nil {
 		return nil, fmt.Errorf("app not configured")
 	}
-	_, ws, err := currentWorkspaceForDriver(deps.App, sessionKey)
+	_, ws, err := currentWorkspaceForDriver(deps.Permissions, sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -430,10 +430,10 @@ func (d codexPermissionDriver) RenderWorkspaceSandboxMenu(sessionKey string, dep
 }
 
 func (d codexPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
-	if deps.App == nil {
+	if deps.Permissions == nil {
 		return nil, fmt.Errorf("app not configured")
 	}
-	_, ws, err := currentWorkspaceForDriver(deps.App, sessionKey)
+	_, ws, err := currentWorkspaceForDriver(deps.Permissions, sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -471,10 +471,10 @@ func (d codexPermissionDriver) RenderWorkspacePolicyMenu(sessionKey string, deps
 }
 
 func (d codexPermissionDriver) RenderWorkspaceMultiAgentMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
-	if deps.App == nil {
+	if deps.Permissions == nil {
 		return nil, fmt.Errorf("app not configured")
 	}
-	_, ws, err := currentWorkspaceForDriver(deps.App, sessionKey)
+	_, ws, err := currentWorkspaceForDriver(deps.Permissions, sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -511,14 +511,14 @@ func (d codexPermissionDriver) RenderWorkspaceMultiAgentMenu(sessionKey string, 
 }
 
 func (d claudePermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey string, deps WorkspacePermissionRenderDeps) (map[string]any, error) {
-	if deps.App == nil || deps.App.Config() == nil {
+	if deps.Permissions == nil || deps.Permissions.Config() == nil {
 		return nil, fmt.Errorf("app not configured")
 	}
-	_, ws, err := currentWorkspaceForDriver(deps.App, sessionKey)
+	_, ws, err := currentWorkspaceForDriver(deps.Permissions, sessionKey)
 	if err != nil {
 		return nil, err
 	}
-	effective := effectiveClaudePermissionMode(nil, ws, deps.App.Config().Claude)
+	effective := effectiveClaudePermissionMode(nil, ws, deps.Permissions.Config().Claude)
 	override := strings.TrimSpace(ws.ClaudePermissionMode)
 	bodyLines := []string{
 		"配置当前工作区默认 Claude 权限模式。",
@@ -547,7 +547,7 @@ func (d claudePermissionDriver) RenderWorkspacePermissionModeMenu(sessionKey str
 			WorkspaceID: ws.ID,
 		}.Map(),
 	})
-	for _, opt := range driverClaudePermissionModeOptions(driverClaudeBypassEnabled(deps.App.Config())) {
+	for _, opt := range driverClaudePermissionModeOptions(driverClaudeBypassEnabled(deps.Permissions.Config())) {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == override {
@@ -678,7 +678,7 @@ func (d claudePermissionDriver) CompleteWorkspacePermissionModeSet(sessionKey, w
 		mode = override
 	} else {
 		var err error
-		mode, warning, err = driverNormalizeRequestedClaudePermissionMode(deps.App.Config(), rawMode)
+		mode, warning, err = driverNormalizeRequestedClaudePermissionMode(deps.Permissions.Config(), rawMode)
 		if err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
@@ -688,9 +688,9 @@ func (d claudePermissionDriver) CompleteWorkspacePermissionModeSet(sessionKey, w
 	}); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if deps.Session != nil && deps.App != nil && deps.App.Config() != nil {
+	if deps.Session != nil && deps.Permissions != nil && deps.Permissions.Config() != nil {
 		if sess := deps.Session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) == strings.TrimSpace(workspaceID) && strings.TrimSpace(sess.ActiveClaudePermissionMode) == "" {
-			effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(deps.App.Config(), workspaceID), deps.App.Config().Claude)
+			effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(deps.Permissions.Config(), workspaceID), deps.Permissions.Config().Claude)
 			if err := deps.ApplyRuntime(sessionKey, effective); err != nil {
 				return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 			}
@@ -727,15 +727,15 @@ func (d codexPermissionDriver) CompleteWorkspacePermissionModeSet(string, string
 }
 
 func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
-	if deps.App == nil || deps.Session == nil {
+	if deps.Permissions == nil || deps.Session == nil {
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.App.Config())
+	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.Permissions.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
-	ws := config.FindWorkspace(deps.App.Config(), workspaceID)
+	ws := config.FindWorkspace(deps.Permissions.Config(), workspaceID)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, fmt.Errorf("当前没有活动线程")
 	}
@@ -787,15 +787,15 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 }
 
 func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
-	if deps.App == nil || deps.Session == nil {
+	if deps.Permissions == nil || deps.Session == nil {
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.App.Config())
+	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.Permissions.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
-	ws := config.FindWorkspace(deps.App.Config(), workspaceID)
+	ws := config.FindWorkspace(deps.Permissions.Config(), workspaceID)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, fmt.Errorf("当前没有活动线程")
 	}
@@ -847,15 +847,15 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 }
 
 func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
-	if deps.App == nil || deps.Session == nil {
+	if deps.Permissions == nil || deps.Session == nil {
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.App.Config())
+	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.Permissions.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
-	ws := config.FindWorkspace(deps.App.Config(), workspaceID)
+	ws := config.FindWorkspace(deps.Permissions.Config(), workspaceID)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, fmt.Errorf("当前没有活动线程")
 	}
@@ -897,20 +897,20 @@ func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey strin
 }
 
 func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
-	if deps.App == nil || deps.Session == nil || deps.App.Config() == nil {
+	if deps.Permissions == nil || deps.Session == nil || deps.Permissions.Config() == nil {
 		return nil, fmt.Errorf("app not configured")
 	}
 	sess := deps.Session(sessionKey)
-	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.App.Config())
+	workspaceID := appcore.DefaultWorkspaceIDFromConfig(deps.Permissions.Config())
 	if sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 		workspaceID = sess.WorkspaceID
 	}
-	ws := config.FindWorkspace(deps.App.Config(), workspaceID)
+	ws := config.FindWorkspace(deps.Permissions.Config(), workspaceID)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return nil, fmt.Errorf("当前没有活动会话")
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	effective := effectiveClaudePermissionMode(sess, ws, deps.App.Config().Claude)
+	effective := effectiveClaudePermissionMode(sess, ws, deps.Permissions.Config().Claude)
 	override := strings.TrimSpace(sess.ActiveClaudePermissionMode)
 	bodyLines := []string{
 		"配置当前 Claude 会话权限模式。",
@@ -939,7 +939,7 @@ func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey 
 			ThreadID:   threadID,
 		}.Map(),
 	})
-	for _, opt := range driverClaudePermissionModeOptions(driverClaudeBypassEnabled(deps.App.Config())) {
+	for _, opt := range driverClaudePermissionModeOptions(driverClaudeBypassEnabled(deps.Permissions.Config())) {
 		btnType := "default"
 		label := opt.Label
 		if opt.Value == override {
@@ -1092,8 +1092,8 @@ func (d claudePermissionDriver) CompleteConversationPermissionModeSet(sessionKey
 	if err := deps.SaveSession(sess); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	if deps.App != nil && deps.App.Config() != nil {
-		effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(deps.App.Config(), sess.WorkspaceID), deps.App.Config().Claude)
+	if deps.Permissions != nil && deps.Permissions.Config() != nil {
+		effective := effectiveClaudePermissionMode(sess, config.FindWorkspace(deps.Permissions.Config(), sess.WorkspaceID), deps.Permissions.Config().Claude)
 		if err := deps.ApplyRuntime(sessionKey, effective); err != nil {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 		}

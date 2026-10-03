@@ -755,7 +755,7 @@ func (s *Service) CommandSession(msg *feishu.InboundMessage, args []string) erro
 			},
 			ShowConversationPermissionModeMenu: func(msg *feishu.InboundMessage) error {
 				card, err := s.app.PermissionDriver().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
-					App:            s.app,
+					Permissions:    s.app,
 					Session:        s.app.ThreadMenuAppState().Session,
 					FormatMenuBody: s.app.MenuCardBody,
 				})
@@ -861,7 +861,7 @@ func (s *Service) ShowThreadSandboxMenu(msg *feishu.InboundMessage) error {
 func (s *Service) RenderThreadSandboxMenuCard(sessionKey string) (map[string]any, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
 	return s.app.PermissionDriver().RenderConversationSandboxMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
-		App:            s.app,
+		Permissions:    s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
 	})
@@ -885,7 +885,7 @@ func (s *Service) ShowThreadPolicyMenu(msg *feishu.InboundMessage) error {
 func (s *Service) RenderThreadPolicyMenuCard(sessionKey string) (map[string]any, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
 	return s.app.PermissionDriver().RenderConversationPolicyMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
-		App:            s.app,
+		Permissions:    s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
 	})
@@ -909,7 +909,7 @@ func (s *Service) ShowThreadMultiAgentMenu(msg *feishu.InboundMessage) error {
 func (s *Service) RenderThreadMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
 	sessionKey = s.effectiveSessionKey(sessionKey)
 	return s.app.PermissionDriver().RenderConversationMultiAgentMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
-		App:            s.app,
+		Permissions:    s.app,
 		Session:        s.app.ThreadMenuAppState().Session,
 		FormatMenuBody: s.app.MenuCardBody,
 	})
@@ -1103,7 +1103,7 @@ func (s *Service) completeClaudeSessionPermissionModeSet(action *feishu.CardActi
 		}
 	}
 	return s.app.PermissionDriver().CompleteConversationPermissionModeSet(sessionKey, threadID, rawMode, appbackend.ConversationPermissionModeUpdateDeps{
-		App:         s.app,
+		Permissions: s.app,
 		Session:     s.app.ThreadMenuAppState().Session,
 		SaveSession: s.app.ThreadMenuAppState().SaveSession,
 		NormalizeRequested: func(raw string) (string, string, error) {
@@ -1112,7 +1112,7 @@ func (s *Service) completeClaudeSessionPermissionModeSet(action *feishu.CardActi
 		ApplyRuntime: applyRuntime,
 		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
 			return s.app.PermissionDriver().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
-				App:            s.app,
+				Permissions:    s.app,
 				Session:        s.app.ThreadMenuAppState().Session,
 				FormatMenuBody: s.app.MenuCardBody,
 			})
