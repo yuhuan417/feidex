@@ -27,13 +27,14 @@ import (
 
 // ServerRequestService returns the serverrequest.Service for this app.
 func (a *App) ServerRequestService() *serverrequest.Service {
-	if a.composition != nil && a.composition.serverRequestSvc != nil {
-		return a.composition.serverRequestSvc
+	if a == nil {
+		return nil
 	}
-	if a.composition == nil {
-		a.composition = &appComposition{}
+	ensureCompositionState(a)
+	if value, ok := registryFor(a).Get("serverRequestSvc").(*serverrequest.Service); ok {
+		return value
 	}
-	a.composition.serverRequestSvc = &serverrequest.Service{
+	service := &serverrequest.Service{
 		// State access
 		PendingRequests: func() []*state.PendingRequest { return a.State().PendingRequests() },
 		Pending:         func(id string) *state.PendingRequest { return a.State().Pending(id) },
@@ -121,7 +122,8 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		BackendCodex:  domainbackend.BackendCodex,
 		BackendClaude: domainbackend.BackendClaude,
 	}
-	return a.composition.serverRequestSvc
+	registryFor(a).Set("serverRequestSvc", service)
+	return service
 }
 
 // completePendingFormCancelDispatch routes pending_form.cancel to either

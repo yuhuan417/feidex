@@ -18,19 +18,9 @@ type backendConfigurationService struct {
 }
 
 func newBackendConfigurationService(app *App) backendConfigurationService {
-	if app == nil {
-		return buildBackendConfigurationService(nil)
-	}
-	if app.composition == nil {
-		app.composition = &appComposition{}
-	}
-	app.composition.mu.Lock()
-	defer app.composition.mu.Unlock()
-	if app.composition.backendConfig == nil {
-		service := buildBackendConfigurationService(app)
-		app.composition.backendConfig = &service
-	}
-	return *app.composition.backendConfig
+	return compositionService(app, "backendConfig", func() backendConfigurationService {
+		return buildBackendConfigurationService(app)
+	})
 }
 
 func buildBackendConfigurationService(app *App) backendConfigurationService {

@@ -10,20 +10,9 @@ import (
 )
 
 func newBackendActionService(app *App) appbackend.ActionService {
-	if app != nil {
-		if app.composition == nil {
-			app.composition = &appComposition{}
-		}
-		app.composition.mu.Lock()
-		defer app.composition.mu.Unlock()
-		if app.composition != nil && app.composition.backendActions != nil {
-			return *app.composition.backendActions
-		}
-		service := buildBackendActionService(app)
-		app.composition.backendActions = &service
-		return service
-	}
-	return buildBackendActionService(nil)
+	return compositionService(app, "backendActions", func() appbackend.ActionService {
+		return buildBackendActionService(app)
+	})
 }
 
 func buildBackendActionService(app *App) appbackend.ActionService {

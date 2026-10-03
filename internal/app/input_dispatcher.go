@@ -126,8 +126,10 @@ func newEffectRunner(a *App) frontendruntime.EffectRunner {
 		return frontendruntime.EffectRunner{}
 	}
 	transport := a.feishu
-	if a.composition != nil && a.composition.feishuTransport != nil {
-		transport = a.composition.feishuTransport
+	if registryFor(a) != nil && registryFor(a).FeishuTransport != nil {
+		if configured, ok := registryFor(a).FeishuTransport.(FeishuClient); ok {
+			transport = configured
+		}
 	}
 	runner := feishuoutbound.NewEffectRunner(transport)
 	if owner := ensureRuntimeOwner(a); owner != nil {

@@ -78,9 +78,19 @@ func getCodex(a *App) CodexClient {
 		return nil
 	}
 	owner := ensureRuntimeOwner(a)
-	a.composition.clientsMu.RLock()
-	legacy := a.composition.codex
-	a.composition.clientsMu.RUnlock()
+	registryFor(a).ClientsMu.RLock()
+	legacy, _ := registryFor(a).Codex.(CodexClient)
+	registryFor(a).ClientsMu.RUnlock()
+	if legacy == nil && a.composition != nil {
+		a.composition.clientsMu.RLock()
+		legacy = a.composition.codex
+		a.composition.clientsMu.RUnlock()
+		if legacy != nil {
+			registryFor(a).ClientsMu.Lock()
+			registryFor(a).Codex = legacy
+			registryFor(a).ClientsMu.Unlock()
+		}
+	}
 	if current := owner.CodexClient(); current != nil {
 		return current
 	}
@@ -92,9 +102,14 @@ func setCodex(a *App, c CodexClient) {
 		return
 	}
 	ensureCompositionState(a)
-	a.composition.clientsMu.Lock()
-	a.composition.codex = c
-	a.composition.clientsMu.Unlock()
+	registryFor(a).ClientsMu.Lock()
+	registryFor(a).Codex = c
+	registryFor(a).ClientsMu.Unlock()
+	if a.composition != nil {
+		a.composition.clientsMu.Lock()
+		a.composition.codex = c
+		a.composition.clientsMu.Unlock()
+	}
 	ensureRuntimeOwner(a).SetCodexClient(c)
 }
 

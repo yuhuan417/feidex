@@ -44,22 +44,25 @@ import (
 )
 
 type App struct {
-	cfg                    *config.Config
-	cfgPath                string
-	store                  *state.Store
-	frontendID             string
-	frontendConfigIndex    int
-	configMu               sync.RWMutex
-	sharedConfigMu         *sync.RWMutex
-	backend                string
-	backendDriver          backend.Driver
-	feishu                 FeishuClient
-	started                time.Time
-	frontendRuntime        frontendruntime.FrontendRuntime
-	runtimeOwner           *frontendruntime.FrontendOwner
-	stateMu                sync.Mutex
-	stateView              *appstate.Store
+	cfg                 *config.Config
+	cfgPath             string
+	store               *state.Store
+	frontendID          string
+	frontendConfigIndex int
+	configMu            sync.RWMutex
+	sharedConfigMu      *sync.RWMutex
+	backend             string
+	backendDriver       backend.Driver
+	feishu              FeishuClient
+	started             time.Time
+	frontendRuntime     frontendruntime.FrontendRuntime
+	runtimeOwner        *frontendruntime.FrontendOwner
+	stateMu             sync.Mutex
+	stateView           *appstate.Store
+	// composition is retained only for hand-built legacy test fixtures. The
+	// production path uses registry, which is constructed by composition.
 	composition            *appComposition
+	registry               *composition.Registry
 	deduper                *frontendruntime.InboundDeduper
 	asyncRunner            func(func())
 	waitAsync              func()
@@ -70,22 +73,15 @@ type App struct {
 	sessionActors          *frontendruntime.SessionActors // legacy mirror; runtimeOwner is authoritative
 }
 
-// appComposition owns lazily constructed application/backend services. Keeping
-// these bindings together prevents the frontend aggregate from becoming a
-// second service registry while preserving one cache per frontend runtime.
+// appComposition is a test-fixture compatibility shape. Production frontends
+// never instantiate it; all runtime construction and service caches use the
+// composition.Registry stored in App.registry.
 type appComposition struct {
-	mu          sync.Mutex
-	workspaceMu sync.Mutex
-	clientsMu   sync.RWMutex
-	// feishuTransport is used only by the effect runner; services get the proxy.
-	feishuTransport FeishuClient
-	// Runtime-owned state lives here so App remains the frontend entrypoint
-	// rather than a registry of mutable service state.
-	codex    CodexClient
-	claude   ClaudeCore
-	trackers *appTrackers
-	// The following runtime fields remain as compatibility mirrors for tests
-	// and transitional callers. Production code reads the FrontendOwner.
+	clientsMu        sync.RWMutex
+	feishuTransport  FeishuClient
+	codex            CodexClient
+	claude           ClaudeCore
+	trackers         *appTrackers
 	liveThreads      *frontendruntime.LiveThreads
 	autoRetries      *appautoretry.Tracker
 	codexRecovery    *appcodexruntime.RecoveryState
@@ -97,10 +93,8 @@ type appComposition struct {
 	workspaceManage  *appworkspacecmd.ManagementService
 	workspaceRender  *workspacecards.Presentation
 	serverRequestSvc *serverrequest.Service
-	dispatcher       *application.Dispatcher
-	effectRunner     *frontendruntime.EffectRunner
 	mcp              *feidexMCPService
-	switchState      backend.RuntimeStateService
+	switchState      *backend.RuntimeStateService
 }
 
 func (a *App) configMutex() *sync.RWMutex {
@@ -148,17 +142,17 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		frontendConfigIndex: frontend.ConfigIndex,
 		backend:             backend,
 		backendDriver:       backendDriverForKind(backend),
-		composition:         &appComposition{feishuTransport: feishuTransport},
-		feishu:              feishuTransport,
-		started:             time.Now(),
-		deduper:             frontendruntime.NewInboundDeduper(),
-		runtimeOwner:        owner,
-		sessionActors:       owner.SessionActors,
+		registry:            composition.NewRegistry(feishuTransport),
+		// Keep a narrow compatibility mirror for package-local legacy tests. All
+		// production reads and writes go through registry/runtimeOwner.
+		composition:   &appComposition{feishuTransport: feishuTransport},
+		feishu:        feishuTransport,
+		started:       time.Now(),
+		deduper:       frontendruntime.NewInboundDeduper(),
+		runtimeOwner:  owner,
+		sessionActors: owner.SessionActors,
 	}
-	app.composition.liveThreads = owner.LiveThreads
-	app.composition.autoRetries = owner.AutoRetries
-	app.composition.codexRecovery = owner.CodexRecovery
-	app.composition.trackers = &appTrackers{
+	app.registry.Set("trackers", &appTrackers{
 		turnStreams:        newTurnStreamTracker(),
 		turnItems:          turnitem.NewTracker(),
 		workspaceCloneOps:  newWorkspaceCloneTracker(),
@@ -167,10 +161,9 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		pendingSkills:      skillruntime.NewTracker(),
 		groupAnnouncements: newGroupAnnouncementTracker(),
 		submissionStarts:   owner.SubmissionStarts,
-	}
+	})
 	effectRunner := newEffectRunner(app)
 	owner.EffectRunner = &effectRunner
-	app.composition.effectRunner = &effectRunner
 	if notifying, ok := app.feishu.(*appfeishuwrap.NotifyingFeishuClient); ok {
 		app.feishu = &appfeishuwrap.EffectClient{NotifyingFeishuClient: notifying, Frontend: identity.FrontendID(app.frontendID), Runner: effectRunner}
 	}
@@ -179,10 +172,9 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 	// Workspace presentation is a composition concern. Build it once after the
 	// scoped state repository exists; its query reads detached snapshots and
 	// follows runtime backend changes through the injected capability.
-	app.composition.workspaceRender = buildWorkspaceRenderService(app)
+	app.registry.Set("workspaceRender", buildWorkspaceRenderService(app))
 	dispatcher := newInputDispatcher(app)
 	owner.Dispatcher = &dispatcher
-	app.composition.dispatcher = &dispatcher
 	if err := canonicalizeStoredSessionKeys(app); err != nil {
 		return nil, err
 	}

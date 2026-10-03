@@ -9,17 +9,9 @@ import (
 )
 
 func newWorkspaceRenderService(a *App) *workspacecards.Presentation {
-	if a != nil && a.composition != nil {
-		a.composition.workspaceMu.Lock()
-		defer a.composition.workspaceMu.Unlock()
-		if a.composition.workspaceRender != nil {
-			return a.composition.workspaceRender
-		}
-		service := buildWorkspaceRenderService(a)
-		a.composition.workspaceRender = service
-		return service
-	}
-	return buildWorkspaceRenderService(a)
+	return compositionService(a, "workspaceRender", func() *workspacecards.Presentation {
+		return buildWorkspaceRenderService(a)
+	})
 }
 
 func buildWorkspaceRenderService(a *App) *workspacecards.Presentation {

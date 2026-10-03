@@ -22,20 +22,9 @@ type backendSelectionService struct {
 }
 
 func newBackendSelectionService(app *App) backendSelectionService {
-	if app != nil {
-		if app.composition == nil {
-			app.composition = &appComposition{}
-		}
-		app.composition.mu.Lock()
-		defer app.composition.mu.Unlock()
-		if app.composition != nil && app.composition.backendSelection != nil {
-			return *app.composition.backendSelection
-		}
-		service := buildBackendSelectionService(app)
-		app.composition.backendSelection = &service
-		return service
-	}
-	return buildBackendSelectionService(nil)
+	return compositionService(app, "backendSelection", func() backendSelectionService {
+		return buildBackendSelectionService(app)
+	})
 }
 
 func buildBackendSelectionService(app *App) backendSelectionService {
@@ -46,7 +35,7 @@ func buildBackendSelectionService(app *App) backendSelectionService {
 	s := backendSelectionService{app: app}
 	s.inner = backend.NewSelectionService(backend.SelectionDeps{
 		Source: app,
-		Switch: &app.composition.switchState,
+		Switch: runtimeSwitchState(app),
 		Runtime: backend.SelectionRuntimeDeps{
 			ListAvailableBackends: func() []backend.AvailableBackend {
 				return availableBackendsForApp(app)

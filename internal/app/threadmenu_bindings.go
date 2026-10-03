@@ -49,18 +49,12 @@ func (o threadMenuOutbound) ReplyCard(ctx context.Context, messageID string, car
 }
 
 func threadMenuService(a *App) *appthreadmenu.Service {
-	if a == nil {
-		return appthreadmenu.NewService(appthreadmenu.Dependencies{})
-	}
-	if a.composition == nil {
-		a.composition = &appComposition{}
-	}
-	a.composition.mu.Lock()
-	defer a.composition.mu.Unlock()
-	if a.composition.threadMenu == nil {
-		a.composition.threadMenu = appthreadmenu.NewService(newThreadMenuDependencies(a))
-	}
-	return a.composition.threadMenu
+	return compositionService(a, "threadMenu", func() *appthreadmenu.Service {
+		if a == nil {
+			return appthreadmenu.NewService(appthreadmenu.Dependencies{})
+		}
+		return appthreadmenu.NewService(newThreadMenuDependencies(a))
+	})
 }
 
 // ---------------------------------------------------------------------------

@@ -35,12 +35,12 @@ func (c skillsCatalog) ListSkills(ctx context.Context, cwd string, reload bool) 
 
 func newSkillUseCase(a *App) *skillapp.Service {
 	trackers := a.Trackers()
-	a.composition.mu.Lock()
+	registryFor(a).Mu.Lock()
 	if trackers.pendingSkills == nil {
 		trackers.pendingSkills = skillruntime.NewTracker()
 	}
 	pending := trackers.pendingSkills
-	a.composition.mu.Unlock()
+	registryFor(a).Mu.Unlock()
 	return composition.NewSkillService(composition.SkillDependencies{
 		Frontend: identity.FrontendID(a.FrontendID()),
 		Context:  a.Context, Config: a.cfg, Mutex: a.ConfigMu(),

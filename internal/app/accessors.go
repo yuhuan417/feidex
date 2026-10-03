@@ -137,9 +137,20 @@ func currentClaudeCore(a *App) ClaudeCore {
 		return nil
 	}
 	owner := ensureRuntimeOwner(a)
-	a.composition.clientsMu.RLock()
-	legacy := a.composition.claude
-	a.composition.clientsMu.RUnlock()
+	registry := registryFor(a)
+	registry.ClientsMu.RLock()
+	legacy, _ := registry.Claude.(ClaudeCore)
+	registry.ClientsMu.RUnlock()
+	if legacy == nil && a.composition != nil {
+		a.composition.clientsMu.RLock()
+		legacy = a.composition.claude
+		a.composition.clientsMu.RUnlock()
+		if legacy != nil {
+			registry.ClientsMu.Lock()
+			registry.Claude = legacy
+			registry.ClientsMu.Unlock()
+		}
+	}
 	if current := owner.ClaudeCore(); current != nil {
 		return current
 	}
@@ -151,8 +162,69 @@ func ensureCompositionState(a *App) {
 		return
 	}
 	if a.composition == nil {
-		a.composition = &appComposition{}
+		// Hand-built tests from the transitional app package still populate this
+		// compatibility fixture directly. Production ownership remains in the
+		// registry/runtime owner initialized by NewFrontend.
+		a.composition = &appComposition{feishuTransport: a.feishu}
 	}
+	registryFor(a)
+}
+
+// registryFor returns the production composition registry. Legacy fixtures
+// may still provide appComposition; their values are imported once so the
+// production access path remains the same for tests and real frontends.
+func registryFor(a *App) *composition.Registry {
+	if a == nil {
+		return nil
+	}
+	if a.registry != nil {
+		return a.registry
+	}
+	r := composition.NewRegistry(a.feishu)
+	if legacy := a.composition; legacy != nil {
+		legacy.clientsMu.RLock()
+		r.Codex = legacy.codex
+		r.Claude = legacy.claude
+		legacy.clientsMu.RUnlock()
+		if legacy.feishuTransport != nil {
+			r.FeishuTransport = legacy.feishuTransport
+		}
+		if legacy.threadMenu != nil {
+			r.Set("threadMenu", legacy.threadMenu)
+		}
+		if legacy.backendConfig != nil {
+			r.Set("backendConfig", *legacy.backendConfig)
+		}
+		if legacy.backendSelection != nil {
+			r.Set("backendSelection", *legacy.backendSelection)
+		}
+		if legacy.backendActions != nil {
+			r.Set("backendActions", *legacy.backendActions)
+		}
+		if legacy.workspaceConfig != nil {
+			r.Set("workspaceConfig", legacy.workspaceConfig)
+		}
+		if legacy.workspaceManage != nil {
+			r.Set("workspaceManage", legacy.workspaceManage)
+		}
+		if legacy.workspaceRender != nil {
+			r.Set("workspaceRender", legacy.workspaceRender)
+		}
+		if legacy.serverRequestSvc != nil {
+			r.Set("serverRequestSvc", legacy.serverRequestSvc)
+		}
+		if legacy.mcp != nil {
+			r.Set("mcp", legacy.mcp)
+		}
+		if legacy.trackers != nil {
+			r.Set("trackers", legacy.trackers)
+		}
+		if legacy.switchState != nil {
+			r.Set("switchState", legacy.switchState)
+		}
+	}
+	a.registry = r
+	return r
 }
 
 // ensureRuntimeOwner binds hand-built legacy fixtures to the frontend-scoped
@@ -164,41 +236,56 @@ func ensureRuntimeOwner(a *App) *frontendruntime.FrontendOwner {
 	}
 	a.runtimeOwnerMu.Lock()
 	defer a.runtimeOwnerMu.Unlock()
-	ensureCompositionState(a)
+	registry := registryFor(a)
 	if a.runtimeOwner != nil {
+		// Legacy test fixtures can still mutate the compatibility fields after
+		// the owner has been initialized. Import those values on demand while
+		// keeping the owner authoritative for production code.
+		if legacy := a.composition; legacy != nil {
+			if legacy.autoRetries != nil {
+				a.runtimeOwner.AutoRetries = legacy.autoRetries
+			}
+			if legacy.liveThreads != nil {
+				a.runtimeOwner.LiveThreads = legacy.liveThreads
+			}
+			if legacy.codexRecovery != nil {
+				a.runtimeOwner.CodexRecovery = legacy.codexRecovery
+			}
+		}
 		return a.runtimeOwner
 	}
 	a.runtimeOwner = composition.NewFrontendOwner()
 	if a.sessionActors != nil {
 		a.runtimeOwner.SessionActors = a.sessionActors
 	}
-	if a.composition.liveThreads != nil {
-		a.runtimeOwner.LiveThreads = a.composition.liveThreads
+	if legacy := a.composition; legacy != nil {
+		if legacy.liveThreads != nil {
+			a.runtimeOwner.LiveThreads = legacy.liveThreads
+		}
+		if legacy.autoRetries != nil {
+			a.runtimeOwner.AutoRetries = legacy.autoRetries
+		}
+		if legacy.codexRecovery != nil {
+			a.runtimeOwner.CodexRecovery = legacy.codexRecovery
+		}
+		if legacy.switchState != nil {
+			registry.Set("switchState", legacy.switchState)
+		}
 	}
-	if a.composition.autoRetries != nil {
-		a.runtimeOwner.AutoRetries = a.composition.autoRetries
-	}
-	if a.composition.codexRecovery != nil {
-		a.runtimeOwner.CodexRecovery = a.composition.codexRecovery
-	}
-	if a.composition.trackers != nil && a.composition.trackers.submissionStarts != nil {
-		a.runtimeOwner.SubmissionStarts = a.composition.trackers.submissionStarts
-	}
-	a.composition.clientsMu.RLock()
-	legacyCodex, legacyClaude := a.composition.codex, a.composition.claude
-	a.composition.clientsMu.RUnlock()
-	if legacyCodex != nil {
+	registry.ClientsMu.RLock()
+	legacyCodex, _ := registry.Codex.(CodexClient)
+	legacyClaude, _ := registry.Claude.(ClaudeCore)
+	registry.ClientsMu.RUnlock()
+	if legacyCodex != nil && a.runtimeOwner.CodexClient() == nil {
 		a.runtimeOwner.SetCodexClient(legacyCodex)
 	}
-	if legacyClaude != nil {
+	if legacyClaude != nil && a.runtimeOwner.ClaudeCore() == nil {
 		a.runtimeOwner.SetClaudeCore(legacyClaude)
 	}
 	a.sessionActors = a.runtimeOwner.SessionActors
-	a.composition.liveThreads = a.runtimeOwner.LiveThreads
-	a.composition.autoRetries = a.runtimeOwner.AutoRetries
-	a.composition.codexRecovery = a.runtimeOwner.CodexRecovery
-	if a.composition.trackers != nil {
-		a.composition.trackers.submissionStarts = a.runtimeOwner.SubmissionStarts
+	trackers := runtimeTrackers(a)
+	if trackers != nil {
+		trackers.submissionStarts = a.runtimeOwner.SubmissionStarts
 	}
 	return a.runtimeOwner
 }
@@ -207,10 +294,15 @@ func setCompositionClaude(a *App, core ClaudeCore) {
 	if a == nil {
 		return
 	}
-	ensureCompositionState(a)
-	a.composition.clientsMu.Lock()
-	a.composition.claude = core
-	a.composition.clientsMu.Unlock()
+	registry := registryFor(a)
+	registry.ClientsMu.Lock()
+	registry.Claude = core
+	registry.ClientsMu.Unlock()
+	if a.composition != nil {
+		a.composition.clientsMu.Lock()
+		a.composition.claude = core
+		a.composition.clientsMu.Unlock()
+	}
 	ensureRuntimeOwner(a).SetClaudeCore(core)
 }
 
@@ -219,11 +311,34 @@ func (a *App) Trackers() *appTrackers {
 	if a == nil {
 		return nil
 	}
-	ensureCompositionState(a)
-	if a.composition.trackers == nil {
-		a.composition.trackers = &appTrackers{}
+	registryFor(a)
+	trackers, _ := registryFor(a).Get("trackers").(*appTrackers)
+	if trackers == nil {
+		trackers = &appTrackers{}
+		registryFor(a).Set("trackers", trackers)
 	}
-	return a.composition.trackers
+	return trackers
+}
+
+func runtimeTrackers(a *App) *appTrackers {
+	if a == nil {
+		return nil
+	}
+	trackers, _ := registryFor(a).Get("trackers").(*appTrackers)
+	return trackers
+}
+
+func runtimeSwitchState(a *App) *appbackend.RuntimeStateService {
+	if a == nil {
+		return nil
+	}
+	ensureCompositionState(a)
+	state, _ := registryFor(a).Get("switchState").(*appbackend.RuntimeStateService)
+	if state == nil {
+		state = &appbackend.RuntimeStateService{}
+		registryFor(a).Set("switchState", state)
+	}
+	return state
 }
 
 func submissionStartTracker(a *App) *frontendruntime.SubmissionStarts {
@@ -252,26 +367,38 @@ func (a *App) invalidateThreadMenuService() {
 	if a == nil {
 		return
 	}
-	if a.composition != nil {
-		a.composition.mu.Lock()
-		a.composition.threadMenu = nil
-		a.composition.mu.Unlock()
-	}
+	clearCompositionService(a, "threadMenu")
 }
 
 func (a *App) invalidateBackendConfigurationService() {
 	if a == nil {
 		return
 	}
-	if a.composition != nil {
-		a.composition.mu.Lock()
-		a.composition.backendConfig = nil
-		a.composition.mu.Unlock()
-		a.composition.workspaceMu.Lock()
-		a.composition.workspaceConfig = nil
-		a.composition.workspaceManage = nil
-		a.composition.workspaceMu.Unlock()
+	clearCompositionService(a, "backendConfig")
+	clearCompositionService(a, "workspaceConfig")
+	clearCompositionService(a, "workspaceManage")
+}
+
+func compositionService[T any](a *App, key string, build func() T) T {
+	var zero T
+	if a == nil {
+		return zero
 	}
+	ensureCompositionState(a)
+	registry := registryFor(a)
+	if value, ok := registry.Get(key).(T); ok {
+		return value
+	}
+	value := build()
+	registry.Set(key, value)
+	return value
+}
+
+func clearCompositionService(a *App, key string) {
+	if a == nil || registryFor(a) == nil {
+		return
+	}
+	registryFor(a).Delete(key)
 }
 
 // ConfigMu returns the config read-write mutex.

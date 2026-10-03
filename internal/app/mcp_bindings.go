@@ -20,7 +20,8 @@ func startMCPService(a *App, ctx context.Context) error {
 	if a == nil {
 		return nil
 	}
-	if a.composition != nil && a.composition.mcp != nil {
+	ensureCompositionState(a)
+	if _, ok := registryFor(a).Get("mcp").(*feidexMCPService); ok {
 		return nil
 	}
 	svc, err := newFeidexMCPService(a)
@@ -30,18 +31,20 @@ func startMCPService(a *App, ctx context.Context) error {
 	if err := svc.Start(ctx); err != nil {
 		return err
 	}
-	ensureCompositionState(a)
-	a.composition.mcp = svc
+	registryFor(a).Set("mcp", svc)
 	publishMCPToCodexClient(a, currentCodexClient(a))
 	return nil
 }
 
 func stopMCPService(a *App, ctx context.Context) error {
-	if a == nil || a.composition == nil || a.composition.mcp == nil {
+	if a == nil || registryFor(a) == nil {
 		return nil
 	}
-	svc := a.composition.mcp
-	a.composition.mcp = nil
+	svc, ok := registryFor(a).Get("mcp").(*feidexMCPService)
+	if !ok || svc == nil {
+		return nil
+	}
+	registryFor(a).Delete("mcp")
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -49,10 +52,14 @@ func stopMCPService(a *App, ctx context.Context) error {
 }
 
 func currentMCPPublication(a *App) mcpbridge.Publication {
-	if a == nil || a.composition == nil || a.composition.mcp == nil {
+	if a == nil || registryFor(a) == nil {
 		return mcpbridge.Publication{}
 	}
-	return a.composition.mcp.Publication()
+	svc, ok := registryFor(a).Get("mcp").(*feidexMCPService)
+	if !ok || svc == nil {
+		return mcpbridge.Publication{}
+	}
+	return svc.Publication()
 }
 
 func newFeidexMCPService(a *App) (*feidexMCPService, error) {

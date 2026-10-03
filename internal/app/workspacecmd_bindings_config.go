@@ -64,17 +64,9 @@ func workspaceCommandApp(a *App) appworkspacecmd.Dependencies {
 }
 
 func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
-	if a != nil && a.composition != nil {
-		a.composition.workspaceMu.Lock()
-		defer a.composition.workspaceMu.Unlock()
-		if a.composition.workspaceConfig != nil {
-			return a.composition.workspaceConfig
-		}
-		service := buildWorkspaceConfigService(a)
-		a.composition.workspaceConfig = service
-		return service
-	}
-	return buildWorkspaceConfigService(a)
+	return compositionService(a, "workspaceConfig", func() *appworkspacecmd.ConfigService {
+		return buildWorkspaceConfigService(a)
+	})
 }
 
 func buildWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
