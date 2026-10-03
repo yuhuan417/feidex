@@ -171,8 +171,14 @@ func TestMigratedCommandPackagesDoNotImportFeishuTransport(t *testing.T) {
 			if readErr != nil {
 				return readErr
 			}
-			if strings.Contains(string(data), "internal/adapter/feishu/transport") {
+			source := string(data)
+			if strings.Contains(source, "internal/adapter/feishu/transport") {
 				t.Errorf("%s imports the Feishu transport directly", path)
+			}
+			for _, pattern := range []string{".Feishu().Reply", ".Feishu().Send", ".Feishu().Patch", ".FeishuClient().Reply", ".FeishuClient().Send", ".FeishuClient().Patch"} {
+				if strings.Contains(source, pattern) {
+					t.Errorf("%s calls transport outbound method %s directly", path, pattern)
+				}
 			}
 			return nil
 		})

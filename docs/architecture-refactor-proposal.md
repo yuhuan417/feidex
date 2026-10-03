@@ -548,7 +548,7 @@ Codex server request
 - `internal/app` 仍直接编排群绑定、workspace 管理、模型/Profile 命令、thread menu、debug 和部分 runtime；这些服务虽然大多已经有 Dependencies 结构，但仍由 app 负责组装和触发，尚未全部成为独立 application use case。
 - Feishu outbound 已有 EffectClient；goal、skills、review、plan mode、upgrade、debug、thread menu、backend selection、群绑定/后端 action 和 maintenance 的主要回复与 patch 路径已通过 consumer-owned outbound capability 进入 effect runner，workspace、model/profile 的 renderer 与部分 maintenance artifact 查询仍保留旧端口调用，尚未统一改成 application 返回 semantic effects。
 - workspace command 的发送、补丁和状态卡渲染已拆为 outbound、renderer、BotName capability；turn item card 的复用补丁与回复也已统一走 effect helper。
-- architecture tests now guard the migrated command packages against reintroducing direct Feishu transport imports; maintenance patch helpers also consume a semantic outbound port.
+- architecture tests now guard the migrated command packages against reintroducing direct Feishu transport imports or direct transport outbound calls; maintenance patch helpers also consume a semantic outbound port.
 - history command and Claude history rendering now receive outbound and card-renderer capabilities; history orchestration no longer stores a Feishu transport client.
 - auto-retry and service-tier adapters now use semantic outbound ports; their app composition bindings route replies, sends, and patches through effect helpers.
 - MCP local file/image/video tools now depend on an explicit attachment sender capability instead of a broad Feishu client interface.
