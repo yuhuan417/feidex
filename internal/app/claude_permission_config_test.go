@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
@@ -11,8 +12,8 @@ import (
 
 func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
-	a.backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	a.backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
@@ -53,8 +54,8 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 
 func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
-	a.backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	a.backend = domainbackend.BackendClaude
 	a.cfg.Claude.DangerouslySkipPermissions = true
 
 	sessionKey := "feishu:chat:chat"
@@ -90,8 +91,8 @@ func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *t
 
 func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPermissionsDisabled(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
-	a.backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	a.backend = domainbackend.BackendClaude
 	a.cfg.Claude.DangerouslySkipPermissions = false
 	setCodex(a, nil)
 
@@ -129,8 +130,8 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 
 func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
-	a.backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	a.backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)

@@ -3,6 +3,7 @@ package app
 import (
 	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/upgraderender"
+	domainbackend "feidex/internal/domain/backend"
 	appruntime "feidex/internal/runtime"
 	"feidex/internal/textutil"
 
@@ -30,7 +31,7 @@ func newCodexUpgradeService(a *App) appcodexruntime.UpgradeService {
 			return a.cfg.Codex.ExperimentalAPI
 		},
 		IsBackendActive: func() bool {
-			if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
+			if runtime := backendRuntimeForKind(domainbackend.BackendCodex); runtime != nil {
 				return runtime.isActive(backendRuntimeContextForApp(a))
 			}
 			return false

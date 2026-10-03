@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 
@@ -989,8 +990,8 @@ func TestGroupThreadMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *test
 func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.frontendID = "bot-a"
-	a.cfg.Feishu.Backend = backendClaude
-	a.backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	a.backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, &fakeClaudeCore{})
 	configDir := t.TempDir()
@@ -1152,7 +1153,7 @@ func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("bot-a", "group", "chat-help"), FrontendID: "bot-a", ChatType: "group", ChatID: "chat-help", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	groupHelp := renderHelpBodyForSession(a, backendCodex, groupKey)
+	groupHelp := renderHelpBodyForSession(a, domainbackend.BackendCodex, groupKey)
 	for _, banned := range []string{"/" + "bind", "binding", "Binding", "component", "/workspace delete", "/model plan"} {
 		if strings.Contains(groupHelp, banned) {
 			t.Fatalf("group help should hide %q, got %q", banned, groupHelp)
@@ -1164,7 +1165,7 @@ func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 		}
 	}
 
-	p2pHelp := renderHelpBodyForSession(a, backendCodex, "feishu:frontend:bot-a:chat:p2p-help")
+	p2pHelp := renderHelpBodyForSession(a, domainbackend.BackendCodex, "feishu:frontend:bot-a:chat:p2p-help")
 	for _, want := range []string{"直接设置 Bot 默认 model。", "/workspace delete ID", "/model plan"} {
 		if !strings.Contains(p2pHelp, want) {
 			t.Fatalf("p2p help changed unexpectedly: %q, want %q", p2pHelp, want)
@@ -1243,9 +1244,9 @@ func findWorkspaceForTest(a *App, id string) *config.Workspace {
 
 func TestGroupModelSetSavesClaudeModelForNextTurn(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
+	a.backend = domainbackend.BackendClaude
 	a.frontendID = "claude-test"
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	claude := &fakeClaudeCore{setModelApplied: true}
 	setCompositionClaude(a, claude)

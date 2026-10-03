@@ -62,14 +62,14 @@ func localCommandSpecsRegistry() []localCommandSpec {
 	return append([]localCommandSpec(nil), cachedLocalCommandSpecs...)
 }
 
-func menuNodeRenderersRegistry() map[string]menuNodeRenderer {
+func menuNodeRenderers() map[string]menuNodeRenderer {
 	menuNodeRenderersOnce.Do(func() {
 		cachedMenuNodeRenderers = buildMenuNodeRenderers()
 	})
 	return cachedMenuNodeRenderers
 }
 
-func menuCardActionHandlersRegistry() map[string]cardActionHandler {
+func menuCardActionHandlers() map[string]cardActionHandler {
 	menuCardActionHandlersOnce.Do(func() {
 		cachedMenuCardActionHandlers = buildMenuCardActionHandlers()
 	})
@@ -148,3 +148,5 @@ func buildMenuCardActionHandlers() map[string]cardActionHandler {
 	}
 	return handlers
 }
+
+type menuNodeRenderer func(a *App, sessionKey string) (map[string]any, bool)

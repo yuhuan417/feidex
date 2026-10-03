@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appautoretry "feidex/internal/runtime/autoretry"
@@ -512,7 +513,7 @@ func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testi
 func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.asyncRunner = func(fn func()) { fn() }
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.composition.claude = &fakeClaudeCore{
 		ensureSessionSet: true,
 		ensureSessionID:  "claude-session-1",

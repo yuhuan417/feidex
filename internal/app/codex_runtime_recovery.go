@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	codexadapter "feidex/internal/adapter/backend/codex"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
@@ -44,7 +45,7 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 			return a.frontendID
 		},
 		IsBackendActive: func() bool {
-			if runtime := backendRuntimeForKind(backendCodex); runtime != nil {
+			if runtime := backendRuntimeForKind(domainbackend.BackendCodex); runtime != nil {
 				return runtime.isActive(backendRuntimeContextForApp(a))
 			}
 			return false

@@ -2,6 +2,7 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
+	domainbackend "feidex/internal/domain/backend"
 	catalog "feidex/internal/domain/modelconfig"
 	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
@@ -31,16 +32,16 @@ func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *s
 		"backend: `" + textutil.FirstNonEmpty(backend, "unset") + "`",
 		"当前群内模型: " + renderOptionalBacktick(bindingModelOverride(binding)),
 	}
-	if backend == backendCodex || backend == backendClaude {
+	if backend == domainbackend.BackendCodex || backend == domainbackend.BackendClaude {
 		lines = append(lines, "当前群内推理强度: "+renderOptionalBacktick(bindingReasoningEffortOverride(binding)))
 	}
-	if backend == backendCodex {
+	if backend == domainbackend.BackendCodex {
 		lines = append(lines, "当前群内响应速度: "+renderOptionalBacktick(bindingServiceTierOverride(binding)))
 	}
 	buttons := []feishu.Button{
 		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
 	}
-	if backend == backendCodex {
+	if backend == domainbackend.BackendCodex {
 		buttons = append(buttons, feishu.Button{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}})
 	}
 	buttons = append(buttons, feishu.Button{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}})
@@ -52,7 +53,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 		binding = bindingForSessionKey(s.app, sessionKey)
 	}
 	switch configuredBackend(s.app) {
-	case backendCodex:
+	case domainbackend.BackendCodex:
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		result, err := newModelConfigService(s.app).fetchModelList(ctx)
@@ -60,7 +61,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 			return nil, err
 		}
 		return s.renderBindingCodexModelConfigCard(sessionKey, binding, result), nil
-	case backendClaude:
+	case domainbackend.BackendClaude:
 		return s.renderBindingClaudeModelConfigCard(sessionKey, binding), nil
 	default:
 		body := strings.Join([]string{
@@ -127,7 +128,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
 	sess := s.app.State().Session(sessionKey)
-	settings := newModelSnapshotService(s.app).Desired(backendCodex, sess)
+	settings := newModelSnapshotService(s.app).Desired(domainbackend.BackendCodex, sess)
 	planModelDisplay := renderAuxModelSummary(binding.PlanModelOverride, settings.PlanModel, modelName)
 	reviewModelDisplay := renderAuxModelSummary(binding.ReviewModelOverride, settings.ReviewModel, modelName)
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, modelName)
@@ -252,7 +253,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
 	sess := s.app.State().Session(sessionKey)
-	settings := newModelSnapshotService(s.app).Desired(backendClaude, sess)
+	settings := newModelSnapshotService(s.app).Desired(domainbackend.BackendClaude, sess)
 	smallModelDisplay := renderAuxModelSummary(binding.SmallModelOverride, settings.SmallModel, "Claude 内置 haiku")
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, currentModel)
 
@@ -336,7 +337,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model_auxiliary", "当前群内覆盖。未设置时跟随 Bot 默认；可随时保存，待对应会话边界生效。")})
 	switch configuredBackend(s.app) {
-	case backendClaude:
+	case domainbackend.BackendClaude:
 		small, subagent := "", ""
 		if binding != nil {
 			small, subagent = binding.SmallModelOverride, binding.SubagentModelOverride

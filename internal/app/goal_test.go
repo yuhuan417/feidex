@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	goalcmd "feidex/internal/adapter/feishu/goalcmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
@@ -306,7 +307,7 @@ func TestCommandGoalControlsValidateAndCallExpectedMethods(t *testing.T) {
 	}
 
 	calls = nil
-	err := handleCommand(a, msg, "/goal "+strings.Repeat("x", goalMaxObjectiveRunes+1))
+	err := handleCommand(a, msg, "/goal "+strings.Repeat("x", goalcmd.MaxObjectiveRunes+1))
 	if err == nil || !strings.Contains(err.Error(), "too long") {
 		t.Fatalf("overlong /goal error = %v, want too long", err)
 	}
@@ -467,7 +468,7 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 	if foundSessionKey != sessionKey || sub == nil {
 		t.Fatalf("goal continuation binding = %q / %+v, want %q", foundSessionKey, sub, sessionKey)
 	}
-	if sub.Kind != goalSubmissionKind || sub.InputText != goalContinuationInputText || sub.TriggerMessageID != "goal-turn-root-1" || sub.Status != domainsubmission.SubmissionStatusRunning.String() {
+	if sub.Kind != goalcmd.SubmissionKind || sub.InputText != goalcmd.ContinuationInputText || sub.TriggerMessageID != "goal-turn-root-1" || sub.Status != domainsubmission.SubmissionStatusRunning.String() {
 		t.Fatalf("goal continuation submission = %+v", sub)
 	}
 	if len(sub.SourceRootMessageIDs) != 1 || sub.SourceRootMessageIDs[0] != "goal-turn-root-1" {

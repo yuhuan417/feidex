@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"feidex/internal/codexrpc"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
@@ -339,7 +340,7 @@ func TestClearCodexPlanModeForSessionStoresDefaultCollaborationMode(t *testing.T
 	if got := sess.ActiveThreadCollaborationMode.Model; got != "gpt-5.4" {
 		t.Fatalf("model after clear = %q, want gpt-5.4", got)
 	}
-	snapshot, ok := sess.BackendThreads[backendCodex]
+	snapshot, ok := sess.BackendThreads[domainbackend.BackendCodex]
 	if !ok || snapshot.CollaborationMode == nil || snapshot.CollaborationMode.Mode != "default" {
 		t.Fatalf("backend snapshot after clear = %+v", sess.BackendThreads)
 	}

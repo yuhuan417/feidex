@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ import (
 
 func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -57,7 +58,7 @@ func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 
 func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, &fakeClaudeCore{})
 
@@ -84,7 +85,7 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 
 func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, &fakeClaudeCore{})
 
@@ -141,7 +142,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 
 func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true, ensureSessionID: "session-resume-1"}
 	setCompositionClaude(a, claude)
@@ -186,7 +187,7 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 
 func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, &fakeClaudeCore{})
 	altCwd := t.TempDir()

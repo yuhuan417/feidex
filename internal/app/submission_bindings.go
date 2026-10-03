@@ -195,7 +195,7 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 		},
 		SendStartFailureNotice: func(ctx context.Context, sub *domainsubmission.Submission, err error, willContinue bool) {
 			// Delegates to the coordinator method.
-			newSubmissionCoordinator(a).notifySubmissionStartFailure(ctx, sub, err, willContinue)
+			newSubmissionQueueServiceFromApp(a).NotifySubmissionStartFailure(ctx, sub, err, willContinue)
 		},
 		RunAsync: func(fn func()) {
 			runAsync(a, fn)

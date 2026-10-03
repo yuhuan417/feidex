@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
@@ -12,7 +13,7 @@ import (
 
 type claudeRuntimeFacade struct{}
 
-func (claudeRuntimeFacade) kind() string { return backendClaude }
+func (claudeRuntimeFacade) kind() string { return domainbackend.BackendClaude }
 
 func (claudeRuntimeFacade) displayName() string { return "Claude" }
 
@@ -24,7 +25,7 @@ func (claudeRuntimeFacade) configuredCommand(ctx backendRuntimeContext) string {
 }
 
 func (claudeRuntimeFacade) isActive(ctx backendRuntimeContext) bool {
-	return ctx.backend == backendClaude
+	return ctx.backend == domainbackend.BackendClaude
 }
 
 func (claudeRuntimeFacade) runtimeReady(ctx backendRuntimeContext) bool {
@@ -118,10 +119,10 @@ func (claudeRuntimeFacade) clearActiveOperationsAfterInterrupt(a *App, sessionKe
 
 func (claudeRuntimeFacade) buildRuntime(ctx backendRuntimeContext) *backendRuntimeHandle {
 	if ctx.newClaudeCore == nil {
-		return &backendRuntimeHandle{backend: backendClaude}
+		return &backendRuntimeHandle{backend: domainbackend.BackendClaude}
 	}
 	return &backendRuntimeHandle{
-		backend: backendClaude,
+		backend: domainbackend.BackendClaude,
 		claude:  ctx.newClaudeCore(),
 	}
 }

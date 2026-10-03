@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	domainbackend "feidex/internal/domain/backend"
 	"fmt"
 	"strings"
 
@@ -56,7 +57,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 		if operation == "set" && setting.Auxiliary() && setting != routing.PlanEffort && setting != routing.SubagentEffort {
 			return saveAuxiliaryCommand(a, msg, setting, args[2], string(setting)+" model")
 		}
-		if operation == "effort" && configuredBackend(a) == backendCodex {
+		if operation == "effort" && configuredBackend(a) == domainbackend.BackendCodex {
 			switch setting {
 			case routing.PlanModel:
 				return saveAuxiliaryCommand(a, msg, routing.PlanEffort, args[2], "Plan reasoning effort")

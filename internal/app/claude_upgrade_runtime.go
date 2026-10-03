@@ -3,6 +3,7 @@ package app
 import (
 	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/upgraderender"
+	domainbackend "feidex/internal/domain/backend"
 	appruntime "feidex/internal/runtime"
 	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/textutil"
@@ -216,7 +217,7 @@ func (s backendUpgradeService) refreshClaudeRuntimeAfterMaintenance(ctx context.
 	if err := runClaudeSmokeTest(s.app, ctx); err != nil {
 		return false, err
 	}
-	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(s.app)) {
+	if runtime := backendRuntimeForKind(domainbackend.BackendClaude); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(s.app)) {
 		return false, nil
 	}
 	if currentClaudeCore(s.app) == nil {

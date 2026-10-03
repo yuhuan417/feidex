@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	domainbackend "feidex/internal/domain/backend"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 
 func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
@@ -71,7 +72,7 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 
 func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 

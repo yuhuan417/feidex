@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"feidex/internal/config"
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 	"path/filepath"
 	"strings"
@@ -15,7 +16,7 @@ func deliverTestPendingUserInputCard(t *testing.T, a *App, sub *domainsubmission
 	t.Helper()
 	if err := deliverPendingCard(a, sub, a.feishu.SimpleStatusCard("需要补充输入", "orange", "你希望用哪种方案？", nil), pendingCardDelivery{
 		requestKey:    "req-1",
-		backend:       backendCodex,
+		backend:       domainbackend.BackendCodex,
 		kind:          "tool_request_user_input",
 		sessionKey:    sub.SessionKey,
 		threadID:      sub.ThreadID,

@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"fmt"
 	"strings"
 
@@ -229,7 +230,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				}
 			}
 			if actionName == "menu.model_auxiliary" {
-				if configuredBackend(s.app) == backendClaude {
+				if configuredBackend(s.app) == domainbackend.BackendClaude {
 					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开 Claude 辅助模型配置"}, Card: rawCard(newModelConfigService(s.app).renderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
 				}
 				card, err := newModelConfigService(s.app).renderCodexAuxiliaryModelConfigCardForSession(sessionKey, "menu.model_auxiliary")
@@ -250,7 +251,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
-				if configuredBackend(s.app) == backendClaude {
+				if configuredBackend(s.app) == domainbackend.BackendClaude {
 					return newModelConfigService(s.app).completeClaudeAuxiliaryModelSet(action, "subagent", value)
 				}
 				return newModelConfigService(s.app).completeCodexAuxiliaryModelSet(action, "subagent", value)

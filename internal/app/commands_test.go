@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
@@ -25,7 +26,7 @@ import (
 
 func testCodexConfig() *config.Config {
 	cfg := config.Default()
-	cfg.Feishu.Backend = backendCodex
+	cfg.Feishu.Backend = domainbackend.BackendCodex
 	return cfg
 }
 
@@ -107,7 +108,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 
 func TestHandleCommandBlockedWhileBackendSwitching(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
+	newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
 
 	msg := &feishu.InboundMessage{
 		MessageID: "msg-1",
@@ -382,14 +383,14 @@ func TestIsLocalCommandForClaudeBackend(t *testing.T) {
 		"/workspace use default extra":       false,
 	}
 	for input, want := range cases {
-		if got := isLocalCommandForBackend(backendClaude, input); got != want {
+		if got := isLocalCommandForBackend(domainbackend.BackendClaude, input); got != want {
 			t.Fatalf("isLocalCommandForBackend(claude, %q) = %v, want %v", input, got, want)
 		}
 	}
 }
 
 func TestRenderHelpBodyFromRegistryForClaudeBackend(t *testing.T) {
-	body := renderHelpBodyFromRegistry(backendClaude)
+	body := renderHelpBodyFromRegistry(domainbackend.BackendClaude)
 	for _, banned := range []string{
 		"/review",
 		"/skills",
@@ -420,7 +421,7 @@ func TestRenderHelpBodyFromRegistryForClaudeBackend(t *testing.T) {
 }
 
 func TestRenderHelpBodyFromRegistryForCodexBackend(t *testing.T) {
-	body := renderHelpBodyFromRegistry(backendCodex)
+	body := renderHelpBodyFromRegistry(domainbackend.BackendCodex)
 	for _, banned := range []string{
 		"/workspace permissions",
 	} {
@@ -456,7 +457,7 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 	} {
 		t.Run(raw, func(t *testing.T) {
 			a, _, _ := newTestApp(t)
-			a.cfg.Feishu.Backend = backendClaude
+			a.cfg.Feishu.Backend = domainbackend.BackendClaude
 			setCodex(a, nil)
 			claude := &fakeClaudeCore{}
 			setCompositionClaude(a, claude)
@@ -655,7 +656,7 @@ func TestHandleCommandCompactPassthroughsToClaude(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	cfg := testCodexConfig()
-	cfg.Feishu.Backend = backendClaude
+	cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	a := &App{store: store, feishu: &fakeFeishuClient{}, cfg: cfg, composition: &appComposition{claude: claude}}
 
@@ -783,7 +784,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 	for _, raw := range []string{"/fork", "/session fork"} {
 		t.Run(raw, func(t *testing.T) {
 			a, ff, _ := newTestApp(t)
-			a.cfg.Feishu.Backend = backendClaude
+			a.cfg.Feishu.Backend = domainbackend.BackendClaude
 			a.cfg.Claude.Model = "mimo-v2-pro"
 			setCodex(a, nil)
 			claude := &fakeClaudeCore{
@@ -831,7 +832,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 
 func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "mimo-v2-pro"
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"feidex/internal/domain/conversation"
 	domainrouting "feidex/internal/domain/routing"
 	"feidex/internal/feishu"
 )
@@ -161,7 +162,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 		return handleCommand(a, msg, trimmedText)
 	}
 	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
-		return newUIWarningError(reason)
+		return conversation.NewWarning(reason)
 	}
 	if runtime := backendRuntime(a); runtime != nil {
 		if err := runtime.maintenanceBlocksCommand(backendRuntimeContextForApp(a), ""); err != nil {

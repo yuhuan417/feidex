@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 
@@ -22,7 +23,7 @@ import (
 
 func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	cfg := config.Default()
-	cfg.Feishu.Backend = backendCodex
+	cfg.Feishu.Backend = domainbackend.BackendCodex
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
@@ -117,7 +118,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
 
 	bad := &App{
-		cfg:     &config.Config{Feishu: config.FeishuConfig{Backend: backendCodex}},
+		cfg:     &config.Config{Feishu: config.FeishuConfig{Backend: domainbackend.BackendCodex}},
 		store:   store,
 		feishu:  ff,
 		started: time.Now(),
@@ -145,10 +146,10 @@ func TestRemovedBindSlashIsNotRegisteredAsLocalCommand(t *testing.T) {
 	if spec := findLocalCommandSpec(removed); spec != nil {
 		t.Fatalf("removed command still registered: %+v", spec)
 	}
-	if isLocalCommandForBackend(backendCodex, removed) {
+	if isLocalCommandForBackend(domainbackend.BackendCodex, removed) {
 		t.Fatal("removed command should not be local on Codex")
 	}
-	if isLocalCommandForBackend(backendClaude, removed) {
+	if isLocalCommandForBackend(domainbackend.BackendClaude, removed) {
 		t.Fatal("removed command should not be local on Claude")
 	}
 	if commandAllowedWithoutBackend(&feishu.InboundMessage{ChatType: "group", ChatID: "chat"}, removed) {
@@ -415,7 +416,7 @@ func TestStartNextSubmissionClearsCodexThreadLineageAfterRuntimeFailure(t *testi
 		Status:      "queued",
 		Queue:       []string{"sub-1"},
 		BackendThreads: map[string]conversation.SessionBackendThread{
-			backendCodex: {
+			domainbackend.BackendCodex: {
 				ThreadID:    "thread-stale",
 				WorkspaceID: a.cfg.Workspaces[0].ID,
 			},
@@ -458,7 +459,7 @@ func TestStartNextSubmissionClearsCodexThreadLineageAfterRuntimeFailure(t *testi
 	if sess.ActiveThreadID != "" || sess.ActiveThreadWorkspaceID != "" {
 		t.Fatalf("session after runtime start failure kept thread lineage: %+v", sess)
 	}
-	if _, ok := sess.BackendThreads[backendCodex]; ok {
+	if _, ok := sess.BackendThreads[domainbackend.BackendCodex]; ok {
 		t.Fatalf("session after runtime start failure kept codex backend snapshot: %+v", sess.BackendThreads)
 	}
 	if sessionHasLiveThread(a, sessionKey, "thread-1") {

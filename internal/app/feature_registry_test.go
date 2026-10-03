@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"strings"
 	"testing"
 
@@ -9,12 +10,12 @@ import (
 
 func TestHiddenBackendFeaturesDoNotAppearInHelpOrMenus(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, &fakeClaudeCore{})
 	sessionKey := "feishu:chat:chat"
 
-	helpBody := renderHelpBodyFromRegistry(backendClaude)
+	helpBody := renderHelpBodyFromRegistry(domainbackend.BackendClaude)
 	menuButtonsByGroup := map[string]map[string]string{
 		"menu.tools":       cardButtonLabelsByAction(renderToolsMenuCard(a, sessionKey)),
 		"menu.group.model": cardButtonLabelsByAction(newBackendConfigurationService(a).renderModelMenuCard(sessionKey)),
@@ -27,11 +28,11 @@ func TestHiddenBackendFeaturesDoNotAppearInHelpOrMenus(t *testing.T) {
 	}
 
 	for _, spec := range appfeatures.All() {
-		if spec.SupportsBackend(backendClaude) {
+		if spec.SupportsBackend(domainbackend.BackendClaude) {
 			continue
 		}
 		for _, command := range spec.Commands {
-			for _, entry := range command.HelpEntriesForBackend(backendClaude) {
+			for _, entry := range command.HelpEntriesForBackend(domainbackend.BackendClaude) {
 				if strings.Contains(helpBody, entry.Command) {
 					t.Fatalf("Claude help should hide feature %q command %q", spec.ID, entry.Command)
 				}

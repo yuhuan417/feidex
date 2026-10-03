@@ -38,9 +38,6 @@ func (s backendUpgradeService) replyCard(ctx context.Context, messageID string, 
 	})
 }
 
-// backendUpgradeView is the upgrade snapshot both backends render from.
-type backendUpgradeView = upgraderender.UpgradeView
-
 const (
 	claudeUpgradePendingKind  = "claude_self_upgrade"
 	codexUpgradePendingKind   = "codex_self_upgrade"
@@ -98,13 +95,13 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 	return nil
 }
 
-func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includeLatest bool) (backendUpgradeView, error) {
+func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includeLatest bool) (upgraderender.UpgradeView, error) {
 	manager := newClaudeInstallManager(s.app.cfg.Claude.Command)
 	probe, err := manager.Probe(ctx)
 	if err != nil {
-		return backendUpgradeView{}, err
+		return upgraderender.UpgradeView{}, err
 	}
-	view := backendUpgradeView{
+	view := upgraderender.UpgradeView{
 		Probe:      probe,
 		BusyReason: newMaintenanceStateService(s.app).ClaudeUpgradeRuntimeBusyReason(),
 		Snapshot:   newMaintenanceStateService(s.app).ClaudeUpgradeState(),
@@ -121,13 +118,13 @@ func (s backendUpgradeService) loadClaudeUpgradeView(ctx context.Context, includ
 	return view, nil
 }
 
-func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (backendUpgradeView, error) {
+func (s backendUpgradeService) loadCodexUpgradeView(ctx context.Context, includeLatest bool) (upgraderender.UpgradeView, error) {
 	manager := newCodexInstallManager(s.app.cfg.Codex.Command)
 	probe, err := manager.Probe(ctx)
 	if err != nil {
-		return backendUpgradeView{}, err
+		return upgraderender.UpgradeView{}, err
 	}
-	view := backendUpgradeView{
+	view := upgraderender.UpgradeView{
 		Probe:      probe,
 		BusyReason: newMaintenanceStateService(s.app).CodexUpgradeRuntimeBusyReason(),
 		Snapshot:   newMaintenanceStateService(s.app).CodexUpgradeState(),

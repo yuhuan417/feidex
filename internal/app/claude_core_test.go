@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appclauderuntime "feidex/internal/runtime/claude"
@@ -332,7 +333,7 @@ func (f *fakeClaudeCore) startTurnCallsSnapshot() []fakeClaudeStartTurnCall {
 
 func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-session-42"}
 	setCompositionClaude(a, claude)
@@ -403,7 +404,7 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 
 func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	setCompositionClaude(a, claude)
@@ -492,7 +493,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 
 func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{
 		ensureResults: []fakeClaudeEnsureResult{
@@ -583,7 +584,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 
 func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	runtime := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
 
 	sessionKey := "feishu:chat:chat"
@@ -622,10 +623,10 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 	}
 	newRuntimeStateService(a).bindTurnSubmission("claude-stale", "claude-turn-1", sessionKey, "sub-1")
 
-	state := &claudeSessionState{
+	state := &appclauderuntime.SessionState{
 		SessionKey: sessionKey,
 		SessionID:  "claude-stale",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {
 				TurnNumber:               1,
 				TurnID:                   "claude-turn-1",
@@ -654,7 +655,7 @@ func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testin
 
 func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true}
 	setCompositionClaude(a, claude)
@@ -734,7 +735,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 
 func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
 	sessionKey := "feishu:chat:chat-1"
 	subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
@@ -786,7 +787,7 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 
 func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	setCompositionClaude(a, claude)
@@ -867,7 +868,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 
 func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -875,7 +876,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "approve-1",
-		Backend:     backendClaude,
+		Backend:     domainbackend.BackendClaude,
 		Kind:        "command",
 		OwnerUserID: "user-1",
 		PayloadJSON: mustJSON(map[string]any{"body": "命令审批"}),
@@ -911,7 +912,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 
 func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 
 	sub := seedActiveSubmission(t, a, "sess-1", "claude-thread-1", "claude-turn-1")
@@ -930,7 +931,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 	); err != nil {
 		t.Fatalf("sendClaudeApprovalCardWithPayload() error = %v", err)
 	}
-	if pending := a.store.PendingByID("approve-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != "command" || pending.Status != "pending" {
+	if pending := a.store.PendingByID("approve-card-1"); pending == nil || pending.Backend != domainbackend.BackendClaude || pending.Kind != "command" || pending.Status != "pending" {
 		t.Fatalf("approval pending = %+v, want Claude pending command", pending)
 	}
 
@@ -944,7 +945,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("sendClaudeUserInputCard() error = %v", err)
 	}
-	if pending := a.store.PendingByID("question-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != "tool_request_user_input" || pending.Status != "pending" {
+	if pending := a.store.PendingByID("question-card-1"); pending == nil || pending.Backend != domainbackend.BackendClaude || pending.Kind != "tool_request_user_input" || pending.Status != "pending" {
 		t.Fatalf("user input pending = %+v, want Claude pending user input", pending)
 	}
 	if got := cardMarkdownContent(t, ff.replyCards[1]); !strings.Contains(got, "Choose a mode") || !strings.Contains(got, "1. Fast - Prioritize speed") || !strings.Contains(got, "2. Safe - Prioritize safety") {
@@ -954,7 +955,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 	if err := sendClaudePlanModeCard(a, "plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
 		t.Fatalf("sendClaudePlanModeCard() error = %v", err)
 	}
-	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != backendClaude || pending.Kind != claudePlanModePendingKind || pending.Status != "pending" {
+	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != domainbackend.BackendClaude || pending.Kind != claudePlanModePendingKind || pending.Status != "pending" {
 		t.Fatalf("plan pending = %+v, want Claude plan pending", pending)
 	}
 	if len(ff.replyCards) != 3 {
@@ -967,7 +968,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 
 func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -983,7 +984,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "question-1",
-		Backend:     backendClaude,
+		Backend:     domainbackend.BackendClaude,
 		Kind:        "tool_request_user_input",
 		OwnerUserID: "user-1",
 		PayloadJSON: mustJSON(payload),
@@ -1023,7 +1024,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 
 func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -1040,7 +1041,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 	}
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "question-form-1",
-		Backend:     backendClaude,
+		Backend:     domainbackend.BackendClaude,
 		Kind:        "tool_request_user_input_form",
 		OwnerUserID: "user-1",
 		PayloadJSON: mustJSON(payload),
@@ -1087,7 +1088,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 
 func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -1095,7 +1096,7 @@ func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "question-text-1",
-		Backend:     backendClaude,
+		Backend:     domainbackend.BackendClaude,
 		Kind:        "tool_request_user_input_form",
 		OwnerUserID: "user-1",
 		FeishuMsgID: "card-1",
@@ -1157,7 +1158,7 @@ func TestClaudeQuestionsAsToolUserInputPreservesMultiSelect(t *testing.T) {
 
 func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -1228,7 +1229,7 @@ func TestReadClaudePlanTextFallsBackToLatestHomePlan(t *testing.T) {
 
 func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -1241,7 +1242,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 
 	pending := &state.PendingRequest{
 		ID:          "plan-1",
-		Backend:     backendClaude,
+		Backend:     domainbackend.BackendClaude,
 		Kind:        claudePlanModePendingKind,
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
@@ -1280,7 +1281,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 
 func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -1293,7 +1294,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 
 	pending := &state.PendingRequest{
 		ID:          "plan-cancel-1",
-		Backend:     backendClaude,
+		Backend:     domainbackend.BackendClaude,
 		Kind:        claudePlanModePendingKind,
 		SessionKey:  "sess-1",
 		OwnerUserID: "user-1",
@@ -1333,7 +1334,7 @@ func TestCompletePendingFormCancelClaudePlanPreservesOriginalPlanBody(t *testing
 
 func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -1373,7 +1374,7 @@ func TestCompletePendingFormCancelClaudeReviewSkipsBackendCancel(t *testing.T) {
 
 func TestHandleFeishuMessageReplyStartsAdditionalClaudeTurn(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	setCompositionClaude(a, claude)
@@ -1461,7 +1462,7 @@ func dumpSessionState(t *testing.T, label string, sess *conversation.Session) {
 
 func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	setCompositionClaude(a, claude)
@@ -1577,7 +1578,7 @@ func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 
 func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	runtime := newTestClaudeRuntime(t, a)
 
 	sessionKey := "feishu:chat:chat"
@@ -1653,10 +1654,10 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	// Create SessionState with ONE turn (new architecture: steer is not a
 	// separate CLI turn). The steer submission ID is recorded on the turn's
 	// TurnState so that handleTurnComplete can finalize it together.
-	claudeState := &claudeSessionState{
+	claudeState := &appclauderuntime.SessionState{
 		SessionKey: sessionKey,
 		SessionID:  "claude-thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "claude-turn-1", SteerSubmissionID: steerSubID},
 		},
 	}
@@ -1691,7 +1692,7 @@ func TestSteerHandleTurnCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 // session can accept new messages after /stop.
 func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	setCompositionClaude(a, claude)
@@ -1784,7 +1785,7 @@ func TestStopAfterSteerShouldClearActiveOperations(t *testing.T) {
 
 func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	setCompositionClaude(a, claude)
@@ -1853,7 +1854,7 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 
 func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
 	setCompositionClaude(a, claude)

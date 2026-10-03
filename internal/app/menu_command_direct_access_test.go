@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	"os"
@@ -305,8 +306,8 @@ func TestCommandModelDirectSetAndEffort(t *testing.T) {
 
 func TestCommandModelDirectSetAndEffortForClaude(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 
@@ -352,8 +353,8 @@ func TestCommandModelDirectSetAndEffortForClaude(t *testing.T) {
 
 func TestCommandModelOptionAddAndRemoveForClaude(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 
@@ -381,8 +382,8 @@ func TestCommandModelOptionAddAndRemoveForClaude(t *testing.T) {
 
 func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 
@@ -403,8 +404,8 @@ func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 
 func TestCommandModelDirectSetClaudeModelRejectsConcurrentMessageTraffic(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 

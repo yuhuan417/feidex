@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ import (
 func newClaudePermissionMenuApp(t *testing.T, claude *fakeClaudeCore) (*App, *fakeFeishuClient, string) {
 	t.Helper()
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, claude)
 	sessionKey := "feishu:chat:chat-1"

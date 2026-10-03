@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"feidex/internal/domain/conversation"
+	identity "feidex/internal/domain/identity"
 	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
@@ -613,7 +614,7 @@ func knownGroupAnnouncementChatIDs(a *App) []string {
 		}
 		chatID := strings.TrimSpace(sess.ChatID)
 		if chatID == "" {
-			_, _, chatID, _, _ = parseSessionKey(sess.Key)
+			_, _, chatID, _, _ = identity.ParseSessionKey(sess.Key)
 		}
 		if !sessionMatchesGroupChat(a, sess, chatID) {
 			continue
@@ -652,7 +653,7 @@ func sessionMatchesGroupChat(a *App, sess *conversation.Session, chatID string) 
 	sessChatID := strings.TrimSpace(sess.ChatID)
 	sessChatType := strings.ToLower(strings.TrimSpace(sess.ChatType))
 	if sessChatID == "" || sessChatType == "" {
-		_, keyChatType, keyChatID, _, _ := parseSessionKey(sess.Key)
+		_, keyChatType, keyChatID, _, _ := identity.ParseSessionKey(sess.Key)
 		if sessChatID == "" {
 			sessChatID = keyChatID
 		}

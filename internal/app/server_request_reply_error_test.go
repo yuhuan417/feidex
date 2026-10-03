@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	domainbackend "feidex/internal/domain/backend"
 	"testing"
 
 	"feidex/internal/adapter/feishu/pendingforms"
@@ -86,7 +87,7 @@ func TestCompleteToolUserInputTextKeepsPendingWhenCodexReplyFails(t *testing.T) 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:           "input-text-1",
 		RequestIDRaw: `"input-text-1"`,
-		Backend:      backendCodex,
+		Backend:      domainbackend.BackendCodex,
 		Kind:         "tool_request_user_input_form",
 		SessionKey:   "sess-1",
 		ThreadID:     "thread-1",
@@ -184,7 +185,7 @@ func TestCompleteElicitationFormTextKeepsPendingWhenCodexReplyFails(t *testing.T
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:           "elicit-form-1",
 		RequestIDRaw: `"elicit-form-1"`,
-		Backend:      backendCodex,
+		Backend:      domainbackend.BackendCodex,
 		Kind:         "mcp_elicitation_form",
 		SessionKey:   "sess-1",
 		ThreadID:     "thread-1",

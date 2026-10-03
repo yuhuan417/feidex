@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"feidex/internal/adapter/feishu/pendingforms"
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appturnlifecycle "feidex/internal/application/turn"
@@ -310,7 +311,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 		t.Fatalf("sendApprovalCardWithPayload() cards = %d, want 1", len(ff.replyCards))
 	}
 	pending := a.store.PendingByID("req-1")
-	if pending == nil || pending.Kind != "command" || pending.Status != "pending" || pending.Backend != backendCodex {
+	if pending == nil || pending.Kind != "command" || pending.Status != "pending" || pending.Backend != domainbackend.BackendCodex {
 		t.Fatalf("approval pending = %+v, want stored command request", pending)
 	}
 	if got := a.store.GetSubmission(sub.ID); got.Status != "waiting_approval" {
@@ -318,7 +319,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	}
 
 	a.ServerRequestService().SendPermissionsCardWithPayload(json.RawMessage(`"perm-1"`), "thread-1", "turn-1", "item-2", "need perms", map[string]any{"mode": "read"}, map[string]any{"permissions": map[string]any{"mode": "read"}})
-	if pending := a.store.PendingByID("perm-1"); pending == nil || pending.Kind != "permissions" || pending.Backend != backendCodex {
+	if pending := a.store.PendingByID("perm-1"); pending == nil || pending.Kind != "permissions" || pending.Backend != domainbackend.BackendCodex {
 		t.Fatalf("permissions pending = %+v, want stored permissions request", pending)
 	}
 
@@ -330,7 +331,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 			{ID: "mode", Question: "Pick one", Options: []pendingforms.ToolUserInputOption{{Label: "Fast"}, {Label: "Safe"}}},
 		},
 	})
-	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" || pending.Backend != backendCodex {
+	if pending := a.store.PendingByID("input-1"); pending == nil || pending.Kind != "tool_request_user_input" || pending.Backend != domainbackend.BackendCodex {
 		t.Fatalf("user-input pending = %+v, want stored request", pending)
 	}
 

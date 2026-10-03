@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	appclauderuntime "feidex/internal/runtime/claude"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,9 +21,9 @@ func TestClaudeRuntimeAssistantTextRepliesImmediately(t *testing.T) {
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -57,9 +58,9 @@ func TestClaudeRuntimeToolBoundaryKeepsLaterAssistantTextIntact(t *testing.T) {
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -112,9 +113,9 @@ func TestClaudeRuntimeAssistantTextStartsNewQuietWorkingCardBoundary(t *testing.
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -175,9 +176,9 @@ func TestClaudeRuntimeThinkingUsesProgressWorkingCardAndReusesItForAssistantText
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -231,9 +232,9 @@ func TestClaudeRuntimeThinkingRemainsHiddenOutsideProgress(t *testing.T) {
 			newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 			runtime := newTestClaudeRuntime(t, a)
-			session := &claudeSessionState{
+			session := &appclauderuntime.SessionState{
 				SessionID: "thread-1",
-				Turns: map[int]*claudeTurnState{
+				Turns: map[int]*appclauderuntime.TurnState{
 					1: {TurnNumber: 1, TurnID: "turn-1"},
 				},
 			}
@@ -257,9 +258,9 @@ func TestClaudeRuntimeTurnCompleteUsesResultFallbackWithoutAssistantText(t *test
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -292,9 +293,9 @@ func TestClaudeRuntimeTurnCompleteWithoutResultFallsBackToTerminalText(t *testin
 	ff.replyCardErr = errors.New("boom")
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -318,9 +319,9 @@ func TestClaudeRuntimeTurnCompleteUsesResultUsageSynchronously(t *testing.T) {
 	newRuntimeStateService(a).markTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -359,9 +360,9 @@ func TestClaudeRuntimeTurnCompleteReusesThinkingCardForFinalFallback(t *testing.
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -405,9 +406,9 @@ func TestClaudeRuntimeTurnCompleteReusesLatestThinkingCardAfterAssistantText(t *
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -455,12 +456,12 @@ func TestClaudeRuntimePlanModeDoesNotDelayAssistantMessages(t *testing.T) {
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID:         "thread-1",
 		WorkspaceID:       a.cfg.Workspaces[0].ID,
 		CurrentTurnNumber: 1,
 		StartedAt:         time.Now(),
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}
@@ -523,9 +524,9 @@ func TestClaudeRuntimeQuietFinalSuppressesIntermediateTextButStillDeliversFinalA
 	newTurnStreamService(a).noteTurnStarted("sess-1", sub)
 
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionID: "thread-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "turn-1"},
 		},
 	}

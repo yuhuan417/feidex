@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"os"
@@ -15,7 +16,7 @@ import (
 
 func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, &fakeClaudeCore{})
 
@@ -91,7 +92,7 @@ func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 
 func TestRenderHistoryCardClaudeMarksLatestTurnRunningWhenSessionBusy(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, &fakeClaudeCore{})
 

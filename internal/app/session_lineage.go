@@ -2,7 +2,9 @@ package app
 
 import (
 	"feidex/internal/domain/conversation"
+	identity "feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
+	appruntime "feidex/internal/runtime"
 
 	"feidex/internal/config"
 	frontendruntime "feidex/internal/runtime"
@@ -37,7 +39,7 @@ func markSessionThreadLive(a *App, sessionKey, threadID string) {
 	if sess := a.State().Session(sessionKey); sess != nil {
 		chatID := strings.TrimSpace(sess.ChatID)
 		if chatID == "" {
-			_, _, chatID, _, _ = parseSessionKey(sess.Key)
+			_, _, chatID, _, _ = identity.ParseSessionKey(sess.Key)
 		}
 		if sessionMatchesGroupChat(a, sess, chatID) {
 			scheduleGroupAnnouncementStatusRefresh(a, chatID, "thread_live")
@@ -88,13 +90,13 @@ func effectiveThreadMultiAgentMode(sess *conversation.Session, ws *config.Worksp
 func normalizeClaudePermissionModeValue(value string) string {
 	switch strings.TrimSpace(value) {
 	case "", "default":
-		return string(claudePermissionModeDefault)
-	case string(claudePermissionModeAcceptEdits):
-		return string(claudePermissionModeAcceptEdits)
-	case string(claudePermissionModeBypass):
-		return string(claudePermissionModeBypass)
-	case string(claudePermissionModePlan):
-		return string(claudePermissionModePlan)
+		return string(appruntime.ClaudePermissionModeDefault)
+	case string(appruntime.ClaudePermissionModeAcceptEdits):
+		return string(appruntime.ClaudePermissionModeAcceptEdits)
+	case string(appruntime.ClaudePermissionModeBypass):
+		return string(appruntime.ClaudePermissionModeBypass)
+	case string(appruntime.ClaudePermissionModePlan):
+		return string(appruntime.ClaudePermissionModePlan)
 	default:
 		return strings.TrimSpace(value)
 	}

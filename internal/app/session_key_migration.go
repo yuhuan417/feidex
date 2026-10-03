@@ -16,7 +16,7 @@ func canonicalizeStoredSessionKeys(a *App) error {
 			return key
 		}
 		chatID = strings.TrimSpace(chatID)
-		parsedFrontendID, _, parsedChatID, _, _ := parseSessionKey(key)
+		parsedFrontendID, _, parsedChatID, _, _ := identity.ParseSessionKey(key)
 		if chatID == "" {
 			chatID = strings.TrimSpace(parsedChatID)
 		}
@@ -49,7 +49,7 @@ func canonicalSessionKeyForApp(a *App, key, chatType, chatID string) string {
 		return key
 	}
 	chatID = strings.TrimSpace(chatID)
-	parsedFrontendID, _, parsedChatID, _, _ := parseSessionKey(key)
+	parsedFrontendID, _, parsedChatID, _, _ := identity.ParseSessionKey(key)
 	if chatID == "" {
 		chatID = strings.TrimSpace(parsedChatID)
 	}

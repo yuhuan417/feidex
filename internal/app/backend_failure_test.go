@@ -3,6 +3,7 @@ package app
 import (
 	"feidex/internal/domain/conversation"
 	appautoretry "feidex/internal/runtime/autoretry"
+	appclauderuntime "feidex/internal/runtime/claude"
 
 	"errors"
 	"strings"
@@ -104,9 +105,9 @@ func TestClaudeHandleSessionErrorFailsRunningSubmissionOnFatalProcessExit(t *tes
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "claude-thread-1", "claude-turn-1")
 	runtime := newTestClaudeRuntime(t, a)
-	session := &claudeSessionState{
+	session := &appclauderuntime.SessionState{
 		SessionKey: "sess-1",
-		Turns: map[int]*claudeTurnState{
+		Turns: map[int]*appclauderuntime.TurnState{
 			1: {TurnNumber: 1, TurnID: "claude-turn-1"},
 		},
 	}

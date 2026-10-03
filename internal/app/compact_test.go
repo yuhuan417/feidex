@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
@@ -303,8 +304,8 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 
 func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &blockingClaudeCompactCore{
 		fakeClaudeCore: &fakeClaudeCore{},
@@ -382,8 +383,8 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 
 func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = backendCodex
-	a.cfg.Feishu.Backend = backendCodex
+	a.backend = domainbackend.BackendCodex
+	a.cfg.Feishu.Backend = domainbackend.BackendCodex
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,

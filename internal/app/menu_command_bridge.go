@@ -1,6 +1,7 @@
 package app
 
 import (
+	identity "feidex/internal/domain/identity"
 	"feidex/internal/textutil"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 )
 
 func parseSessionKeyMeta(sessionKey string) (chatType, chatID, rootMessageID, userID string) {
-	_, chatType, chatID, rootMessageID, userID = parseSessionKey(sessionKey)
+	_, chatType, chatID, rootMessageID, userID = identity.ParseSessionKey(sessionKey)
 	return chatType, chatID, rootMessageID, userID
 }
 

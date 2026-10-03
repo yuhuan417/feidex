@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
@@ -67,7 +68,7 @@ func newClaudeSupportService(a *App) *claudesupport.Service {
 		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
 			return contentCardTitleForSession(a, sessionKey, workspaceID, title)
 		},
-		BackendClaude: backendClaude,
+		BackendClaude: domainbackend.BackendClaude,
 		ResolvePlanFeedback: func(pendingID, feedback string) error {
 			return currentClaudeCore(a).ResolvePlanFeedback(pendingID, feedback)
 		},

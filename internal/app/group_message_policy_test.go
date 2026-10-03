@@ -2,6 +2,7 @@ package app
 
 import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+	identity "feidex/internal/domain/identity"
 
 	"context"
 	"encoding/json"
@@ -241,7 +242,7 @@ func TestBindingUsesChatScopedGroupSessionKey(t *testing.T) {
 	if first != firstWant || second != secondWant || first != second {
 		t.Fatalf("binding session keys = %q / %q, want %q / %q", first, second, firstWant, secondWant)
 	}
-	frontendID, chatType, chatID, rootID, userID := parseSessionKey(first)
+	frontendID, chatType, chatID, rootID, userID := identity.ParseSessionKey(first)
 	if frontendID != "frontend-a" || chatType != "" || chatID != "chat-1" || rootID != "" || userID != "" {
 		t.Fatalf("parsed group session key = %q %q %q %q %q", frontendID, chatType, chatID, rootID, userID)
 	}

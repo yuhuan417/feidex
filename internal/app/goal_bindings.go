@@ -36,13 +36,6 @@ func (r goalCardRenderer) SimpleStatusCard(title, color, body string, buttons []
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
-const (
-	goalCommandUsage          = goalcmd.CommandUsage
-	goalMaxObjectiveRunes     = goalcmd.MaxObjectiveRunes
-	goalSubmissionKind        = goalcmd.SubmissionKind
-	goalContinuationInputText = goalcmd.ContinuationInputText
-)
-
 func goalTrackerForApp(a *App) *goalcmd.Tracker {
 	if a == nil {
 		return nil

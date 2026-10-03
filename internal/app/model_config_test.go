@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	"path/filepath"
@@ -112,7 +113,7 @@ func TestUpdateGlobalModelConfigClearsUnsupportedEffort(t *testing.T) {
 
 func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 	cfg := config.Default()
-	cfg.Feishu.Backend = backendCodex
+	cfg.Feishu.Backend = domainbackend.BackendCodex
 	cfg.Codex.Model = "gpt-5.4"
 	cfg.Codex.ReasoningEffort = "high"
 	sess := &conversation.Session{
@@ -123,7 +124,7 @@ func TestStatusCardBodyShowsWorkspaceThreadAndEffectiveSettings(t *testing.T) {
 		Status:                     "turn_in_progress",
 		Queue:                      []string{"sub-1"},
 	}
-	a := &App{cfg: cfg, backend: backendCodex}
+	a := &App{cfg: cfg, backend: domainbackend.BackendCodex}
 	body := newBackendConfigurationService(a).statusCardBody(sess)
 	for _, want := range []string{
 		"版本: `0.1.0`",
@@ -209,11 +210,11 @@ func TestRenderModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 
 func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 	cfg := config.Default()
-	cfg.Feishu.Backend = backendClaude
+	cfg.Feishu.Backend = domainbackend.BackendClaude
 	cfg.Claude.Model = "mimo-v2-pro"
 	cfg.Claude.ModelOptions = []string{"deepseek-v4-pro", "mimo-v2-pro"}
 	cfg.Claude.Effort = "high"
-	a := &App{cfg: cfg, backend: backendClaude}
+	a := &App{cfg: cfg, backend: domainbackend.BackendClaude}
 
 	card := newModelConfigService(a).renderClaudeModelConfigCard("sess-1", "menu.model")
 	selects := cardSelectStaticForTest(card)
@@ -255,8 +256,8 @@ func TestRenderClaudeModelConfigCardUsesSelectStaticPickers(t *testing.T) {
 
 func TestCompleteClaudeModelOptionAddAndRemovePersistConfig(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 	sessionKey := "feishu:chat:chat"
@@ -308,8 +309,8 @@ func TestCompleteClaudeModelOptionAddAndRemovePersistConfig(t *testing.T) {
 
 func TestCompleteClaudeModelOptionRemoveUsesSelectInputValue(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.ModelOptions = []string{"deepseek-v4-pro"}
 
 	resp, err := newModelConfigService(a).completeClaudeModelOptionRemove(&feishu.CardAction{
@@ -332,10 +333,10 @@ func TestCompleteClaudeModelOptionRemoveUsesSelectInputValue(t *testing.T) {
 
 func TestStatusCardBodyUsesClaudeModelAndEffortOnClaudeBackend(t *testing.T) {
 	cfg := config.Default()
-	cfg.Feishu.Backend = backendClaude
+	cfg.Feishu.Backend = domainbackend.BackendClaude
 	cfg.Claude.Model = "mimo-v2-pro"
 	cfg.Claude.Effort = "max"
-	a := &App{cfg: cfg, backend: backendClaude}
+	a := &App{cfg: cfg, backend: domainbackend.BackendClaude}
 
 	body := newBackendConfigurationService(a).statusCardBody(&conversation.Session{WorkspaceID: "default"})
 	if !strings.Contains(body, "Claude model: `mimo-v2-pro`") {
@@ -382,8 +383,8 @@ func modelConfigFormCountForTest(t *testing.T, card map[string]any) int {
 
 func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "mimo-v2-pro"
 	a.cfg.Claude.Effort = "high"
 
@@ -431,8 +432,8 @@ func TestRenderModelMenuCardWithoutBackendDoesNotFallbackToCodex(t *testing.T) {
 
 func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 
@@ -471,8 +472,8 @@ func TestUpdateClaudeModelConfigDoesNotResetIdleRuntimeSession(t *testing.T) {
 
 func TestCompleteClaudeModelSetDefersCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setModelApplied: true}
 	setCompositionClaude(a, claude)
@@ -505,8 +506,8 @@ func TestCompleteClaudeModelSetDefersCurrentSession(t *testing.T) {
 
 func TestCompleteClaudeModelSetAllowsMessageTraffic(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 	newRuntimeStateService(a).beginFrontendMessageTraffic()
@@ -534,8 +535,8 @@ func TestCompleteClaudeModelSetAllowsMessageTraffic(t *testing.T) {
 
 func TestCompleteClaudeEffortSetDefersCurrentSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setEffortApplied: true}
 	setCompositionClaude(a, claude)
@@ -568,8 +569,8 @@ func TestCompleteClaudeEffortSetDefersCurrentSession(t *testing.T) {
 
 func TestCompleteClaudeEffortSetDefaultDefersReinitialization(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "feishu:chat:chat"
 	claude := &fakeClaudeCore{setEffortErr: claudecli.ErrEffortDefaultHotApplyUnsupported}
 	setCompositionClaude(a, claude)
@@ -602,8 +603,8 @@ func TestCompleteClaudeEffortSetDefaultDefersReinitialization(t *testing.T) {
 
 func TestUpdateClaudeModelConfigAllowsActiveFrontend(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 
@@ -640,8 +641,8 @@ func TestUpdateClaudeModelConfigAllowsActiveFrontend(t *testing.T) {
 
 func TestClaudeModelCardShowsSessionScopedSmallModel(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
 	sessionKey := "feishu:chat:chat-p2p"
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -668,8 +669,8 @@ func TestClaudeModelCardShowsSessionScopedSmallModel(t *testing.T) {
 
 func TestModelCardBackReturnsToParentMenu(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
 	card := newModelConfigService(a).renderClaudeModelConfigCard("feishu:frontend:default:chat:chat-1", "menu.model")
 	labels := cardButtonLabelsByAction(card)
@@ -690,8 +691,8 @@ func TestModelCardBackReturnsToParentMenu(t *testing.T) {
 
 func TestCodexModelCardShowsEffectiveAuxiliaryModels(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendCodex
-	a.cfg.Feishu.Backend = backendCodex
+	a.backend = domainbackend.BackendCodex
+	a.cfg.Feishu.Backend = domainbackend.BackendCodex
 	a.cfg.Codex.PlanModel = "gpt-5-plan"
 	a.cfg.Codex.ReviewModel = "gpt-5-mini"
 	a.cfg.Codex.SubagentModel = "gpt-5-nano"
@@ -757,8 +758,8 @@ func markedClaudeOptionTexts(texts []string) []string {
 
 func TestRenderBindingClaudeModelConfigCardMarksOnlyTheGroupOverride(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}
 	binding := &state.AgentBinding{
@@ -800,8 +801,8 @@ func TestRenderBindingClaudeModelConfigCardMarksOnlyTheGroupOverride(t *testing.
 
 func TestRenderBindingClaudeAuxiliaryCardMarksEachOverride(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}
 	binding := &state.AgentBinding{
@@ -832,8 +833,8 @@ func TestRenderBindingClaudeAuxiliaryCardMarksEachOverride(t *testing.T) {
 
 func TestRenderClaudeModelCardsMarkEachPickerValue(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	a.cfg.Claude.SmallModel = "haiku"
 	a.cfg.Claude.ModelOptions = []string{"claude-fable-5"}

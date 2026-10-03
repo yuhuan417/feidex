@@ -35,13 +35,13 @@ func newUpgradeRenderService(app *App) upgradeRenderService {
 	return upgradeRenderService{app: app, renderer: renderer}
 }
 
-func (s upgradeRenderService) renderUpgradeStatusCard(spec upgraderender.Spec, sessionKey string, view backendUpgradeView, latestChecked bool) map[string]any {
+func (s upgradeRenderService) renderUpgradeStatusCard(spec upgraderender.Spec, sessionKey string, view upgraderender.UpgradeView, latestChecked bool) map[string]any {
 	return upgraderender.RenderUpgradeStatusCard(spec, s.renderer, sessionKey, view, latestChecked)
 }
 
 // prepareUpgradeCard renders the confirmation card and persists the pending
 // request, or returns the status card when the upgrade cannot start.
-func (s upgradeRenderService) prepareUpgradeCard(spec upgraderender.Spec, pendingKind, idPrefix string, sessionKey, ownerUserID string, view backendUpgradeView) (map[string]any, string, error) {
+func (s upgradeRenderService) prepareUpgradeCard(spec upgraderender.Spec, pendingKind, idPrefix string, sessionKey, ownerUserID string, view upgraderender.UpgradeView) (map[string]any, string, error) {
 	if view.Snapshot.Running || !view.Probe.Supported || view.BusyReason != "" || view.LatestError != "" || view.LatestVersion == "" || upgradeTargetMatchesCurrent(view.Probe.CurrentVersion, view.LatestVersion) {
 		return upgraderender.RenderUpgradeStatusCard(spec, s.renderer, sessionKey, view, true), "", nil
 	}

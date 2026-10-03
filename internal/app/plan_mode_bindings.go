@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"feidex/internal/adapter/feishu/planmode"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
@@ -141,7 +142,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		ReplyInThreadEnabledFn: func(chatType string) bool { return replyInThreadEnabled(a, chatType) },
 		SessionHasActiveWorkFn: sessionHasActiveWork,
 		EffectivePlanSettingsFn: func(sess *conversation.Session) (string, string) {
-			settings := newModelSnapshotService(a).Desired(backendCodex, sess)
+			settings := newModelSnapshotService(a).Desired(domainbackend.BackendCodex, sess)
 			return settings.PlanModel, settings.PlanEffort
 		},
 		ActionStringValueFn:          actionStringValue,

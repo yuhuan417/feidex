@@ -3,6 +3,7 @@ package app
 import (
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
+	domainbackend "feidex/internal/domain/backend"
 	appruntime "feidex/internal/runtime"
 
 	"context"
@@ -29,11 +30,11 @@ func isClaudeBypassPermissionsEnabled(cfg *config.Config) bool {
 
 func claudePermissionModeOptions(includeBypass bool) []appruntime.ClaudePermissionModeOption {
 	options := []appruntime.ClaudePermissionModeOption{
-		{Value: string(claudePermissionModeDefault), Label: "default"},
-		{Value: string(claudePermissionModeAcceptEdits), Label: "acceptEdits"},
+		{Value: string(appruntime.ClaudePermissionModeDefault), Label: "default"},
+		{Value: string(appruntime.ClaudePermissionModeAcceptEdits), Label: "acceptEdits"},
 	}
 	if includeBypass {
-		options = append(options, appruntime.ClaudePermissionModeOption{Value: string(claudePermissionModeBypass), Label: "bypassPermissions"})
+		options = append(options, appruntime.ClaudePermissionModeOption{Value: string(appruntime.ClaudePermissionModeBypass), Label: "bypassPermissions"})
 	}
 	return options
 }
@@ -42,11 +43,11 @@ func normalizeRequestedClaudePermissionMode(a *App, ctx context.Context, raw str
 	_ = ctx
 	mode := normalizeClaudePermissionModeValue(raw)
 	switch mode {
-	case string(claudePermissionModeDefault), string(claudePermissionModeAcceptEdits), string(claudePermissionModeBypass):
+	case string(appruntime.ClaudePermissionModeDefault), string(appruntime.ClaudePermissionModeAcceptEdits), string(appruntime.ClaudePermissionModeBypass):
 	default:
 		return "", "", fmt.Errorf("不支持的 Claude 权限模式 `%s`", strings.TrimSpace(raw))
 	}
-	if mode == string(claudePermissionModeBypass) && !isClaudeBypassPermissionsEnabled(a.cfg) {
+	if mode == string(appruntime.ClaudePermissionModeBypass) && !isClaudeBypassPermissionsEnabled(a.cfg) {
 		return "", "", fmt.Errorf("当前未启用 `claude.dangerously_skip_permissions`，不能切到 `bypassPermissions`")
 	}
 	return mode, "", nil
@@ -56,7 +57,7 @@ func applyClaudePermissionModeToRuntime(a *App, sessionKey, mode string) error {
 	if a == nil || currentClaudeCore(a) == nil {
 		return nil
 	}
-	if runtime := backendRuntimeForKind(backendClaude); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(a)) {
+	if runtime := backendRuntimeForKind(domainbackend.BackendClaude); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(a)) {
 		return nil
 	}
 	sess := a.State().Session(sessionKey)

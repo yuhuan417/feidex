@@ -67,8 +67,6 @@ func defaultWorkspaceID(a *App) string {
 	return a.Config().Workspaces[0].ID
 }
 
-var parseSessionKey = identity.ParseSessionKey
-
 func normalizeSessionKey(a *App, sessionKey string) string {
 	sessionKey = strings.TrimSpace(sessionKey)
 	if sessionKey == "" {

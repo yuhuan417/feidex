@@ -33,7 +33,7 @@ type backendUpgradeHooks struct {
 	pendingKind  string
 	rawCommand   string
 	patchLog     string
-	loadView     func(ctx context.Context, includeLatest bool) (backendUpgradeView, error)
+	loadView     func(ctx context.Context, includeLatest bool) (upgraderender.UpgradeView, error)
 	beginUpgrade func(appbackend.BackendUpgradeSnapshot) bool
 	upgradeState func() appbackend.BackendUpgradeSnapshot
 	beginRestart func() (appbackend.BackendRestartSnapshot, error)

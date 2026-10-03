@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
@@ -17,7 +18,7 @@ func TestSwitchSessionWorkspaceClearsIdleThreadContext(t *testing.T) {
 		ActiveThreadName:        "thread name",
 		ActiveThreadPreview:     "thread preview",
 		BackendThreads: map[string]conversation.SessionBackendThread{
-			backendCodex: {ThreadID: "thread-1", WorkspaceID: "ws-old"},
+			domainbackend.BackendCodex: {ThreadID: "thread-1", WorkspaceID: "ws-old"},
 		},
 	}
 
@@ -139,11 +140,11 @@ func TestSessionStoreAndRestoreBackendThread(t *testing.T) {
 		ActiveThreadPreview: "preview",
 	}
 
-	conversation.StoreBackendThread(sess, backendCodex)
+	conversation.StoreBackendThread(sess, domainbackend.BackendCodex)
 	conversation.ClearThreadContext(sess)
 	sess.WorkspaceID = "ws-claude"
 
-	if !conversation.RestoreBackendThread(sess, backendCodex) {
+	if !conversation.RestoreBackendThread(sess, domainbackend.BackendCodex) {
 		t.Fatal("expected codex backend thread snapshot to restore")
 	}
 	if sess.WorkspaceID != "ws-codex" || sess.ActiveThreadID != "codex-thread-1" {

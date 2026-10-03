@@ -4,6 +4,7 @@ import (
 	"context"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
+	domainbackend "feidex/internal/domain/backend"
 	"log/slog"
 	"strings"
 
@@ -46,7 +47,7 @@ func ExpireClaudeInteractionCards(a *App, sessionKey string, requestIDs []string
 	}
 	body := claudeInteractionExpiredBody(reason)
 	for _, pending := range a.State().PendingRequests() {
-		if pending == nil || normalizeRuntimeBackend(pending.Backend) != backendClaude {
+		if pending == nil || normalizeRuntimeBackend(pending.Backend) != domainbackend.BackendClaude {
 			continue
 		}
 		if !storagejson.IsPendingRequestOpen(pending) {

@@ -6,6 +6,7 @@ import (
 	apppathpick "feidex/internal/adapter/feishu/pathpicker"
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/daemon"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	"feidex/internal/release"
@@ -553,8 +554,8 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 
 func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
 	origClient := newCodexClient
 	var smoke *fakeCodexClient
@@ -854,7 +855,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 
 func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = backendClaude
+	a.backend = domainbackend.BackendClaude
 	setCompositionClaude(a, &fakeClaudeCore{})
 	newMaintenanceStateService(a).BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
@@ -879,8 +880,8 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 
 func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 	manager := &fakeClaudeInstallManager{
@@ -938,8 +939,8 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 
 func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 	manager := &fakeClaudeInstallManager{
@@ -999,8 +1000,8 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 
 func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 	manager := &fakeClaudeInstallManager{
@@ -1055,8 +1056,8 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 
 func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
 	manager := &fakeClaudeInstallManager{

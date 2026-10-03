@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	"fmt"
@@ -99,8 +100,8 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		})
 	}
 
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	p2pClaudeModelConfig := newModelConfigService(a).renderClaudeModelConfigCard(p2pKey, "menu.model")
 	groupClaudeModelConfig := newBindingService(a).renderBindingClaudeModelConfigCard(groupKey, binding)
 	if p2p := menuCardSignature(t, p2pClaudeModelConfig); !reflect.DeepEqual(p2p, menuCardSignature(t, groupClaudeModelConfig)) {

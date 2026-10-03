@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"feidex/internal/config"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
@@ -84,7 +85,7 @@ func backendRuntimeContextForApp(a *App) backendRuntimeContext {
 	ctx.codexMaintenanceActive = func() bool { return newMaintenanceStateService(a).CodexMaintenanceActive() }
 	ctx.claudeMaintenanceActive = func() bool { return newMaintenanceStateService(a).ClaudeMaintenanceActive() }
 	ctx.maintenanceBlocksCommand = func(raw string) error {
-		if configuredBackend(a) == backendClaude {
+		if configuredBackend(a) == domainbackend.BackendClaude {
 			return newMaintenanceStateService(a).ClaudeMaintenanceBlocksCommand(raw)
 		}
 		return newMaintenanceStateService(a).CodexMaintenanceBlocksCommand(raw)
@@ -104,11 +105,11 @@ func backendRuntimeContextForApp(a *App) backendRuntimeContext {
 			strings.Contains(strings.ToLower(text), "codex app-server process exited")
 	}
 	ctx.handleTransportFailure = func(sessionKey, threadID string, err error) {
-		if configuredBackend(a) == backendClaude {
+		if configuredBackend(a) == domainbackend.BackendClaude {
 			failClaudeSessionActiveWork(a, sessionKey, threadID, err)
 			return
 		}
-		failBackendActiveWork(a, backendCodex, sessionKey, threadID, errorText(err))
+		failBackendActiveWork(a, domainbackend.BackendCodex, sessionKey, threadID, errorText(err))
 	}
 	return ctx
 }
@@ -174,9 +175,9 @@ type backendRuntimeFacade interface {
 
 func backendRuntimeForKind(kind string) backendRuntimeFacade {
 	switch normalizeRuntimeBackend(kind) {
-	case backendCodex:
+	case domainbackend.BackendCodex:
 		return codexRuntimeFacade{}
-	case backendClaude:
+	case domainbackend.BackendClaude:
 		return claudeRuntimeFacade{}
 	default:
 		return nil

@@ -8,6 +8,7 @@ import (
 	"feidex/internal/application"
 	"feidex/internal/application/backendops"
 	"feidex/internal/codexrpc"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
@@ -152,7 +153,7 @@ func newEffectRunner(a *App) frontendruntime.EffectRunner {
 		if string(e.Frontend) != a.FrontendID() {
 			return fmt.Errorf("response effect frontend mismatch")
 		}
-		if e.Backend != backendCodex {
+		if e.Backend != domainbackend.BackendCodex {
 			return fmt.Errorf("unsupported response backend %q", e.Backend)
 		}
 		client, err := requireCodexClient(a)

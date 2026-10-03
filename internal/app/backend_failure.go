@@ -1,6 +1,8 @@
 package app
 
 import (
+	mcpbridge "feidex/internal/adapter/feishu/mcpbridge"
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 
 	"context"
@@ -47,7 +49,7 @@ func publishMCPToCodexClient(a *App, client CodexClient) {
 		return
 	}
 	pub := currentMCPPublication(a)
-	aware.SetMCPServerPublication(feidexMCPServerID, pub.URL, feidexMCPBearerEnvName, pub.Token)
+	aware.SetMCPServerPublication(mcpbridge.ServerID, pub.URL, mcpbridge.BearerEnvName, pub.Token)
 }
 
 func (a *App) handleCodexTransportError(client CodexClient, err error) {
@@ -65,7 +67,7 @@ func (a *App) handleCodexTransportError(client CodexClient, err error) {
 	)
 	resetLiveThreadState(a)
 	runAsync(a, func() {
-		failBackendActiveWork(a, backendCodex, "", "", message)
+		failBackendActiveWork(a, domainbackend.BackendCodex, "", "", message)
 	})
 	runAsync(a, func() {
 		recoverCodexRuntimeAfterTransportFailure(a, client, skipFrontendRecovery)

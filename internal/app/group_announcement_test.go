@@ -2,6 +2,7 @@ package app
 
 import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	frontendruntime "feidex/internal/runtime"
 
@@ -20,7 +21,7 @@ import (
 func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeishuClient, frontendID string) *App {
 	t.Helper()
 	cfg := config.Default()
-	cfg.Feishu.Backend = backendCodex
+	cfg.Feishu.Backend = domainbackend.BackendCodex
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	return &App{
 		cfg:        cfg,

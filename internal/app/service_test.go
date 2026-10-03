@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"path/filepath"
 	"testing"
 
@@ -85,10 +86,10 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 	if codexApp.ConfigMu() != claudeApp.ConfigMu() {
 		t.Fatal("frontend apps should share one config mutex")
 	}
-	if codexApp.frontendID != "codex-main" || codexApp.backend != backendCodex || codexApp.composition.codex != codexClients[0] || codexApp.composition.claude != nil {
+	if codexApp.frontendID != "codex-main" || codexApp.backend != domainbackend.BackendCodex || codexApp.composition.codex != codexClients[0] || codexApp.composition.claude != nil {
 		t.Fatalf("codex app = %+v", codexApp)
 	}
-	if claudeApp.frontendID != "claude-main" || claudeApp.backend != backendClaude || claudeApp.composition.codex != nil || claudeApp.composition.claude != claudeClients[0] {
+	if claudeApp.frontendID != "claude-main" || claudeApp.backend != domainbackend.BackendClaude || claudeApp.composition.codex != nil || claudeApp.composition.claude != claudeClients[0] {
 		t.Fatalf("claude app = %+v", claudeApp)
 	}
 }

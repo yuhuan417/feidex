@@ -1,8 +1,10 @@
 package app
 
 import (
+	"feidex/internal/adapter/feishu/finalcardpatch"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
 
@@ -117,7 +119,7 @@ type appTrackers struct {
 	turnBindings        *turnbinding.Tracker
 	submissionStarts    frontendruntime.SubmissionStarts
 	workspaceCloneOps   *appworkspacecmd.CloneTracker
-	finalCardPatches    *finalCardPatchTracker
+	finalCardPatches    *finalcardpatch.Tracker
 	pendingSkills       *skillruntime.Tracker
 	groupAnnouncements  *groupAnnouncementTracker
 	maintenanceTrackers backend.TrackerMap
@@ -156,7 +158,7 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		turnItems:          turnitem.NewTracker(),
 		workspaceCloneOps:  newWorkspaceCloneTracker(),
 		turnBindings:       turnbinding.NewTracker(store),
-		finalCardPatches:   newFinalCardPatchTracker(),
+		finalCardPatches:   finalcardpatch.NewTracker(),
 		pendingSkills:      skillruntime.NewTracker(),
 		groupAnnouncements: newGroupAnnouncementTracker(),
 	}
@@ -242,7 +244,7 @@ func runAsync(a *App, fn func()) {
 
 func buildThreadStartParams(a *App, ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
 	if strings.TrimSpace(effectiveModel) == "" {
-		effectiveModel = modelConfigSnapshot(a, sess, backendCodex).Model
+		effectiveModel = modelConfigSnapshot(a, sess, domainbackend.BackendCodex).Model
 	}
 	return codexrpc.ThreadStartParams{
 		Cwd:                    ws.Cwd,
@@ -300,7 +302,7 @@ func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
 }
 
 func enqueueSubmissionWithSessionKey(a *App, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
-	if err := newSubmissionCoordinator(a).enqueueSubmissionWithSessionKey(msg, sessionKey, bindOnlyCurrentRoot); err != nil {
+	if err := newSubmissionQueueServiceFromApp(a).EnqueueSubmission(msg, sessionKey, bindOnlyCurrentRoot); err != nil {
 		return err
 	}
 	invalidateCodexPlanModeExitArtifactsForSession(a, sessionKey, "当前已有新的提交，旧的计划确认已失效。")

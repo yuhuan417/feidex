@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"log/slog"
 	"strings"
@@ -30,7 +31,7 @@ func reconcileCompletedCodexTurn(a *App, sessionKey string, sess *conversation.S
 	if a == nil || sess == nil {
 		return sess
 	}
-	if runtime := backendRuntimeForKind(backendCodex); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(a)) {
+	if runtime := backendRuntimeForKind(domainbackend.BackendCodex); runtime == nil || !runtime.isActive(backendRuntimeContextForApp(a)) {
 		return sess
 	}
 	client := currentCodexClient(a)

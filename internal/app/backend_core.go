@@ -4,13 +4,7 @@ import (
 	domainbackend "feidex/internal/domain/backend"
 	"strings"
 
-	appruntime "feidex/internal/runtime"
 	"feidex/internal/state"
-)
-
-const (
-	backendCodex  = domainbackend.BackendCodex
-	backendClaude = domainbackend.BackendClaude
 )
 
 type sessionInflightMode = domainbackend.SessionInflightMode
@@ -19,13 +13,6 @@ const (
 	sessionInflightSingle     sessionInflightMode = domainbackend.SessionInflightSingle
 	sessionInflightSerialized sessionInflightMode = domainbackend.SessionInflightSerialized
 	sessionInflightParallel   sessionInflightMode = domainbackend.SessionInflightParallel
-)
-
-const (
-	claudePermissionModeDefault     = appruntime.ClaudePermissionModeDefault
-	claudePermissionModeAcceptEdits = appruntime.ClaudePermissionModeAcceptEdits
-	claudePermissionModePlan        = appruntime.ClaudePermissionModePlan
-	claudePermissionModeBypass      = appruntime.ClaudePermissionModeBypass
 )
 
 func sessionInflightModeForBackend(backend string) sessionInflightMode {

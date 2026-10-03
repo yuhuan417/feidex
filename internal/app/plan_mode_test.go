@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
@@ -265,13 +266,13 @@ func TestCommandPlanWithoutArgsTogglesPlanMode(t *testing.T) {
 	if got := sess.ActiveThreadCollaborationMode.Model; got != "gpt-5.4" {
 		t.Fatalf("model after disable = %q, want gpt-5.4", got)
 	}
-	snapshot, ok := sess.BackendThreads[backendCodex]
+	snapshot, ok := sess.BackendThreads[domainbackend.BackendCodex]
 	if !ok || snapshot.CollaborationMode == nil || snapshot.CollaborationMode.Mode != "default" {
 		t.Fatalf("backend snapshot after disable = %+v", sess.BackendThreads)
 	}
 	restored := *sess
 	restored.ActiveThreadCollaborationMode = nil
-	if !conversation.RestoreBackendThread(&restored, backendCodex) {
+	if !conversation.RestoreBackendThread(&restored, domainbackend.BackendCodex) {
 		t.Fatal("expected backend thread snapshot to restore")
 	}
 	if restored.ActiveThreadCollaborationMode == nil || restored.ActiveThreadCollaborationMode.Mode != "default" {

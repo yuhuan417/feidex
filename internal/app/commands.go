@@ -2,6 +2,8 @@ package app
 
 import (
 	appfeatures "feidex/internal/application/features"
+	domainbackend "feidex/internal/domain/backend"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
 	"fmt"
 	"strings"
@@ -25,7 +27,7 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 	}
 	backend := configuredBackend(a)
 	if reason := newRuntimeStateService(a).backendSwitchBlockedReasonForTraffic(); reason != "" {
-		return newUIWarningError(reason)
+		return conversation.NewWarning(reason)
 	}
 	if runtime := backendRuntime(a); runtime != nil {
 		if err := runtime.maintenanceBlocksCommand(backendRuntimeContextForApp(a), raw); err != nil {
@@ -74,7 +76,7 @@ func isLocalCommandForMessage(backend string, msg *feishu.InboundMessage, raw st
 }
 
 func isLocalCommand(raw string) bool {
-	return isLocalCommandForBackend(backendCodex, raw)
+	return isLocalCommandForBackend(domainbackend.BackendCodex, raw)
 }
 
 func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {

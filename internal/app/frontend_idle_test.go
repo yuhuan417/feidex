@@ -2,6 +2,7 @@ package app
 
 import (
 	appbackend "feidex/internal/adapter/feishu/backend"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	appautoretry "feidex/internal/runtime/autoretry"
 
@@ -69,7 +70,7 @@ func TestFrontendIdleState(t *testing.T) {
 			name: "backend switching blocks idle",
 			seed: func(t *testing.T, a *App, _ *state.Store) {
 				t.Helper()
-				newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
+				newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
 			},
 			want: "当前正在切换到 Codex backend，请稍后再试",
 		},

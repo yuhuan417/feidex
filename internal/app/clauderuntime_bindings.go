@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
@@ -147,7 +148,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		ModelSettings: func(sessionKey string) domainmodelconfig.Snapshot {
 			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
-			return modelConfigSnapshot(app, sess, backendClaude)
+			return modelConfigSnapshot(app, sess, domainbackend.BackendClaude)
 		},
 		ModelSettingsApplied: func(sessionKey string, settings domainmodelconfig.Snapshot) {
 			_, err := app.State().UpdateSession(sessionKey, func(sess *conversation.Session) {
@@ -160,7 +161,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		AuxiliaryModels: func(sessionKey string) (string, string) {
 			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
-			settings := newModelSnapshotService(app).Desired(backendClaude, sess)
+			settings := newModelSnapshotService(app).Desired(domainbackend.BackendClaude, sess)
 			return settings.SmallModel, settings.SubagentModel
 		},
 	})

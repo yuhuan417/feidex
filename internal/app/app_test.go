@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	domainbackend "feidex/internal/domain/backend"
 	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/textutil"
@@ -57,7 +58,7 @@ func TestNewUsesInjectedClientsAndConfiguresHandlers(t *testing.T) {
 	newFeishuClient = func(config.FeishuConfig) FeishuClient { return ff }
 
 	cfg := config.Default()
-	cfg.Feishu.Backend = backendCodex
+	cfg.Feishu.Backend = domainbackend.BackendCodex
 	cfg.DataDir = t.TempDir()
 	app, err := New(cfg, filepath.Join(t.TempDir(), "config.toml"))
 	if err != nil {
@@ -847,7 +848,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 	if resp, err := newCardActionService(a).dispatch(&feishu.CardAction{Name: "unknown"}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" {
 		t.Fatalf("dispatchCardAction(unknown) = %#v, %v", resp, err)
 	}
-	newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
+	newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
 	if resp, err := newCardActionService(a).dispatch(&feishu.CardAction{
 		ActionValue: map[string]any{"action": "menu.root"},
 	}); err != nil || resp.Toast == nil || resp.Toast.Type != "warning" || !strings.Contains(resp.Toast.Content, "当前正在切换到 Codex backend") {
@@ -1007,7 +1008,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 
 func TestProcessMessageBlockedWhileBackendSwitching(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	newRuntimeStateService(a).beginBackendSwitchState(backendCodex)
+	newRuntimeStateService(a).beginBackendSwitchState(domainbackend.BackendCodex)
 
 	msg := &feishu.InboundMessage{
 		MessageID: "msg-1",
@@ -1276,7 +1277,7 @@ func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
 
 func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	setCompositionClaude(a, &fakeClaudeCore{})
 	sessionKey := "feishu:chat:chat"
@@ -1306,7 +1307,7 @@ func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 
 func TestClaudeStaleReviewMenuActionPassthroughsAndFallsBackToToolsMenu(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)
@@ -2605,7 +2606,7 @@ func TestHandleFeishuMessageReplySteerFallsBackToQueue(t *testing.T) {
 		t.Fatalf("UpsertSession(target) error = %v", err)
 	}
 	if err := a.store.UpsertMessageLink(&state.MessageLink{
-		Backend:    backendCodex,
+		Backend:    domainbackend.BackendCodex,
 		MessageID:  "root-msg",
 		SessionKey: targetSessionKey,
 		ThreadID:   "thread-old",
@@ -2981,7 +2982,7 @@ func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 		t.Fatalf("UpsertSession(staged bucket) error = %v", err)
 	}
 	if err := a.store.UpsertMessageLink(&state.MessageLink{
-		Backend:    backendCodex,
+		Backend:    domainbackend.BackendCodex,
 		MessageID:  "reply-root",
 		SessionKey: replySessionKey,
 		ThreadID:   "thread-old",

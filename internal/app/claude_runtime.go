@@ -11,17 +11,11 @@ import (
 
 const claudePlanModePendingKind = "claude_exit_plan_mode"
 
-// Type aliases — exported types from the clauderuntime sub-package.
-type (
-	claudeSessionState = appclauderuntime.SessionState
-	claudeTurnState    = appclauderuntime.TurnState
-)
-
-func (r *claudeRuntime) sessionState(sessionKey string) (*claudeSessionState, error) {
+func (r *claudeRuntime) sessionState(sessionKey string) (*appclauderuntime.SessionState, error) {
 	return r.service.SessionState(sessionKey)
 }
 
-func (r *claudeRuntime) handleTurnComplete(state *claudeSessionState, event claudecli.TurnCompleteEvent) {
+func (r *claudeRuntime) handleTurnComplete(state *appclauderuntime.SessionState, event claudecli.TurnCompleteEvent) {
 	r.service.HandleTurnComplete(state, event)
 }
 

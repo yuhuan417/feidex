@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
@@ -93,7 +94,7 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 
 func TestModelConfigClaudeFailureRetainsQueueAndLineage(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = backendClaude, backendClaude
+	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: fmt.Errorf("%w: rejected", claudecli.ErrModelConfigApply)}
 	setCompositionClaude(a, fake)
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
@@ -123,7 +124,7 @@ func (*modelConfigProtectedClaude) CanRetryFreshSession(string) bool { return fa
 
 func TestModelConfigClaudeRestartedTurnFailureRetainsQueueAndLineage(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = backendClaude, backendClaude
+	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionID: "original-thread", startTurnErr: errors.New("restarted process rejected turn")}
 	a.composition.claude = &modelConfigProtectedClaude{fake}
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
@@ -333,7 +334,7 @@ func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 
 func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = backendClaude, backendClaude
+	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: errors.New("must not initialize while steering")}
 	setCompositionClaude(a, fake)
 	sub := seedActiveSubmission(t, a, "sess-steer", "original-thread", "turn-original")
@@ -351,7 +352,7 @@ func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
 }
 
 func TestModelConfigFailedSaveDoesNotPublish(t *testing.T) {
-	for _, backend := range []string{backendCodex, backendClaude} {
+	for _, backend := range []string{domainbackend.BackendCodex, domainbackend.BackendClaude} {
 		t.Run(backend, func(t *testing.T) {
 			a, _, _ := newTestApp(t)
 			a.backend, a.cfg.Feishu.Backend = backend, backend
@@ -359,7 +360,7 @@ func TestModelConfigFailedSaveDoesNotPublish(t *testing.T) {
 			before := *config.Clone(a.cfg)
 			a.cfgPath = t.TempDir() // A directory cannot be replaced by config.toml.
 			var err error
-			if backend == backendClaude {
+			if backend == domainbackend.BackendClaude {
 				err = newModelConfigService(a).updateClaudeModelConfig(func(c *config.ClaudeConfig) { c.Model = "changed" })
 			} else {
 				err = newModelConfigService(a).inner.UpdateGlobalAuxiliaryConfig(func(c *config.CodexConfig) { c.Model = "changed" })
@@ -394,7 +395,7 @@ func TestModelConfigSnapshotConcurrentWritesRemainCoherent(t *testing.T) {
 		if i%10 == 0 {
 			_ = newModelConfigService(a).inner.RenderModelConfigCard(catalog.ModelListResult{}, nil, "", "menu.model")
 		}
-		got := modelConfigSnapshot(a, nil, backendCodex)
+		got := modelConfigSnapshot(a, nil, domainbackend.BackendCodex)
 		if got.Model != got.Effort {
 			t.Errorf("mixed settings: %+v", got)
 		}
@@ -404,7 +405,7 @@ func TestModelConfigSnapshotConcurrentWritesRemainCoherent(t *testing.T) {
 
 func TestModelConfigGroupWritesDuringWorkPreservePending(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = backendClaude, backendClaude
+	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	fake := &fakeClaudeCore{}
 	setCompositionClaude(a, fake)
 	msg := &feishu.InboundMessage{ChatID: "group-model", ChatType: "group", UserID: "user", MessageID: "config"}
@@ -462,7 +463,7 @@ for line in sys.stdin:
 
 func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend, a.cfg.Feishu.Backend = backendClaude, backendClaude
+	a.backend, a.cfg.Feishu.Backend = domainbackend.BackendClaude, domainbackend.BackendClaude
 	cli, logPath := writeModelConfigCLI(t)
 	a.cfg.Claude.Command, a.cfg.Claude.Model, a.cfg.Claude.Effort, a.cfg.Claude.SubagentModel = cli, "sonnet", "low", "fixed-subagent"
 	r := newClaudeRuntime(a, a.cfg.Claude).(*claudeRuntime)
@@ -523,11 +524,11 @@ func TestModelConfigPlanDefaultUsesPresetAfterClearingOverride(t *testing.T) {
 		Mode: "plan", Model: "plan", ReasoningEffort: "high", PresetReasoningEffort: "medium",
 	}}
 	a.cfg.Codex.PlanReasoningEffort = "high"
-	if got := modelConfigSnapshot(a, sess, backendCodex).PlanEffort; got != "high" {
+	if got := modelConfigSnapshot(a, sess, domainbackend.BackendCodex).PlanEffort; got != "high" {
 		t.Fatal(got)
 	}
 	a.cfg.Codex.PlanReasoningEffort = ""
-	if got := modelConfigSnapshot(a, sess, backendCodex).PlanEffort; got != "medium" {
+	if got := modelConfigSnapshot(a, sess, domainbackend.BackendCodex).PlanEffort; got != "medium" {
 		t.Fatalf("cleared override used stale effort: %s", got)
 	}
 }

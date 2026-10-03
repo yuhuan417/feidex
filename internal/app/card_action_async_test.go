@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	"os"
@@ -411,7 +412,7 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 
 func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.cfg.Feishu.Backend = backendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	setCodex(a, nil)
 	claude := &fakeClaudeCore{}
 	setCompositionClaude(a, claude)

@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 
 	"context"
@@ -11,7 +12,7 @@ import (
 
 type codexRuntimeFacade struct{}
 
-func (codexRuntimeFacade) kind() string { return backendCodex }
+func (codexRuntimeFacade) kind() string { return domainbackend.BackendCodex }
 
 func (codexRuntimeFacade) displayName() string { return "Codex" }
 
@@ -23,7 +24,7 @@ func (codexRuntimeFacade) configuredCommand(ctx backendRuntimeContext) string {
 }
 
 func (codexRuntimeFacade) isActive(ctx backendRuntimeContext) bool {
-	return ctx.backend == backendCodex
+	return ctx.backend == domainbackend.BackendCodex
 }
 
 func (codexRuntimeFacade) runtimeReady(ctx backendRuntimeContext) bool {
@@ -52,14 +53,14 @@ func (codexRuntimeFacade) clearActiveOperationsAfterInterruptContext(_ backendRu
 
 func (codexRuntimeFacade) buildRuntime(ctx backendRuntimeContext) *backendRuntimeHandle {
 	if ctx.buildCodexClient == nil {
-		return &backendRuntimeHandle{backend: backendCodex}
+		return &backendRuntimeHandle{backend: domainbackend.BackendCodex}
 	}
 	client := ctx.buildCodexClient()
 	if ctx.configureCodexClient != nil {
 		ctx.configureCodexClient(client)
 	}
 	return &backendRuntimeHandle{
-		backend: backendCodex,
+		backend: domainbackend.BackendCodex,
 		codex:   client,
 	}
 }

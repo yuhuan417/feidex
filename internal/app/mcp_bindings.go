@@ -9,18 +9,6 @@ import (
 	"strings"
 )
 
-const (
-	feidexMCPServerID       = mcpbridge.ServerID
-	feidexMCPBearerEnvName  = mcpbridge.BearerEnvName
-	feidexMCPProtocol       = mcpbridge.Protocol
-	feidexMCPPath           = mcpbridge.Path
-	feidexMCPSessionKeyName = mcpbridge.SessionKeyName
-
-	feidexSendIMFileToolName  = mcpbridge.SendIMFileToolName
-	feidexSendIMImageToolName = mcpbridge.SendIMImageToolName
-	feidexSendIMVideoToolName = mcpbridge.SendIMVideoToolName
-)
-
 type feidexMCPService struct {
 	*mcpbridge.Service
 

@@ -2,6 +2,7 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
@@ -284,7 +285,7 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		}
 		return s.commandCurrentBotGroupConfig(msg, []string{role, args[2]})
 	case "option":
-		if configuredBackend(s.app) != backendClaude {
+		if configuredBackend(s.app) != domainbackend.BackendClaude {
 			return fmt.Errorf("/model option 仅适用于 Claude backend")
 		}
 		if len(args) != 3 {

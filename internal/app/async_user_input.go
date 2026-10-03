@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"feidex/internal/application"
 	"feidex/internal/application/asyncinput"
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 
@@ -29,7 +30,7 @@ func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pe
 	}
 	card := pendingforms.RenderAsyncUserInputFormCard(requestID, payload, drafts, sub.UserID)
 	if err := deliverPendingCard(a, sub, card, pendingCardDelivery{
-		requestKey: requestID, backend: backendCodex, kind: pendingforms.AsyncUserInputPendingKind,
+		requestKey: requestID, backend: domainbackend.BackendCodex, kind: pendingforms.AsyncUserInputPendingKind,
 		sessionKey: sub.SessionKey, threadID: sub.ThreadID, turnID: sub.TurnID,
 		itemID: payload.ItemID, ownerUserID: sub.UserID, payloadJSON: mustJSON(payload),
 		linkKind: "user_input_card", nonBlocking: true, reuseMessageID: reuseMessageID,

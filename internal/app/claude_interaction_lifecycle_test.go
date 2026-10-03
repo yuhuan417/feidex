@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
@@ -17,7 +18,7 @@ func newClaudeInteractionPending(t *testing.T, a *App, id, kind, status string) 
 	t.Helper()
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          id,
-		Backend:     backendClaude,
+		Backend:     domainbackend.BackendClaude,
 		Kind:        kind,
 		SessionKey:  "feishu:chat:chat-1",
 		ThreadID:    "claude-thread-1",
@@ -46,7 +47,7 @@ func TestClaudeInteractionPendingSurvivesTurnCleanup(t *testing.T) {
 	newClaudeInteractionPending(t, a, "claude-form-1", "tool_request_user_input_form", state.PendingRequestStatusPending.String())
 	newClaudeInteractionPending(t, a, "claude-done-1", "command", state.PendingRequestStatusResolved.String())
 	if err := a.store.UpsertPending(&state.PendingRequest{
-		ID: "codex-approval-1", Backend: backendCodex, Kind: "command",
+		ID: "codex-approval-1", Backend: domainbackend.BackendCodex, Kind: "command",
 		SessionKey: "feishu:chat:chat-1", ThreadID: "thread-1", TurnID: "claude-turn-1",
 		Status: state.PendingRequestStatusPending.String(), ExpiresAt: 1<<62 - 1,
 	}); err != nil {
@@ -161,7 +162,7 @@ func TestSendDetachedApprovalCardDeliversAnswerableCard(t *testing.T) {
 	if pending == nil {
 		t.Fatal("detached card did not record a pending request")
 	}
-	if pending.Backend != backendClaude || pending.Kind != "command" || pending.TurnID != "claude-turn-1" || pending.FeishuMsgID == "" {
+	if pending.Backend != domainbackend.BackendClaude || pending.Kind != "command" || pending.TurnID != "claude-turn-1" || pending.FeishuMsgID == "" {
 		t.Fatalf("pending = %#v, want a Claude command approval bound to the anchor", pending)
 	}
 

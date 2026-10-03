@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	mcpbridge "feidex/internal/adapter/feishu/mcpbridge"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
@@ -15,9 +16,9 @@ import (
 
 func performMCPHTTPRequest(t *testing.T, handler http.Handler, token, sessionKey, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	target := "http://127.0.0.1" + feidexMCPPath
+	target := "http://127.0.0.1" + mcpbridge.Path
 	if strings.TrimSpace(sessionKey) != "" {
-		target += "?" + feidexMCPSessionKeyName + "=" + sessionKey
+		target += "?" + mcpbridge.SessionKeyName + "=" + sessionKey
 	}
 	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:12345"
@@ -64,8 +65,8 @@ func TestFeidexMCPSendsCodexFileAttachment(t *testing.T) {
 	newRuntimeStateService(a).noteTurnItemStartedPayload("thread-1", "turn-1", turnitem.NewProtocolItemWithID("item-1", map[string]any{
 		"id":        "item-1",
 		"type":      "mcpToolCall",
-		"server":    feidexMCPServerID,
-		"tool":      feidexSendIMFileToolName,
+		"server":    mcpbridge.ServerID,
+		"tool":      mcpbridge.SendIMFileToolName,
 		"status":    "inProgress",
 		"arguments": map[string]any{"path": path},
 	}))
@@ -163,8 +164,8 @@ func TestFeidexMCPFailsClosedOnAmbiguousMatch(t *testing.T) {
 		newRuntimeStateService(a).noteTurnItemStartedPayload(tc.threadID, tc.turnID, turnitem.NewProtocolItemWithID(tc.itemID, map[string]any{
 			"id":        tc.itemID,
 			"type":      "mcpToolCall",
-			"server":    feidexMCPServerID,
-			"tool":      feidexSendIMFileToolName,
+			"server":    mcpbridge.ServerID,
+			"tool":      mcpbridge.SendIMFileToolName,
 			"status":    "inProgress",
 			"arguments": map[string]any{"path": path},
 		}))

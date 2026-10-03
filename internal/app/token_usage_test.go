@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
 	"testing"
@@ -55,8 +56,8 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 
 func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.backend = backendClaude
-	a.cfg.Feishu.Backend = backendClaude
+	a.backend = domainbackend.BackendClaude
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "sess-1"
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"feidex/internal/application"
 	"feidex/internal/application/backendops"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
@@ -65,13 +66,13 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		AdapterForPending: func(pending *state.PendingRequest) serverrequest.BackendAdapter {
 			backend := pendingBackend(a, pending)
 			switch normalizeRuntimeBackend(backend) {
-			case backendCodex:
+			case domainbackend.BackendCodex:
 				client := currentCodexClient(a)
 				if client == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
 				return interactionreply.NewCodexAdapter(codexEffectReplyClient{app: a}, backend)
-			case backendClaude:
+			case domainbackend.BackendClaude:
 				if currentClaudeCore(a) == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
@@ -120,8 +121,8 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		RawCard: rawCard,
 
 		// Constants
-		BackendCodex:  backendCodex,
-		BackendClaude: backendClaude,
+		BackendCodex:  domainbackend.BackendCodex,
+		BackendClaude: domainbackend.BackendClaude,
 	}
 	return a.composition.serverRequestSvc
 }
@@ -281,8 +282,8 @@ func (c codexEffectReplyClient) Reply(token json.RawMessage, payload any) error 
 	if err != nil {
 		return err
 	}
-	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: backendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Payload: encoded}}})
+	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: domainbackend.BackendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Payload: encoded}}})
 }
 func (c codexEffectReplyClient) ReplyError(token json.RawMessage, code int, message string) error {
-	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: backendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Error: &backendops.ResponseError{Code: code, Message: message}}}})
+	return newEffectRunner(c.app).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: domainbackend.BackendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Error: &backendops.ResponseError{Code: code, Message: message}}}})
 }

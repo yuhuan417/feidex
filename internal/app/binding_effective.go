@@ -1,6 +1,7 @@
 package app
 
 import (
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
 
@@ -100,7 +101,7 @@ func codexAuxiliaryConfig(a *App, sess *conversation.Session) map[string]any {
 	if a == nil {
 		return nil
 	}
-	snapshot := modelConfigSnapshot(a, sess, backendCodex)
+	snapshot := modelConfigSnapshot(a, sess, domainbackend.BackendCodex)
 	result := map[string]any{}
 	if snapshot.ReviewModel != "" {
 		result["review_model"] = snapshot.ReviewModel

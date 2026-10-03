@@ -1,9 +1,11 @@
 package app
 
+import "feidex/internal/application/backendcaps"
+
 func primaryConversationSlash(backend string) string {
-	return backendCapabilityForKind(backend).Conversation.Slash
+	return backendcaps.ForKind(backend).Conversation.Slash
 }
 
 func primaryConversationMissingLabel(backend string) string {
-	return backendCapabilityForKind(backend).MissingConversationLabel()
+	return backendcaps.ForKind(backend).MissingConversationLabel()
 }
