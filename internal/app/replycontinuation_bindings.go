@@ -12,53 +12,53 @@ import (
 )
 
 func newReplyContinuationService(a *App) *continuation.Service {
-	svc := &continuation.Service{
+	svc := &continuation.Service{Deps: continuation.Dependencies{
 		Backend:    func() string { return configuredBackend(a) },
 		FrontendID: a.FrontendID(), DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
 		Workspace:      func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
 		MakeSessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
-	}
+	}}
 
-	// Wire callback function fields that need *App internals.
-	svc.GetSession = func(key string) *conversation.Session {
+	// Wire the consumer-owned ports that need *App internals.
+	svc.Deps.GetSession = func(key string) *conversation.Session {
 		st := a.State()
 		if st == nil {
 			return nil
 		}
 		return st.Session(key)
 	}
-	svc.SaveSession = func(sess *conversation.Session) error {
+	svc.Deps.SaveSession = func(sess *conversation.Session) error {
 		st := a.State()
 		if st == nil {
 			return nil
 		}
 		return st.SaveSession(sess)
 	}
-	svc.GetMessageLink = func(messageID string) *state.MessageLink {
+	svc.Deps.GetMessageLink = func(messageID string) *state.MessageLink {
 		st := a.State()
 		if st == nil {
 			return nil
 		}
 		return st.MessageLink(messageID)
 	}
-	svc.SaveMessageLink = func(link *state.MessageLink) error {
+	svc.Deps.SaveMessageLink = func(link *state.MessageLink) error {
 		st := a.State()
 		if st == nil {
 			return nil
 		}
 		return st.SaveMessageLink(link)
 	}
-	svc.CreateSubmission = func(sub *domainsubmission.Submission) (string, error) {
+	svc.Deps.CreateSubmission = func(sub *domainsubmission.Submission) (string, error) {
 		st := a.State()
 		if st == nil {
 			return "", nil
 		}
 		return st.CreateSubmission(sub)
 	}
-	svc.HasInFlightSubmission = func(sess *conversation.Session) bool {
+	svc.Deps.HasInFlightSubmission = func(sess *conversation.Session) bool {
 		return conversation.HasInFlightSubmission(sess)
 	}
-	svc.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
+	svc.Deps.TrySteer = func(msg *feishu.InboundMessage, link *state.MessageLink, sessionKey string, sess *conversation.Session) (bool, error) {
 		if configuredBackend(a) == backendClaude {
 			return svc.TryClaudeReplyContinuation(msg, link, sessionKey, sess)
 		}
@@ -70,18 +70,18 @@ func newReplyContinuationService(a *App) *continuation.Service {
 				}
 				return (codexadapter.Gateway{Client: client}).SteerTurn(ctx, threadID, turnID, sub)
 			},
-			ResolveInboundAttachments: svc.ResolveInboundAttachments,
+			ResolveInboundAttachments: svc.Deps.ResolveInboundAttachments,
 			PendingInputSessionKey:    svc.PendingInputSessionKey, CollectPendingStagedImages: svc.CollectPendingStagedImages,
-			ClearPendingStagedImages: svc.ClearPendingStagedImages, SaveSession: svc.SaveSession, DefaultWorkspaceID: svc.DefaultWorkspaceID,
+			ClearPendingStagedImages: svc.ClearPendingStagedImages, SaveSession: svc.Deps.SaveSession, DefaultWorkspaceID: svc.Deps.DefaultWorkspaceID,
 		}, msg, link, sessionKey, sess)
 	}
-	svc.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
+	svc.Deps.StartSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNotice(sessionKey, sess, sub, ws, notifyFailure)
 	}
-	svc.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
+	svc.Deps.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 		return newSubmissionQueueServiceFromApp(a).StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
 	}
-	svc.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
+	svc.Deps.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 		return resolveInboundAttachments(a, msg, workspaceID, sessionKey)
 	}
 

@@ -239,6 +239,22 @@ func TestApplicationBackendEventServiceUsesOneSinkPort(t *testing.T) {
 	}
 }
 
+func TestApplicationContinuationUsesOneDependencyCarrier(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "internal", "application", "continuation", "service.go")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	if !strings.Contains(source, "type Dependencies struct") || !strings.Contains(source, "type Service struct{ Deps Dependencies }") {
+		t.Fatalf("reply continuation must expose one explicit dependency carrier")
+	}
+	if strings.Contains(source, "type Service struct {") {
+		t.Fatalf("reply continuation reintroduced a flat callback service carrier")
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	root, err := os.Getwd()

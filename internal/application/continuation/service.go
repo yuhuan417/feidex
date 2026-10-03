@@ -26,9 +26,10 @@ type StartSubmissionFunc func(sessionKey string, sess *conversation.Session, sub
 // inbound message.
 type ResolveInboundAttachmentsFunc func(msg *application.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error)
 
-// Service manages reply continuation, message link tracking, and
-// inbound-reply steering logic.
-type Service struct {
+// Dependencies are the consumer-owned ports required by reply continuation.
+// Keeping them in one explicit carrier prevents the service from becoming a
+// second host registry while preserving narrow function-level boundaries.
+type Dependencies struct {
 	Backend            func() string
 	FrontendID         string
 	DefaultWorkspaceID func() string
@@ -67,6 +68,10 @@ type Service struct {
 	HasInFlightSubmission func(sess *conversation.Session) bool
 }
 
+// Service manages reply continuation, message link tracking, and
+// inbound-reply steering logic.
+type Service struct{ Deps Dependencies }
+
 // ReplyRootTurnLink returns the MessageLink for the root message of a reply
 // chain, but only if it matches the current backend. Returns nil if the
 // message is not a reply or if no matching link exists.
@@ -81,7 +86,7 @@ func (s *Service) ReplyRootTurnLink(msg *application.InboundMessage) *conversati
 	if root == "" || root == strings.TrimSpace(msg.MessageID) {
 		return nil
 	}
-	link := s.GetMessageLink(root)
+	link := s.Deps.GetMessageLink(root)
 	if !s.MessageLinkMatchesCurrentBackend(link) {
 		return nil
 	}
@@ -94,7 +99,7 @@ func (s *Service) MessageLinkMatchesCurrentBackend(link *conversation.MessageLin
 	if s == nil || link == nil {
 		return false
 	}
-	currentBackend := s.Backend()
+	currentBackend := s.Deps.Backend()
 	linkBackend := backend.NormalizeBackend(link.Backend)
 	switch {
 	case currentBackend == "":
@@ -105,7 +110,7 @@ func (s *Service) MessageLinkMatchesCurrentBackend(link *conversation.MessageLin
 	if strings.TrimSpace(link.SessionKey) == "" || strings.TrimSpace(link.ThreadID) == "" {
 		return false
 	}
-	sess := s.GetSession(link.SessionKey)
+	sess := s.Deps.GetSession(link.SessionKey)
 	if sess == nil {
 		return false
 	}
@@ -119,7 +124,7 @@ func (s *Service) SessionKeyForInboundMessage(msg *application.InboundMessage, l
 	if link != nil && strings.TrimSpace(link.SessionKey) != "" {
 		return strings.TrimSpace(link.SessionKey)
 	}
-	return s.MakeSessionKey(msg)
+	return s.Deps.MakeSessionKey(msg)
 }
 
 // PendingInputSessionKey returns a bucket session key for pending-input
@@ -129,8 +134,8 @@ func (s *Service) PendingInputSessionKey(msg *application.InboundMessage) string
 		return ""
 	}
 	prefix := "feishu:"
-	if strings.TrimSpace(s.FrontendID) != "" {
-		prefix += "frontend:" + strings.TrimSpace(s.FrontendID) + ":"
+	if strings.TrimSpace(s.Deps.FrontendID) != "" {
+		prefix += "frontend:" + strings.TrimSpace(s.Deps.FrontendID) + ":"
 	}
 	return prefix + "chat:" + strings.TrimSpace(msg.ChatID) + ":pending:" + strings.TrimSpace(msg.UserID)
 }
@@ -148,7 +153,7 @@ func (s *Service) CollectPendingStagedImages(targetSessionKey, bucketSessionKey 
 			continue
 		}
 		seen[key] = struct{}{}
-		sess := s.GetSession(key)
+		sess := s.Deps.GetSession(key)
 		if sess == nil {
 			continue
 		}
@@ -174,15 +179,15 @@ func (s *Service) ClearPendingStagedImages(targetSessionKey, bucketSessionKey st
 			continue
 		}
 		seen[key] = struct{}{}
-		sess := s.GetSession(key)
+		sess := s.Deps.GetSession(key)
 		if sess == nil || len(sess.StagedImages) == 0 {
 			continue
 		}
 		sess.StagedImages = nil
-		if !s.HasInFlightSubmission(sess) && len(sess.Queue) == 0 {
+		if !s.Deps.HasInFlightSubmission(sess) && len(sess.Queue) == 0 {
 			sess.Status = conversation.SessionStatusIdle.String()
 		}
-		if err := s.SaveSession(sess); err != nil {
+		if err := s.Deps.SaveSession(sess); err != nil {
 			return err
 		}
 	}
@@ -202,11 +207,11 @@ func (s *Service) TrySteerInboundReply(msg *application.InboundMessage, link *co
 		return false, nil
 	}
 	sessionKey := s.SessionKeyForInboundMessage(msg, link)
-	sess := s.GetSession(sessionKey)
+	sess := s.Deps.GetSession(sessionKey)
 	if sess == nil {
 		sess = &conversation.Session{
 			Key:           sessionKey,
-			WorkspaceID:   s.DefaultWorkspaceID(),
+			WorkspaceID:   s.Deps.DefaultWorkspaceID(),
 			OwnerUserID:   msg.UserID,
 			ChatID:        msg.ChatID,
 			ChatType:      msg.ChatType,
@@ -215,9 +220,9 @@ func (s *Service) TrySteerInboundReply(msg *application.InboundMessage, link *co
 		}
 	}
 	if strings.TrimSpace(sess.WorkspaceID) == "" {
-		sess.WorkspaceID = s.DefaultWorkspaceID()
+		sess.WorkspaceID = s.Deps.DefaultWorkspaceID()
 	}
-	return s.TrySteer(msg, link, sessionKey, sess)
+	return s.Deps.TrySteer(msg, link, sessionKey, sess)
 }
 
 // TryClaudeReplyContinuation attempts to continue an active Claude session
@@ -226,7 +231,7 @@ func (s *Service) TryClaudeReplyContinuation(msg *application.InboundMessage, li
 	if s == nil || msg == nil || link == nil || sess == nil {
 		return false, nil
 	}
-	if !s.HasInFlightSubmission(sess) {
+	if !s.Deps.HasInFlightSubmission(sess) {
 		return false, nil
 	}
 	if strings.TrimSpace(sess.ActiveThreadID) == "" {
@@ -255,11 +260,11 @@ func (s *Service) ContinueClaudeSessionWithText(sessionKey, text string) error {
 	if text == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	sess := s.GetSession(sessionKey)
+	sess := s.Deps.GetSession(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" || strings.TrimSpace(sess.ActiveTurnID) == "" {
 		return fmt.Errorf("当前没有可补充的任务")
 	}
-	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.DefaultWorkspaceID())
+	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.Deps.DefaultWorkspaceID())
 	sub := &domainsubmission.Submission{
 		SessionKey:  strings.TrimSpace(sessionKey),
 		WorkspaceID: workspaceID,
@@ -271,7 +276,7 @@ func (s *Service) ContinueClaudeSessionWithText(sessionKey, text string) error {
 	if rootMessageID := strings.TrimSpace(sess.RootMessageID); rootMessageID != "" {
 		sub.SourceRootMessageIDs = []string{rootMessageID}
 	}
-	id, err := s.CreateSubmission(sub)
+	id, err := s.Deps.CreateSubmission(sub)
 	if err != nil {
 		return err
 	}
@@ -304,9 +309,9 @@ func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *application.
 	if s == nil || msg == nil || sess == nil {
 		return nil, nil
 	}
-	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.DefaultWorkspaceID())
+	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), s.Deps.DefaultWorkspaceID())
 	bucketSessionKey := s.PendingInputSessionKey(msg)
-	inboundAttachments, err := s.ResolveInboundAttachments(msg, workspaceID, sessionKey)
+	inboundAttachments, err := s.Deps.ResolveInboundAttachments(msg, workspaceID, sessionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +337,7 @@ func (s *Service) BuildClaudeContinuationSubmissionFromMessage(msg *application.
 	if strings.TrimSpace(sub.InputText) == "" && len(sub.Attachments) == 0 {
 		return nil, nil
 	}
-	id, err := s.CreateSubmission(sub)
+	id, err := s.Deps.CreateSubmission(sub)
 	if err != nil {
 		return nil, err
 	}
@@ -351,18 +356,18 @@ func (s *Service) StartClaudeContinuationSubmission(sessionKey string, sub *doma
 	if s == nil || sub == nil {
 		return nil
 	}
-	sess := s.GetSession(sessionKey)
+	sess := s.Deps.GetSession(sessionKey)
 	if sess == nil {
 		return fmt.Errorf("session %q missing", sessionKey)
 	}
-	ws := s.Workspace(sub.WorkspaceID)
+	ws := s.Deps.Workspace(sub.WorkspaceID)
 	if ws == nil {
 		return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
 	}
-	if s.StartSteerSubmission != nil {
-		return s.StartSteerSubmission(sessionKey, sess, sub, ws, notifyFailure)
+	if s.Deps.StartSteerSubmission != nil {
+		return s.Deps.StartSteerSubmission(sessionKey, sess, sub, ws, notifyFailure)
 	}
-	return s.StartSubmission(sessionKey, sess, sub, ws, notifyFailure)
+	return s.Deps.StartSubmission(sessionKey, sess, sub, ws, notifyFailure)
 }
 
 // SourceMessageIDsForSubmission returns the unique source message IDs for a
@@ -400,7 +405,7 @@ func (s *Service) RecordRootTurnBinding(rootMessageID, sessionKey, threadID, tur
 	if s == nil || strings.TrimSpace(rootMessageID) == "" {
 		return
 	}
-	_ = s.SaveMessageLink(&conversation.MessageLink{
+	_ = s.Deps.SaveMessageLink(&conversation.MessageLink{
 		MessageID:  strings.TrimSpace(rootMessageID),
 		SessionKey: strings.TrimSpace(sessionKey),
 		ThreadID:   strings.TrimSpace(threadID),
@@ -414,7 +419,7 @@ func (s *Service) RecordTurnMessageLink(messageID, sessionKey, threadID, turnID 
 	if s == nil || strings.TrimSpace(messageID) == "" {
 		return
 	}
-	_ = s.SaveMessageLink(&conversation.MessageLink{
+	_ = s.Deps.SaveMessageLink(&conversation.MessageLink{
 		MessageID:  strings.TrimSpace(messageID),
 		SessionKey: strings.TrimSpace(sessionKey),
 		ThreadID:   strings.TrimSpace(threadID),
