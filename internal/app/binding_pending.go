@@ -29,7 +29,7 @@ func (s bindingService) gatePendingGroupMessage(msg *feishu.InboundMessage) (boo
 		return false, err
 	}
 	card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(makeSessionKey(s.app, msg))
-	_, err = s.app.feishu.ReplyCard(s.app.Context(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	_, err = replyCardWithIDEffect(s.app.Context(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return true, err
 }
 func (s bindingService) replayPendingBindingMessage(binding *state.AgentBinding) error {
@@ -49,7 +49,7 @@ func (s bindingService) replayPendingBindingMessageAsync(binding *state.AgentBin
 		if err := s.replayPendingBindingMessage(binding); err != nil {
 			slog.Warn("binding pending message replay failed", "binding_id", binding.ID, "message_id", messageID, "error", err)
 			if messageID != "" {
-				_ = s.app.feishu.ReplyText(context.Background(), messageID, fmt.Sprintf("绑定成功，但处理原消息失败: %v", err), replyInThreadEnabled(s.app, binding.ChatType))
+				_ = replyTextByAnchorEffect(context.Background(), s.app, messageID, fmt.Sprintf("绑定成功，但处理原消息失败: %v", err), replyInThreadEnabled(s.app, binding.ChatType))
 			}
 		}
 	})

@@ -140,17 +140,17 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 	sessionKey := makeSessionKey(s.app, msg)
 	if len(args) == 0 {
 		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case "choose":
 		card := newWorkspaceRenderService(s.app).RenderWorkspaceChooseCard(sessionKey)
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case "use":
 		return s.commandCurrentBotGroupConfig(msg, append([]string{"use"}, args[1:]...))
@@ -187,7 +187,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 			if err != nil {
 				return err
 			}
-			_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+			_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 			return err
 		}
 		return s.commandCurrentBotGroupConfig(msg, append([]string{strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...))
@@ -201,7 +201,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 			return err
 		}
 		card := newWorkspaceRenderService(s.app).RenderWorkspaceMenuCard(sessionKey)
-		_, err := s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	default:
 		return fmt.Errorf("usage: %s", groupBindingWorkspaceUsage)
@@ -236,7 +236,7 @@ func (s bindingService) beginBindingWorkspaceClone(msg *feishu.InboundMessage, s
 		return err
 	}
 	card := newWorkspaceRenderService(s.app).RenderWorkspaceCloneCard(sessionKey, requestID, payload)
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 
@@ -253,7 +253,7 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		if err != nil {
 			return err
 		}
-		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
@@ -309,7 +309,7 @@ func (s bindingService) commandEffort(msg *feishu.InboundMessage, args []string)
 		if err != nil {
 			return err
 		}
-		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case 1:
 		return s.commandCurrentBotGroupConfig(msg, []string{"effort", args[0]})
@@ -334,7 +334,7 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, s.renderBindingFastCard(makeSessionKey(s.app, msg), binding), replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, s.renderBindingFastCard(makeSessionKey(s.app, msg), binding), replyInThreadEnabled(s.app, msg.ChatType))
 		return err
 	case "fast", "default", "off":
 		return s.commandCurrentBotGroupConfig(msg, []string{"fast", args[0]})

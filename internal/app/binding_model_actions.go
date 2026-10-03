@@ -499,7 +499,7 @@ func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, arg
 		return err
 	}
 	card := s.renderBindingModelConfigOrMenuCard(makeSessionKey(s.app, msg), binding)
-	_, err = s.app.feishu.ReplyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
 	return err
 }
 

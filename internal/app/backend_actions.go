@@ -70,7 +70,7 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 				return enqueuePassthroughCommand(app, msg, rawCommand)
 			},
 			ReplyText: func(ctx context.Context, msgID, text string, inThread bool) error {
-				return app.feishu.ReplyText(ctx, msgID, text, inThread)
+				return replyTextByAnchorEffect(ctx, app, msgID, text, inThread)
 			},
 			ReplyInThreadEnabled: func(chatType string) bool {
 				return replyInThreadEnabled(app, chatType)
