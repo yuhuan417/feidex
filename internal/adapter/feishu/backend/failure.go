@@ -53,6 +53,8 @@ type FailureAsyncDeps struct {
 	StartNextSubmissionAsync           func(sessionKey, reason string)
 	NextQueuedSubmissionSessionKey     func(sessionKey string) string
 	RunAsync                           func(fn func())
+	// RunSessionAsync serializes queue continuation with the target session.
+	RunSessionAsync func(sessionKey string, fn func())
 }
 
 type FailureDeps struct {
@@ -424,9 +426,15 @@ func (s BackendFailureService) FailSubmissionWithoutTerminalCompletion(sessionKe
 		nextSessionKey = s.NextQueuedSubmissionSessionKey(sessionKey)
 	}
 	if nextSessionKey != "" {
-		s.RunAsync(func() {
-			s.StartNextSubmissionAsync(nextSessionKey, "backendFailed")
-		})
+		if s.deps.Async.RunSessionAsync != nil {
+			s.deps.Async.RunSessionAsync(nextSessionKey, func() {
+				s.StartNextSubmissionAsync(nextSessionKey, "backendFailed")
+			})
+		} else {
+			s.RunAsync(func() {
+				s.StartNextSubmissionAsync(nextSessionKey, "backendFailed")
+			})
+		}
 	}
 }
 

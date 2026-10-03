@@ -5,6 +5,7 @@ import (
 	"feidex/internal/application/presentation/usageview"
 	"feidex/internal/codexrpc"
 	domainsubmission "feidex/internal/domain/submission"
+	domainturn "feidex/internal/domain/turn"
 	"feidex/internal/runtime/turnbinding"
 	"strings"
 	"time"
@@ -135,13 +136,13 @@ func (s runtimeStateService) turnFinalFooterLines(turnID string, completedAt tim
 	return lines
 }
 
-func (s runtimeStateService) currentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {
+func (s runtimeStateService) currentThreadUsage(threadID string) (domainturn.ThreadTokenUsage, bool) {
 	tracker := s.turnBindingTracker()
 	if tracker == nil {
-		return codexrpc.ThreadTokenUsage{}, false
+		return domainturn.ThreadTokenUsage{}, false
 	}
 	usage, found := tracker.CurrentThreadUsage(threadID)
-	return codexadapter.ProtocolThreadUsage(usage), found
+	return usage, found
 }
 
 // Exported wrappers so runtimeStateService directly satisfies sub-package
@@ -170,6 +171,6 @@ func (s runtimeStateService) ClearTurnBinding(turnID string) { s.clearTurnBindin
 func (s runtimeStateService) TurnBindingTracker() *turnbinding.Tracker {
 	return s.turnBindingTracker()
 }
-func (s runtimeStateService) CurrentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {
+func (s runtimeStateService) CurrentThreadUsage(threadID string) (domainturn.ThreadTokenUsage, bool) {
 	return s.currentThreadUsage(threadID)
 }

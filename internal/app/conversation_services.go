@@ -5,8 +5,8 @@ import (
 	claudeadapter "feidex/internal/adapter/backend/claude"
 	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/adapter/feishu/threadview"
+	"feidex/internal/application/backendops"
 	"feidex/internal/application/conversation"
-	"feidex/internal/codexrpc"
 	"feidex/internal/composition"
 	"feidex/internal/config"
 	domainbackend "feidex/internal/domain/backend"
@@ -24,20 +24,20 @@ func newConversationService(a *App) *conversation.Service {
 	} else {
 		s.Deps.Gateway = codexadapter.ConversationGateway{
 			Client: func() (codexadapter.ConversationClient, error) { return requireCodexClient(a) },
-			StartParams: func(r conversation.Request) codexrpc.ThreadStartParams {
+			StartParams: func(r conversation.Request) backendops.ThreadStartConfig {
 				return buildThreadStartParams(a, r.Workspace, r.Session, r.Model)
 			},
 			ResumeConfig: func(sess *domain.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
-			ForkParams: func(r conversation.Request) map[string]any {
-				p := map[string]any{"threadId": strings.TrimSpace(r.Session.ActiveThreadID), "cwd": r.Workspace.Cwd,
-					"approvalPolicy": effectiveBindingApprovalPolicy(a, r.Session, r.Workspace), "sandbox": effectiveBindingSandboxMode(a, r.Session, r.Workspace), "multiAgentMode": effectiveBindingMultiAgentMode(a, r.Session, r.Workspace)}
-				if tier := effectiveBindingServiceTier(a, r.Session); strings.TrimSpace(tier) != "" {
-					p["serviceTier"] = strings.TrimSpace(tier)
+			ForkParams: func(r conversation.Request) backendops.ThreadForkRequest {
+				return backendops.ThreadForkRequest{
+					ThreadID:       strings.TrimSpace(r.Session.ActiveThreadID),
+					Cwd:            r.Workspace.Cwd,
+					ApprovalPolicy: effectiveBindingApprovalPolicy(a, r.Session, r.Workspace),
+					SandboxMode:    effectiveBindingSandboxMode(a, r.Session, r.Workspace),
+					ServiceTier:    effectiveBindingServiceTier(a, r.Session),
+					Model:          r.Model,
+					MultiAgentMode: effectiveBindingMultiAgentMode(a, r.Session, r.Workspace),
 				}
-				if r.Model != "" {
-					p["model"] = r.Model
-				}
-				return p
 			},
 		}
 	}
@@ -89,7 +89,7 @@ func startupRecoveryDependencies(a *App) codexruntime.StartupRecoveryDeps {
 	return codexruntime.StartupRecoveryDeps{
 		Context: a.Context, CurrentClient: func() codexruntime.CodexRPCClient { return currentCodexClient(a) },
 		RuntimeRecovering: func() bool { return codexRuntimeRecovering(a) },
-		BuildThreadStartParams: func(ws *config.Workspace, sess *domain.Session, model string) codexrpc.ThreadStartParams {
+		BuildThreadStartParams: func(ws *config.Workspace, sess *domain.Session, model string) backendops.ThreadStartConfig {
 			return buildThreadStartParams(a, ws, sess, model)
 		},
 		BuildThreadConfig: func(sess *domain.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },

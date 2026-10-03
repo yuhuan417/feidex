@@ -105,13 +105,13 @@ func (s SelectionService) BindingWorkspace(sessionKey string, sess *conversation
 	}
 	return ""
 }
-func (s SelectionService) Select(chatType, chatID, userID, workspaceID string) error {
+func (s SelectionService) Transition(chatType, chatID, userID, workspaceID string) (*conversation.Session, *routing.BotProfile) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	key := SelectionKey(s.Frontend, chatType, chatID, userID)
 	if s.Repository == nil || workspaceID == "" || key == "" {
-		return nil
+		return nil, nil
 	}
-	sess := s.Repository.Session(key)
+	sess := conversation.CloneSession(s.Repository.Session(key))
 	if sess == nil {
 		sess = &conversation.Session{Key: key, Status: conversation.SessionStatusIdle.String()}
 	}
@@ -132,10 +132,33 @@ func (s SelectionService) Select(chatType, chatID, userID, workspaceID string) e
 		}
 	}
 	sess.RecentWorkspaceIDs = recent
+	var profile *routing.BotProfile
+	if !strings.EqualFold(sess.ChatType, "group") {
+		profile = s.Repository.BotProfile()
+		if profile == nil {
+			frontend := string(s.Frontend)
+			if frontend == "" {
+				frontend = "default"
+			}
+			profile = &routing.BotProfile{ID: "bot-profile-" + routing.ProfileID(frontend), FrontendID: frontend}
+		} else {
+			cp := *profile
+			profile = &cp
+		}
+		profile.WorkspaceID = workspaceID
+	}
+	return sess, profile
+}
+
+func (s SelectionService) Select(chatType, chatID, userID, workspaceID string) error {
+	sess, profile := s.Transition(chatType, chatID, userID, workspaceID)
+	if sess == nil {
+		return nil
+	}
 	if err := s.Repository.SaveSession(sess); err != nil {
 		return err
 	}
-	if !strings.EqualFold(sess.ChatType, "group") {
+	if profile != nil {
 		return s.Repository.SetProfileWorkspace(workspaceID)
 	}
 	return nil

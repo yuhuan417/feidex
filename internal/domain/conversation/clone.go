@@ -6,6 +6,7 @@ func CloneSession(sess *Session) *Session {
 		return nil
 	}
 	cp := *sess
+	cp.RecentWorkspaceIDs = append([]string(nil), sess.RecentWorkspaceIDs...)
 	cp.Queue = append([]string(nil), sess.Queue...)
 	cp.ActiveOperations = append([]SessionActiveOperation(nil), sess.ActiveOperations...)
 	cp.StagedImages = append([]SessionStagedImage(nil), sess.StagedImages...)

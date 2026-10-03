@@ -2,6 +2,7 @@ package app
 
 import (
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
+	applicationrouting "feidex/internal/application/routing"
 	domainbackend "feidex/internal/domain/backend"
 	catalog "feidex/internal/domain/modelconfig"
 	"feidex/internal/domain/routing"
@@ -411,11 +412,12 @@ func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardActi
 	}
 	value = clearableArg(value)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Setting(role), value)
+	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
+	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}

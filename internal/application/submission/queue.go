@@ -29,32 +29,34 @@ import (
 // Dependencies owns the explicit inputs, repositories and external effects needed by queue orchestration.
 // Composition supplies each dependency once; the service never calls a host to locate another service.
 type Dependencies struct {
-	Context                            func() context.Context
-	Backend                            func() string
-	StartConversation                  func(context.Context, *workspace.Workspace, *conversation.Session, *domainsubmission.Submission, string) (ConversationStarted, error)
-	DeleteTurnArtifacts                func(string)
-	AppState                           QueueStateProvider
-	SkillResolver                      QueueSkillResolver
-	AttachmentResolver                 QueueAttachmentResolver
-	LiveThread                         QueueLiveThreadProvider
-	PendingQueue                       QueuePendingQueueProvider
-	RuntimeState                       QueueRuntimeStateProvider
-	RuntimeMaintenance                 QueueRuntimeMaintenanceProvider
-	ReplyContinuation                  QueueReplyContinuationProvider
-	TurnStream                         QueueTurnStreamProvider
-	AutoRetry                          QueueAutoRetryProvider
-	BackendRuntime                     QueueBackendRuntimeProvider
-	DefaultWorkspaceID                 func() string
-	Workspace                          func(id string) *workspace.Workspace
-	ReplyInThreadEnabled               func(chatType string) bool
-	ReplyInThreadForSubmission         func(sub *domainsubmission.Submission) bool
-	ConfiguredInflightMode             func() QueueInflightMode
-	InflightAllowsAdditional           func(mode QueueInflightMode) bool
-	ResolveWorkspaceID                 func(msg *application.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string
-	ReplyText                          func(ctx context.Context, messageID, text string, inThread bool) error
-	SendQueuedNotice                   func(ctx context.Context, sub *domainsubmission.Submission)
-	SendStartFailureNotice             func(ctx context.Context, sub *domainsubmission.Submission, err error, willContinue bool)
-	RunAsync                           func(fn func())
+	Context                    func() context.Context
+	Backend                    func() string
+	StartConversation          func(context.Context, *workspace.Workspace, *conversation.Session, *domainsubmission.Submission, string) (ConversationStarted, error)
+	DeleteTurnArtifacts        func(string)
+	AppState                   QueueStateProvider
+	SkillResolver              QueueSkillResolver
+	AttachmentResolver         QueueAttachmentResolver
+	LiveThread                 QueueLiveThreadProvider
+	PendingQueue               QueuePendingQueueProvider
+	RuntimeState               QueueRuntimeStateProvider
+	RuntimeMaintenance         QueueRuntimeMaintenanceProvider
+	ReplyContinuation          QueueReplyContinuationProvider
+	TurnStream                 QueueTurnStreamProvider
+	AutoRetry                  QueueAutoRetryProvider
+	BackendRuntime             QueueBackendRuntimeProvider
+	DefaultWorkspaceID         func() string
+	Workspace                  func(id string) *workspace.Workspace
+	ReplyInThreadEnabled       func(chatType string) bool
+	ReplyInThreadForSubmission func(sub *domainsubmission.Submission) bool
+	ConfiguredInflightMode     func() QueueInflightMode
+	InflightAllowsAdditional   func(mode QueueInflightMode) bool
+	ResolveWorkspaceID         func(msg *application.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string
+	ReplyText                  func(ctx context.Context, messageID, text string, inThread bool) error
+	SendQueuedNotice           func(ctx context.Context, sub *domainsubmission.Submission)
+	RunAsync                   func(fn func())
+	// RunSessionAsync serializes asynchronous follow-up work with the session
+	// actor. RunAsync remains a compatibility fallback for frontend-wide jobs.
+	RunSessionAsync                    func(sessionKey string, fn func())
 	TryBeginStart                      func(sessionKey string) bool
 	FinishStart                        func(sessionKey string) bool
 	LogSessionState                    func(event, sessionKey string, sess *conversation.Session)
@@ -70,6 +72,19 @@ type Dependencies struct {
 	AgentBindingByID                   func(id string) *routing.AgentBinding
 	ModelSettings                      ModelSettings
 	BotProfile                         func() *routing.BotProfile
+}
+
+func runSessionAsync(deps Dependencies, sessionKey string, fn func()) {
+	if fn == nil {
+		return
+	}
+	if deps.RunSessionAsync != nil {
+		deps.RunSessionAsync(strings.TrimSpace(sessionKey), fn)
+		return
+	}
+	if deps.RunAsync != nil {
+		deps.RunAsync(fn)
+	}
 }
 
 type ModelSettings interface {
@@ -375,7 +390,7 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *application.InboundMessag
 	a.MarkSubmissionQueuedReactions(sub)
 	a.SendQueuedNotice(a.context(), sub)
 	if serialBindingBlocked && !autoRetryBlocked {
-		a.RunAsync(func() {
+		runSessionAsync(a, sessionKey, func() {
 			s.StartNextSubmissionAsync(sessionKey, "serialBindingQueued")
 		})
 	}
@@ -525,7 +540,7 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 	}
 	defer func() {
 		if a.FinishStart(sessionKey) {
-			a.RunAsync(func() {
+			runSessionAsync(a, sessionKey, func() {
 				s.StartNextSubmissionAsync(sessionKey, "coalesced")
 			})
 		}
@@ -716,12 +731,12 @@ func (s SubmissionQueueService) HandleSubmissionStartFailure(sessionKey, threadI
 	}
 	if notifyFailure && sub != nil {
 		willContinue := shouldStartNext
-		a.SendStartFailureNotice(a.context(), sub, err, willContinue)
+		s.NotifySubmissionStartFailure(a.context(), sub, err, willContinue)
 	}
 	a.RuntimeMaintenance.CleanupSubmissionRuntimeState(sub)
 	if shouldStartNext {
 		nextSessionKey := s.NextQueuedSessionKey(sessionKey)
-		a.RunAsync(func() {
+		runSessionAsync(a, firstNonEmpty(nextSessionKey, sessionKey), func() {
 			s.StartNextSubmissionAsync(firstNonEmpty(nextSessionKey, sessionKey), "turnStartFailed")
 		})
 	}

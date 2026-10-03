@@ -5,16 +5,17 @@ package debugviewcmd
 import (
 	"context"
 	"encoding/json"
-	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/application/runtimeconfig"
 	"feidex/internal/application/workspace"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
+	domainturn "feidex/internal/domain/turn"
 	domainworkspace "feidex/internal/domain/workspace"
 	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -26,12 +27,9 @@ import (
 	turnitem "feidex/internal/adapter/feishu/turnitem"
 	apppathpick "feidex/internal/adapter/filesystem/pathpicker"
 	appusageview "feidex/internal/application/presentation/usageview"
-	"feidex/internal/claudecli"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/logcontrol"
-	appclauderuntime "feidex/internal/runtime/claude"
 	turnbinding "feidex/internal/runtime/turnbinding"
 	"feidex/internal/state"
 
@@ -69,7 +67,7 @@ type StateProvider interface {
 // tracker operations used by the usage service.
 type RuntimeStateProvider interface {
 	TurnBindingTracker() TurnBindingTracker
-	CurrentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool)
+	CurrentThreadUsage(threadID string) (domainturn.ThreadTokenUsage, bool)
 }
 
 // TurnBindingTracker is the narrow interface for thread usage tracking.
@@ -380,9 +378,6 @@ var SessionCurrentThreadLabel = func(sess *conversation.Session) string {
 	return appthreadview.CurrentThreadLabel(sess.ActiveThreadName, sess.ActiveThreadPreview, sess.ActiveThreadID)
 }
 
-// TurnContextUsagePercent calculates the context window usage percentage.
-var TurnContextUsagePercent = appclauderuntime.TurnContextUsagePercent
-
 // ConfiguredBackend returns the configured backend name.
 func ConfiguredBackend(source Dependencies) string {
 	if source.ConfigProvider == nil {
@@ -597,7 +592,7 @@ func RenderClaudeThreadUsageCardBody(threadLabel, threadID string, usage turnbin
 }
 
 // RecordClaudeThreadUsage records Claude thread usage from a turn.
-func (s UsageService) RecordClaudeThreadUsage(threadID string, usage claudecli.TurnUsage) {
+func (s UsageService) RecordClaudeThreadUsage(threadID string, rawUsage any) {
 	if s.app.ConfigProvider == nil {
 		return
 	}
@@ -605,6 +600,7 @@ func (s UsageService) RecordClaudeThreadUsage(threadID string, usage claudecli.T
 	if threadID == "" {
 		return
 	}
+	usage := normalizeClaudeUsage(rawUsage)
 	snapshot := turnbindingClaudeSnapshot{
 		TotalCostUSD:  usage.CostUSD,
 		ContextWindow: int64(usage.ContextWindow),
@@ -620,13 +616,72 @@ func (s UsageService) RecordClaudeThreadUsage(threadID string, usage claudecli.T
 		snapshot.TotalCacheReadTokens = int64(usage.CacheReadTokens)
 		snapshot.TotalCacheCreationTokens = int64(usage.CacheCreationTokens)
 	}
-	if percentage, ok := TurnContextUsagePercent(usage); ok {
+	if percentage, ok := claudeContextUsagePercent(usage); ok {
 		snapshot.ContextUsagePercent = percentage
 		snapshot.HasContextUsagePercent = true
 	}
 
 	tracker := s.app.DebugRuntimeState().TurnBindingTracker()
 	tracker.SetClaudeThreadUsage(threadID, snapshot)
+}
+
+// normalizeClaudeUsage keeps this Feishu command boundary independent of the
+// Claude CLI package while allowing older host fixtures to pass their event
+// value during the migration.
+func normalizeClaudeUsage(raw any) domainturn.ClaudeThreadUsage {
+	if usage, ok := raw.(domainturn.ClaudeThreadUsage); ok {
+		return usage
+	}
+	v := reflect.ValueOf(raw)
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return domainturn.ClaudeThreadUsage{}
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return domainturn.ClaudeThreadUsage{}
+	}
+	intField := func(name string) int {
+		f := v.FieldByName(name)
+		if f.IsValid() && f.Kind() >= reflect.Int && f.Kind() <= reflect.Int64 {
+			return int(f.Int())
+		}
+		return 0
+	}
+	boolField := func(name string) bool {
+		f := v.FieldByName(name)
+		return f.IsValid() && f.Kind() == reflect.Bool && f.Bool()
+	}
+	floatField := func(name string) float64 {
+		f := v.FieldByName(name)
+		if f.IsValid() && f.Kind() == reflect.Float64 {
+			return f.Float()
+		}
+		return 0
+	}
+	return domainturn.ClaudeThreadUsage{
+		InputTokens: intField("InputTokens"), OutputTokens: intField("OutputTokens"),
+		CacheReadTokens: intField("CacheReadTokens"), CacheCreationTokens: intField("CacheCreationTokens"),
+		CumulativeInputTokens: intField("CumulativeInputTokens"), CumulativeOutputTokens: intField("CumulativeOutputTokens"),
+		CumulativeCacheReadTokens: intField("CumulativeCacheReadTokens"), CumulativeCacheCreationTokens: intField("CumulativeCacheCreationTokens"),
+		HasCumulativeUsage: boolField("HasCumulativeUsage"), ContextWindow: intField("ContextWindow"), CostUSD: floatField("CostUSD"),
+	}
+}
+
+func claudeContextUsagePercent(usage domainturn.ClaudeThreadUsage) (float64, bool) {
+	if usage.ContextWindow <= 0 {
+		return 0, false
+	}
+	used := usage.InputTokens + usage.CacheReadTokens + usage.CacheCreationTokens
+	if used < 0 {
+		used = 0
+	}
+	percentage := float64(used) * 100 / float64(usage.ContextWindow)
+	if percentage > 100 {
+		percentage = 100
+	}
+	return percentage, true
 }
 
 // CurrentClaudeThreadUsage returns the current Claude thread usage.
@@ -687,7 +742,7 @@ func (s UsageService) RenderCodexUsageBody(sess *conversation.Session) string {
 		if usage.ModelContextWindow != nil {
 			contextLine = FormatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
 		}
-		body = RenderThreadUsageCardBody(s.app.DebugCurrentThreadLabel(sess), sess.ActiveThreadID, codexadapter.ThreadUsage(usage), contextLine)
+		body = RenderThreadUsageCardBody(s.app.DebugCurrentThreadLabel(sess), sess.ActiveThreadID, usage, contextLine)
 	}
 	return body
 }

@@ -4,11 +4,10 @@ package threadview
 
 import (
 	"feidex/internal/application/presentation"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
 	"path/filepath"
 	"strings"
-
-	"feidex/internal/codexrpc"
 )
 
 func truncate(s string, n int) string { return textutil.Truncate(s, n) }
@@ -70,12 +69,12 @@ func ShortThreadID(id string) string {
 	return id[:8]
 }
 
-func FilterThreadsByWorkspaceCWD(items []codexrpc.ThreadListEntry, workspaceCWD string) []codexrpc.ThreadListEntry {
+func FilterThreadsByWorkspaceCWD(items []conversation.ThreadEntry, workspaceCWD string) []conversation.ThreadEntry {
 	workspaceCWD = strings.TrimSpace(workspaceCWD)
 	if workspaceCWD == "" || len(items) == 0 {
 		return items
 	}
-	filtered := make([]codexrpc.ThreadListEntry, 0, len(items))
+	filtered := make([]conversation.ThreadEntry, 0, len(items))
 	for _, item := range items {
 		if SameWorkspaceCWD(item.Cwd, workspaceCWD) {
 			filtered = append(filtered, item)

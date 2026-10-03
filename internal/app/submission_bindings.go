@@ -193,18 +193,20 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 		SendQueuedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
 			sendSubmissionQueuedNotice(a, ctx, sub)
 		},
-		SendStartFailureNotice: func(ctx context.Context, sub *domainsubmission.Submission, err error, willContinue bool) {
-			// Delegates to the coordinator method.
-			newSubmissionQueueServiceFromApp(a).NotifySubmissionStartFailure(ctx, sub, err, willContinue)
-		},
 		RunAsync: func(fn func()) {
 			runAsync(a, fn)
 		},
+		RunSessionAsync: func(sessionKey string, fn func()) {
+			if fn == nil {
+				return
+			}
+			runAsync(a, func() { a.sessionActorRuntime().Run("session:"+strings.TrimSpace(sessionKey), fn) })
+		},
 		TryBeginStart: func(sessionKey string) bool {
-			return a.Trackers().submissionStarts.TryBegin(sessionKey)
+			return submissionStartTracker(a).TryBegin(sessionKey)
 		},
 		FinishStart: func(sessionKey string) bool {
-			return a.Trackers().submissionStarts.Finish(sessionKey)
+			return submissionStartTracker(a).Finish(sessionKey)
 		},
 		LogSessionState: func(event, sessionKey string, sess *conversation.Session) {
 			logSessionState(event, sessionKey, sess)
@@ -261,4 +263,11 @@ func newSubmissionQueueServiceFromApp(a *App) appsubmission.SubmissionQueueServi
 		},
 		ModelSettings: newModelSnapshotService(a),
 	})
+}
+
+func findSubmissionByTurn(a *App, threadID, turnID string) (string, *domainsubmission.Submission) {
+	if a == nil {
+		return "", nil
+	}
+	return (appsubmission.SubmissionLookupService{State: a.State(), Runtime: newRuntimeStateService(a)}).FindSubmissionByTurn(threadID, turnID)
 }

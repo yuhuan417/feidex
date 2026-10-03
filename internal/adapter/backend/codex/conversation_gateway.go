@@ -2,6 +2,7 @@ package codex
 
 import (
 	"context"
+	"feidex/internal/application/backendops"
 	usecase "feidex/internal/application/conversation"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
@@ -15,9 +16,9 @@ import (
 // providers supply resolved values; the adapter never locates another service.
 type ConversationGateway struct {
 	Client       func() (ConversationClient, error)
-	StartParams  func(usecase.Request) codexrpc.ThreadStartParams
+	StartParams  func(usecase.Request) backendops.ThreadStartConfig
 	ResumeConfig func(*conversation.Session) map[string]any
-	ForkParams   func(usecase.Request) map[string]any
+	ForkParams   func(usecase.Request) backendops.ThreadForkRequest
 }
 
 func (g ConversationGateway) client() (ConversationClient, error) {
@@ -66,11 +67,14 @@ func (g ConversationGateway) Start(ctx context.Context, r usecase.Request) (usec
 	if err != nil {
 		return usecase.Thread{}, err
 	}
-	var result codexrpc.ThreadStartResult
-	if err := client.Call(ctx, "thread/start", g.StartParams(r).Map(), &result); err != nil {
+	if g.StartParams == nil {
+		return usecase.Thread{}, fmt.Errorf("codex thread start configuration not initialized")
+	}
+	result, err := StartThread(ctx, client, g.StartParams(r))
+	if err != nil {
 		return usecase.Thread{}, err
 	}
-	return usecase.Thread{ID: result.Thread.ID, Name: result.Thread.Name, Preview: result.Thread.Preview}, nil
+	return usecase.Thread{ID: result.ID, Name: result.Name, Preview: result.Preview}, nil
 }
 
 func (g ConversationGateway) Resume(ctx context.Context, r usecase.Request) (usecase.Thread, error) {
@@ -78,24 +82,23 @@ func (g ConversationGateway) Resume(ctx context.Context, r usecase.Request) (use
 	if err != nil {
 		return usecase.Thread{}, err
 	}
-	params := codexrpc.ThreadResumeParams{ThreadID: r.Selection.ThreadID, PersistExtendedHistory: true, Model: r.Model}
+	resumeConfig := map[string]any(nil)
 	if g.ResumeConfig != nil {
-		params.Config = g.ResumeConfig(r.Session)
+		resumeConfig = g.ResumeConfig(r.Session)
 	}
-	var result codexrpc.ThreadStartResult
-	if err := client.Call(ctx, "thread/resume", params.Map(), &result); err != nil {
+	result, err := ResumeThread(ctx, client, r.Selection.ThreadID, r.Model, resumeConfig)
+	if err != nil {
 		return usecase.Thread{}, err
 	}
-	name, preview := textutil.FirstNonEmpty(r.Selection.Name, result.Thread.Name), textutil.FirstNonEmpty(r.Selection.Preview, result.Thread.Preview)
+	name, preview := textutil.FirstNonEmpty(r.Selection.Name, result.Name), textutil.FirstNonEmpty(r.Selection.Preview, result.Preview)
 	if !r.SelectionExplicit {
-		name = textutil.FirstNonEmpty(result.Thread.Name, r.Selection.Name)
-		preview = textutil.FirstNonEmpty(result.Thread.Preview, r.Selection.Preview)
+		name = textutil.FirstNonEmpty(result.Name, r.Selection.Name)
+		preview = textutil.FirstNonEmpty(result.Preview, r.Selection.Preview)
 	}
-	applied := ResumedThreadConfig(params.Model, params.Config)
 	return usecase.Thread{
-		ID:      textutil.FirstNonEmpty(strings.TrimSpace(result.Thread.ID), r.Selection.ThreadID),
+		ID:      textutil.FirstNonEmpty(strings.TrimSpace(result.ID), r.Selection.ThreadID),
 		Name:    name,
-		Preview: preview, Applied: &applied,
+		Preview: preview, Applied: &result.Applied,
 	}, nil
 }
 
@@ -104,8 +107,11 @@ func (g ConversationGateway) Fork(ctx context.Context, r usecase.Request) (useca
 	if err != nil {
 		return usecase.Thread{}, err
 	}
+	if g.ForkParams == nil {
+		return usecase.Thread{}, fmt.Errorf("codex thread fork configuration not initialized")
+	}
 	var result codexrpc.ThreadStartResult
-	if err := client.Call(ctx, "thread/fork", g.ForkParams(r), &result); err != nil {
+	if err := client.Call(ctx, "thread/fork", ThreadForkParams(g.ForkParams(r)), &result); err != nil {
 		return usecase.Thread{}, err
 	}
 	return usecase.Thread{ID: strings.TrimSpace(result.Thread.ID), Name: result.Thread.Name, Preview: result.Thread.Preview}, nil

@@ -4,6 +4,7 @@ import (
 	storagejson "feidex/internal/adapter/storage/json"
 	applicationinteraction "feidex/internal/application/interaction"
 	"feidex/internal/domain/interaction"
+	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/state"
 )
 
@@ -30,6 +31,21 @@ func (s runtimeStateService) resolveServerPendingRequest(requestID string) *stat
 	return s.app.State().Pending(request.ID)
 }
 
+// resumeSubmissionAfterRequest is the narrow interaction -> submission
+// handoff. Resolution is authoritative first; only when the interaction
+// application service reports no other open request may the submission return
+// to running. It does not call back through ServerRequestService.
+func (s runtimeStateService) resumeSubmissionAfterRequest(pending *state.PendingRequest) {
+	if pending == nil || s.hasOpenPendingRequestForTurn(pending.ThreadID, pending.TurnID, pending.ID) {
+		return
+	}
+	_, sub := findSubmissionByTurn(s.app, pending.ThreadID, pending.TurnID)
+	if sub == nil {
+		return
+	}
+	_ = s.app.State().SetSubmissionStatus(sub.ID, domainsubmission.SubmissionStatusRunning.String())
+}
+
 func (s runtimeStateService) backendResolvesPendingLocally(pending *state.PendingRequest) bool {
 	if pending == nil {
 		return false
@@ -46,7 +62,7 @@ func (s runtimeStateService) finalizePendingReply(pending *state.PendingRequest)
 	}
 	if s.backendResolvesPendingLocally(pending) {
 		resolved := s.resolveServerPendingRequest(pending.ID)
-		s.app.ServerRequestService().ResumeSubmissionAfterRequest(pending)
+		s.resumeSubmissionAfterRequest(pending)
 		return resolved
 	}
 	request, _ := s.interactionService().ReplyAccepted(pending.ID)

@@ -17,21 +17,11 @@ func recoveryState(a *App) *appcodexruntime.RecoveryState {
 	if a == nil {
 		return nil
 	}
-	if a.composition != nil {
-		a.composition.mu.Lock()
-		defer a.composition.mu.Unlock()
-		if a.composition.codexRecovery == nil {
-			a.composition.codexRecovery = appcodexruntime.NewRecoveryState()
-		}
-		return a.composition.codexRecovery
+	owner := ensureRuntimeOwner(a)
+	if owner.CodexRecovery == nil {
+		owner.CodexRecovery = appcodexruntime.NewRecoveryState()
 	}
-	ensureCompositionState(a)
-	a.composition.mu.Lock()
-	defer a.composition.mu.Unlock()
-	if a.composition.codexRecovery == nil {
-		a.composition.codexRecovery = appcodexruntime.NewRecoveryState()
-	}
-	return a.composition.codexRecovery
+	return owner.CodexRecovery
 }
 
 // buildCodexRecoveryService builds a codexruntime.RecoveryService with
@@ -69,6 +59,9 @@ func buildCodexRecoveryService(a *App) appcodexruntime.RecoveryService {
 		StartNextSubmissionAsync: func(sessionKey, reason string) {
 			newSubmissionQueueServiceFromApp(a).StartNextSubmissionAsync(sessionKey, reason)
 		},
+		RunSessionAsync: func(sessionKey string, fn func()) {
+			runSessionAsync(a, sessionKey, fn)
+		},
 	}
 }
 
@@ -84,10 +77,14 @@ func getCodex(a *App) CodexClient {
 	if a == nil {
 		return nil
 	}
-	ensureCompositionState(a)
+	owner := ensureRuntimeOwner(a)
 	a.composition.clientsMu.RLock()
-	defer a.composition.clientsMu.RUnlock()
-	return a.composition.codex
+	legacy := a.composition.codex
+	a.composition.clientsMu.RUnlock()
+	if current := owner.CodexClient(); current != nil {
+		return current
+	}
+	return legacy
 }
 
 func setCodex(a *App, c CodexClient) {
@@ -96,8 +93,9 @@ func setCodex(a *App, c CodexClient) {
 	}
 	ensureCompositionState(a)
 	a.composition.clientsMu.Lock()
-	defer a.composition.clientsMu.Unlock()
 	a.composition.codex = c
+	a.composition.clientsMu.Unlock()
+	ensureRuntimeOwner(a).SetCodexClient(c)
 }
 
 func currentCodexClient(a *App) CodexClient {

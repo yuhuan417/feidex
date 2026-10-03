@@ -3,7 +3,7 @@ package codexruntime
 import (
 	"context"
 	codexadapter "feidex/internal/adapter/backend/codex"
-	"feidex/internal/codexrpc"
+	"feidex/internal/application/backendops"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
@@ -43,7 +43,7 @@ type StartupRecoveryDeps struct {
 	Context                func() context.Context
 	CurrentClient          func() CodexRPCClient
 	RuntimeRecovering      func() bool
-	BuildThreadStartParams func(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams
+	BuildThreadStartParams func(ws *config.Workspace, sess *conversation.Session, effectiveModel string) backendops.ThreadStartConfig
 	BuildThreadConfig      func(sess *conversation.Session) map[string]any
 	SaveSession            SessionSaveFunc
 	SetThreadContext       ThreadContextSetter
@@ -61,15 +61,10 @@ func RecoverStartupConversation(deps StartupRecoveryDeps, sessionKey, workspaceI
 		return
 	}
 	threadID := strings.TrimSpace(sess.ActiveThreadID)
-	resumeParams := codexrpc.ThreadResumeParams{
-		ThreadID:               threadID,
-		PersistExtendedHistory: true,
-		Model:                  strings.TrimSpace(effectiveModel),
-	}
+	resumeConfig := map[string]any(nil)
 	if deps.BuildThreadConfig != nil {
-		resumeParams.Config = deps.BuildThreadConfig(sess)
+		resumeConfig = deps.BuildThreadConfig(sess)
 	}
-	var resumeResp codexrpc.ThreadStartResult
 	slog.Debug("startup thread resume request",
 		"session_key", sessionKey,
 		"thread_id", threadID,
@@ -77,17 +72,17 @@ func RecoverStartupConversation(deps StartupRecoveryDeps, sessionKey, workspaceI
 		"model", effectiveModel,
 	)
 	resumeCtx, resumeCancel := context.WithTimeout(dependencyContext(deps.Context), 30*time.Second)
-	err := client.Call(resumeCtx, "thread/resume", resumeParams.Map(), &resumeResp)
+	resumeResult, err := codexadapter.ResumeThread(resumeCtx, client, threadID, effectiveModel, resumeConfig)
 	resumeCancel()
 	if err == nil {
-		sess.AppliedModelConfig = codexadapter.ResumedThreadConfig(resumeParams.Model, resumeParams.Config)
+		sess.AppliedModelConfig = resumeResult.Applied
 		sess.ModelConfigError = ""
 		if deps.SetThreadContext != nil {
 			deps.SetThreadContext(sess,
 				workspaceID,
-				firstNonEmpty(strings.TrimSpace(resumeResp.Thread.ID), threadID),
-				firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Name), sess.ActiveThreadName),
-				firstNonEmpty(strings.TrimSpace(resumeResp.Thread.Preview), sess.ActiveThreadPreview),
+				firstNonEmpty(strings.TrimSpace(resumeResult.ID), threadID),
+				firstNonEmpty(strings.TrimSpace(resumeResult.Name), sess.ActiveThreadName),
+				firstNonEmpty(strings.TrimSpace(resumeResult.Preview), sess.ActiveThreadPreview),
 			)
 		}
 		sess.Status = conversation.SessionStatusIdle.String()
@@ -145,8 +140,7 @@ func RecoverStartupConversation(deps StartupRecoveryDeps, sessionKey, workspaceI
 	if deps.BuildThreadStartParams == nil {
 		return
 	}
-	threadParams := deps.BuildThreadStartParams(ws, sess, effectiveModel)
-	var threadResp codexrpc.ThreadStartResult
+	threadConfig := deps.BuildThreadStartParams(ws, sess, effectiveModel)
 	slog.Debug("startup thread start request",
 		"session_key", sessionKey,
 		"workspace_id", workspaceID,
@@ -154,7 +148,7 @@ func RecoverStartupConversation(deps StartupRecoveryDeps, sessionKey, workspaceI
 		"model", effectiveModel,
 	)
 	threadCtx, threadCancel := context.WithTimeout(dependencyContext(deps.Context), 30*time.Second)
-	err = client.Call(threadCtx, "thread/start", threadParams.Map(), &threadResp)
+	threadResult, err := codexadapter.StartThread(threadCtx, client, threadConfig)
 	threadCancel()
 	if err != nil {
 		if valueOrFalse(deps.RuntimeRecovering) || deps.CurrentClient() == nil || deps.CurrentClient() != client {
@@ -187,14 +181,14 @@ func RecoverStartupConversation(deps StartupRecoveryDeps, sessionKey, workspaceI
 		return
 	}
 	if deps.SetThreadContext != nil {
-		deps.SetThreadContext(sess, workspaceID, threadResp.Thread.ID, threadResp.Thread.Name, threadResp.Thread.Preview)
+		deps.SetThreadContext(sess, workspaceID, threadResult.ID, threadResult.Name, threadResult.Preview)
 	}
 	sess.Status = conversation.SessionStatusIdle.String()
 	if deps.SaveSession != nil {
 		if upsertErr := deps.SaveSession(sess); upsertErr != nil {
 			slog.Error("startup fresh thread persistence failed",
 				"session_key", sessionKey,
-				"thread_id", threadResp.Thread.ID,
+				"thread_id", threadResult.ID,
 				"workspace_id", workspaceID,
 				"error", upsertErr,
 			)
@@ -202,11 +196,11 @@ func RecoverStartupConversation(deps StartupRecoveryDeps, sessionKey, workspaceI
 		}
 	}
 	if deps.MarkThreadLive != nil {
-		deps.MarkThreadLive(sessionKey, threadResp.Thread.ID)
+		deps.MarkThreadLive(sessionKey, threadResult.ID)
 	}
 	slog.Debug("startup thread started",
 		"session_key", sessionKey,
-		"thread_id", threadResp.Thread.ID,
+		"thread_id", threadResult.ID,
 		"workspace_id", workspaceID,
 		"model", effectiveModel,
 	)

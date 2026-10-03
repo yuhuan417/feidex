@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"strings"
 
+	configadapter "feidex/internal/adapter/config"
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
+	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/config"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -40,8 +43,14 @@ func workspaceCommandApp(a *App) appworkspacecmd.Dependencies {
 	}
 	return appworkspacecmd.Dependencies{
 		ConfigProvider: a,
-		Outbound:       workspaceOutbound{app: a},
-		CardRenderer:   workspaceCardRenderer{app: a},
+		Lifecycle: &workspaceapp.Lifecycle{
+			Frontend:      identity.FrontendID(a.FrontendID()),
+			Selection:     a.WorkspaceSelection(),
+			Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(a)},
+			Repository:    configadapter.WorkspaceLifecycleRepository{Source: a, Scope: a.State()},
+		},
+		Outbound:     workspaceOutbound{app: a},
+		CardRenderer: workspaceCardRenderer{app: a},
 		BotNameFn: func() string {
 			if a == nil || a.feishu == nil {
 				return ""
@@ -80,8 +89,6 @@ func buildWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 		State:        workspaceStateDeps(st),
 		SessionContext: appworkspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
-			SwitchSessionWorkspace: conversation.SwitchSessionWorkspace,
-			ClearSessionThreadCtx:  conversation.ClearThreadContext,
 			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
 		},
 		Threads: appworkspacecmd.ThreadDeps{
@@ -98,10 +105,10 @@ func buildWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 		},
 		Actions: appworkspacecmd.ActionDeps{
 			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-				return indirectCompleteMenuCommand(a, action, sessionKey, rawCommand, parentAction)
+				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 			},
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-				return indirectReplyCommandActionResponse(a, msg, resp)
+				return replyCommandActionResponse(a, msg, resp)
 			},
 			CommandActionFromMessage: commandActionFromMessage,
 		},

@@ -2,9 +2,8 @@ package app
 
 import (
 	configadapter "feidex/internal/adapter/config"
-	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
+	applicationrouting "feidex/internal/application/routing"
 	appworkspace "feidex/internal/application/workspace"
-	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
 
@@ -113,7 +112,8 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model set MODEL_ID|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Model, value)
+		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, value)
+		updated := result.Binding
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,8 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Effort, value)
+		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, value)
+		updated := result.Binding
 		if err != nil {
 			return err
 		}
@@ -134,7 +135,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		}
 		value := clearableArg(args[1])
 		role := strings.ToLower(strings.TrimSpace(args[0]))
-		_, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Setting(role), value)
+		_, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
 		if err != nil {
 			return err
 		}
@@ -144,7 +145,8 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model subagent effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.SubagentEffort, value)
+		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.SubagentEffort, value)
+		updated := result.Binding
 		if err != nil {
 			return err
 		}
@@ -154,7 +156,8 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model plan effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.PlanEffort, value)
+		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.PlanEffort, value)
+		updated := result.Binding
 		if err != nil {
 			return err
 		}
@@ -168,12 +171,13 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			value = ""
 		}
 		if value != "" {
-			value = appservicetiercmd.NormalizeServiceTier(value)
+			value = applicationrouting.NormalizeServiceTier(value)
 			if value == "" {
 				return fmt.Errorf("unsupported service tier %q", args[1])
 			}
 		}
-		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.ServiceTier, value)
+		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, value)
+		updated := result.Binding
 		if err != nil {
 			return err
 		}
@@ -269,23 +273,16 @@ func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
 	if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
 		return fmt.Errorf("当前群没有已绑定的 workspace")
 	}
-	sess := s.app.State().Session(sessionKey)
-	if reason := appworkspacecmd.WorkspaceSwitchBlockedReason(sess, conversation.HasInFlightSubmission(sess)); reason != "" {
-		return fmt.Errorf("%s", reason)
-	}
-	if _, err := newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
-		current.WorkspaceID = ""
-		current.Status = state.AgentBindingStatusPending.String()
-	}); err != nil {
+	effects, err := workspaceCommandApp(s.app).Lifecycle.Switch(appworkspace.SwitchRequest{
+		Session: s.app.State().Session(sessionKey), Binding: binding, Unbind: true,
+	})
+	if err != nil {
 		return err
 	}
-	if sess != nil {
-		conversation.SwitchSessionWorkspace(sess, "")
-		clearSessionLiveThread(s.app, sess.Key)
-		if err := s.app.State().SaveSession(sess); err != nil {
-			return err
-		}
+	for _, key := range effects.ClearLiveThreads {
+		clearSessionLiveThread(s.app, key)
 	}
+
 	return nil
 }
 
@@ -304,7 +301,7 @@ func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding
 		return fmt.Errorf("usage: /workspace %s VALUE|default", setting)
 	}
 	value := clearableArg(args[1])
-	_, err := newRoutingConfiguration(s.app).SetBinding(binding, setting, value)
+	_, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, setting, value)
 	if err != nil {
 		return err
 	}
@@ -312,17 +309,20 @@ func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding
 }
 
 func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, workspaceID string) (*state.AgentBinding, error) {
-	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID == "" {
-		return nil, fmt.Errorf("请指定 workspace_id")
+	if binding == nil {
+		return nil, fmt.Errorf("binding is required")
 	}
-	if config.FindWorkspace(s.app.cfg, workspaceID) == nil {
-		return nil, fmt.Errorf("workspace %q not found", workspaceID)
-	}
-	return newRoutingConfiguration(s.app).UpdateBinding(binding, func(current *state.AgentBinding) {
-		current.WorkspaceID = workspaceID
-		current.Status = state.AgentBindingStatusActive.String()
+	key := makeSessionKey(s.app, &feishu.InboundMessage{ChatType: binding.ChatType, ChatID: binding.ChatID})
+	effects, err := workspaceCommandApp(s.app).Lifecycle.Switch(appworkspace.SwitchRequest{
+		Session: s.app.State().Session(key), Binding: binding, WorkspaceID: workspaceID,
 	})
+	if err != nil {
+		return nil, err
+	}
+	for _, sessionKey := range effects.ClearLiveThreads {
+		clearSessionLiveThread(s.app, sessionKey)
+	}
+	return effects.Binding, nil
 }
 
 func (s bindingService) createLocalWorkspace(id, name, cwd string) (*config.Workspace, error) {

@@ -1,89 +1,66 @@
 # Backend Layering
 
-这份说明记录从旧 `internal/app` backend 分层迁移到目标架构的边界。目标不是把 Codex 和 Claude 强行抹平成一套假抽象，而是把 Feishu 前端编排、backend 能力差异、以及具体协议实现放到明确且可验证的边界里。最终结构以 [长期架构重构提案](architecture-refactor-proposal.md) 为准。
+本文记录当前 Codex/Claude backend 分层。目标不是抹平能力差异，而是让产品策略、协议转换、运行时监督和 Feishu 展示各有 owner。最终边界以 [长期架构目标与边界](architecture-refactor-proposal.md) 为准。
 
-## 1. Application Use Case Layer
+## 1. Application semantic layer
 
-- 最终位于 `internal/application`。
-- 负责 frontend/session 路由、submission、turn、approval、model config 和 workspace 用例。
-- 只依赖 domain 和 consumer-owned ports，不直接调用 Feishu SDK 或 Codex/Claude raw protocol。
-- 迁移期间，`internal/app` 仍作为入口和兼容协调层调用这些用例。
+`internal/application` 负责 backend-neutral 的 conversation、submission、turn、interaction、workspace、routing、model configuration 和 capability policy。它只依赖 domain 与 consumer-owned ports，发布 typed `BackendEvent`、semantic effects 和 detached views；不得导入 `internal/codexrpc`、`internal/claudecli`、Feishu SDK、storage 或 `internal/app`。
 
-## 2. Feishu Entry / Compatibility Layer
+主要入口：
 
-- 入口与组合位于 root `internal/app`，Feishu 协议和 outbound effect adapter 位于 `internal/adapter/feishu`。
-- 负责 Feishu 事件入口、session 路由、submission 队列、卡片动作、恢复流程、审批与 turn/thread 生命周期收口。
-- 这层只做入口和组合，不新增产品状态 owner；runtime 安装、pending request 路由和协议敏感恢复通过显式 capability 注入。
-- 任何涉及 Codex app-server turn / thread / approval 生命周期的改动，都必须继续对照 [docs/codex-app-server-state-machine-audit.md](/home/yuhuan/feidex/docs/codex-app-server-state-machine-audit.md)。
+- `internal/application/backendevents/service.go`
+- `internal/application/backendops/request.go`
+- `internal/application/conversation/service.go`
+- `internal/application/submission/queue.go`
+- `internal/application/turn/service.go`
+- `internal/application/interaction/service.go`
+- `internal/application/modelconfig/`
+- `internal/application/routing/`
 
-代表文件:
+## 2. Feishu entry and composition layer
 
-- `internal/app/app.go`
-- `internal/app/feishu_event_router.go`
-- `internal/app/submission_queue.go`
-- `internal/app/submission_workflow.go`
+`internal/app` 只负责 Feishu entrypoint、composition binding 和必须保持协议顺序的跨 owner 编排。`internal/composition` 创建 frontend scope 与 runtime owner。卡片与消息由 `internal/adapter/feishu` 转换和执行，不能从 application 直接调用 SDK。
+
+代表文件：
+
+- `internal/app/input_dispatcher.go`
+- `internal/app/backend_events.go`
+- `internal/app/submission_bindings.go`
 - `internal/app/turn_lifecycle.go`
 - `internal/app/server_request_state.go`
-
-## 3. Backend Capability / Selection Layer
-
-- 主要位于 `internal/app/backend` 和 `internal/application/backendcaps`。
-- 负责“当前 frontend 选中的 backend 能做什么、前端该如何展示什么、同一入口在不同 backend 下如何解释”。
-- 允许在这一层按 backend 分流，但不在这里实现底层协议 transport。
-- permission / workspace / conversation 术语差异都属于这一层的 owner；不应再散落到 root `app` 的多处 backend 分支中。
-
-当前入口:
-
-- `internal/app/backend/driver.go`
-- `internal/app/backend/permission_driver.go`
-- `internal/app/backend/configuration.go`
-- `internal/app/backend/selection.go`
-- `internal/app/backend/actions.go`
-- `internal/app/backend/display.go`
-- `internal/app/backend/failure.go`
-- `internal/app/backend/maintenance.go`
-- `internal/application/backendcaps/capability.go`
-
-## 4. Backend Adapter Layer
-
-- 最终位于 `internal/adapter/backend/codex` 和 `internal/adapter/backend/claude`，底层协议客户端仍位于 `internal/codexrpc` 与 `internal/claudecli`。协议实现已收敛到 `internal/adapter/backend` 与 `internal/runtime`；root 只保留 composition binding。
-- 负责真正的 Codex / Claude 行为实现。
-- 只有这一层应该知道具体协议方法、CLI 特性、session/thread 启停细节、权限模式热更新、或 backend 内部恢复策略。
-
-当前主要实现点:
-
-- `internal/adapter/backend/codex/*`
-- `internal/adapter/backend/claude/*`
-- `internal/runtime/claude/*`
-- `internal/app/claudesupport/support.go`
-- `internal/runtime/codex/recovery.go`
-- `internal/runtime/codex/upgrade.go`
-- `internal/codexrpc/*`
-
-## 5. Runtime Layer
-
-- 最终位于 `internal/runtime`。
-- 这层负责 frontend 生命周期、进程监督、取消、恢复和 effect 执行；状态通过显式 runtime context 注入，避免直接回调 root。
-- root glue 只负责构造和注入；runtime 不读取 root 宿主字段，也不承接产品规则。
-
-当前入口:
-
 - `internal/app/backend_runtime.go`
-- `internal/app/backend_runtime_codex.go`
-- `internal/app/backend_runtime_claude.go`
-- `internal/app/backend_selection.go`
-- `internal/app/backend_configuration_helpers.go`
-- `internal/app/maintenance_bindings.go`
-- `internal/app/startup_recovery_bindings.go`
-- `internal/app/claude_runtime.go`
-- `internal/app/conversation_services.go`
+
+涉及 thread/turn/approval/review/compaction/tool input/server request 的改动，必须同步检查 [Codex 状态机审计](codex-app-server-state-machine-audit.md)。
+
+## 3. Backend capability and configuration
+
+backend 选择与 capability 位于 `internal/application/backendcaps`、`internal/application/backendconfig`、`internal/application/modelconfig` 和 `internal/app/backend_*` 的 composition glue。这里负责当前 frontend 的可用能力、配置 scope、模型 snapshot、idle-only backend switch 和失败策略；不实现具体 RPC 或 CLI wire。
+
+`internal/app/backend_selection.go` 只连接 `internal/adapter/feishu/backend/selection.go` 的 semantic card/effect ports。backend failure、maintenance 和 runtime selection 的长任务必须遵守 frontend/session scope；不得静默 fallback 到 Codex。
+
+## 4. Backend adapters
+
+- `internal/adapter/backend/codex/` 负责 Codex gateway、thread/turn/review/goal/skills/input 编码、notification/request 解码、request token 和 usage 转换。
+- `internal/adapter/backend/claude/` 负责 Claude conversation gateway 与 prompt/协议转换；Claude CLI session/process 的生命周期由 `internal/runtime/claude/` 监督。
+- `internal/codexrpc/` 和 `internal/claudecli/` 只提供 transport/protocol 客户端与类型，不理解 Feishu、session aggregate 或卡片策略。
+
+Codex wire 参数（如 thread start/resume/fork、turn start/steer 和 reply payload）必须留在 Codex adapter。架构测试会阻止 `internal/app` 重新组装这些类型；startup recovery 必须调用 Codex adapter operation。
+
+## 5. Runtime layer
+
+`internal/runtime` 负责 frontend lifecycle/cancellation、session actors、effect execution/dedupe、backend process supervision、recovery、retry、turn binding 和 workspace process。`FrontendOwner` 是 frontend-scoped mutable state 的单一构造入口；runtime 不导入 transitional app，也不承接菜单或产品策略。
+
+当前主要实现：
+
+- `internal/runtime/frontend.go`、`internal/runtime/frontend_owner.go`
+- `internal/runtime/session_actors.go`
+- `internal/runtime/effect_runner.go`、`internal/runtime/effect_deduper.go`
+- `internal/runtime/codex/`、`internal/runtime/claude/`
+- `internal/runtime/autoretry/`、`internal/runtime/turnbinding/`、`internal/runtime/workspace/`
 
 ## 放置规则
 
-- 新的前端展示差异、菜单差异、帮助文案差异，优先放到 `internal/application/backendcaps` 或 `internal/app/backend`。
-- 新的 permission 差异，优先放到 `backend.PermissionDriver`，不要在 root `app` 做默认 backend 分支。
-- 新的 backend 启停与维护放到 `internal/runtime`，协议操作放到 `internal/adapter/backend`，产品配置规则放到 application；root 只负责构造和注入。
-- 新的 Codex / Claude 专有调用，留在 implementation layer，不要直接散落到 Feishu 编排入口。
-- frontend 级 backend 切换和影响 session 启动语义的运行时配置变化，继续遵守 idle-only 规则。
-- unset / unsupported backend 必须返回显式 unsupported 行为，不能静默 fallback 到 Codex 或任何默认 backend。
-- root `internal/app` 不再接受新的 backend-specific compatibility shim、alias 文件、或 comment-only wrapper。
+- 新产品规则放 application/domain；新协议字段放 backend adapter；新进程、取消、恢复和监督放 runtime；新卡片渲染/Feishu API 放 Feishu adapter；新构造只放 composition。
+- session/submission/turn 的异步 continuation 必须通过 `RunSessionAsync` 或等价 actor port；frontend-wide startup/recovery/maintenance 重新按 session 投递队列工作。
+- 所有 external effect 必须经过 semantic effect runner；保存失败不得发布后续 effects，成功副作用由 frontend-scoped deduper 记账。
+- 新的 backend-specific compatibility shim、alias-only wrapper、service locator 或 `*App` capability carrier 不得加入 root。

@@ -5,10 +5,12 @@ import (
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	domainturn "feidex/internal/domain/turn"
 	"log/slog"
 	"time"
 
 	appapproval "feidex/internal/adapter/feishu/approval"
+	"feidex/internal/application"
 
 	appclauderuntime "feidex/internal/runtime/claude"
 
@@ -37,16 +39,28 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		Cfg:     cfg,
 		Lifecycle: appclauderuntime.LifecycleDeps{
 			BindClaudeSessionThread: func(sessionKey, turnID, threadID string) {
-				bindClaudeSessionThread(app, sessionKey, turnID, threadID)
+				runSession(app, sessionKey, func() {
+					bindClaudeSessionThread(app, sessionKey, turnID, threadID)
+				})
 			},
 			FinishTurn: func(threadID, turnID, status string) {
-				finishTurn(app, threadID, turnID, status)
+				runSession(app, sessionKeyForBackendEvent(app, application.BackendEvent{ThreadID: threadID}), func() {
+					finishTurn(app, threadID, turnID, status)
+				})
 			},
 			FinishSteerSubmission: func(submissionID, status string) {
-				finishSteerSubmission(app, submissionID, status)
+				sessionKey := ""
+				if sub := app.State().Submission(submissionID); sub != nil {
+					sessionKey = sub.SessionKey
+				}
+				runSession(app, sessionKey, func() {
+					finishSteerSubmission(app, submissionID, status)
+				})
 			},
 			FailClaudeSessionWork: func(sessionKey, threadID string, err error) {
-				failClaudeSessionActiveWork(app, sessionKey, threadID, err)
+				runSession(app, sessionKey, func() {
+					failClaudeSessionActiveWork(app, sessionKey, threadID, err)
+				})
 			},
 			FailBackendActiveWork: func(backend, sessionKey, threadID, message string) {
 				failBackendActiveWork(app, backend, sessionKey, threadID, message)
@@ -57,7 +71,13 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		Usage: appclauderuntime.UsageDeps{
 			RecordClaudeThreadUsage: func(threadID string, usage claudecli.TurnUsage) {
-				newUsageService(app).RecordClaudeThreadUsage(threadID, usage)
+				newUsageService(app).RecordClaudeThreadUsage(threadID, domainturn.ClaudeThreadUsage{
+					InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens,
+					CacheReadTokens: usage.CacheReadTokens, CacheCreationTokens: usage.CacheCreationTokens,
+					CumulativeInputTokens: usage.CumulativeInputTokens, CumulativeOutputTokens: usage.CumulativeOutputTokens,
+					CumulativeCacheReadTokens: usage.CumulativeCacheReadTokens, CumulativeCacheCreationTokens: usage.CumulativeCacheCreationTokens,
+					HasCumulativeUsage: usage.HasCumulativeUsage, ContextWindow: usage.ContextWindow, CostUSD: usage.CostUSD,
+				})
 			},
 			RecordTurnTokenUsage: func(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
 				newRuntimeStateService(app).recordTurnTokenUsage(threadID, turnID, usage)
@@ -120,7 +140,7 @@ func newClaudeRuntime(app *App, cfg config.ClaudeConfig) ClaudeCore {
 		},
 		Lookup: appclauderuntime.LookupDeps{
 			FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-				return newSubmissionQueueServiceFromApp(app).FindSubmissionByTurn(threadID, turnID)
+				return findSubmissionByTurn(app, threadID, turnID)
 			},
 			GetSession: func(sessionKey string) *conversation.Session {
 				return app.State().Session(sessionKey)

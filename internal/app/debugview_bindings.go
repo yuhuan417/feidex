@@ -5,9 +5,9 @@ import (
 	configadapter "feidex/internal/adapter/config"
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	domainturn "feidex/internal/domain/turn"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -77,7 +77,7 @@ func (a debugRuntimeStateAdapter) TurnBindingTracker() appdebugviewcmd.TurnBindi
 	return newRuntimeStateService(a.app).turnBindingTracker()
 }
 
-func (a debugRuntimeStateAdapter) CurrentThreadUsage(threadID string) (codexrpc.ThreadTokenUsage, bool) {
+func (a debugRuntimeStateAdapter) CurrentThreadUsage(threadID string) (domainturn.ThreadTokenUsage, bool) {
 	return newRuntimeStateService(a.app).currentThreadUsage(threadID)
 }
 

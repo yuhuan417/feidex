@@ -182,6 +182,9 @@ func newBackendFailureService(a *App) appbackend.BackendFailureService {
 			RunAsync: func(fn func()) {
 				runAsync(a, fn)
 			},
+			RunSessionAsync: func(sessionKey string, fn func()) {
+				runSessionAsync(a, sessionKey, fn)
+			},
 		},
 	})
 }

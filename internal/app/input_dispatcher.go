@@ -56,8 +56,8 @@ func newInputDispatcher(a *App) application.Dispatcher {
 }
 func dispatchInput(a *App, input application.Input) (application.Result, error) {
 	dispatcher := newInputDispatcher(a)
-	if a != nil && a.composition != nil && a.composition.dispatcher != nil {
-		dispatcher = *a.composition.dispatcher
+	if owner := ensureRuntimeOwner(a); owner != nil && owner.Dispatcher != nil {
+		dispatcher = *owner.Dispatcher
 	}
 	var result application.Result
 	var err error
@@ -119,8 +119,8 @@ func dispatchCodexRequest(a *App, req codexrpc.RequestEnvelope) {
 }
 
 func newEffectRunner(a *App) frontendruntime.EffectRunner {
-	if a != nil && a.composition != nil && a.composition.effectRunner != nil {
-		return *a.composition.effectRunner
+	if owner := ensureRuntimeOwner(a); owner != nil && owner.EffectRunner != nil {
+		return *owner.EffectRunner
 	}
 	if a == nil {
 		return frontendruntime.EffectRunner{}
@@ -130,6 +130,9 @@ func newEffectRunner(a *App) frontendruntime.EffectRunner {
 		transport = a.composition.feishuTransport
 	}
 	runner := feishuoutbound.NewEffectRunner(transport)
+	if owner := ensureRuntimeOwner(a); owner != nil {
+		runner.Deduper = owner.EffectDeduper
+	}
 	runner.Save = func(ctx context.Context, e application.SaveState) error {
 		if err := ctx.Err(); err != nil {
 			return err

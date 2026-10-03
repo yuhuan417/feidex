@@ -1,7 +1,7 @@
 package app
 
 import (
-	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
+	applicationrouting "feidex/internal/application/routing"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/routing"
@@ -345,8 +345,9 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		next := appservicetiercmd.ToggleServiceTier(binding.ServiceTierOverride)
-		updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.ServiceTier, next)
+		next := applicationrouting.ToggleServiceTier(binding.ServiceTierOverride)
+		result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, next)
+		updated := result.Binding
 		if err != nil {
 			return err
 		}
@@ -362,11 +363,12 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 	}
 	modelID = clearableArg(modelID)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Model, modelID)
+	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, modelID)
+	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -382,11 +384,12 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 	}
 	effort = clearableArg(effort)
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/model effort")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Effort, effort)
+	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, effort)
+	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -399,17 +402,18 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction, sessionKey, serviceTier string) (*callback.CardActionTriggerResponse, error) {
 	serviceTier = clearableArg(serviceTier)
 	if serviceTier != "" {
-		serviceTier = appservicetiercmd.NormalizeServiceTier(serviceTier)
+		serviceTier = applicationrouting.NormalizeServiceTier(serviceTier)
 		if serviceTier == "" {
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "unsupported service tier"}}, nil
 		}
 	}
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/fast")
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.ServiceTier, serviceTier)
+	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, serviceTier)
+	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -421,12 +425,13 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 
 func (s bindingService) completeBindingSimpleOverride(action *feishu.CardAction, sessionKey, fieldName, value string) (*callback.CardActionTriggerResponse, error) {
 	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace "+fieldName)
-	binding, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := newRoutingConfiguration(s.app).EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)
-	updated, err := newRoutingConfiguration(s.app).SetBinding(binding, routing.Setting(fieldName), value)
+	result, err := newScopedRoutingConfiguration(s.app).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(fieldName), value)
+	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}

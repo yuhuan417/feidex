@@ -34,7 +34,6 @@ import (
 
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -57,6 +56,7 @@ type App struct {
 	feishu                 FeishuClient
 	started                time.Time
 	frontendRuntime        frontendruntime.FrontendRuntime
+	runtimeOwner           *frontendruntime.FrontendOwner
 	stateMu                sync.Mutex
 	stateView              *appstate.Store
 	composition            *appComposition
@@ -66,8 +66,9 @@ type App struct {
 	frontendRecoveryMu     sync.Mutex
 	frontendTrafficMu      sync.Mutex
 	frontendMessageTraffic int
+	runtimeOwnerMu         sync.Mutex
 	sessionActorsMu        sync.Mutex
-	sessionActors          *frontendruntime.SessionActors
+	sessionActors          *frontendruntime.SessionActors // legacy mirror; runtimeOwner is authoritative
 }
 
 // appComposition owns lazily constructed application/backend services. Keeping
@@ -81,9 +82,11 @@ type appComposition struct {
 	feishuTransport FeishuClient
 	// Runtime-owned state lives here so App remains the frontend entrypoint
 	// rather than a registry of mutable service state.
-	codex            CodexClient
-	claude           ClaudeCore
-	trackers         *appTrackers
+	codex    CodexClient
+	claude   ClaudeCore
+	trackers *appTrackers
+	// The following runtime fields remain as compatibility mirrors for tests
+	// and transitional callers. Production code reads the FrontendOwner.
 	liveThreads      *frontendruntime.LiveThreads
 	autoRetries      *appautoretry.Tracker
 	codexRecovery    *appcodexruntime.RecoveryState
@@ -117,7 +120,7 @@ type appTrackers struct {
 	turnStreams         *turnStreamTracker
 	turnItems           *turnitem.Tracker
 	turnBindings        *turnbinding.Tracker
-	submissionStarts    frontendruntime.SubmissionStarts
+	submissionStarts    *frontendruntime.SubmissionStarts
 	workspaceCloneOps   *appworkspacecmd.CloneTracker
 	finalCardPatches    *finalcardpatch.Tracker
 	pendingSkills       *skillruntime.Tracker
@@ -136,6 +139,7 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 	}
 	backend := normalizeRuntimeBackend(frontend.Backend)
 	feishuTransport := appfeishuwrap.WrapFeishuClient(newFeishuClient(frontend.Feishu))
+	owner := composition.NewFrontendOwner()
 	app := &App{
 		cfg:                 cfg,
 		sharedConfigMu:      scope.ConfigMutex,
@@ -149,10 +153,12 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		feishu:              feishuTransport,
 		started:             time.Now(),
 		deduper:             frontendruntime.NewInboundDeduper(),
-		sessionActors:       frontendruntime.NewSessionActors(),
+		runtimeOwner:        owner,
+		sessionActors:       owner.SessionActors,
 	}
-	app.composition.liveThreads = frontendruntime.NewLiveThreads()
-	app.composition.autoRetries = appautoretry.NewTracker()
+	app.composition.liveThreads = owner.LiveThreads
+	app.composition.autoRetries = owner.AutoRetries
+	app.composition.codexRecovery = owner.CodexRecovery
 	app.composition.trackers = &appTrackers{
 		turnStreams:        newTurnStreamTracker(),
 		turnItems:          turnitem.NewTracker(),
@@ -161,8 +167,10 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 		finalCardPatches:   finalcardpatch.NewTracker(),
 		pendingSkills:      skillruntime.NewTracker(),
 		groupAnnouncements: newGroupAnnouncementTracker(),
+		submissionStarts:   owner.SubmissionStarts,
 	}
 	effectRunner := newEffectRunner(app)
+	owner.EffectRunner = &effectRunner
 	app.composition.effectRunner = &effectRunner
 	if notifying, ok := app.feishu.(*appfeishuwrap.NotifyingFeishuClient); ok {
 		app.feishu = &appfeishuwrap.EffectClient{NotifyingFeishuClient: notifying, Frontend: identity.FrontendID(app.frontendID), Runner: effectRunner}
@@ -174,6 +182,7 @@ func NewFrontend(scope composition.FrontendScope) (*App, error) {
 	// follows runtime backend changes through the injected capability.
 	app.composition.workspaceRender = buildWorkspaceRenderService(app)
 	dispatcher := newInputDispatcher(app)
+	owner.Dispatcher = &dispatcher
 	app.composition.dispatcher = &dispatcher
 	if err := canonicalizeStoredSessionKeys(app); err != nil {
 		return nil, err
@@ -242,20 +251,20 @@ func runAsync(a *App, fn func()) {
 	a.frontendRuntime.Run(fn, a.asyncRunner)
 }
 
-func buildThreadStartParams(a *App, ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
+func buildThreadStartParams(a *App, ws *config.Workspace, sess *conversation.Session, effectiveModel string) backendops.ThreadStartConfig {
 	if strings.TrimSpace(effectiveModel) == "" {
 		effectiveModel = modelConfigSnapshot(a, sess, domainbackend.BackendCodex).Model
 	}
-	return codexrpc.ThreadStartParams{
+	return backendops.ThreadStartConfig{
 		Cwd:                    ws.Cwd,
 		ApprovalPolicy:         effectiveBindingApprovalPolicy(a, sess, ws),
-		Sandbox:                effectiveBindingSandboxMode(a, sess, ws),
+		SandboxMode:            effectiveBindingSandboxMode(a, sess, ws),
 		ServiceName:            a.cfg.Codex.ServiceName,
 		ExperimentalRawEvents:  false,
 		PersistExtendedHistory: true,
 		ServiceTier:            strings.TrimSpace(effectiveBindingServiceTier(a, sess)),
 		Model:                  strings.TrimSpace(effectiveModel),
-		Config:                 codexAuxiliaryConfig(a, sess),
+		AuxiliaryConfig:        codexAuxiliaryConfig(a, sess),
 	}
 }
 

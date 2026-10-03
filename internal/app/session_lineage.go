@@ -15,19 +15,19 @@ func getAppLiveThreadTracker(a *App) *frontendruntime.LiveThreads {
 	if a == nil {
 		return nil
 	}
-	ensureCompositionState(a)
-	if a.composition.liveThreads == nil {
-		a.composition.liveThreads = frontendruntime.NewLiveThreads()
+	owner := ensureRuntimeOwner(a)
+	if owner.LiveThreads == nil {
+		owner.LiveThreads = frontendruntime.NewLiveThreads()
 	}
-	return a.composition.liveThreads
+	return owner.LiveThreads
 }
 
 func resetAppLiveThreadTracker(a *App) {
 	if a == nil {
 		return
 	}
-	ensureCompositionState(a)
-	a.composition.liveThreads = frontendruntime.NewLiveThreads()
+	owner := ensureRuntimeOwner(a)
+	owner.LiveThreads = frontendruntime.NewLiveThreads()
 }
 
 func markSessionThreadLive(a *App, sessionKey, threadID string) {

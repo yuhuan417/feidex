@@ -73,6 +73,11 @@ type RecoveryService struct {
 
 	// StartNextSubmissionAsync starts the next submission for a session.
 	StartNextSubmissionAsync func(sessionKey, reason string)
+
+	// RunSessionAsync admits recovery continuations to the owning session actor.
+	// Recovery itself remains frontend-wide, but queue mutations must preserve
+	// the same ordering as ordinary turn completion callbacks.
+	RunSessionAsync func(sessionKey string, fn func())
 }
 
 // NewRecoveryService creates a new RecoveryService.
@@ -272,6 +277,12 @@ func (s RecoveryService) ResumeQueuedSessions() {
 			continue
 		}
 		if !s.SessionShouldStartNextSubmissionAsync(sessionKey) {
+			continue
+		}
+		if s.RunSessionAsync != nil {
+			s.RunSessionAsync(sessionKey, func() {
+				s.StartNextSubmissionAsync(sessionKey, "codexRuntimeRecovered")
+			})
 			continue
 		}
 		go s.StartNextSubmissionAsync(sessionKey, "codexRuntimeRecovered")

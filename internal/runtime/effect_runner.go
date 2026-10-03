@@ -11,6 +11,7 @@ import (
 // completed its state transition. It stops on the first failed effect, so an
 // unsuccessful save cannot accidentally start a backend turn.
 type EffectRunner struct {
+	Deduper         EffectDeduper
 	RefreshGroup    func(context.Context, application.RefreshGroupStatus) error
 	Steer           func(context.Context, application.SteerTurn) error
 	Enqueue         func(context.Context, application.EnqueueInput) error
@@ -25,6 +26,30 @@ type EffectRunner struct {
 	Resolve         func(context.Context, application.ResolveBackendRequest) error
 }
 
+// WithoutDeduper returns a transport-only runner for imperative adapter
+// calls. Application effects use the frontend-scoped deduper; direct client
+// methods such as command capture and permission retries must retain their
+// historical one-call semantics.
+func (r EffectRunner) WithoutDeduper() EffectRunner {
+	r.Deduper = nil
+	return r
+}
+
+func (r EffectRunner) run(ctx context.Context, key string, fn func() error) error {
+	if r.Deduper == nil || key == "" {
+		return fn()
+	}
+	_, err := r.Deduper.Do(ctx, key, func() (any, error) { return nil, fn() })
+	return err
+}
+
+func (r EffectRunner) runValue(ctx context.Context, key string, fn func() (any, error)) (any, error) {
+	if r.Deduper == nil || key == "" {
+		return fn()
+	}
+	return r.Deduper.Do(ctx, key, fn)
+}
+
 func (r EffectRunner) RunSendMessage(ctx context.Context, effect application.SendMessage) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -32,13 +57,20 @@ func (r EffectRunner) RunSendMessage(ctx context.Context, effect application.Sen
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if r.SendWithID != nil {
-		return r.SendWithID(ctx, effect)
+	value, err := r.runValue(ctx, application.EffectIdentity(effect), func() (any, error) {
+		if r.SendWithID != nil {
+			return r.SendWithID(ctx, effect)
+		}
+		if r.Send == nil {
+			return "", fmt.Errorf("send effect unavailable")
+		}
+		return "", r.Send(ctx, effect)
+	})
+	if err != nil {
+		return "", err
 	}
-	if r.Send == nil {
-		return "", fmt.Errorf("send effect unavailable")
-	}
-	return "", r.Send(ctx, effect)
+	result, _ := value.(string)
+	return result, nil
 }
 
 func (r EffectRunner) RunSendCard(ctx context.Context, effect application.SendCard) (string, error) {
@@ -48,13 +80,23 @@ func (r EffectRunner) RunSendCard(ctx context.Context, effect application.SendCa
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	if r.SendCardWithID != nil {
-		return r.SendCardWithID(ctx, effect)
+	// Card sends can be intentionally repeated for menu navigation and command
+	// capture. Their stable identity is used by higher-level workflows when
+	// needed, while the transport operation itself remains one-shot here.
+	value, err := r.runValue(ctx, "", func() (any, error) {
+		if r.SendCardWithID != nil {
+			return r.SendCardWithID(ctx, effect)
+		}
+		if r.SendCard == nil {
+			return "", fmt.Errorf("send card effect unavailable")
+		}
+		return "", r.SendCard(ctx, effect)
+	})
+	if err != nil {
+		return "", err
 	}
-	if r.SendCard == nil {
-		return "", fmt.Errorf("send card effect unavailable")
-	}
-	return "", r.SendCard(ctx, effect)
+	result, _ := value.(string)
+	return result, nil
 }
 
 func (r EffectRunner) Run(ctx context.Context, effects []application.Effect) error {
@@ -71,44 +113,47 @@ func (r EffectRunner) Run(ctx context.Context, effects []application.Effect) err
 			if r.RefreshGroup == nil {
 				return fmt.Errorf("group refresh effect unavailable")
 			}
-			err = r.RefreshGroup(ctx, e)
+			err = r.run(ctx, application.EffectIdentity(e), func() error { return r.RefreshGroup(ctx, e) })
 		case application.SaveState:
 			if r.Save == nil {
 				return fmt.Errorf("save effect unavailable")
 			}
-			err = r.Save(ctx, e)
+			err = r.run(ctx, application.EffectIdentity(e), func() error { return r.Save(ctx, e) })
 		case application.SendMessage:
 			if r.Send == nil {
 				return fmt.Errorf("send effect unavailable")
 			}
-			err = r.Send(ctx, e)
+			err = r.run(ctx, application.EffectIdentity(e), func() error { return r.Send(ctx, e) })
 		case application.SendCard:
 			if r.SendCard == nil {
 				return fmt.Errorf("send card effect unavailable")
 			}
+			// Menu/card sends are presentation refreshes and may intentionally
+			// repeat for the same anchor; workflow callers can use transport-level
+			// capture or patch semantics when they need stronger deduplication.
 			err = r.SendCard(ctx, e)
 		case application.PatchCard:
 			if r.Patch == nil {
 				return fmt.Errorf("patch effect unavailable")
 			}
-			err = r.Patch(ctx, e)
+			err = r.run(ctx, application.EffectIdentity(e), func() error { return r.Patch(ctx, e) })
 		case application.StartTurn:
 			_, err = r.RunStartTurn(ctx, e)
 		case application.SteerTurn:
 			if r.Steer == nil {
 				return fmt.Errorf("steer effect unavailable")
 			}
-			err = r.Steer(ctx, e)
+			err = r.run(ctx, application.EffectIdentity(e), func() error { return r.Steer(ctx, e) })
 		case application.EnqueueInput:
 			if r.Enqueue == nil {
 				return fmt.Errorf("enqueue effect unavailable")
 			}
-			err = r.Enqueue(ctx, e)
+			err = r.run(ctx, application.EffectIdentity(e), func() error { return r.Enqueue(ctx, e) })
 		case application.ResolveBackendRequest:
 			if r.Resolve == nil {
 				return fmt.Errorf("resolve effect unavailable")
 			}
-			err = r.Resolve(ctx, e)
+			err = r.run(ctx, application.EffectIdentity(e), func() error { return r.Resolve(ctx, e) })
 		default:
 			return fmt.Errorf("unsupported effect %T", effect)
 		}
@@ -127,11 +172,18 @@ func (r EffectRunner) RunStartTurn(ctx context.Context, effect application.Start
 	if err := ctx.Err(); err != nil {
 		return backendops.TurnResult{}, err
 	}
-	if r.StartWithResult != nil {
-		return r.StartWithResult(ctx, effect)
+	value, err := r.runValue(ctx, application.EffectIdentity(effect), func() (any, error) {
+		if r.StartWithResult != nil {
+			return r.StartWithResult(ctx, effect)
+		}
+		if r.Start == nil {
+			return backendops.TurnResult{}, fmt.Errorf("start effect unavailable")
+		}
+		return backendops.TurnResult{}, r.Start(ctx, effect)
+	})
+	if err != nil {
+		return backendops.TurnResult{}, err
 	}
-	if r.Start == nil {
-		return backendops.TurnResult{}, fmt.Errorf("start effect unavailable")
-	}
-	return backendops.TurnResult{}, r.Start(ctx, effect)
+	result, _ := value.(backendops.TurnResult)
+	return result, nil
 }

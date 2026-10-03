@@ -99,6 +99,65 @@ func TestBackendConfigurationDoesNotDependOnTransitionalConfigurationHelpers(t *
 	}
 }
 
+func TestWorkspaceCommandCompositionHasNoIndirectInitBridge(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "workspacecmd_bindings.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, forbidden := range []string{"func init()", "indirectCompleteMenuCommand", "indirectReplyCommandActionResponse"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("workspace command composition still uses implicit bridge %q", forbidden)
+		}
+	}
+}
+
+func TestTurnCompositionDoesNotPassAppAggregateToUseCase(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "turn_lifecycle.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	if strings.Contains(source, "Runtime: app") || strings.Contains(source, "Continuations: app") || strings.Contains(source, "Delivery: app") || strings.Contains(source, "Diagnostics: app") {
+		t.Fatal("turn composition passes the App aggregate instead of narrow ports")
+	}
+}
+
+func TestFrontendRuntimeOwnerConstructionStaysInComposition(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal", "app", "app.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, forbidden := range []string{
+		"frontendruntime.NewFrontendOwner()",
+		"frontendruntime.NewSessionActors()",
+		"frontendruntime.NewLiveThreads()",
+		"appautoretry.NewTracker()",
+		"appcodexruntime.NewRecoveryState()",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("frontend construction must stay behind composition owner factory: %q", forbidden)
+		}
+	}
+	if !strings.Contains(source, "composition.NewFrontendOwner()") {
+		t.Fatal("NewFrontend must obtain its runtime owner from composition")
+	}
+}
+
+func TestRuntimeOwnerDoesNotDependOnTransitionalApp(t *testing.T) {
+	violations, err := importsUnder(repositoryRoot(t), "internal/runtime", []string{modulePath + "/internal/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("runtime owner must not depend on transitional app: %v", violations)
+	}
+}
+
 func TestPlanModeDoesNotDependOnAppCoreOrAppWorkspace(t *testing.T) {
 	root := repositoryRoot(t)
 	violations, err := importsUnder(root, "internal/adapter/feishu/planmode", []string{
@@ -274,6 +333,200 @@ func TestTargetPackagesUseCapabilityFieldsInsteadOfAppPointers(t *testing.T) {
 		})
 		if err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestBackendProtocolAssemblyStaysBehindAdapters(t *testing.T) {
+	root := repositoryRoot(t)
+	checks := []struct {
+		name     string
+		relative string
+		banned   []string
+	}{
+		{
+			name: "app thread wire params", relative: "internal/app",
+			banned: []string{"codexrpc.ThreadStartParams", "codexrpc.ThreadResumeParams", "codexrpc.ThreadForkParams"},
+		},
+		{
+			name: "workspace command backend protocol", relative: "internal/adapter/feishu/workspacecmd",
+			banned: []string{"internal/codexrpc", "internal/claudecli", "CodexRPCClient"},
+		},
+		{
+			name: "debug command Claude protocol", relative: "internal/adapter/feishu/debugviewcmd",
+			banned: []string{"internal/claudecli", "claudecli.TurnUsage"},
+		},
+	}
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			violations, err := textMatches(root, check.relative, check.banned)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(violations) != 0 {
+				t.Fatalf("backend protocol assembly crossed its boundary: %v", violations)
+			}
+		})
+	}
+}
+
+func TestCodexStartupRecoveryUsesSemanticAdapterOperations(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal/runtime/codex/startup_recovery.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, forbidden := range []string{"client.Call(", "codexrpc.ThreadStartParams", "codexrpc.ThreadResumeParams"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("startup recovery must use Codex adapter operations, found %q", forbidden)
+		}
+	}
+	for _, required := range []string{"codexadapter.StartThread(", "codexadapter.ResumeThread("} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("startup recovery must call %s", required)
+		}
+	}
+}
+
+func TestSemanticEffectsExposeRetryIdentityWithoutTransportTypes(t *testing.T) {
+	root := repositoryRoot(t)
+	effectPath := filepath.Join(root, "internal", "application", "effect.go")
+	data, err := os.ReadFile(effectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, required := range []string{"IdempotencyKey string", "func EffectIdentity(", "func StableEffectKey("} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("application effects must expose %s", required)
+		}
+	}
+	for _, forbidden := range []string{"internal/adapter/", "internal/feishu/", "map[string]any"} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("semantic effects must not expose transport type %q", forbidden)
+		}
+	}
+	runner, err := os.ReadFile(filepath.Join(root, "internal", "runtime", "effect_runner.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(runner), "EffectDeduper") || !strings.Contains(string(runner), "runValue(") {
+		t.Fatal("effect runner must execute retryable effects through the deduper")
+	}
+}
+
+func TestApplicationPresentationStaysDetachedFromFeishuSDK(t *testing.T) {
+	violations, err := importsUnder(repositoryRoot(t), "internal/application/presentation", []string{
+		modulePath + "/internal/feishu", modulePath + "/internal/adapter", modulePath + "/internal/app",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("application presentation must remain detached: %v", violations)
+	}
+}
+
+func TestSessionOwnedAsyncPathsUseActorAwarePorts(t *testing.T) {
+	root := repositoryRoot(t)
+	checks := []struct {
+		path string
+		want []string
+		bad  []string
+	}{
+		{"internal/application/submission/queue.go", []string{"RunSessionAsync", "runSessionAsync("}, nil},
+		{"internal/application/turn/service.go", []string{"RunSessionAsync"}, nil},
+		{"internal/app/session_async.go", []string{"sessionActorRuntime().Run"}, nil},
+		{"internal/adapter/feishu/backend/selection.go", nil, []string{"go func()"}},
+		{"internal/runtime/codex/recovery.go", []string{"RunSessionAsync"}, nil},
+		{"internal/adapter/feishu/backend/failure.go", []string{"RunSessionAsync"}, nil},
+	}
+	for _, check := range checks {
+		data, err := os.ReadFile(filepath.Join(root, check.path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := string(data)
+		for _, required := range check.want {
+			if !strings.Contains(source, required) {
+				t.Fatalf("%s must contain actor-aware path %q", check.path, required)
+			}
+		}
+		for _, forbidden := range check.bad {
+			if strings.Contains(source, forbidden) {
+				t.Fatalf("%s must not bypass injected async runner with %q", check.path, forbidden)
+			}
+		}
+	}
+}
+
+func TestStateRepositoryDoesNotPerformExternalEffects(t *testing.T) {
+	violations, err := importsUnder(repositoryRoot(t), "internal/state", []string{
+		modulePath + "/internal/feishu", modulePath + "/internal/adapter", modulePath + "/internal/runtime", modulePath + "/internal/claudecli", modulePath + "/internal/codexrpc",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("state repository must remain a pure persistence owner: %v", violations)
+	}
+}
+
+func TestArchitectureDocumentsDoNotReferenceRemovedBoundaries(t *testing.T) {
+	root := repositoryRoot(t)
+	docs := []string{
+		"docs/architecture.md",
+		"docs/app-package-boundaries.md",
+		"docs/backend-layering.md",
+		"docs/codex-app-server-state-machine-audit.md",
+		"docs/feishu-card-callback-latency-audit.md",
+	}
+	forbidden := []string{
+		"internal/app/appcore",
+		"internal/app/appstate",
+		"internal/app/convbackend",
+		"internal/app/backend/",
+		"internal/app/serverrequest/",
+		"internal/app/submission_queue.go",
+		"internal/app/goalcmd/",
+		"internal/app/planmode/",
+		"internal/app/skillscmd/",
+		"internal/app/skills/",
+		"internal/app/apphistory/",
+	}
+	for _, relative := range docs {
+		data, err := os.ReadFile(filepath.Join(root, relative))
+		if err != nil {
+			t.Fatal(err)
+		}
+		source := string(data)
+		for _, path := range forbidden {
+			if strings.Contains(source, path) {
+				t.Fatalf("%s references removed boundary %q", relative, path)
+			}
+		}
+	}
+}
+
+func TestCardCallbackAndSessionActorContractsRemainDocumented(t *testing.T) {
+	root := repositoryRoot(t)
+	latency, err := os.ReadFile(filepath.Join(root, "docs", "feishu-card-callback-latency-audit.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"fast callback ack", "async work", "card patch", "card.action.trigger"} {
+		if !strings.Contains(string(latency), required) {
+			t.Fatalf("callback latency audit must retain %q", required)
+		}
+	}
+	architecture, err := os.ReadFile(filepath.Join(root, "docs", "architecture.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"SessionActors", "FrontendOwner", "RunSessionAsync", "SaveState"} {
+		if !strings.Contains(string(architecture), required) {
+			t.Fatalf("architecture guide must document %q", required)
 		}
 	}
 }

@@ -45,7 +45,7 @@ func (s bindingService) replayPendingBindingMessageAsync(binding *state.AgentBin
 		return
 	}
 	messageID := strings.TrimSpace(binding.PendingMessages[0].MessageID)
-	runAsync(s.app, func() {
+	runSessionAsync(s.app, binding.ChatID, func() {
 		if err := s.replayPendingBindingMessage(binding); err != nil {
 			slog.Warn("binding pending message replay failed", "binding_id", binding.ID, "message_id", messageID, "error", err)
 			if messageID != "" {

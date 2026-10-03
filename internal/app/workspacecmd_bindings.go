@@ -4,29 +4,8 @@ import (
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/domain/conversation"
-	"feidex/internal/feishu"
 	"feidex/internal/state"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
-
-// ---------------------------------------------------------------------------
-// Indirect function references to break initialization cycles.
-// Set in init() so adapter constructors don't statically reference
-// functions that participate in the menu rendering cycle.
-// ---------------------------------------------------------------------------
-
-var indirectCompleteMenuCommand func(a *App, action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error)
-var indirectReplyCommandActionResponse func(a *App, msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error
-
-func init() {
-	indirectCompleteMenuCommand = func(a *App, action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-		return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
-	}
-	indirectReplyCommandActionResponse = func(a *App, msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-		return replyCommandActionResponse(a, msg, resp)
-	}
-}
 
 func workspaceStateDeps(store *appstate.Store) appworkspacecmd.StateDeps {
 	return appworkspacecmd.StateDeps{

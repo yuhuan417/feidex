@@ -22,7 +22,7 @@ func bindClaudeSessionThread(a *App, sessionKey, turnID, threadID string) {
 	var workspaceID string
 
 	if turnID != "" {
-		if _, sub := newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn("", turnID); sub != nil {
+		if _, sub := findSubmissionByTurn(a, "", turnID); sub != nil {
 			workspaceID = strings.TrimSpace(sub.WorkspaceID)
 			_ = appState.UpdateSubmission(sub.ID, func(value *domainsubmission.Submission) {
 				value.ThreadID = threadID

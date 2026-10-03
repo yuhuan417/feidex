@@ -78,8 +78,9 @@ func (s backendEventSink) GoalCleared(threadID string) {
 }
 func (s backendEventSink) RequestResolved(id string) {
 	a := s.app
-	pending := newRuntimeStateService(a).resolveServerPendingRequest(id)
-	a.ServerRequestService().ResumeSubmissionAfterRequest(pending)
+	runtimeState := newRuntimeStateService(a)
+	pending := runtimeState.resolveServerPendingRequest(id)
+	runtimeState.resumeSubmissionAfterRequest(pending)
 }
 func (s backendEventSink) InteractionRequested(ctx context.Context, event application.BackendEvent) error {
 	return deliverBackendInteraction(s.app, ctx, event)
@@ -89,7 +90,7 @@ func deliverBackendInteraction(a *App, _ context.Context, event application.Back
 	switch event.Kind {
 	case application.EventApprovalRequested:
 		cwd := ""
-		if _, sub := newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(event.ThreadID, event.TurnID); sub != nil {
+		if _, sub := findSubmissionByTurn(a, event.ThreadID, event.TurnID); sub != nil {
 			if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
 				cwd = ws.Cwd
 			}

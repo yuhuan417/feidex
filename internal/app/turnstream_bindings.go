@@ -8,6 +8,7 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	appturnstream "feidex/internal/adapter/feishu/turnstream"
+	appsubmission "feidex/internal/application/submission"
 )
 
 // ---------------------------------------------------------------------------
@@ -17,7 +18,7 @@ import (
 type turnStreamSubmissionFinderAdapter struct{ app *App }
 
 func (a turnStreamSubmissionFinderAdapter) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
-	return newSubmissionQueueServiceFromApp(a.app).FindSubmissionByTurn(threadID, turnID)
+	return (appsubmission.SubmissionLookupService{State: a.app.State(), Runtime: newRuntimeStateService(a.app)}).FindSubmissionByTurn(threadID, turnID)
 }
 
 type turnStreamTurnLifecycleAdapter struct{ app *App }

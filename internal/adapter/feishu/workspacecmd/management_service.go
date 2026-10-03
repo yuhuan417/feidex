@@ -198,28 +198,22 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 	if sess == nil {
 		sess = &conversation.Session{Key: sessionKey, ChatID: chatID, ChatType: chatType, OwnerUserID: userID}
 	}
-	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
-		return fmt.Errorf("%s", reason)
+	if s.Deps.Lifecycle == nil {
+		return fmt.Errorf("workspace lifecycle is unavailable")
 	}
-	ws, err := (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.Deps)}).Create(config.Workspace{
-		ID:             id,
-		Name:           name,
-		Cwd:            cwd,
-		ApprovalPolicy: "never",
-		SandboxMode:    "danger-full-access",
+	effects, err := s.Deps.Lifecycle.CreateAndSwitch(appworkspace.SwitchRequest{Session: sess}, config.Workspace{
+		ID: id, Name: name, Cwd: cwd, ApprovalPolicy: "never", SandboxMode: "danger-full-access",
 	})
 	if err != nil {
 		return err
 	}
-	if err := s.Deps.WorkspaceSelection().Select(chatType, chatID, userID, id); err != nil {
-		return err
+	for _, key := range effects.ClearLiveThreads {
+		s.ClearSessionLiveThread(key)
 	}
-	if err := applyWorkspaceSwitch(s, sessionKey, sess, id); err != nil {
-		return err
+	if effects.Workspace != nil {
+		s.runAsyncThreadBinding(sessionKey, effects.Workspace.ID, effects.Workspace)
 	}
-	if ws != nil {
-		s.runAsyncThreadBinding(sessionKey, id, ws)
-	}
+
 	return nil
 }
 
@@ -909,14 +903,8 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 	if sess == nil {
 		sess = &conversation.Session{Key: sessionKey, OwnerUserID: action.UserID, ChatID: action.ChatID}
 	}
-	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: reason}}, nil
-	}
-	if err := setSelectedWorkspaceForSession(s.Deps, sess, workspaceID); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	if err := applyWorkspaceSwitch(s, sessionKey, sess, workspaceID); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	if err := applyWorkspaceSwitch(s.Deps.Lifecycle, s.ClearSessionLiveThread, sess, workspaceID); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	if ws != nil {
 		s.runAsyncThreadBinding(sessionKey, workspaceID, ws)
@@ -930,27 +918,26 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 // runAsyncThreadBinding runs EnsureWorkspaceThreadBinding asynchronously.
 func (s *ManagementService) runAsyncThreadBinding(sessionKey, workspaceID string, ws *config.Workspace) {
 	s.RunAsync(func() {
-		sess := s.GetSession(sessionKey)
-		if sess == nil {
-			s.OnAsyncDone()
+		defer s.OnAsyncDone()
+		if s.Deps.Lifecycle == nil {
 			return
 		}
-		if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
-			slog.Debug("workspace action thread binding skipped",
-				"session_key", sessionKey,
-				"workspace_id", workspaceID,
-				"reason", reason,
-			)
-			s.OnAsyncDone()
+		sess, currentWorkspace, err := s.Deps.Lifecycle.BindingCandidate(sessionKey, workspaceID)
+		if err != nil {
+			slog.Warn("workspace binding admission failed", "session_key", sessionKey, "error", err)
 			return
 		}
-		if strings.TrimSpace(sess.WorkspaceID) != strings.TrimSpace(workspaceID) {
-			s.OnAsyncDone()
+		if sess == nil || currentWorkspace == nil {
 			return
 		}
-		if strings.TrimSpace(sess.ActiveThreadID) != "" && strings.TrimSpace(sess.ActiveThreadWorkspaceID) == strings.TrimSpace(workspaceID) {
-			s.OnAsyncDone()
-			return
+		ws = currentWorkspace
+		if latest := s.GetSession(sessionKey); latest != nil {
+			*latest = *sess
+			sess = latest
+			if err := s.SaveSession(sess); err != nil {
+				slog.Warn("workspace binding session save failed", "session_key", sessionKey, "error", err)
+				return
+			}
 		}
 		binding, err := s.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 		if err != nil {
@@ -967,7 +954,6 @@ func (s *ManagementService) runAsyncThreadBinding(sessionKey, workspaceID string
 				"thread_id", binding.ThreadID,
 			)
 		}
-		s.OnAsyncDone()
 	})
 }
 

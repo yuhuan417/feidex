@@ -9,6 +9,32 @@ import (
 	"feidex/internal/domain/submission"
 )
 
+// ThreadStartConfig is the backend-neutral configuration captured for a new
+// conversation. Codex adapters translate it to thread/start wire fields.
+type ThreadStartConfig struct {
+	Cwd                    string
+	ApprovalPolicy         string
+	SandboxMode            string
+	ServiceName            string
+	ExperimentalRawEvents  bool
+	PersistExtendedHistory bool
+	ServiceTier            string
+	Model                  string
+	AuxiliaryConfig        map[string]any
+}
+
+// ThreadForkRequest contains semantic fork inputs. Backend adapters own the
+// protocol field names and optional-field encoding.
+type ThreadForkRequest struct {
+	ThreadID       string
+	Cwd            string
+	ApprovalPolicy string
+	SandboxMode    string
+	ServiceTier    string
+	Model          string
+	MultiAgentMode string
+}
+
 type StartTurnRequest struct {
 	ThreadID                                                                     string
 	Submission                                                                   *submission.Submission

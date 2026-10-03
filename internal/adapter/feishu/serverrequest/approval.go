@@ -116,22 +116,6 @@ func (s *Service) renderResolvedApprovalCard(pending *state.PendingRequest, acti
 	return s.SimpleStatusCard(title, color, strings.Join(lines, "\n"), nil)
 }
 
-// ResumeSubmissionAfterRequest resumes a submission if no other open
-// pending requests remain for the same turn.
-func (s *Service) ResumeSubmissionAfterRequest(pending *state.PendingRequest) {
-	if pending == nil {
-		return
-	}
-	if s.HasOpenPendingRequestForTurn(pending.ThreadID, pending.TurnID, pending.ID) {
-		return
-	}
-	_, sub := s.FindSubmissionByTurn(pending.ThreadID, pending.TurnID)
-	if sub == nil {
-		return
-	}
-	_ = s.SetSubStatus(sub.ID, domainsubmission.SubmissionStatusRunning.String())
-}
-
 // ---------- Outbound card methods ----------
 
 // SendApprovalCard sends a simple approval card without extra payload.

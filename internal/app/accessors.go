@@ -5,6 +5,7 @@ import (
 
 	appbackend "feidex/internal/adapter/feishu/backend"
 	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/composition"
 	frontendruntime "feidex/internal/runtime"
 
 	"feidex/internal/config"
@@ -135,10 +136,14 @@ func currentClaudeCore(a *App) ClaudeCore {
 	if a == nil {
 		return nil
 	}
-	ensureCompositionState(a)
+	owner := ensureRuntimeOwner(a)
 	a.composition.clientsMu.RLock()
-	defer a.composition.clientsMu.RUnlock()
-	return a.composition.claude
+	legacy := a.composition.claude
+	a.composition.clientsMu.RUnlock()
+	if current := owner.ClaudeCore(); current != nil {
+		return current
+	}
+	return legacy
 }
 
 func ensureCompositionState(a *App) {
@@ -150,14 +155,63 @@ func ensureCompositionState(a *App) {
 	}
 }
 
+// ensureRuntimeOwner binds hand-built legacy fixtures to the frontend-scoped
+// runtime owner. New production frontends are initialized by NewFrontend and
+// already have this owner.
+func ensureRuntimeOwner(a *App) *frontendruntime.FrontendOwner {
+	if a == nil {
+		return nil
+	}
+	a.runtimeOwnerMu.Lock()
+	defer a.runtimeOwnerMu.Unlock()
+	ensureCompositionState(a)
+	if a.runtimeOwner != nil {
+		return a.runtimeOwner
+	}
+	a.runtimeOwner = composition.NewFrontendOwner()
+	if a.sessionActors != nil {
+		a.runtimeOwner.SessionActors = a.sessionActors
+	}
+	if a.composition.liveThreads != nil {
+		a.runtimeOwner.LiveThreads = a.composition.liveThreads
+	}
+	if a.composition.autoRetries != nil {
+		a.runtimeOwner.AutoRetries = a.composition.autoRetries
+	}
+	if a.composition.codexRecovery != nil {
+		a.runtimeOwner.CodexRecovery = a.composition.codexRecovery
+	}
+	if a.composition.trackers != nil && a.composition.trackers.submissionStarts != nil {
+		a.runtimeOwner.SubmissionStarts = a.composition.trackers.submissionStarts
+	}
+	a.composition.clientsMu.RLock()
+	legacyCodex, legacyClaude := a.composition.codex, a.composition.claude
+	a.composition.clientsMu.RUnlock()
+	if legacyCodex != nil {
+		a.runtimeOwner.SetCodexClient(legacyCodex)
+	}
+	if legacyClaude != nil {
+		a.runtimeOwner.SetClaudeCore(legacyClaude)
+	}
+	a.sessionActors = a.runtimeOwner.SessionActors
+	a.composition.liveThreads = a.runtimeOwner.LiveThreads
+	a.composition.autoRetries = a.runtimeOwner.AutoRetries
+	a.composition.codexRecovery = a.runtimeOwner.CodexRecovery
+	if a.composition.trackers != nil {
+		a.composition.trackers.submissionStarts = a.runtimeOwner.SubmissionStarts
+	}
+	return a.runtimeOwner
+}
+
 func setCompositionClaude(a *App, core ClaudeCore) {
 	if a == nil {
 		return
 	}
 	ensureCompositionState(a)
 	a.composition.clientsMu.Lock()
-	defer a.composition.clientsMu.Unlock()
 	a.composition.claude = core
+	a.composition.clientsMu.Unlock()
+	ensureRuntimeOwner(a).SetClaudeCore(core)
 }
 
 // Trackers returns the per-service runtime tracker bundle.
@@ -172,16 +226,26 @@ func (a *App) Trackers() *appTrackers {
 	return a.composition.trackers
 }
 
+func submissionStartTracker(a *App) *frontendruntime.SubmissionStarts {
+	owner := ensureRuntimeOwner(a)
+	if owner == nil {
+		return nil
+	}
+	if owner.SubmissionStarts == nil {
+		owner.SubmissionStarts = &frontendruntime.SubmissionStarts{}
+	}
+	return owner.SubmissionStarts
+}
+
 func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {
 	if a == nil {
 		return nil
 	}
-	a.sessionActorsMu.Lock()
-	defer a.sessionActorsMu.Unlock()
-	if a.sessionActors == nil {
-		a.sessionActors = frontendruntime.NewSessionActors()
+	owner := ensureRuntimeOwner(a)
+	if owner.SessionActors == nil {
+		owner.SessionActors = frontendruntime.NewSessionActors()
 	}
-	return a.sessionActors
+	return owner.SessionActors
 }
 
 func (a *App) invalidateThreadMenuService() {

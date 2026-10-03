@@ -407,7 +407,7 @@ func (s SubmissionQueueService) deferClaudeModelConfig(sessionKey string, sub *d
 	}
 	s.Deps.MarkSubmissionQueuedReactions(sub)
 	if notify {
-		s.Deps.SendStartFailureNotice(s.Deps.context(), sub, fmt.Errorf("%w；消息已保留在队首，请修正模型配置后发送新消息重试队列，或 /stop 取消", applyErr), false)
+		s.NotifySubmissionStartFailure(s.Deps.context(), sub, fmt.Errorf("%w；消息已保留在队首，请修正模型配置后发送新消息重试队列，或 /stop 取消", applyErr), false)
 	}
 	return applyErr
 }

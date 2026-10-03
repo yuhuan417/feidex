@@ -35,7 +35,10 @@ func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenBackendIsClaude(t *testing
 		},
 	})
 	mgmt := NewManagementService(ManagementDeps{
-		Dependencies:   Dependencies{ConfigProvider: app},
+		Dependencies: Dependencies{ConfigProvider: app, Lifecycle: &workspace.Lifecycle{
+			Configuration: workspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(app)},
+			Repository:    testLifecycleRepository{session: &session},
+		}},
 		State:          newTestStateDeps(&session),
 		SessionContext: testSessionContextDeps(),
 		Threads: ThreadDeps{
@@ -153,15 +156,6 @@ func newTestStateDeps(session **conversation.Session) StateDeps {
 func testSessionContextDeps() SessionContextDeps {
 	return SessionContextDeps{
 		SessionHasInFlight: func(*conversation.Session) bool { return false },
-		SwitchSessionWorkspace: func(sess *conversation.Session, workspaceID string) {
-			sess.WorkspaceID = workspaceID
-		},
-		ClearSessionThreadCtx: func(sess *conversation.Session) {
-			sess.ActiveThreadWorkspaceID = ""
-			sess.ActiveThreadID = ""
-			sess.ActiveThreadName = ""
-			sess.ActiveThreadPreview = ""
-		},
 		SetSessionThreadCtx: func(sess *conversation.Session, workspaceID, threadID, name, preview string) {
 			sess.ActiveThreadWorkspaceID = workspaceID
 			sess.ActiveThreadID = threadID
@@ -263,4 +257,20 @@ func (c *testClaudeCore) Close() error { return nil }
 
 func (a *testWorkspaceApp) WorkspaceSelection() workspace.SelectionService {
 	return workspace.SelectionService{}
+}
+
+// This fixture keeps the lifecycle commit independent of backend binding, so
+// the test verifies the same post-commit async boundary as production.
+type testLifecycleRepository struct{ session **conversation.Session }
+
+func (r testLifecycleRepository) State() workspace.LifecycleState {
+	return workspace.LifecycleState{Sessions: []*conversation.Session{conversation.CloneSession(*r.session)}}
+}
+func (r testLifecycleRepository) Commit(change workspace.LifecycleChange) error {
+	for _, sess := range change.Sessions {
+		if sess.Key == (*r.session).Key {
+			*r.session = sess
+		}
+	}
+	return nil
 }

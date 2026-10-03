@@ -89,6 +89,7 @@ func buildBackendSelectionService(app *App) backendSelectionService {
 			PatchCard: func(ctx context.Context, messageID string, card map[string]any) error {
 				return patchCardEffect(ctx, app, messageID, card)
 			},
+			RunAsync: func(sessionKey string, fn func()) { runSessionAsync(app, sessionKey, fn) },
 		},
 		Commands: backend.SelectionCommandDeps{
 			CommandAutoRetry: func(msg *feishu.InboundMessage, args []string) error {

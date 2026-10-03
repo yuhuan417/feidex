@@ -19,6 +19,14 @@ type FrontendScope struct {
 	ConfigMutex *sync.RWMutex
 	Frontend    config.ResolvedFrontend
 }
+
+// NewFrontendOwner is the composition boundary for frontend-scoped mutable
+// runtime state. The owner itself lives in runtime; composition decides when
+// one is created for each frontend.
+func NewFrontendOwner() *runtime.FrontendOwner {
+	return runtime.NewFrontendOwner()
+}
+
 type Factory[T runtime.ManagedFrontend] func(FrontendScope) (T, error)
 type Service[T runtime.ManagedFrontend] struct {
 	runtime.FrontendGroup

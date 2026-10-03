@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -44,8 +43,6 @@ func buildWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService 
 		State:        workspaceStateDeps(st),
 		SessionContext: appworkspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
-			SwitchSessionWorkspace: conversation.SwitchSessionWorkspace,
-			ClearSessionThreadCtx:  conversation.ClearThreadContext,
 			SetSessionThreadCtx:    conversation.SetThreadContext,
 			SessionResetActiveOps:  conversation.ResetActiveOperations,
 			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
@@ -66,13 +63,6 @@ func buildWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService 
 			ClearCloneOp: workspaceCloneClearOp(a),
 			GitClone:     workspaceGitClone,
 		},
-		Codex: appworkspacecmd.CodexDeps{
-			RequireCodexClient: func() (appworkspacecmd.CodexClient, error) { return requireCodexClient(a) },
-			BuildThreadStartParams: func(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
-				return buildThreadStartParams(a, ws, sess, effectiveModel)
-			},
-			BuildThreadConfig: func(sess *conversation.Session) map[string]any { return codexAuxiliaryConfig(a, sess) },
-		},
 		Backend: appworkspacecmd.BackendConfigDeps{
 			BackendWorkspaceSwitchBindingNotice:        bcfg.backendWorkspaceSwitchBindingNotice,
 			BackendWorkspaceSwitchBindingFailureNotice: bcfg.backendWorkspaceSwitchBindingFailureNotice,
@@ -82,10 +72,10 @@ func buildWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService 
 		},
 		Actions: appworkspacecmd.ActionDeps{
 			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-				return indirectCompleteMenuCommand(a, action, sessionKey, rawCommand, parentAction)
+				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 			},
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-				return indirectReplyCommandActionResponse(a, msg, resp)
+				return replyCommandActionResponse(a, msg, resp)
 			},
 			CommandActionFromMessage: commandActionFromMessage,
 			CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {

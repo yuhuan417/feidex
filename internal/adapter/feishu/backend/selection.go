@@ -49,6 +49,7 @@ type SelectionEffectDeps struct {
 	ReplyCard func(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error)
 	SendCard  func(ctx context.Context, chatID string, card map[string]any) (string, error)
 	PatchCard func(ctx context.Context, messageID string, card map[string]any) error
+	RunAsync  func(sessionKey string, fn func())
 }
 
 type SelectionCommandDeps struct {
@@ -301,7 +302,11 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 	}
 
 	messageID := strings.TrimSpace(action.MessageID)
-	go func() {
+	run := s.deps.Effects.RunAsync
+	if run == nil {
+		run = func(_ string, fn func()) { go fn() }
+	}
+	run(sessionKey, func() {
 		err := s.SwitchBackend(s.Source.Context(), target)
 		notice := "已切换到 `" + target + "`。"
 		if err != nil {
@@ -325,7 +330,7 @@ func (s SelectionService) CompleteBackendSelect(action *feishu.CardAction, sessi
 				"error", patchErr,
 			)
 		}
-	}()
+	})
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "正在切换到 " + BackendDisplayName(target)},
 		Card:  RawCard(s.RenderBackendSwitchingCard(sessionKey, target)),

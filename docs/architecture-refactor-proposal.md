@@ -1,15 +1,23 @@
-# 长期架构重构提案
+# 长期架构目标与边界
 
-状态：实施中
-更新时间：2026-10-02
+状态：目标架构定义
+更新时间：2026-10-03
 
-本文描述 Feidex 的目标架构。设计时暂时忽略现有目录、兼容层和迁移成本，先确定清晰的职责边界，再按阶段迁移现有实现。
+本文只定义 Feidex 的最终架构目标、职责边界和完成判定，不记录阶段拆解、执行顺序或验收过程。实现必须继续遵守 [DEVELOPER.md](../DEVELOPER.md) 的工程契约和 [Codex App Server 状态机审计](codex-app-server-state-machine-audit.md) 的协议约束；thread、turn、approval、server request 和 goal continuation 的行为不能因为架构调整而改变。
 
-本文的结构目标已经获得确认，旧 package boundary 仅供迁移定位，不再限制目标依赖方向。迁移保留 [DEVELOPER.md](../DEVELOPER.md) 的行为契约和 [Codex App Server 状态机审计](codex-app-server-state-machine-audit.md) 的协议约束；thread、turn、approval、server request 和 goal continuation 的行为不能因为重构而改变。
+## 1. 最终目标与边界
 
-## 1. 要解决的问题
+最终目标是让每个领域状态只有一个 owner，让跨模块控制流只通过显式的 input、command、event、query 和 effect 传递。目录移动不是完成标准，依赖方向和运行时所有权才是完成标准。
 
-当前代码已经拆成许多子包，但拆分主要发生在文件和服务层面，依赖方向没有形成稳定的层次。典型控制流仍然是：
+最终运行时拓扑如下：
+
+- `internal/composition` 是唯一 composition root，负责创建 frontend scope、repository、application use case、adapter、runtime owner 并注入依赖。
+- `internal/app` 只保留 Feishu 入口和极薄的输入转换/分发门面。它不持有业务状态、服务注册表、backend client、业务 tracker 或跨 owner callback，也不负责组装 backend wire 请求。
+- `internal/domain` 负责聚合、值对象和不变量；`internal/application` 负责产品用例、策略、查询和 semantic effects；`internal/adapter` 负责 Feishu、Codex、Claude、配置和存储协议转换；`internal/runtime` 负责 frontend 生命周期、进程、取消、恢复、并发和 effect 执行。
+- `internal/state` 和其他 repository 只负责持久化、clone、normalize 和原子更新，不发送消息、不渲染卡片、不调用 backend 或启动进程。
+- 每个 frontend 拥有独立的 backend runtime、session actors、pending requests、message links 和 runtime cache；同一 session 的状态转换串行，不同 session 和 frontend 之间互不共享 mutable runtime。
+
+最终边界必须消除以下控制流：
 
 ```text
 App
@@ -19,21 +27,17 @@ App
   -> another Service
 ```
 
-因此 Go 的 import graph 虽然没有直接循环，运行时仍然存在概念循环。接口把循环隐藏起来了，却没有消除循环。
-
-主要表现如下：
-
-| 现象 | 实际问题 |
-| --- | --- |
-| 根 `internal/app` 持有配置、状态、Feishu、Codex、Claude、队列和生命周期 | `App` 成为所有模块的隐式依赖容器 |
-| `submission`、`turnlifecycle`、`convbackend` 都通过宽接口访问宿主 | 子模块仍然通过回调互相调用，职责没有真正分离 |
-| `backend` 同时处理 backend 选择、卡片、状态、维护和协议 | backend 包不是协议 adapter，而是第二个业务协调层 |
-| session、submission、turn、pending request 分散在多个 store、tracker 和 helper | 同一状态有多个修改入口，没有单一 owner |
-| 菜单、slash command、card action 各自连接业务函数 | 同一能力的入口、权限和生效语义容易分叉 |
-| `internal/feishu` 反向依赖 `internal/app` 下的工具包 | 下层 adapter 不能独立复用和测试 |
-| `appcore` 聚合 config、state、runtime、Codex 和 Feishu 接口 | 公共核心会继续膨胀，成为新的 God package |
-
-目标不是把所有代码机械地移动到更多目录，而是让每个业务状态只有一个 owner，让跨模块控制流变成显式的输入、事件和 effect。
+```text
+Feishu / Codex / Claude / Store
+          │
+       adapters
+          │ typed input/event/query result
+          ▼
+application use case ── semantic effects ──▶ runtime / adapter
+          │
+          ▼
+   domain aggregate + repository ports
+```
 
 ## 2. 目标依赖方向
 
@@ -70,7 +74,7 @@ App
 
 接口应由使用方定义在对应 application 模块中，避免重新创建一个全局的 `appcore` 或巨大的 `ports` 包。
 
-## 3. 建议的目录结构
+## 3. 最终目录结构
 
 ```text
 internal/
@@ -128,7 +132,7 @@ internal/
     app.go
 ```
 
-这不是要求一次性建立全部目录。它描述的是最终 owner，迁移时可以先在现有 `internal/app` 下实现相同接口，再逐步移动目录。
+目录结构表达最终 owner；实现可以暂时保留兼容目录，但不得改变这里定义的依赖方向和状态所有权。
 
 ## 4. 领域状态和 owner
 
@@ -349,7 +353,7 @@ Codex server request
   -> resume submission after all requests are resolved
 ```
 
-重构时不得把 `serverRequest/resolved` 简化成“用户点击了按钮”。协议 resolved 边界仍由 Codex adapter 和 application interaction 状态共同守护。
+协议实现不得把 `serverRequest/resolved` 简化成“用户点击了按钮”。resolved 边界仍由 Codex adapter 和 application interaction 状态共同守护。
 
 ## 10. 必须固定的架构规则
 
@@ -366,57 +370,9 @@ Codex server request
 - 每个菜单能力必须有直接 command 入口；菜单只是 presentation surface。
 - 所有 approval、turn、thread、review、compaction、tool input 和 server request 改动必须继续对照状态机审计并补测试。
 
-## 11. 迁移顺序
+## 11. 完成标准
 
-### 阶段 0：建立约束
-
-- 新增 import architecture tests。
-- 定义 `Input`、`BackendEvent`、`Effect` 和 frontend/session identity。
-- 禁止新增宽 `App` interface、root compatibility shim 和跨模块业务 callback。
-
-### 阶段 1：抽取领域模型
-
-- 先抽取 session、submission、turn、interaction、model config 的状态和纯转换。
-- 保留现有 `state.Store` 作为临时 repository adapter。
-- 为关键不变量添加纯 domain tests。
-
-### 阶段 2：统一事件入口
-
-- Feishu message、card action、backend notification、timer 都转换成 application input。
-- 现有入口可以继续调用旧实现，但必须经过 dispatcher，逐步减少直接调用根 `App` 方法。
-
-### 阶段 3：迁移低风险边界
-
-- 先迁移 primary、BotProfile、AgentBinding 和 modelconfig。
-- 验证群聊/单聊 scope、desired/applied/turn snapshot 和主消息流卡片 patch。
-
-### 阶段 4：迁移 submission、turn 和 interaction
-
-- 把 queue、turn lifecycle、approval、pending form 的状态转换移到 application/domain。
-- 用 session actor 或 keyed dispatcher 替代跨 service callback 和分散锁。
-- 逐条对照 Codex 状态机审计迁移。
-
-### 阶段 5：形成真正的 backend adapter
-
-- 把 Codex event router 和 Claude stream/control 转换放进 backend adapter。
-- application 只消费 backend-neutral event。
-- 对 unsupported capability 做显式 capability gate。
-
-### 阶段 6：收敛 Feishu 和 runtime
-
-- Feishu adapter 接管事件解码、卡片渲染和消息发送。
-- runtime 接管进程 supervisor、effect runner、startup recovery 和 shutdown。
-- 根 `internal/app` 缩小为 composition 和少量跨 owner 编排。
-
-### 阶段 7：删除旧桥接
-
-- 删除 `serviceFor`、宽 `App` interface、owner 间业务 callback 和只转发的 binding 文件。
-- 删除重复的状态 facade、backend 分支和旧兼容入口。
-- 更新 architecture、backend layering 和 package boundaries 文档。
-
-## 12. 完成标准
-
-重构完成后，新增一个业务能力时应能明确回答：
+最终架构完成时，新增一个业务能力时应能明确回答：
 
 1. 它修改哪个 domain aggregate？
 2. 它由哪个 application use case 处理？
@@ -426,189 +382,11 @@ Codex server request
 6. 它是否触及 Codex/Claude 协议状态机？
 7. 它的 frontend、chat 和 session scope 是什么？
 
-如果一个新功能仍需要把 `*App` 传入多个子服务，或需要在多个 service 之间注册 callback，说明边界还没有收敛完成。
+同时满足以下条件，才算达到最终目标：
 
-## 13. 实施记录
-
-已落地：
-
-- domain/application 的导入方向守卫与输入/effect 契约。
-- primary assignment、primary transition、群消息路由规则，以及 frontend-scoped JSON repository。
-- model scope resolution 和统一领域快照；模型应用状态用例；Codex resume config 转换。
-- frontend 生命周期、取消、异步任务准入和 shutdown drain。
-- submission startup 的纯领域状态和 runtime 并发协调，删除根 App 启动 guard。
-- interaction pending/replied/resolved 转换和阻塞恢复规则；JSON DTO adapter 保留 frontend scope。
-- conversation/session 类型、backend lineage、workspace 切换/恢复校验与活动操作转换；删除 sessionctx、appcore session facade 和根活动操作转发文件。
-- submission aggregate、状态枚举与 queued/running/waiting/terminal 转换已迁入 `internal/domain/submission`；JSON store 只负责持久化和 DTO 拷贝，应用层通过 typed transition 更新状态。
-- conversation queue 的去重、FIFO 出队、活动 turn 阻塞和 pending/idle 状态刷新已迁入 `internal/domain/conversation`；队列存取仍由 JSON store 执行，业务规则不再由 storage 方法决定。
-- turn lifecycle 编排已迁入 `internal/application/turn`，turn binding tracker 已迁入 `internal/runtime/turnbinding`；旧 `internal/app/turnlifecycle`、`turnbinding`、`usageview` 服务包和 App 生命周期接口已删除。协议 usage 通过 Codex adapter 转换为 domain 值，terminal card 和 usage card 作为 presentation/effect ports 执行。
-- Codex lifecycle notification 解码和 request ID 规范化；app router 暂时只负责把 semantic event 交给现有 turn owner。
-
-- Feishu 展示依赖图整体迁入 `internal/adapter/feishu`（approval/forms/cards/delivery/review/thread/turn item），不保留旧 app 展示包。菜单能力声明迁入 application，backend identity/inflight 迁入 domain，运行时值迁入 runtime；删除 menutypes 和 apputil 转发层。
-
-- 全部 36 处 `serviceFor` 与 App 按名称索引的服务缓存已删除。
-- submission enqueue/dequeue、启动/失败/回滚、暂存附件和查找 turn 的完整用例迁入 `internal/application/submission`，删除宽 App/PendingQueueApp 接口、旧 app/submission 包与宿主转发适配器。生产队列不再经过 conversation facade 回调自身；Codex 初始化协议与 Claude prompt 编码由 backend adapter 执行。
-- workspace 配置值、AgentBinding/BotProfile 和 frontend/session key 解析迁入 domain；标准化 inbound message 由 application 定义，Feishu adapter 不再拥有业务输入类型。存储和 config 保留序列化兼容别名，持久化字段不变。
-
-- Codex runtime recovery/upgrade 已迁入 `internal/runtime/codex`，全局 recovery state 已删除；每个 frontend 单独拥有 client、恢复状态和自动 thread recovery exclusion。新增并验证 frontend 隔离回归测试。
-
-后续迁移状态以本文末尾“核心边界整块迁移”记录为准；提案仍在实施中。
-
-### 2026-10-02 核心边界整块迁移
-
-- conversation 创建、恢复、显式选择、fork、interrupt 和 continue 用例迁入 application；Codex/Claude gateway 只执行外部操作。删除 convbackend、conversation backend facade、workspace thread service 及回调自己的 queue 路径。
-- dispatcher 覆盖 Feishu message、card action、recall、reaction、Codex notification/server request 和 retry timer；跨 frontend 输入在调用 owner 前被拒绝。重试定时器携带 generation token，过期回调不会启动 submission。
-- Codex adapter 完成 notification/request 解码、numeric/string request ID 保真和 protocol rejection；application 消费 semantic event，删除两层旧 event router。
-- 自动重试状态、退避和定时 dispatch 归属 `internal/runtime/autoretry`，卡片和入口归属 Feishu adapter，删除旧宽 App 接口。
-- startup recovery 与 submission runtime cleanup 归属 `internal/runtime/maintenance`；原维护服务只保留环境清理和升级查询，使用固定依赖，不再访问宿主。
-- standalone compaction 生命周期归属 application，协议调用归属 Codex adapter，卡片归属 Feishu adapter，删除 compact 到 App 的回调链。
-- Claude runtime 不再持有 App；Claude catalogue/history 位于 backend adapter。turnstream 和 finalcardpatch 位于 Feishu adapter，删除宿主访问器及纯转发包装。
-- effect runner 已执行实际 SendMessage/PatchCard，保存或外部 effect 失败会阻止后续 effect；其余同步端口仍需收敛为 effect。
-- session snapshot 复制与 active-work 判定归属 conversation domain。显式 resume 保存失败时保留调用方旧 lineage，不发布 live thread。
-- 回归覆盖 frontend 隔离、cancelled effect、save-before-start、request ID 保真、workspace 拒绝和 conversation persistence failure。原审批、模型、菜单、review、goal 和 compaction 契约继续运行。
-
-### 2026-10-02 前端服务边界继续收敛
-
-- history command/history backend 已分别迁入 Feishu adapter 与 Codex history adapter，删除 history 宿主 facade 和 backend callback。
-- upgrade service 改为显式依赖集合，取消宽宿主接口和 appcore 生命周期耦合。
-- planmode 与 goalcmd 改为 consumer-owned Dependencies，composition root 只在绑定处组装 capability ports；删除对应宽 App interface 和 adapter。
-- 保持模型生效、thread 生命周期、pending 状态、菜单顺序与 frontend 隔离契约不变；全量 Go 测试 1215 项通过。
-- workspacecmd 的配置、管理和渲染服务改为显式 workspace capability carrier，删除其宿主 App interface；MCP bridge 改为显式 Dependencies，删除 MCP 宿主 adapter。
-- debugviewcmd、reviewcmd 和 threadmenu 改为 consumer-owned Dependencies，根绑定只负责组装状态、backend、Feishu 和 runtime capability；对应宿主 adapter 已删除。
-- backend capability carrier 的正式名称改为 `Dependencies`；旧 `App` 仅保留为源码兼容别名，后续 permission driver 将继续拆成按能力注入的 ports。
-- threadmenu/workspacecmd 的 permission 操作改为由 composition root 注入 `PermissionDriver`；服务内部不再调用 `DriverForApp` 动态回查宿主。
-- `appstate.Store` 已改为显式持有 state store、frontend、backend 和 legacy fallback scope，删除 `appcore.AppStateFacade`；旧 facade 不再作为生产状态入口存在。
-- `backend.ConfigurationService` 已由 composition root 注入当前 `Driver`；模型、workspace 和 status 展示不再在每次调用时通过宿主动态回查 driver。
-- `App.State()` 已改为 frontend 生命周期内唯一的 scoped gateway；backend runtime 切换通过显式 scope 更新，不再在每次状态访问时重建 gateway。
-- frontend runtime 现在同时持有当前 `backend.Driver`，并在 runtime 安装或 backend 切换时更新；workspace、thread menu、Claude permission 和 autoretry 绑定从 composition root 接收该 driver，不再在业务调用中动态回查宿主。
-- `runtime.SessionActors` 已接入 application dispatcher；同一 frontend session 的消息、卡片、backend event 和 retry transition 按 key 串行，不同 session 保持并发。
-- thread menu 依赖组装已按 frontend runtime 缓存；backend 切换时显式失效并重新绑定 driver，命令和 card action 不再重复构造 capability carrier。
-- backend configuration service 也已按 frontend runtime 缓存，并在 backend 切换时失效；模型、workspace 和 status command 不再重复构造同一组绑定。
-- application effect pipeline 已增加 `SendCard`，根菜单发送已通过 effect runner 进入 Feishu adapter。
-- backend selection 已改为由 composition root 注入卡片渲染和发送/patch ports，selection service 不再直接持有 Feishu outbound client。
-- Claude runtime 的 turn stream 已增加 `TurnStreamPort` presentation boundary；生产绑定通过该 port 连接 turn presentation service，`TurnStreamDeps` 不再保留旧 callback 字段或 fallback 分支。
-- backend upgrade 的卡片 renderer 与发送路径改为显式注入 `StatusCardRenderer` 和 outbound port；Claude permission 菜单、交互失效卡以及 help/quiet/status/menu bridge 的用户可见发送统一经过 application effect runner。
-- Claude 后台 Agent 通知与 Claude support 的 pending card patch 也统一经过 effect runner，避免 runtime support carrier 直接调用 Feishu outbound client。
-- bot profile、fork、plan/goal 异步反馈、compaction 通知和 startup maintenance 文本发送已统一经过 effect runner。
-- server request、local file preview 和 quiet working card 的 patch 路径已统一经过 effect runner；需要 Feishu 返回新消息 ID 的卡片发送仍保留专用 outbound port，避免丢失消息链接语义。
-- effect runner 已增加带 message ID 的 `RunSendMessage`/`RunSendCard` 结果端口，delivery、final、pending、message link、maintenance restart 和 quiet card 新卡片发送均通过 Feishu outbound adapter 执行。
-- application 新增 `Handlers`/`NewDispatcher`，输入族路由契约从 app composition 文件移入 application；backend action/selection service 也按 frontend runtime 缓存，减少重复组装。
-- session actor key 计算已迁入 application，app entrypoint 不再拥有输入并发分片规则。
-- backend services 已删除 `backend.App` 兼容别名，统一使用显式 `backend.Dependencies`；后续继续拆除其中仍保留的宽 capability carrier。
-- permission driver 的 `PermissionApp` 兼容命名已删除，改为显式 `PermissionDependencies`，backend package 不再以 App 命名依赖 carrier。
-- card action 的统一 dispatch、session key normalization、backend switching gate 和 unknown action 处理已迁入 `internal/application/cardaction`；app 只注册具体业务 handlers。
-- backend configuration、selection 和 action service 的缓存已归入 frontend `appComposition`，`App` 不再直接持有这些 service 实例。
-- dispatcher、effect runner 和 server request service 也已归入 `appComposition`；`App` 的字段只保留 frontend state、runtime 和生命周期 owner。
-- thread menu composition cache 也已归入 `appComposition`，backend 切换时通过 composition invalidation 重建。
-- group message root anchor normalization 已迁入 application，Feishu router 只负责把 inbound 字段转换为 routing input。
-- composition cache 的锁和生命周期也已从 `App` 移入 `appComposition`，避免宿主继续承担 service registry synchronization。
-- backend runtime facade 已改为接收显式 `backendRuntimeContext`，配置、client、维护策略、恢复策略、状态收口和 transport failure 都通过 capability callback 注入；恢复路径避免在持锁期间重新读取 runtime client。
-- message command 的优先级判断已迁入 `application.ClassifyMessageRoute`，统一 pending response、local command、image staging、空消息和普通 submission 的顺序；Feishu router 只执行选中的 adapter/use-case。
-- tracker、live-thread、auto-retry、Codex recovery 和 backend client 的生产 owner 已迁入 `appComposition`；`App` 上保留的字段只作为旧测试/过渡构造的兼容镜像，生产读写经过 composition accessor。
-- application/runtime/adapter 中残留的 `*App` 状态接口已统一改为 capability 语义命名（`StateProvider`、`QueueStateProvider`、`PendingQueueStateProvider`），避免接口名称继续暗示宿主聚合依赖。
-
-上述记录描述各阶段迁移结果；最终清理以以下记录为准。
-
-
-### 2026-10-02 outbound 与兼容状态最终清理
-
-- 删除 App 的 codex、claude、autoRetries、liveThreads、trackers 五个兼容镜像；删除复制回 composition 的 fallback 和双写逻辑。测试直接构造 composition，生产与测试只有一个 runtime owner。
-- 新增 Feishu EffectClient，六种消息/卡片 outbound 方法统一转换为 application effect，composition 在创建 dispatcher 和下游服务前安装 proxy。带 ID 的方法使用 RunSendMessage/RunSendCard，保留 final reuse、fallback、pending/message link 和 goal continuation 的 ID 语义。
-- effect runner 绑定独立 NotifyingFeishuClient transport，proxy 与 runner 不形成递归。显式 effect 和旧调用都保留 command capture、权限诊断、去重、thread 路由和错误返回。事件注册、文件上传下载、reaction 和身份查询继续由 transport 执行。
-- Feishu wrapper 与 transport 接口整体迁入 internal/adapter/feishu；删除旧 internal/app/feishuwrap 路径和 appcore.FeishuClient，不留兼容别名。
-- composition 持有 transport 和 client 读写锁；恢复后替换 Codex client 与队列恢复读取使用同一锁，消除 race 检测发现的竞争。
-- 新增真实 New 构造路径回归，覆盖六种 outbound、返回 ID、capture、取消、transport error 和权限通知去重。全量 go test、go test -race、go vet、staticcheck、diff check 通过；不运行 live token-consuming integration tests。
-
-### 2026-10-02 阶段性收敛记录
-
-- 增加 `internal/composition`：它创建共享 state/config scope，并将每个 frontend 交给 runtime supervisor；单 frontend 启动也复用同一 supervisor 生命周期。
-- 增加 `internal/runtime/FrontendGroup`，固定 prepare → recovery → serve → background 顺序，prepare/serve 失败逆序停止已接纳 frontend；新增生命周期顺序和回滚测试。
-- Codex `Gateway` 现在承担 turn/start、turn/steer、thread/read、goal、review、model、collaboration、skills 的 method 名称和 wire 参数；业务层使用 `backendops` 请求/结果值。
-- Codex input、review target、model/skill catalog、goal budget、opaque response token 的协议编码分别归入 Codex/backend、review/domain、modelconfig/skill/domain、interaction/backendops 和 adapter；增加 omit/null/number、numeric/string token 与 turn snapshot 回归测试。
-- server request reply 通过 `ResolveBackendRequest` effect 进入 Codex adapter；reply 成功仍只变为 `replied`，后端 `serverRequest/resolved` 仍是 authoritative resolve。
-- async user input 的 session 校验、原子 claim、steer/queue 选择和失败恢复归入 `internal/application/asyncinput`；问题卡仍由 Feishu adapter 渲染，回调保持快速 ack。
-- scoped JSON repository 已从 `internal/app/appstate` 移到 `internal/adapter/storage/json/scoped`；scope 由 composition 显式注入，旧 appstate package 已删除。
-- attachment prompt、skill selection、Claude support、pending reply adapter 和 card view 均移向 application/domain/adapter；`CardView` 约束禁止 effect 层继续接收无类型的 Feishu map。
-- backend selection/maintenance/action/failure 的宿主 capability 已拆为 configuration、selection、repository、tracker、runtime callback 等使用方端口；切换状态自持锁，维护查询只读当前 frontend scope。
-- 模型 desired/applied/turn snapshot 优先级保持不变；“最近已应用模型”只来自 session 的 applied snapshot，不再混读单聊/global desired 配置。
-- 工作区选择策略迁入 `internal/application/workspace`，由 scoped repository 提供持久化；业务服务通过 `WorkspaceSelection` capability 获取用例，旧 appcore 桥接已删除。
-- Codex thread/read 的恢复路径只接收语义化 turn 状态，业务层不再依赖协议响应 DTO；协作模式发送前统一裁剪空白值。
-- 删除 `appcore.WorkspaceSource` 宽宿主接口；workspace/thread/review/plan/debug consumer 改为声明各自的配置、身份、存储和 selection ports，permission driver 仅接收其所需的配置快照、scoped store 与 workspace selection。
-- 群 primary 的自动初始化也经过 routing application service 和 JSON repository，`internal/app` 只负责 Feishu bot-count/open-id 事实采集与结果展示。
-- 群 primary 的查询、启用判断和 assignment 过期判断也由 routing application service 承担，`internal/app` 不再直接读取 primary repository 来做状态决策。
-- backend upgrade status/confirmation cards now enter the semantic `SendCard` effect runner; upgrade policy and maintenance state remain runtime/application capabilities.
-- Codex history `thread/read` and compaction `thread/compact/start` now go through the shared Codex gateway and semantic backend operation values; Feishu history rendering no longer calls the raw RPC client directly.
-- backend selection now consumes an explicit effect capability for reply/send/patch cards; its composition adapter routes all three operations through the semantic effect runner.
-- goal、skills、review、plan mode、upgrade、debug 和 thread menu command 已移除 Feishu transport 依赖；各自只声明 outbound/renderer capability，由 composition adapter 统一进入 effect runner。空 message ID 的命令捕获仍按 reply 语义保留，debug 的文件分享保留为独立 artifact capability。
-
-当前完成标准：新增能力需声明 domain owner、application use case、consumer-owned ports、effects、adapter、协议状态机影响及 frontend/chat/session scope；新增业务代码不得以 `*App` 作为跨模块能力容器。现有 `internal/app` 仍包含 Feishu 入口和历史编排，后续新增代码不得扩大该层；其余迁移应按同一边界继续收敛。
-
-### 2026-10-03 未完成边界清单
-
-- `internal/app` 仍直接编排群绑定、workspace 管理、模型/Profile 命令、thread menu、debug 和部分 runtime；这些服务虽然大多已经有 Dependencies 结构，但仍由 app 负责组装和触发，尚未全部成为独立 application use case。
-- Feishu outbound 已有 EffectClient；goal、skills、review、plan mode、upgrade、debug、thread menu、backend selection、群绑定/后端 action 和 maintenance 的主要回复与 patch 路径已通过 consumer-owned outbound capability 进入 effect runner，workspace、model/profile 的 renderer 与部分 maintenance artifact 查询仍保留旧端口调用，尚未统一改成 application 返回 semantic effects。
-- workspace command 的发送、补丁和状态卡渲染已拆为 outbound、renderer、BotName capability；turn item card 的复用补丁与回复也已统一走 effect helper。
-- architecture tests now guard the migrated command packages against reintroducing direct Feishu transport imports or direct transport outbound calls; maintenance patch helpers also consume a semantic outbound port.
-- history command and Claude history rendering now receive outbound and card-renderer capabilities; history orchestration no longer stores a Feishu transport client.
-- auto-retry and service-tier adapters now use semantic outbound ports; their app composition bindings route replies, sends, and patches through effect helpers.
-- MCP local file/image/video tools now depend on an explicit attachment sender capability instead of a broad Feishu client interface.
-- MCP service ownership and backend switch runtime state now live in `appComposition`; `App` keeps only frontend entrypoint state and lifecycle references for these concerns.
-- `internal/application` 的 backend reply port 已统一承载 `json.RawMessage` opaque JSON；下一步若需要更强约束，可再按 request kind 区分 domain reply value，但 application 已不再接受任意 Go 值。
-- workspace 的创建、默认值更新、删除和群绑定创建已迁移到 workspace application configuration use case 与 config storage adapter；backend selection、Quiet Mode、auto-retry、debug level 和 model config 的配置写入已通过配置 application ports/adapter 收口；workspace 查询展示、部分 backend maintenance、history/recovery 数据组装、model menu policy 和 runtime 配置读路径仍保留在 transitional app。
-- architecture guard 已能阻止跨层 import、具体 `App` 能力字段、SDK callback map 和 untyped backend event payload 回归，但还没有对所有 service callback 环和同步 outbound 做完整静态约束。
-
-### 2026-10-03 本轮边界收敛
-
-- workspace 查询与配置展示继续由 `application/workspace` 生成 detached view；Feishu workspace adapter 只消费 view。路径选择器已拆成 application snapshot、filesystem adapter 和纯 Feishu card renderer，文件解析、目录遍历及 symlink root 校验不再位于 card renderer。
-- workspace presentation 负责在需要时查询路径选择器并把结果交给纯 renderer；workspace cards 不再持有可执行的 filesystem callback。新增测试覆盖 symlink 越界拒绝和目录模式文件过滤。
-
-- 群绑定的模型、响应速度和工作区状态卡改为显式 `CardRenderer` capability；binding service 不再从宿主直接读取 Feishu renderer。
-- backend event application service 的十余个匿名 callback 字段收敛为单一 consumer-owned `EventSink` port；Feishu/app 入口只负责组装 sink 实现，事件分发器不再持有隐式 service callback 集合。
-- workspace command capability carrier 从兼容性的 `App` 重命名为 `Dependencies`，Config/Management/Render service 内部统一使用 `Deps` 字段；composition 仍负责注入 outbound、renderer、state 和 runtime ports。
-- architecture tests 新增 application 禁止同步 Feishu outbound 调用、backend event 必须使用单一 sink port 的守卫。
-- backend configuration/selection 与 permission driver 的 capability carrier 去掉 `App` 字段命名，统一改为 `Permissions`/`Source`；thread menu 和 workspace command 的权限渲染注入同步更新，避免继续把 capability interface 当作宿主聚合。
-- reply continuation 的状态、存储、附件、steer 和 submission 回调收进显式 `continuation.Dependencies` carrier；application service 只持有该 carrier，不再平铺十余个宿主回调字段。
-- standalone compaction 与 conversation/thread service 的 context、gateway、repository、live-thread 和 model resolver 依赖收进 `Dependencies` carrier，调用方通过显式 `Deps` 组装，避免生命周期服务再次暴露宿主式平铺字段。
-- interaction 与 async user input service 也统一采用 `Deps` carrier；pending request repository 和 backend scope 不再以 service 宿主字段形式暴露。
-- `BackendEvent` 对 item、usage、goal 增加 typed semantic payload 字段；Codex adapter、approval renderer 和 application event sink 已改用 typed 字段，通用 `Payload any` 已删除。
-
-### 2026-10-03 typed callback 与 interaction payload 收敛
-
-- application `CardAction` 不再暴露 Feishu SDK 的 `map[string]any`；新增 JSON-backed `application.Values`，在 Feishu adapter 边界完成 map 转换，并提供 string、bool、int、string-list 的 typed accessor。原始 Feishu callback 结构留在 adapter 包，避免 SDK 形状进入 application。
-- backend interaction event 增加 `Approval`、`UserInput`、`ElicitationURL`、`ElicitationForm` 和 `Rejected` typed 字段；approval renderer、backend event sink 和协议测试已改用这些字段。
-- 新增 Values round-trip 与 architecture guard，防止 application CardAction 回退到 SDK map；保留 session key normalization、表单多值和回调快速 ack 行为。
-- backend reply effect 与 interaction approval port 改用 `json.RawMessage`；Codex adapter 在协议边界解码并保留字符串数组语义，application 不再接受任意 Go reply value。
-- `presentation.Action` 的 action value 改用 `json.RawMessage`，Feishu map 只在 outbound adapter 还原；goal command 的消息发送统一使用已注入的 semantic outbound capability。
-- workspace renderer 已移除对 `appcore` helper 的依赖，workspace selection key 和文本 fallback 直接使用 application/domain 值；新增守卫防止 renderer 重新依赖 transitional host helper。
-- 模型目录的默认项解析、ID/name 查找和 reasoning effort 能力判断已迁入 `internal/application/modelconfig`；`internal/app/modelconfig` 只保留兼容别名和 backend/config/Feishu 编排。
-
-### 2026-10-03 模型作用域与启动快照职责迁移
-
-- `domain/routing.Setting` 与 typed transitions 统一 AgentBinding/BotProfile 的字段更新；群命令、群卡片与 Profile 入口不再各自维护辅助模型字段 switch。routing application 用例负责校验、继承值标准化和持久化，群更新继续返回 `RefreshGroupStatus` effect。
-- `application/modelconfig.SettingsService` 负责辅助模型保存时选择已有 session 或 frontend Profile；保存只修改 desired overrides，保留 active turn、queue、collaboration mode 与 applied snapshot，维护/切换准入通过 consumer-owned port 提供。
-- `application/modelconfig.SnapshotService` 统一 desired、turn 与 submission 的 scope source assembly；config adapter 在 config/profile/binding 的共享 revision lock 下读取 detached sources。submission 的 BindingID 覆盖规则也迁入该用例。
-- conversation 与 submission 删除根模型 resolver callbacks，改为注入 snapshot port；删除 app 与 submission 的两套重复模型优先级解析和旧配置回退。没有有效启动快照时显式返回错误，不以旧 submission 配置启动。
-- 模型应用状态由 application 生成 `StatusView`，Feishu `modelsettings` renderer 只接受该展示快照；根层删除 applied/pending 文案拼装与旧 notice 常量，保留原菜单文字和生效边界说明。
-- desired 查询不混入当前 collaboration preset；本地 turn snapshot 保留 Plan preset 回退。该区别保持 SM-04 的 Plan 模式与模型应用边界，SM-05 steer 不重新应用配置，审批 resolved 与后台 goal continuation 契约未变。
-- 新增活动 turn 不变、保存失败不发布、frontend/group 隔离、submission binding、不混读配置 revision 与 workspace `default` ID 回归；AST 架构守卫禁止模型入口直接写 override/turn 字段，并禁止 conversation/submission 重新引入根模型回调。
-- 本批完成的是模型作用域与快照职责迁移；workspace renderer 状态读取、其余业务 callback、菜单政策、composition root 集中及旧桥接删除仍需继续，整体提案尚未完成。
-- workspace config、management 和 presentation 的构造实例已归入 frontend `appComposition`；backend/config 失效时清理 workspace command capability cache，presentation 查询通过共享 scope 读取最新配置。
-- workspace presentation 现在在 frontend composition 初始化阶段一次性构造；配置或 backend 变化只影响其注入的查询快照，不再重建 Feishu renderer。
-- workspace selection 的生产调用已直接依赖 `application/workspace.SelectionService`；已删除 `internal/app/appcore/workspace_selection.go` 及其宿主 wrapper，app/workspacecmd 直接声明 selection capability。
-- history 查询已迁入 `application/history`：分页、详情、ordinal 解析、frontend scope 校验和当前 turn 标记由 use case 负责；Codex/Claude transcript reader 在 composition root 组装。Feishu history adapter 只负责命令路由和纯卡片渲染，移除了递归创建 history service 的回调环。查询结果会复制嵌套切片，避免 reader 缓存被当前 turn 标记或并发调用修改；该迁移只读取 thread/session，不改变 SM-03～SM-08 的生命周期边界。
-- backend configuration 的 backend、Feishu scope、默认 workspace 和模型值读取已收敛到 `internal/app/backend` 自有的窄 `PermissionDependencies` helper，不再依赖 `appcore` 或旧 `app/modelconfig` 聚合包；菜单顺序、模型生效边界、权限协议和状态卡文本保持不变。
-- 模型配置的 Feishu 卡片与命令适配器已从 `internal/app/modelconfig` 移到 `internal/adapter/feishu/modelconfig`；application 继续持有目录解析和快照策略，adapter 仅负责 Feishu 交互与 config/backend 端口连接，旧 app package 已删除。
-- plan mode 已移除对 `appcore` 与 `app/workspace` 的依赖，改用显式 ConfigProvider、ContextProvider、domain conversation binding 和 application modelconfig adapter 能力；`/plan` 的 Codex collaboration mode 请求与 SM-04/SM-05 边界不变。
-- review command 已移除 `appcore` 依赖，ContextProvider 和显式 frontend/config/store/workspace capabilities 由 composition adapter 注入；inline review 的 `review/start` turn 绑定及 queued submission 生命周期保持不变。
-- goal command 已移除 `appcore` 依赖，继续通过显式 ContextProvider、outbound、state 和 tracker ports 执行 goal set/clear 与 continuation；SM-25 goal 通知、SM-04 continuation turn 绑定和新 outbound 根卡行为不变。
-- thread/session menu 已移除 `appcore` 与旧 `app/workspace` 依赖，ConfigProvider、frontend identity、workspace selection 和 conversation binding 改由显式 capability/domain 类型提供；thread resume/fork/interrupt 的生命周期边界保持不变。
-- workspace command 的 config/management/service 三个入口已移除 `appcore` 依赖，session key、legacy frontend fallback、lifecycle context 和 JSON payload 通过本包的显式 capability helper 处理；工作区创建、clone、权限和群绑定行为保持不变。
-- debug/usage command 已移除 `appcore`、旧 thread menu 和旧 workspace 包依赖；日志级别、usage、文件分享和 path picker 继续通过显式 runtime/config/outbound/artifact ports 执行，慢速下载仍保持异步 patch 流程。
-
-### 2026-10-03 appcore 与 workspace 解析边界清理
-
-- 删除 `internal/app/appcore` 整个兼容桥接包。配置、backend、session identity 和 lifecycle helper 由 Feishu entrypoint 保留为窄的 frontend-scoped helper；升级本地 Binary 流程直接使用自身 `Context()`，群公告和 session migration 直接使用 domain identity。
-- `/workspace clone`、`/workspace new worktree` 参数解析以及目录选择后的 workspace ID 推导迁入 `internal/application/workspace`；command matcher、path picker、plan mode 和 upgrade local picker 不再依赖旧 `internal/app/workspace` 包。
-- 旧 `internal/app/workspace` 包已删除。clone/worktree 的 Git process supervision 已迁入 `internal/runtime/workspace`，workspace payload、表单合并、命名和 takeover policy 已迁入 `internal/application/workspace`；pending payload decoding 仅保留在 `workspacecmd` 的 state adapter 中，未改变工作区创建、clone、worktree 或路径选择行为。
-- workspace application 的表单更新仅消费字符串字段；Feishu SDK 值的 coercion、缺字段与显式空值区别留在 command adapter。命令错误继续显示原完整 usage。architecture guard 同时禁止旧 appcore/workspace 目录和 import 恢复。
-- 纯 command matcher 已迁入 `internal/application/features`，命令是否由本地处理、backend capability gate、菜单可见性和 passthrough 判定共用同一 application policy；`internal/app/commandmatch` 已删除。
+- 生产构造路径完全由 `internal/composition` 负责；`internal/app` 不再创建或缓存 application service、backend client、runtime tracker 或兼容镜像。
+- `internal/app` 只把 Feishu 事实转换为 typed input，并把 application effects 交给 runtime/adapter；不存在把 `*App` 传入多个子服务的新增路径。
+- application、adapter、runtime 和 repository 的依赖方向符合第 2 节，任何跨 owner 控制流都通过显式 port、command、event、query 或 effect。
+- 每个 session、submission、turn、interaction 和 frontend runtime 状态只有一个 owner；保存先于外部 effect，重试使用稳定幂等身份。
+- backend wire、Feishu SDK、卡片 JSON、CLI stream 和存储 DTO 都停留在对应 adapter/runtime 边界，application 只处理语义化类型。
+- 所有涉及 Codex/Claude 状态机的路径继续满足协议审计，且架构测试能够阻止上述边界回退。

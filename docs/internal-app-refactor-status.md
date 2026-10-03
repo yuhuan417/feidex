@@ -13,7 +13,7 @@
 
 ## 结论
 
-本文记录的是上一轮 `internal/app` 拆包的历史快照。新的长期重构已经进入 domain/application/adapter/runtime 方向；source of truth 是 [长期架构重构提案](architecture-refactor-proposal.md) 和更新后的 [DEVELOPER.md](../DEVELOPER.md)。
+本文记录的是上一轮 `internal/app` 拆包的历史快照。新的长期重构已经进入 domain/application/adapter/runtime 方向；目标边界以 [长期架构目标与边界](architecture-refactor-proposal.md) 和更新后的 [DEVELOPER.md](../DEVELOPER.md) 为准。
 
 `internal/app` 的阶段化重构已经完成。旧的 phase / wave 执行计划不再作为当前工作的 source of truth；现在以边界文档、状态机审计和 root 现状审计为准。
 

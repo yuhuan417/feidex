@@ -14,7 +14,6 @@ import (
 
 	appbackend "feidex/internal/adapter/feishu/backend"
 	appworkspace "feidex/internal/application/workspace"
-	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/formatutil"
@@ -106,7 +105,7 @@ func WorktreePayloadFromPending(pending *state.PendingRequest) WorktreePayload {
 	return payload
 }
 
-func SortThreadsByUpdated(items []codexrpc.ThreadListEntry) {
+func SortThreadsByUpdated(items []conversation.ThreadEntry) {
 	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt > items[j].UpdatedAt })
 }
 
@@ -117,6 +116,7 @@ func SortThreadsByUpdated(items []codexrpc.ThreadListEntry) {
 
 // Dependencies provides config, state, lifecycle, and Feishu capabilities.
 type Dependencies struct {
+	Lifecycle      *appworkspace.Lifecycle
 	ConfigProvider interface {
 		Config() *config.Config
 		ConfigMu() *sync.RWMutex
@@ -218,15 +218,6 @@ func (a Dependencies) PermissionDriver() appbackend.PermissionDriver {
 }
 
 // ---------------------------------------------------------------------------
-// CodexClient
-// ---------------------------------------------------------------------------
-
-// CodexClient is the narrow interface for Codex RPC operations.
-type CodexClient interface {
-	Call(ctx context.Context, method string, params any, result any) error
-}
-
-// ---------------------------------------------------------------------------
 // Callback function types
 // ---------------------------------------------------------------------------
 
@@ -243,7 +234,7 @@ type (
 
 // Thread callbacks.
 type (
-	ListWorkspaceThreadsFn         func(sessionKey string, ws *config.Workspace, includeAll bool) ([]codexrpc.ThreadListEntry, error)
+	ListWorkspaceThreadsFn         func(sessionKey string, ws *config.Workspace, includeAll bool) ([]conversation.ThreadEntry, error)
 	EnsureWorkspaceThreadBindingFn func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
 	StartWorkspaceThreadFn         func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*ThreadBinding, error)
 	MarkSessionThreadLiveFn        func(sessionKey, threadID string)
@@ -252,11 +243,9 @@ type (
 
 // Session context callbacks.
 type (
-	SessionHasInFlightFn     func(sess *conversation.Session) bool
-	SwitchSessionWorkspaceFn func(sess *conversation.Session, workspaceID string)
-	ClearSessionThreadCtxFn  func(sess *conversation.Session)
-	SetSessionThreadCtxFn    func(sess *conversation.Session, workspaceID, threadID, name, preview string)
-	SessionResetActiveOpsFn  func(sess *conversation.Session)
+	SessionHasInFlightFn    func(sess *conversation.Session) bool
+	SetSessionThreadCtxFn   func(sess *conversation.Session, workspaceID, threadID, name, preview string)
+	SessionResetActiveOpsFn func(sess *conversation.Session)
 )
 
 // Clone operation callbacks.
@@ -266,12 +255,6 @@ type (
 	ClearCloneOpFn   func(requestID string)
 	GitCloneFn       func(ctx context.Context, repoURL, targetDir string, report CloneProgressReporter) error
 	GitWorktreeAddFn func(ctx context.Context, baseRepoRoot, branchName, targetDir string) error
-)
-
-// Codex client callbacks.
-type (
-	RequireCodexClientFn     func() (CodexClient, error)
-	BuildThreadStartParamsFn func(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams
 )
 
 // Backend configuration callbacks.
@@ -329,8 +312,6 @@ type StateDeps struct {
 
 type SessionContextDeps struct {
 	SessionHasInFlight     SessionHasInFlightFn
-	SwitchSessionWorkspace SwitchSessionWorkspaceFn
-	ClearSessionThreadCtx  ClearSessionThreadCtxFn
 	SetSessionThreadCtx    SetSessionThreadCtxFn
 	SessionResetActiveOps  SessionResetActiveOpsFn
 	ClearSessionLiveThread ClearSessionLiveThreadFn
@@ -350,12 +331,6 @@ type CloneDeps struct {
 	ClearCloneOp   ClearCloneOpFn
 	GitClone       GitCloneFn
 	GitWorktreeAdd GitWorktreeAddFn
-}
-
-type CodexDeps struct {
-	RequireCodexClient     RequireCodexClientFn
-	BuildThreadStartParams BuildThreadStartParamsFn
-	BuildThreadConfig      func(sess *conversation.Session) map[string]any
 }
 
 type BackendConfigDeps struct {
@@ -431,7 +406,6 @@ type ManagementDeps struct {
 	SessionContext SessionContextDeps
 	Threads        ThreadDeps
 	Clone          CloneDeps
-	Codex          CodexDeps
 	Backend        BackendConfigDeps
 	Actions        ActionDeps
 	Formatting     FormattingDeps
@@ -502,16 +476,6 @@ func (s ConfigService) SessionHasInFlight(sess *conversation.Session) bool {
 		return false
 	}
 	return s.deps.SessionContext.SessionHasInFlight(sess)
-}
-func (s ConfigService) SwitchSessionWorkspace(sess *conversation.Session, workspaceID string) {
-	if s.deps.SessionContext.SwitchSessionWorkspace != nil {
-		s.deps.SessionContext.SwitchSessionWorkspace(sess, workspaceID)
-	}
-}
-func (s ConfigService) ClearSessionThreadCtx(sess *conversation.Session) {
-	if s.deps.SessionContext.ClearSessionThreadCtx != nil {
-		s.deps.SessionContext.ClearSessionThreadCtx(sess)
-	}
 }
 func (s ConfigService) ClearSessionLiveThread(sessionKey string) {
 	clearFn := s.deps.Threads.ClearSessionLiveThread
@@ -695,16 +659,6 @@ func (s ManagementService) SessionHasInFlight(sess *conversation.Session) bool {
 	}
 	return s.deps.SessionContext.SessionHasInFlight(sess)
 }
-func (s ManagementService) SwitchSessionWorkspace(sess *conversation.Session, workspaceID string) {
-	if s.deps.SessionContext.SwitchSessionWorkspace != nil {
-		s.deps.SessionContext.SwitchSessionWorkspace(sess, workspaceID)
-	}
-}
-func (s ManagementService) ClearSessionThreadCtx(sess *conversation.Session) {
-	if s.deps.SessionContext.ClearSessionThreadCtx != nil {
-		s.deps.SessionContext.ClearSessionThreadCtx(sess)
-	}
-}
 func (s ManagementService) SetSessionThreadCtx(sess *conversation.Session, workspaceID, threadID, name, preview string) {
 	if s.deps.SessionContext.SetSessionThreadCtx != nil {
 		s.deps.SessionContext.SetSessionThreadCtx(sess, workspaceID, threadID, name, preview)
@@ -768,18 +722,6 @@ func (s ManagementService) GitWorktreeAdd(ctx context.Context, baseRepoRoot, bra
 		return s.deps.Clone.GitWorktreeAdd(ctx, baseRepoRoot, branchName, targetDir)
 	}
 	return GitWorktreeAdd(ctx, baseRepoRoot, branchName, targetDir)
-}
-func (s ManagementService) RequireCodexClient() (CodexClient, error) {
-	if s.deps.Codex.RequireCodexClient == nil {
-		return nil, nil
-	}
-	return s.deps.Codex.RequireCodexClient()
-}
-func (s ManagementService) BuildThreadStartParams(ws *config.Workspace, sess *conversation.Session, effectiveModel string) codexrpc.ThreadStartParams {
-	if s.deps.Codex.BuildThreadStartParams == nil {
-		return codexrpc.ThreadStartParams{}
-	}
-	return s.deps.Codex.BuildThreadStartParams(ws, sess, effectiveModel)
 }
 func (s ManagementService) BackendWorkspaceSwitchBindingNotice(binding *ThreadBinding) string {
 	if s.deps.Backend.BackendWorkspaceSwitchBindingNotice == nil {
@@ -967,14 +909,6 @@ func makeSessionKey(a Dependencies, msg *feishu.InboundMessage) string {
 		return "feishu:chat:" + chatID
 	}
 	return "feishu:frontend:" + frontendID + ":chat:" + chatID
-}
-func allowLegacyFallback(a Dependencies) bool {
-	if a.ConfigProvider == nil || a.Config() == nil || a.ConfigMu() == nil {
-		return false
-	}
-	a.ConfigMu().RLock()
-	defer a.ConfigMu().RUnlock()
-	return len(a.Config().ResolvedFrontends()) == 1
 }
 func mustJSON(value any) string { data, _ := json.Marshal(value); return string(data) }
 

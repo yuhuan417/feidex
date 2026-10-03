@@ -97,19 +97,22 @@ type RuntimeMaintenanceProvider interface {
 // Dependencies are consumer-owned ports. They are fixed at composition time;
 // no service can ask a host App to locate another service for it.
 type Dependencies struct {
-	State         StateProvider
-	Bindings      RuntimeStateProvider
-	Replies       ReplyContinuationProvider
-	Streams       TurnStreamProvider
-	Reactions     PendingQueueProvider
-	Cards         OutboundCardProvider
-	Queue         QueueProvider
-	Retry         AutoRetryProvider
-	Cleanup       RuntimeMaintenanceProvider
-	Runtime       RuntimeProvider
-	Continuations ContinuationProvider
-	Delivery      FinalDeliveryProvider
-	Diagnostics   DiagnosticsProvider
+	State     StateProvider
+	Bindings  RuntimeStateProvider
+	Replies   ReplyContinuationProvider
+	Streams   TurnStreamProvider
+	Reactions PendingQueueProvider
+	Cards     OutboundCardProvider
+	Queue     QueueProvider
+	Retry     AutoRetryProvider
+	Cleanup   RuntimeMaintenanceProvider
+	Runtime   RuntimeProvider
+	// RunSessionAsync keeps continuation work on the same session actor as the
+	// terminal transition that scheduled it.
+	RunSessionAsync func(sessionKey string, fn func())
+	Continuations   ContinuationProvider
+	Delivery        FinalDeliveryProvider
+	Diagnostics     DiagnosticsProvider
 }
 
 type QueueProvider interface {
@@ -510,9 +513,15 @@ func (w Service) FinishTurn(threadID, turnID, status string) {
 			"source_session_key", sessionKey,
 			"thread_id", updatedSess.ActiveThreadID,
 		)
-		w.deps.Runtime.RunAsync(func() {
-			w.deps.Queue.StartNextSubmissionAsync(nextSessionKey, "finishTurn")
-		})
+		if w.deps.RunSessionAsync != nil {
+			w.deps.RunSessionAsync(nextSessionKey, func() {
+				w.deps.Queue.StartNextSubmissionAsync(nextSessionKey, "finishTurn")
+			})
+		} else {
+			w.deps.Runtime.RunAsync(func() {
+				w.deps.Queue.StartNextSubmissionAsync(nextSessionKey, "finishTurn")
+			})
+		}
 	}
 	w.deps.Cleanup.CleanupSubmissionRuntimeState(sub)
 }

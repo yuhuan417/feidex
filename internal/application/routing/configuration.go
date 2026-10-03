@@ -2,6 +2,7 @@ package routing
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"feidex/internal/application"
@@ -84,7 +85,10 @@ func (s ConfigurationService) UpdateBinding(binding *domain.AgentBinding, mutate
 	}
 	result := BindingResult{Binding: updated}
 	if strings.EqualFold(strings.TrimSpace(updated.ChatType), "group") {
-		result.Effects = []application.Effect{application.RefreshGroupStatus{Frontend: s.Frontend, ChatID: updated.ChatID, Reason: "binding_updated"}}
+		result.Effects = []application.Effect{application.RefreshGroupStatus{
+			Frontend: s.Frontend, ChatID: updated.ChatID, Reason: "binding_updated",
+			IdempotencyKey: application.StableEffectKey("refresh-group-status", string(s.Frontend), updated.ID, strconv.FormatInt(updated.UpdatedAt, 10)),
+		}}
 	}
 	return result, nil
 }

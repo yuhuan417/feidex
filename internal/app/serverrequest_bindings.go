@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"feidex/internal/application"
 	"feidex/internal/application/backendops"
+	appsubmission "feidex/internal/application/submission"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
@@ -38,7 +39,6 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		Pending:         func(id string) *state.PendingRequest { return a.State().Pending(id) },
 		UpdatePending:   func(id string, mutate func(*state.PendingRequest)) error { return a.State().UpdatePending(id, mutate) },
 		SavePending:     func(req *state.PendingRequest) error { return a.State().SavePending(req) },
-		SetSubStatus:    func(id, status string) error { return a.State().SetSubmissionStatus(id, status) },
 		Submission:      func(id string) *domainsubmission.Submission { return a.State().Submission(id) },
 		Session:         func(key string) *conversation.Session { return a.State().Session(key) },
 		SessionKeysEqual: func(left, right string) bool {
@@ -86,11 +86,8 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
 			return newRuntimeStateService(a).finalizePendingReply(pending)
 		},
-		HasOpenPendingRequestForTurn: func(threadID, turnID, excludeID string) bool {
-			return newRuntimeStateService(a).hasOpenPendingRequestForTurn(threadID, turnID, excludeID)
-		},
 		FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-			return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
+			return (appsubmission.SubmissionLookupService{State: a.State(), Runtime: newRuntimeStateService(a)}).FindSubmissionByTurn(threadID, turnID)
 		},
 		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, delivery serverrequest.PendingCardDelivery) error {
 			return deliverPendingCard(a, sub, card, pendingCardDelivery{

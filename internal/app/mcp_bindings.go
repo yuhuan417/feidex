@@ -103,7 +103,7 @@ func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {
 			return items
 		},
 		FindSubmissionByTurnFn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-			return newSubmissionQueueServiceFromApp(a).FindSubmissionByTurn(threadID, turnID)
+			return findSubmissionByTurn(a, threadID, turnID)
 		},
 		ReplyInThreadForSubmissionFn: func(sub *domainsubmission.Submission) bool {
 			return replyInThreadForSubmission(a, sub)

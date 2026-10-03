@@ -3,8 +3,6 @@ package workspacecmd
 import (
 	"context"
 	"errors"
-	configadapter "feidex/internal/adapter/config"
-	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
@@ -133,14 +131,8 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		if sess == nil {
 			sess = &conversation.Session{Key: sessionKey, ChatID: msg.ChatID, ChatType: msg.ChatType, OwnerUserID: msg.UserID}
 		}
-		if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
-			return fmt.Errorf("%s", reason)
-		}
-		if err := setSelectedWorkspaceForMessage(s.Deps, msg, ws.ID); err != nil {
-			return err
-		}
 		reply := "已切换工作区到 " + ws.ID
-		if err := applyWorkspaceSwitch(s, sessionKey, sess, ws.ID); err != nil {
+		if err := applyWorkspaceSwitch(s.Deps.Lifecycle, s.ClearSessionLiveThread, sess, ws.ID); err != nil {
 			return err
 		}
 		binding, err := s.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
@@ -222,78 +214,24 @@ func (s *ConfigService) ShowWorkspaceDeleteMenu(msg *feishu.InboundMessage) erro
 
 // ValidateWorkspaceDeletion validates that a workspace can be deleted.
 func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string) error {
-	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID == "" {
-		return fmt.Errorf("请指定 workspace_id")
+	if s.Deps.Lifecycle == nil {
+		return fmt.Errorf("workspace lifecycle is unavailable")
 	}
-	repository := configadapter.NewWorkspaceRepository(s.Deps)
-	workspace, err := repository.Get(workspaceID)
-	if err != nil {
-		return err
-	}
-	if workspace == nil {
-		return fmt.Errorf("workspace %q 不存在", workspaceID)
-	}
-	if len(repository.List()) <= 1 {
-		return fmt.Errorf("至少保留一个 workspace")
-	}
-	currentID := selectedWorkspaceIDForSession(s.Deps, s.GetSession(sessionKey))
-	if workspaceID == currentID {
-		return fmt.Errorf("不能删除当前 workspace，请先切换到其他 workspace")
-	}
-	for _, sess := range s.Sessions() {
-		if sess == nil || !s.SessionHasInFlight(sess) {
-			continue
-		}
-		if SessionReferencesWorkspace(sess, workspaceID) {
-			return fmt.Errorf("workspace %q 仍有运行中的任务，无法删除", workspaceID)
-		}
-	}
-	if s.Deps.ConfigProvider != nil && s.Deps.Store() != nil {
-		frontendID := strings.TrimSpace(s.Deps.FrontendID())
-		legacyFallback := allowLegacyFallback(s.Deps)
-		for _, binding := range s.Deps.Store().AllAgentBindings() {
-			if binding == nil || (strings.TrimSpace(binding.FrontendID) != frontendID && !(strings.TrimSpace(binding.FrontendID) == "" && legacyFallback)) {
-				continue
-			}
-			if strings.TrimSpace(binding.WorkspaceID) == workspaceID {
-				return fmt.Errorf("workspace %q 仍被某个群里的当前 Bot 工作区配置使用，请先在对应群聊中用 /workspace use 切换", workspaceID)
-			}
-		}
-	}
-	return nil
+	return s.Deps.Lifecycle.ValidateDeletion(sessionKey, workspaceID)
 }
 
-// DeleteWorkspace deletes a workspace configuration.
+// DeleteWorkspace commits reference cleanup and configuration deletion before
+// runtime cleanup or success cards can be published.
 func (s *ConfigService) DeleteWorkspace(sessionKey, workspaceID string) error {
-	if err := s.ValidateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
-		return err
+	if s.Deps.Lifecycle == nil {
+		return fmt.Errorf("workspace lifecycle is unavailable")
 	}
-	workspaceID = strings.TrimSpace(workspaceID)
-	fallbackID, err := (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.Deps)}).Delete(workspaceID)
+	effects, err := s.Deps.Lifecycle.Delete(sessionKey, workspaceID)
 	if err != nil {
 		return err
 	}
-
-	for _, sess := range s.Sessions() {
-		if sess == nil {
-			continue
-		}
-		updated := false
-		if strings.TrimSpace(sess.WorkspaceID) == workspaceID {
-			s.SwitchSessionWorkspace(sess, fallbackID)
-			updated = true
-		} else if strings.TrimSpace(sess.ActiveThreadWorkspaceID) == workspaceID {
-			s.ClearSessionThreadCtx(sess)
-			updated = true
-		}
-		if !updated {
-			continue
-		}
-		s.ClearSessionLiveThread(sess.Key)
-		if err := s.SaveSession(sess); err != nil {
-			return err
-		}
+	for _, key := range effects.ClearLiveThreads {
+		s.ClearSessionLiveThread(key)
 	}
 	return nil
 }

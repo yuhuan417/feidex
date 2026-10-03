@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
 	applicationmodelconfig "feidex/internal/application/modelconfig"
+	applicationrouting "feidex/internal/application/routing"
 	"feidex/internal/domain/routing"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -29,7 +29,7 @@ func commandWorkspaceProfileAware(a *App, msg *feishu.InboundMessage, args []str
 		}
 		switch setting {
 		case routing.Sandbox, routing.ApprovalPolicy, routing.MultiAgent, routing.Permissions:
-			_, err := newRoutingConfiguration(a).SetProfile(configuredBackend(a), setting, args[1])
+			_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, setting, args[1])
 			return err
 		}
 	}
@@ -43,7 +43,7 @@ func commandWorkspaceProfileAware(a *App, msg *feishu.InboundMessage, args []str
 	if workspaceID == "" {
 		return nil
 	}
-	_, err := newRoutingConfiguration(a).SetProfile(configuredBackend(a), routing.Workspace, workspaceID)
+	_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Workspace, workspaceID)
 	return err
 }
 
@@ -70,7 +70,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 		return err
 	}
 	if len(args) == 2 && strings.EqualFold(strings.TrimSpace(args[0]), "set") {
-		_, err := newRoutingConfiguration(a).SetProfile(configuredBackend(a), routing.Model, args[1])
+		_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, args[1])
 		return err
 	}
 	return nil
@@ -98,7 +98,7 @@ func commandEffortProfileAware(a *App, msg *feishu.InboundMessage, args []string
 	if err := newModelConfigService(a).commandEffort(msg, args); err != nil {
 		return err
 	}
-	_, err := newRoutingConfiguration(a).SetProfile(configuredBackend(a), routing.Effort, args[0])
+	_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, args[0])
 	return err
 }
 
@@ -112,13 +112,13 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 		if err != nil {
 			return err
 		}
-		value = appservicetiercmd.ToggleServiceTier(profile.ServiceTier)
+		value = applicationrouting.ToggleServiceTier(profile.ServiceTier)
 	} else if len(args) == 1 {
 		value = strings.ToLower(strings.TrimSpace(args[0]))
 		if value == "off" || value == "default" {
 			value = ""
 		} else {
-			value = appservicetiercmd.NormalizeServiceTier(value)
+			value = applicationrouting.NormalizeServiceTier(value)
 			if value == "" {
 				return fmt.Errorf("unsupported service tier %q", args[0])
 			}
@@ -126,7 +126,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 	} else {
 		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast off | /fast toggle")
 	}
-	_, err := newRoutingConfiguration(a).SetProfile(configuredBackend(a), routing.ServiceTier, value)
+	_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, value)
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func completeBotProfileModelSet(a *App, action *feishu.CardAction, modelID strin
 	if err != nil || resp == nil || (resp.Toast != nil && strings.EqualFold(resp.Toast.Type, "error")) {
 		return resp, err
 	}
-	_, err = newRoutingConfiguration(a).SetProfile(configuredBackend(a), routing.Model, modelID)
+	_, err = newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: "p2p", ChatID: "profile"}, routing.Model, modelID)
 	return resp, err
 }
 
@@ -154,7 +154,7 @@ func completeBotProfileEffortSet(a *App, action *feishu.CardAction, effort strin
 	if err != nil || resp == nil || (resp.Toast != nil && strings.EqualFold(resp.Toast.Type, "error")) {
 		return resp, err
 	}
-	_, err = newRoutingConfiguration(a).SetProfile(configuredBackend(a), routing.Effort, effort)
+	_, err = newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: "p2p", ChatID: "profile"}, routing.Effort, effort)
 	return resp, err
 }
 
@@ -175,14 +175,14 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 }
 
 func completeBotProfileServiceTierSet(a *App, action *feishu.CardAction, serviceTier string) (*callback.CardActionTriggerResponse, error) {
-	value := appservicetiercmd.NormalizeServiceTier(serviceTier)
+	value := applicationrouting.NormalizeServiceTier(serviceTier)
 	if strings.EqualFold(strings.TrimSpace(serviceTier), "default") || strings.EqualFold(strings.TrimSpace(serviceTier), "off") {
 		value = ""
 	}
 	if strings.TrimSpace(serviceTier) != "" && value == "" && !strings.EqualFold(strings.TrimSpace(serviceTier), "default") && !strings.EqualFold(strings.TrimSpace(serviceTier), "off") {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "unsupported service tier"}}, nil
 	}
-	_, err := newRoutingConfiguration(a).SetProfile(configuredBackend(a), routing.ServiceTier, value)
+	_, err := newScopedRoutingConfiguration(a).Set(applicationrouting.Scope{ChatType: "p2p", ChatID: "profile"}, routing.ServiceTier, value)
 	if err != nil {
 		return nil, err
 	}

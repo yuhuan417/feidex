@@ -83,7 +83,7 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 	}
 	// Only local validation/state changes run in the callback. The backend can
 	// take seconds to steer or start a turn, so acknowledge before doing I/O.
-	runAsync(a, func() {
+	runSessionAsync(a, pending.SessionKey, func() {
 		err := submitAsyncUserInput(a, pending, action.UserID, answerText)
 		var card map[string]any
 		if err != nil {
