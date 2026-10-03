@@ -6,10 +6,10 @@ import "feidex/internal/application"
 // The caller merges item metadata and supplies the workspace without allowing
 // presentation to read or write live session state.
 func PresentationForEvent(event application.BackendEvent, merge func(Presentation) Presentation, cwd string) Presentation {
-	value, ok := event.Payload.(application.ApprovalRequested)
-	if !ok {
+	if event.Approval == nil {
 		return Presentation{}
 	}
+	value := *event.Approval
 	p := Presentation{Kind: NormalizeKind(value.Kind), ThreadID: event.ThreadID, TurnID: event.TurnID, ItemID: value.ItemID, Payload: RequestPayload{Request: value.Request}}
 	if merge != nil {
 		p = merge(p)

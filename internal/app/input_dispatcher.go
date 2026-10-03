@@ -32,7 +32,8 @@ func newInputDispatcher(a *App) application.Dispatcher {
 			return application.Result{}, nil
 		},
 		Card: func(_ context.Context, event application.CardActionReceived) (application.Result, error) {
-			response, err := cardActions.dispatch(&event.Action)
+			action := fromApplicationCardAction(event.Action)
+			response, err := cardActions.dispatch(action)
 			return application.Result{Response: response}, err
 		},
 		Recall: func(_ context.Context, event application.MessageRecalled) (application.Result, error) {
@@ -197,7 +198,7 @@ func dispatchCardAction(a *App, action *feishu.CardAction) (*callback.CardAction
 	if action == nil {
 		return newCardActionService(a).dispatch(nil)
 	}
-	result, err := dispatchInput(a, application.CardActionReceived{Frontend: identity.FrontendID(a.FrontendID()), Action: *action})
+	result, err := dispatchInput(a, application.CardActionReceived{Frontend: identity.FrontendID(a.FrontendID()), Action: toApplicationCardAction(action)})
 	if err != nil {
 		return nil, err
 	}

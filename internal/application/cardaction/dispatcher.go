@@ -22,7 +22,7 @@ type Service struct{ deps Dependencies }
 func NewService(deps Dependencies) Service { return Service{deps: deps} }
 
 func (s Service) Dispatch(action application.CardAction) (any, error) {
-	if action.ActionValue == nil && action.Name == "" && action.MessageID == "" {
+	if action.ActionValue.Empty() && action.Name == "" && action.MessageID == "" {
 		return nil, nil
 	}
 	if s.deps.NormalizeSessionKey != nil {

@@ -277,6 +277,40 @@ func TestApplicationLifecycleServicesUseDependencyCarriers(t *testing.T) {
 	}
 }
 
+func TestBackendEventsExposeTypedSemanticPayloads(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal", "application", "input.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, field := range []string{"Item", "Usage", "Goal"} {
+		if !strings.Contains(source, field) {
+			t.Fatalf("BackendEvent missing typed semantic field %s", field)
+		}
+	}
+	for _, typ := range []string{"*turn.ProtocolItem", "*turn.ThreadTokenUsage", "*conversation.ThreadGoal"} {
+		if !strings.Contains(source, typ) {
+			t.Fatalf("BackendEvent missing typed semantic payload type %s", typ)
+		}
+	}
+}
+
+func TestApplicationCardActionsDoNotExposeSDKMaps(t *testing.T) {
+	root := repositoryRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "internal", "application", "input.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	if strings.Contains(source, "ActionValue map[string]any") || strings.Contains(source, "FormValue   map[string]any") {
+		t.Fatal("application CardAction must use typed Values instead of SDK maps")
+	}
+	if !strings.Contains(source, "ActionValue Values") || !strings.Contains(source, "FormValue   Values") {
+		t.Fatal("application CardAction must expose typed callback values")
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	root, err := os.Getwd()

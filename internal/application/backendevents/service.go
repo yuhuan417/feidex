@@ -59,28 +59,28 @@ func (s Service) Handle(ctx context.Context, event application.BackendEvent) (ap
 			s.Sink.RequestResolved(event.RequestID)
 		}
 	case application.EventItemStarted:
-		if item, ok := event.Payload.(turn.ProtocolItem); ok && s.Sink != nil {
-			s.Sink.ItemStarted(ctx, event.ThreadID, event.TurnID, item)
+		if event.Item != nil && s.Sink != nil {
+			s.Sink.ItemStarted(ctx, event.ThreadID, event.TurnID, *event.Item)
 		}
 	case application.EventItemCompleted:
-		if item, ok := event.Payload.(turn.ProtocolItem); ok && s.Sink != nil {
-			s.Sink.ItemCompleted(ctx, event.ThreadID, event.TurnID, item)
+		if event.Item != nil && s.Sink != nil {
+			s.Sink.ItemCompleted(ctx, event.ThreadID, event.TurnID, *event.Item)
 		}
 	case application.EventItemProgress:
-		if item, ok := event.Payload.(turn.ProtocolItem); ok && s.Sink != nil {
-			s.Sink.ItemProgress(ctx, event.ThreadID, event.TurnID, item)
+		if event.Item != nil && s.Sink != nil {
+			s.Sink.ItemProgress(ctx, event.ThreadID, event.TurnID, *event.Item)
 		}
 	case application.EventPlanUpdated:
 		if s.Sink != nil {
 			s.Sink.PlanUpdated(event.TurnID, event.Message)
 		}
 	case application.EventUsageUpdated:
-		if usage, ok := event.Payload.(turn.ThreadTokenUsage); ok && s.Sink != nil {
-			s.Sink.UsageUpdated(event.ThreadID, event.TurnID, usage)
+		if event.Usage != nil && s.Sink != nil {
+			s.Sink.UsageUpdated(event.ThreadID, event.TurnID, *event.Usage)
 		}
 	case application.EventGoalUpdated:
-		if goal, ok := event.Payload.(conversation.ThreadGoal); ok && s.Sink != nil {
-			s.Sink.GoalUpdated(event.ThreadID, goal)
+		if event.Goal != nil && s.Sink != nil {
+			s.Sink.GoalUpdated(event.ThreadID, *event.Goal)
 		}
 	case application.EventGoalCleared:
 		if s.Sink != nil {

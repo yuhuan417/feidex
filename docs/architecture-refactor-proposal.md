@@ -567,3 +567,10 @@ Codex server request
 - reply continuation 的状态、存储、附件、steer 和 submission 回调收进显式 `continuation.Dependencies` carrier；application service 只持有该 carrier，不再平铺十余个宿主回调字段。
 - standalone compaction 与 conversation/thread service 的 context、gateway、repository、live-thread 和 model resolver 依赖收进 `Dependencies` carrier，调用方通过显式 `Deps` 组装，避免生命周期服务再次暴露宿主式平铺字段。
 - interaction 与 async user input service 也统一采用 `Deps` carrier；pending request repository 和 backend scope 不再以 service 宿主字段形式暴露。
+- `BackendEvent` 对 item、usage、goal 增加 typed semantic payload 字段；Codex adapter 和 application event sink 已改用这些字段，`Payload` 仅保留给尚未完成专用类型迁移的 request interaction 数据。
+
+### 2026-10-03 typed callback 与 interaction payload 收敛
+
+- application `CardAction` 不再暴露 Feishu SDK 的 `map[string]any`；新增 JSON-backed `application.Values`，在 Feishu adapter 边界完成 map 转换，并提供 string、bool、int、string-list 的 typed accessor。原始 Feishu callback 结构留在 adapter 包，避免 SDK 形状进入 application。
+- backend interaction event 增加 `Approval`、`UserInput`、`ElicitationURL`、`ElicitationForm` 和 `Rejected` typed 字段；approval renderer 与 backend event sink 已改用这些字段，旧 `Payload` 仅作为迁移兼容镜像。
+- 新增 Values round-trip 与 architecture guard，防止 application CardAction 回退到 SDK map；保留 session key normalization、表单多值和回调快速 ack 行为。

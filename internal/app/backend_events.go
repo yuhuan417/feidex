@@ -12,7 +12,6 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
-	"feidex/internal/domain/interaction"
 	"feidex/internal/domain/submission"
 	"feidex/internal/domain/turn"
 )
@@ -98,18 +97,30 @@ func deliverBackendInteraction(a *App, _ context.Context, event application.Back
 		p := approval.PresentationForEvent(event, newRuntimeStateService(a).mergeApprovalPresentationWithTurnItem, cwd)
 		a.ServerRequestService().SendApprovalCardPresentation(token, p)
 	case application.EventUserInputRequested:
-		p := event.Payload.(interaction.ToolUserInputPayload)
+		if event.UserInput == nil {
+			return nil
+		}
+		p := *event.UserInput
 		if len(p.Questions) == 1 && len(p.Questions[0].Options) > 0 && len(p.Questions[0].Options) <= 3 && !p.Questions[0].MultiSelect && !p.Questions[0].IsOther {
 			a.ServerRequestService().SendUserInputCard(token, p)
 		} else {
 			a.ServerRequestService().SendUserInputFormCard(token, p)
 		}
 	case application.EventElicitationURLRequested:
-		a.ServerRequestService().SendElicitationURLCard(token, event.Payload.(interaction.ElicitationURLPayload))
+		if event.ElicitationURL == nil {
+			return nil
+		}
+		a.ServerRequestService().SendElicitationURLCard(token, *event.ElicitationURL)
 	case application.EventElicitationFormRequested:
-		a.ServerRequestService().SendElicitationFormCard(token, event.Payload.(interaction.ElicitationFormPayload))
+		if event.ElicitationForm == nil {
+			return nil
+		}
+		a.ServerRequestService().SendElicitationFormCard(token, *event.ElicitationForm)
 	case application.EventRequestRejected:
-		replyCodexError(a, token, event.Payload.(application.RequestRejected).Code, event.Message)
+		if event.Rejected == nil {
+			return nil
+		}
+		replyCodexError(a, token, event.Rejected.Code, event.Message)
 	}
 	return nil
 }

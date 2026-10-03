@@ -31,9 +31,16 @@ func newCardActionService(app *App) cardActionService {
 	service := cardActionService{app: app, handlers: handlers}
 	service.inner = appcardaction.NewService(appcardaction.Dependencies{
 		NormalizeSessionKey: func(action *application.CardAction) {
-			converted := fromApplicationCardAction(*action)
-			service.normalizeSessionKey(converted)
-			*action = toApplicationCardAction(converted)
+			if action == nil {
+				return
+			}
+			raw, ok := action.ActionValue.String("session_key")
+			if !ok {
+				return
+			}
+			if normalized := normalizeSessionKey(app, raw); normalized != strings.TrimSpace(raw) {
+				action.ActionValue.SetString("session_key", normalized)
+			}
 		},
 		ResolveActionName: resolvedApplicationCardActionName,
 		BlockedReason: func(name string) string {
@@ -48,7 +55,12 @@ func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardAc
 	if action == nil {
 		return &callback.CardActionTriggerResponse{}, nil
 	}
-	response, err := s.inner.Dispatch(toApplicationCardAction(action))
+	normalized := toApplicationCardAction(action)
+	response, err := s.inner.Dispatch(normalized)
+	// Preserve adapter-visible normalization (notably legacy session keys) for
+	// callers that retain the callback value after dispatch.
+	action.ActionValue = normalized.ActionValue.Map()
+	action.FormValue = normalized.FormValue.Map()
 	if response == nil {
 		return &callback.CardActionTriggerResponse{}, err
 	}
@@ -66,32 +78,19 @@ func toApplicationCardAction(action *feishu.CardAction) application.CardAction {
 	if action == nil {
 		return application.CardAction{}
 	}
-	return application.CardAction{ActionValue: action.ActionValue, FormValue: action.FormValue, UserID: action.UserID, ChatID: action.ChatID, MessageID: action.MessageID, Name: action.Name, Option: action.Option, InputValue: action.InputValue, Options: action.Options, Checked: action.Checked}
+	return application.CardAction{ActionValue: application.ValuesFromMap(action.ActionValue), FormValue: application.ValuesFromMap(action.FormValue), UserID: action.UserID, ChatID: action.ChatID, MessageID: action.MessageID, Name: action.Name, Option: action.Option, InputValue: action.InputValue, Options: action.Options, Checked: action.Checked}
 }
 
 func fromApplicationCardAction(action application.CardAction) *feishu.CardAction {
-	return &feishu.CardAction{ActionValue: action.ActionValue, FormValue: action.FormValue, UserID: action.UserID, ChatID: action.ChatID, MessageID: action.MessageID, Name: action.Name, Option: action.Option, InputValue: action.InputValue, Options: action.Options, Checked: action.Checked}
+	return &feishu.CardAction{ActionValue: action.ActionValue.Map(), FormValue: action.FormValue.Map(), UserID: action.UserID, ChatID: action.ChatID, MessageID: action.MessageID, Name: action.Name, Option: action.Option, InputValue: action.InputValue, Options: action.Options, Checked: action.Checked}
 }
 
 func resolvedApplicationCardActionName(action application.CardAction) string {
-	name, _ := action.ActionValue["action"].(string)
+	name, _ := action.ActionValue.String("action")
 	if strings.TrimSpace(name) != "" {
 		return strings.TrimSpace(name)
 	}
 	return strings.TrimSpace(action.Name)
-}
-
-func (s cardActionService) normalizeSessionKey(action *feishu.CardAction) {
-	if s.app == nil || action == nil || action.ActionValue == nil {
-		return
-	}
-	raw, ok := action.ActionValue["session_key"].(string)
-	if !ok {
-		return
-	}
-	if normalized := normalizeSessionKey(s.app, raw); normalized != strings.TrimSpace(raw) {
-		action.ActionValue["session_key"] = normalized
-	}
 }
 
 type cardActionHandler func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)

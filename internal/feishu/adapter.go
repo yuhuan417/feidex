@@ -57,7 +57,20 @@ type MessageReaction struct {
 	EmojiType string
 }
 
-type CardAction = application.CardAction
+// CardAction is the Feishu SDK-facing callback shape. The application layer
+// receives a typed copy through application.Values at the adapter boundary.
+type CardAction struct {
+	ActionValue map[string]any
+	FormValue   map[string]any
+	UserID      string
+	ChatID      string
+	MessageID   string
+	Name        string
+	Option      string
+	InputValue  string
+	Options     []string
+	Checked     bool
+}
 
 type BotGroupEvent struct {
 	ChatID   string

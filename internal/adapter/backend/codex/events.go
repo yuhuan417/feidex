@@ -33,7 +33,7 @@ func DecodeNotification(method string, params json.RawMessage) (application.Back
 		if method == "item/completed" {
 			kind = application.EventItemCompleted
 		}
-		return application.BackendEvent{Kind: kind, ThreadID: p.ThreadID, TurnID: p.TurnID, Payload: item}, true, nil
+		return application.BackendEvent{Kind: kind, ThreadID: p.ThreadID, TurnID: p.TurnID, Item: &item, Payload: item}, true, nil
 	case "item/mcpToolCall/progress":
 		var p struct {
 			ThreadID string `json:"threadId"`
@@ -48,7 +48,7 @@ func DecodeNotification(method string, params json.RawMessage) (application.Back
 			return e, true, nil
 		}
 		item := turn.NewProtocolItemWithID(p.ItemID, map[string]any{"id": p.ItemID, "type": "mcp_tool_call", "status": "in_progress", "message": strings.TrimSpace(p.Message)})
-		return application.BackendEvent{Kind: application.EventItemProgress, ThreadID: p.ThreadID, TurnID: p.TurnID, Payload: item}, true, nil
+		return application.BackendEvent{Kind: application.EventItemProgress, ThreadID: p.ThreadID, TurnID: p.TurnID, Item: &item, Payload: item}, true, nil
 	case "turn/plan/updated":
 		var p struct {
 			ThreadID string                          `json:"threadId"`
@@ -68,7 +68,8 @@ func DecodeNotification(method string, params json.RawMessage) (application.Back
 		if err := json.Unmarshal(params, &p); err != nil {
 			return e, true, err
 		}
-		return application.BackendEvent{Kind: application.EventUsageUpdated, ThreadID: p.ThreadID, TurnID: p.TurnID, Payload: ThreadUsage(p.TokenUsage)}, true, nil
+		usage := ThreadUsage(p.TokenUsage)
+		return application.BackendEvent{Kind: application.EventUsageUpdated, ThreadID: p.ThreadID, TurnID: p.TurnID, Usage: &usage, Payload: usage}, true, nil
 	case "thread/goal/updated":
 		var p codexrpc.ThreadGoalUpdatedNotification
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -78,7 +79,8 @@ func DecodeNotification(method string, params json.RawMessage) (application.Back
 		if p.TurnID != nil {
 			turnID = *p.TurnID
 		}
-		return application.BackendEvent{Kind: application.EventGoalUpdated, ThreadID: p.ThreadID, TurnID: turnID, Payload: p.Goal}, true, nil
+		goal := p.Goal
+		return application.BackendEvent{Kind: application.EventGoalUpdated, ThreadID: p.ThreadID, TurnID: turnID, Goal: &goal, Payload: goal}, true, nil
 	case "thread/goal/cleared":
 		var p codexrpc.ThreadGoalClearedNotification
 		if err := json.Unmarshal(params, &p); err != nil {
@@ -97,7 +99,9 @@ func DecodeRequest(req codexrpc.RequestEnvelope) application.BackendEvent {
 	invalid := func(code int, message string) application.BackendEvent {
 		e.Kind = application.EventRequestRejected
 		e.Message = message
-		e.Payload = application.RequestRejected{Code: code}
+		rejected := application.RequestRejected{Code: code}
+		e.Rejected = &rejected
+		e.Payload = rejected // compatibility mirror for legacy event consumers.
 		return e
 	}
 	switch req.Method {
@@ -116,7 +120,9 @@ func DecodeRequest(req codexrpc.RequestEnvelope) application.BackendEvent {
 		e.Kind = application.EventApprovalRequested
 		e.ThreadID = stringValue(raw["threadId"])
 		e.TurnID = stringValue(raw["turnId"])
-		e.Payload = application.ApprovalRequested{Kind: kind, ItemID: stringValue(raw["itemId"]), Request: raw}
+		approval := application.ApprovalRequested{Kind: kind, ItemID: stringValue(raw["itemId"]), Request: raw}
+		e.Approval = &approval
+		e.Payload = approval // compatibility mirror for legacy event consumers.
 		return e
 	case "item/tool/requestUserInput":
 		var p interaction.ToolUserInputPayload
@@ -126,6 +132,7 @@ func DecodeRequest(req codexrpc.RequestEnvelope) application.BackendEvent {
 		e.Kind = application.EventUserInputRequested
 		e.ThreadID = p.ThreadID
 		e.TurnID = p.TurnID
+		e.UserInput = &p
 		e.Payload = p
 		return e
 	case "mcpServer/elicitation/request":
@@ -144,6 +151,7 @@ func DecodeRequest(req codexrpc.RequestEnvelope) application.BackendEvent {
 			e.Kind = application.EventElicitationURLRequested
 			e.ThreadID = p.ThreadID
 			e.TurnID = p.TurnID
+			e.ElicitationURL = &p
 			e.Payload = p
 			return e
 		case "form":
@@ -154,6 +162,7 @@ func DecodeRequest(req codexrpc.RequestEnvelope) application.BackendEvent {
 			e.Kind = application.EventElicitationFormRequested
 			e.ThreadID = p.ThreadID
 			e.TurnID = p.TurnID
+			e.ElicitationForm = &p
 			e.Payload = p
 			return e
 		default:

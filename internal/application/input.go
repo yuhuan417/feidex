@@ -3,7 +3,12 @@
 // invoking product behavior.
 package application
 
-import "feidex/internal/domain/identity"
+import (
+	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
+	"feidex/internal/domain/interaction"
+	"feidex/internal/domain/turn"
+)
 
 // Input is an event entering the application layer. The marker prevents
 // transport packages from inventing ad-hoc event implementations while still
@@ -30,8 +35,8 @@ func (CardActionReceived) input() {}
 
 // CardAction contains no Feishu SDK types.
 type CardAction struct {
-	ActionValue map[string]any
-	FormValue   map[string]any
+	ActionValue Values
+	FormValue   Values
 	UserID      string
 	ChatID      string
 	MessageID   string
@@ -70,7 +75,21 @@ type BackendEvent struct {
 	RequestID     string
 	Status        string
 	Message       string
-	Payload       any
+	// Item, Usage and Goal are typed semantic payloads. Payload remains only
+	// for request-specific interaction values while those are migrated to
+	// dedicated event fields.
+	Item  *turn.ProtocolItem
+	Usage *turn.ThreadTokenUsage
+	Goal  *conversation.ThreadGoal
+	// Interaction payloads are explicit so application consumers do not need
+	// to type-switch an unbounded adapter value. Payload is retained as a
+	// compatibility mirror for older callers and tests during migration.
+	Approval        *ApprovalRequested
+	UserInput       *interaction.ToolUserInputPayload
+	ElicitationURL  *interaction.ElicitationURLPayload
+	ElicitationForm *interaction.ElicitationFormPayload
+	Rejected        *RequestRejected
+	Payload         any
 }
 
 const (

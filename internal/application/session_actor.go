@@ -14,7 +14,7 @@ func SessionActorKey(input Input) string {
 		}
 		return transportPrefix + string(event.Chat.Type) + ":" + strings.TrimSpace(event.Chat.ID)
 	case CardActionReceived:
-		if key, _ := event.Action.ActionValue["session_key"].(string); strings.TrimSpace(key) != "" {
+		if key, ok := event.Action.ActionValue.String("session_key"); ok && strings.TrimSpace(key) != "" {
 			return "session:" + strings.TrimSpace(key)
 		}
 		return transportPrefix + strings.TrimSpace(event.Action.ChatID)
