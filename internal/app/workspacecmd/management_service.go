@@ -52,7 +52,7 @@ func (s *ManagementService) BeginWorkspaceWorktreeWithPayload(msg *feishu.Inboun
 		return err
 	}
 	card := s.RenderWorktreeCard(sessionKey, requestID, payload)
-	msgID, err := s.App.OutboundCapability().ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	msgID, err := s.Deps.OutboundCapability().ReplyCard(appcore.Context(s.Deps), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (s *ManagementService) BeginWorkspaceNewWithPayload(msg *feishu.InboundMess
 		return err
 	}
 	card := s.RenderNewCard(sessionKey, requestID, payload)
-	msgID, err := s.App.OutboundCapability().ReplyCard(appcore.Context(s.App), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	msgID, err := s.Deps.OutboundCapability().ReplyCard(appcore.Context(s.Deps), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	if err != nil {
 		return err
 	}
@@ -162,8 +162,8 @@ func (s *ManagementService) DefaultWorkspaceCloneParent(ws *config.Workspace) st
 	if ws != nil && strings.TrimSpace(ws.Cwd) != "" {
 		return filepath.Dir(strings.TrimSpace(ws.Cwd))
 	}
-	if strings.TrimSpace(s.App.ConfigPath()) != "" {
-		return filepath.Dir(strings.TrimSpace(s.App.ConfigPath()))
+	if strings.TrimSpace(s.Deps.ConfigPath()) != "" {
+		return filepath.Dir(strings.TrimSpace(s.Deps.ConfigPath()))
 	}
 	return "."
 }
@@ -175,8 +175,8 @@ func (s *ManagementService) WorkspaceByCWD(targetDir string) *config.Workspace {
 		return nil
 	}
 	cleanTarget := filepath.Clean(targetDir)
-	for i := range s.App.Config().Workspaces {
-		ws := &s.App.Config().Workspaces[i]
+	for i := range s.Deps.Config().Workspaces {
+		ws := &s.Deps.Config().Workspaces[i]
 		if filepath.Clean(strings.TrimSpace(ws.Cwd)) == cleanTarget {
 			return ws
 		}
@@ -186,7 +186,7 @@ func (s *ManagementService) WorkspaceByCWD(targetDir string) *config.Workspace {
 
 // WorkspaceByIDAndCWD finds a workspace by both ID and CWD.
 func (s *ManagementService) WorkspaceByIDAndCWD(workspaceID, targetDir string) *config.Workspace {
-	ws := config.FindWorkspace(s.App.Config(), strings.TrimSpace(workspaceID))
+	ws := config.FindWorkspace(s.Deps.Config(), strings.TrimSpace(workspaceID))
 	if ws == nil || !sameWorkspaceCWD(targetDir, ws.Cwd) {
 		return nil
 	}
@@ -202,7 +202,7 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
 		return fmt.Errorf("%s", reason)
 	}
-	ws, err := (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.App)}).Create(config.Workspace{
+	ws, err := (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.Deps)}).Create(config.Workspace{
 		ID:             id,
 		Name:           name,
 		Cwd:            cwd,
@@ -212,7 +212,7 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 	if err != nil {
 		return err
 	}
-	if err := appcore.SetWorkspaceSelection(s.App, chatType, chatID, userID, id); err != nil {
+	if err := appcore.SetWorkspaceSelection(s.Deps, chatType, chatID, userID, id); err != nil {
 		return err
 	}
 	if err := applyWorkspaceSwitch(s, sessionKey, sess, id); err != nil {
@@ -226,7 +226,7 @@ func (s *ManagementService) CreateWorkspaceAndSwitch(sessionKey, userID, chatID,
 
 // UpdateWorkspaceDefaults updates a workspace configuration field and saves.
 func (s *ManagementService) UpdateWorkspaceDefaults(workspaceID string, mutate func(*config.Workspace)) (*config.Workspace, error) {
-	return (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.App)}).Update(workspaceID, mutate)
+	return (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.Deps)}).Update(workspaceID, mutate)
 }
 
 // CloneWorkspaceAndSwitch clones a repository and switches to the new workspace.
@@ -244,7 +244,7 @@ func (s *ManagementService) CloneWorkspaceAndSwitchInSelectedParent(msg *feishu.
 		parentDir = s.DefaultWorkspaceCloneParent(ws)
 	}
 	workspaceID, targetDir, err := s.CloneWorkspaceInParent(
-		appcore.Context(s.App),
+		appcore.Context(s.Deps),
 		sessionKey,
 		msg.UserID,
 		msg.ChatID,
@@ -258,7 +258,7 @@ func (s *ManagementService) CloneWorkspaceAndSwitchInSelectedParent(msg *feishu.
 		return err
 	}
 	reply := "已从仓库创建并切换到工作区 " + workspaceID + "\n" + "cwd: " + targetDir
-	return s.App.OutboundCapability().ReplyText(appcore.Context(s.App), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	return s.Deps.OutboundCapability().ReplyText(appcore.Context(s.Deps), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 }
 
 // PrepareWorkspaceClone validates and prepares a clone operation.
@@ -306,7 +306,7 @@ func (s *ManagementService) PrepareWorkspaceClonePayload(payload ClonePayload, p
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
 	}
-	if !CloneCreatesWorktree(payload) && config.FindWorkspace(s.App.Config(), workspaceID) != nil {
+	if !CloneCreatesWorktree(payload) && config.FindWorkspace(s.Deps.Config(), workspaceID) != nil {
 		return nil, fmt.Errorf("workspace %q 已存在，请指定新的 workspace_id", workspaceID)
 	}
 	plan := &ClonePlan{
@@ -331,7 +331,7 @@ func (s *ManagementService) PrepareWorkspaceWorktree(payload WorktreePayload) (*
 	if baseWorkspaceID == "" {
 		return nil, fmt.Errorf("请先选择基准工作区")
 	}
-	baseWS := config.FindWorkspace(s.App.Config(), baseWorkspaceID)
+	baseWS := config.FindWorkspace(s.Deps.Config(), baseWorkspaceID)
 	if baseWS == nil {
 		return nil, fmt.Errorf("基准工作区 %q 不存在", baseWorkspaceID)
 	}
@@ -374,7 +374,7 @@ func (s *ManagementService) PrepareWorkspaceWorktree(payload WorktreePayload) (*
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
 	}
-	if existing := config.FindWorkspace(s.App.Config(), workspaceID); existing != nil {
+	if existing := config.FindWorkspace(s.Deps.Config(), workspaceID); existing != nil {
 		if sameWorkspaceCWD(existing.Cwd, targetDir) {
 			return nil, &CloneExistingWorkspaceError{WorkspaceID: existing.ID, TargetDir: targetDir}
 		}
@@ -495,7 +495,7 @@ func (s *ManagementService) prepareCloneWorktreePlan(payload ClonePayload, repoN
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
 	}
-	if existing := config.FindWorkspace(s.App.Config(), workspaceID); existing != nil {
+	if existing := config.FindWorkspace(s.Deps.Config(), workspaceID); existing != nil {
 		if sameWorkspaceCWD(existing.Cwd, targetDir) {
 			return nil, &CloneExistingWorkspaceError{WorkspaceID: existing.ID, TargetDir: targetDir}
 		}
@@ -511,11 +511,11 @@ func (s *ManagementService) prepareCloneWorktreePlan(payload ClonePayload, repoN
 }
 
 func (s *ManagementService) worktreeBotLabel() string {
-	if s != nil && s.App.ConfigProvider != nil {
-		if name := strings.TrimSpace(s.App.BotName()); name != "" {
+	if s != nil && s.Deps.ConfigProvider != nil {
+		if name := strings.TrimSpace(s.Deps.BotName()); name != "" {
 			return name
 		}
-		if frontendID := strings.TrimSpace(s.App.FrontendID()); frontendID != "" {
+		if frontendID := strings.TrimSpace(s.Deps.FrontendID()); frontendID != "" {
 			return frontendID
 		}
 	}
@@ -578,7 +578,7 @@ func (s *ManagementService) worktreeDefaultAvailable(baseRepoRoot, parentDir, br
 	if strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(directoryName) == "" || strings.TrimSpace(branchName) == "" {
 		return false
 	}
-	if config.FindWorkspace(s.App.Config(), workspaceID) != nil {
+	if config.FindWorkspace(s.Deps.Config(), workspaceID) != nil {
 		return false
 	}
 	targetDir := filepath.Join(parentDir, directoryName)
@@ -600,13 +600,13 @@ func (s *ManagementService) worktreeDefaultAvailable(baseRepoRoot, parentDir, br
 }
 
 func (s *ManagementService) pendingWorktreeDefaultReserved(workspaceID, targetDir, branchName string) bool {
-	if s == nil || s.App.ConfigProvider == nil || s.App.Store() == nil {
+	if s == nil || s.Deps.ConfigProvider == nil || s.Deps.Store() == nil {
 		return false
 	}
 	workspaceID = strings.TrimSpace(workspaceID)
 	targetDir = filepath.Clean(strings.TrimSpace(targetDir))
 	branchName = strings.TrimSpace(branchName)
-	for _, pending := range s.App.Store().AllPendingRequests() {
+	for _, pending := range s.Deps.Store().AllPendingRequests() {
 		if pending == nil {
 			continue
 		}
@@ -725,7 +725,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneCanceledCard(sessionKey, payload, parentDir, op.Snapshot()))
+				s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderCloneCanceledCard(sessionKey, payload, parentDir, op.Snapshot()))
 			}
 			return
 		}
@@ -754,7 +754,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 				req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
+				_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderCloneManualHintCard(sessionKey, payload.DraftID, takeoverErr.TargetDir, payload.ErrorMessage))
 			}
 			return
 		}
@@ -774,7 +774,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneCard(sessionKey, requestID, payload))
+			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderCloneCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -792,7 +792,7 @@ func (s *ManagementService) FinishWorkspaceCloneSubmit(ctx context.Context, op *
 		req.PayloadJSON = appcore.MustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderCloneSuccessCard(sessionKey, workspaceID, targetDir))
+		_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderCloneSuccessCard(sessionKey, workspaceID, targetDir))
 	}
 }
 
@@ -808,7 +808,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
+			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -823,7 +823,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 				req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 			})
 			if strings.TrimSpace(messageID) != "" {
-				_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCanceledCard(sessionKey, payload, plan, op.Snapshot()))
+				_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeCanceledCard(sessionKey, payload, plan, op.Snapshot()))
 			}
 			return
 		}
@@ -834,7 +834,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 			req.ExpiresAt = time.Now().Add(10 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
+			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeCard(sessionKey, requestID, payload))
 		}
 		return
 	}
@@ -845,7 +845,7 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		if strings.TrimSpace(messageID) != "" {
-			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
+			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeManualHintCard(sessionKey, plan.WorkspaceID, plan.TargetDir, err.Error()))
 		}
 		return
 	}
@@ -854,13 +854,13 @@ func (s *ManagementService) FinishWorkspaceWorktreeSubmit(ctx context.Context, o
 		req.PayloadJSON = appcore.MustJSON(payload)
 	})
 	if strings.TrimSpace(messageID) != "" {
-		_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, s.RenderWorktreeSuccessCard(sessionKey, plan.WorkspaceID, plan.TargetDir))
+		_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, s.RenderWorktreeSuccessCard(sessionKey, plan.WorkspaceID, plan.TargetDir))
 	}
 }
 
 // CompleteWorkspaceSandboxSet handles sandbox mode setting.
 func (s *ManagementService) CompleteWorkspaceSandboxSet(action *feishu.CardAction, sessionKey, workspaceID, sandboxMode string) (*callback.CardActionTriggerResponse, error) {
-	return s.App.PermissionDriver().CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode, appbackend.WorkspacePermissionUpdateDeps{
+	return s.Deps.PermissionDriver().CompleteWorkspaceSandboxSet(sessionKey, workspaceID, sandboxMode, appbackend.WorkspacePermissionUpdateDeps{
 		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
@@ -869,7 +869,7 @@ func (s *ManagementService) CompleteWorkspaceSandboxSet(action *feishu.CardActio
 
 // CompleteWorkspacePolicySet handles approval policy setting.
 func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction, sessionKey, workspaceID, approvalPolicy string) (*callback.CardActionTriggerResponse, error) {
-	return s.App.PermissionDriver().CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy, appbackend.WorkspacePermissionUpdateDeps{
+	return s.Deps.PermissionDriver().CompleteWorkspacePolicySet(sessionKey, workspaceID, approvalPolicy, appbackend.WorkspacePermissionUpdateDeps{
 		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
@@ -878,7 +878,7 @@ func (s *ManagementService) CompleteWorkspacePolicySet(action *feishu.CardAction
 
 // CompleteWorkspaceMultiAgentSet handles multi-agent mode setting.
 func (s *ManagementService) CompleteWorkspaceMultiAgentSet(action *feishu.CardAction, sessionKey, workspaceID, mode string) (*callback.CardActionTriggerResponse, error) {
-	return s.App.PermissionDriver().CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode, appbackend.WorkspacePermissionUpdateDeps{
+	return s.Deps.PermissionDriver().CompleteWorkspaceMultiAgentSet(sessionKey, workspaceID, mode, appbackend.WorkspacePermissionUpdateDeps{
 		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		RenderSandboxMenu:       s.renderSandboxMenuCard,
 		RenderPolicyMenu:        s.renderPolicyMenuCard,
@@ -887,14 +887,14 @@ func (s *ManagementService) CompleteWorkspaceMultiAgentSet(action *feishu.CardAc
 }
 
 func (s *ManagementService) CompleteWorkspacePermissionModeSet(action *feishu.CardAction, sessionKey, workspaceID, rawMode string) (*callback.CardActionTriggerResponse, error) {
-	return s.App.PermissionDriver().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
-		App:                     s.App,
+	return s.Deps.PermissionDriver().CompleteWorkspacePermissionModeSet(sessionKey, workspaceID, rawMode, appbackend.WorkspacePermissionModeUpdateDeps{
+		App:                     s.Deps,
 		Session:                 s.GetSession,
 		UpdateWorkspaceDefaults: s.UpdateWorkspaceDefaults,
 		ApplyRuntime:            func(sessionKey, mode string) error { return nil },
 		RenderPermissionMenu: func(sessionKey string) (map[string]any, error) {
-			return s.App.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-				App:            s.App,
+			return s.Deps.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+				App:            s.Deps,
 				FormatMenuBody: s.FormatMenuBody,
 			})
 		},
@@ -905,7 +905,7 @@ func (s *ManagementService) CompleteWorkspacePermissionModeSet(action *feishu.Ca
 // Thread binding runs asynchronously so the Feishu card callback returns
 // immediately instead of blocking on backend RPCs.
 func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
-	ws := config.FindWorkspace(s.App.Config(), workspaceID)
+	ws := config.FindWorkspace(s.Deps.Config(), workspaceID)
 	if ws == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: "工作区不存在"}}, nil
 	}
@@ -916,7 +916,7 @@ func (s *ManagementService) CompleteWorkspaceUse(action *feishu.CardAction, sess
 	if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: reason}}, nil
 	}
-	if err := setSelectedWorkspaceForSession(s.App, sess, workspaceID); err != nil {
+	if err := setSelectedWorkspaceForSession(s.Deps, sess, workspaceID); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	if err := applyWorkspaceSwitch(s, sessionKey, sess, workspaceID); err != nil {
@@ -1252,7 +1252,7 @@ func (s *ManagementService) CompleteWorkspaceNewSubmit(action *feishu.CardAction
 	body := "已创建并切换到工作区 `" + id + "`\n\ncwd: `" + cwd + "`"
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已创建工作区"},
-		Card:  rawCard(s.App.Renderer().SimpleStatusCard("工作区已创建", "green", body, nil)),
+		Card:  rawCard(s.Deps.Renderer().SimpleStatusCard("工作区已创建", "green", body, nil)),
 	}, nil
 }
 
@@ -1337,7 +1337,7 @@ func (s *ManagementService) CompleteWorkspaceCloneSubmit(action *feishu.CardActi
 		}, nil
 	}
 	payload = clonePayloadWithPlan(payload, plan)
-	ctx, cancel := context.WithCancel(appcore.Context(s.App))
+	ctx, cancel := context.WithCancel(appcore.Context(s.Deps))
 	op := NewCloneOperation(cancel)
 	s.SetWorkspaceCloneOperation(requestID, op)
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
@@ -1420,7 +1420,7 @@ func (s *ManagementService) CompleteWorkspaceWorktreeSubmit(action *feishu.CardA
 	payload.DirectoryName = plan.DirectoryName
 	payload.TargetDir = plan.TargetDir
 	messageID := appcore.FirstNonEmpty(strings.TrimSpace(pending.FeishuMsgID), strings.TrimSpace(action.MessageID))
-	ctx, cancel := context.WithCancel(appcore.Context(s.App))
+	ctx, cancel := context.WithCancel(appcore.Context(s.Deps))
 	op := NewCloneOperation(cancel)
 	s.SetWorkspaceCloneOperation(requestID, op)
 	_ = s.UpdatePending(requestID, func(req *state.PendingRequest) {
@@ -1511,7 +1511,7 @@ func (s *ManagementService) CompleteWorkspaceNewText(msg *feishu.InboundMessage,
 	if strings.TrimSpace(cwd) == "" {
 		return fmt.Errorf("请先选择目录")
 	}
-	sessionKey := appcore.MakeSessionKey(s.App, msg)
+	sessionKey := appcore.MakeSessionKey(s.Deps, msg)
 	if existingWS := s.WorkspaceByIDAndCWD(id, cwd); existingWS != nil {
 		payload.DraftID = id
 		payload.DraftName = name
@@ -1521,27 +1521,27 @@ func (s *ManagementService) CompleteWorkspaceNewText(msg *feishu.InboundMessage,
 			req.ExpiresAt = time.Now().Add(30 * time.Minute).Unix()
 		})
 		if pending.FeishuMsgID != "" {
-			_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), pending.FeishuMsgID, s.RenderSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, NewExistingWorkspaceNotice()))
+			_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), pending.FeishuMsgID, s.RenderSwitchExistingCard(sessionKey, existingWS.ID, existingWS.Cwd, NewExistingWorkspaceNotice()))
 		}
-		return s.App.OutboundCapability().ReplyText(appcore.Context(s.App), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		return s.Deps.OutboundCapability().ReplyText(appcore.Context(s.Deps), msg.MessageID, "工作区已存在且目录一致，可直接切换到 "+existingWS.ID, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	}
 	if err := s.CreateWorkspaceAndSwitch(sessionKey, msg.UserID, msg.ChatID, msg.ChatType, id, name, cwd); err != nil {
 		return err
 	}
 	_ = s.UpdatePending(pending.ID, func(req *state.PendingRequest) { req.Status = state.PendingRequestStatusResolved.String() })
 	if pending.FeishuMsgID != "" {
-		_ = s.App.OutboundCapability().PatchCard(appcore.Context(s.App), pending.FeishuMsgID, s.App.Renderer().SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
+		_ = s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), pending.FeishuMsgID, s.Deps.Renderer().SimpleStatusCard("工作区已创建", "green", "已创建并切换到工作区 `"+id+"`\n\ncwd: `"+cwd+"`", nil))
 	}
-	return s.App.OutboundCapability().ReplyText(appcore.Context(s.App), msg.MessageID, "已创建并切换到工作区 "+id, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	return s.Deps.OutboundCapability().ReplyText(appcore.Context(s.Deps), msg.MessageID, "已创建并切换到工作区 "+id, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 }
 
 // --- private helpers ---
 
 func (s *ManagementService) currentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace) {
-	sessionKey = appcore.MakeSessionKey(s.App, msg)
+	sessionKey = appcore.MakeSessionKey(s.Deps, msg)
 	sess = s.GetSession(sessionKey)
-	workspaceID := selectedWorkspaceIDForMessage(s.App, msg, sess)
-	return sessionKey, sess, config.FindWorkspace(s.App.Config(), workspaceID)
+	workspaceID := selectedWorkspaceIDForMessage(s.Deps, msg, sess)
+	return sessionKey, sess, config.FindWorkspace(s.Deps.Config(), workspaceID)
 }
 
 func defaultMessageChatType(msg *feishu.InboundMessage) {
@@ -1573,7 +1573,7 @@ func (s *ManagementService) CloneWorkspacePayloadInParent(ctx context.Context, s
 		return "", "", err
 	}
 	if ctx == nil {
-		ctx = appcore.Context(s.App)
+		ctx = appcore.Context(s.Deps)
 	}
 	if err := os.MkdirAll(filepath.Dir(plan.TargetDir), 0o755); err != nil {
 		return "", "", err
@@ -1621,7 +1621,7 @@ func (s *ManagementService) patchWorkspaceCloneProgressCard(messageID, requestID
 		return
 	}
 	card := s.RenderClonePreparingCard(requestID, payload, parentDir, snapshot)
-	if err := s.App.OutboundCapability().PatchCard(appcore.Context(s.App), messageID, card); err != nil {
+	if err := s.Deps.OutboundCapability().PatchCard(appcore.Context(s.Deps), messageID, card); err != nil {
 		slog.Warn("workspace clone progress patch failed",
 			"request_id", requestID,
 			"message_id", messageID,
@@ -1692,24 +1692,24 @@ func validateWorktreeDirectoryName(name string) error {
 
 // renderSandboxMenuCard is a helper that re-renders the sandbox menu card.
 func (s *ManagementService) renderSandboxMenuCard(sessionKey string) (map[string]any, error) {
-	return s.App.PermissionDriver().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.App,
+	return s.Deps.PermissionDriver().RenderWorkspaceSandboxMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }
 
 // renderPolicyMenuCard is a helper that re-renders the policy menu card.
 func (s *ManagementService) renderPolicyMenuCard(sessionKey string) (map[string]any, error) {
-	return s.App.PermissionDriver().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.App,
+	return s.Deps.PermissionDriver().RenderWorkspacePolicyMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }
 
 // renderMultiAgentMenuCard is a helper that re-renders the multi-agent menu card.
 func (s *ManagementService) renderMultiAgentMenuCard(sessionKey string) (map[string]any, error) {
-	return s.App.PermissionDriver().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-		App:            s.App,
+	return s.Deps.PermissionDriver().RenderWorkspaceMultiAgentMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+		App:            s.Deps,
 		FormatMenuBody: s.FormatMenuBody,
 	})
 }

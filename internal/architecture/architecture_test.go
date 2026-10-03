@@ -188,6 +188,57 @@ func TestMigratedCommandPackagesDoNotImportFeishuTransport(t *testing.T) {
 	}
 }
 
+func TestApplicationDoesNotCallSynchronousOutboundPorts(t *testing.T) {
+	root := repositoryRoot(t)
+	base := filepath.Join(root, "internal", "application")
+	forbidden := []string{
+		".ReplyCard(",
+		".SendCard(",
+		".PatchCard(",
+		".ReplyMessage(",
+		".SendMessage(",
+		".PatchMessage(",
+	}
+	err := filepath.Walk(base, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		source := string(data)
+		for _, pattern := range forbidden {
+			if strings.Contains(source, pattern) {
+				t.Errorf("%s calls synchronous outbound method %s; emit an application effect instead", path, pattern)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestApplicationBackendEventServiceUsesOneSinkPort(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "internal", "application", "backendevents", "service.go")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	if strings.Contains(source, "ItemStarted          func(") || strings.Contains(source, "InteractionRequested func(") {
+		t.Fatalf("backend event service reintroduced per-event callback fields")
+	}
+	if !strings.Contains(source, "type EventSink interface") || !strings.Contains(source, "Sink EventSink") {
+		t.Fatalf("backend event service must expose one explicit EventSink port")
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	root, err := os.Getwd()

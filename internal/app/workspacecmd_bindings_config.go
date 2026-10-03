@@ -34,11 +34,11 @@ func (r workspaceCardRenderer) SimpleStatusCard(title, color, body string, butto
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
-func workspaceCommandApp(a *App) appworkspacecmd.App {
+func workspaceCommandApp(a *App) appworkspacecmd.Dependencies {
 	if a == nil {
-		return appworkspacecmd.App{}
+		return appworkspacecmd.Dependencies{}
 	}
-	return appworkspacecmd.App{
+	return appworkspacecmd.Dependencies{
 		ConfigProvider: a,
 		Outbound:       workspaceOutbound{app: a},
 		CardRenderer:   workspaceCardRenderer{app: a},
@@ -58,8 +58,8 @@ func newWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 	st := a.State()
 	bcfg := newBackendConfigurationService(a)
 	return appworkspacecmd.NewConfigService(appworkspacecmd.ConfigDeps{
-		App:   workspaceCommandApp(a),
-		State: workspaceStateDeps(st),
+		Dependencies: workspaceCommandApp(a),
+		State:        workspaceStateDeps(st),
 		SessionContext: appworkspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
 			SwitchSessionWorkspace: conversation.SwitchSessionWorkspace,

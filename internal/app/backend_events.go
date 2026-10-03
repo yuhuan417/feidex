@@ -18,52 +18,72 @@ import (
 )
 
 func newBackendEventService(a *App) backendevents.Service {
-	return backendevents.Service{
-		ItemStarted: func(ctx context.Context, threadID, turnID string, item turn.ProtocolItem) {
-			newRuntimeStateService(a).noteTurnItemStartedPayload(threadID, turnID, item)
-			newCompactionService(a).NoteStandaloneCompactItemStarted(threadID, turnID, item.MergedRaw())
-			if turnitem.NormalizeTurnItemType(item.Type) == "mcp_tool_call" {
-				newTurnStreamService(a).updateInFlightTurnItemPayload(ctx, threadID, turnID, item.EffectiveID(""), item)
-			}
-		},
-		ItemCompleted: func(ctx context.Context, threadID, turnID string, item turn.ProtocolItem) {
-			newTurnStreamService(a).completeTurnItemPayload(ctx, threadID, turnID, item.EffectiveID(""), item)
-		},
-		ItemProgress: func(ctx context.Context, threadID, turnID string, item turn.ProtocolItem) {
-			snapshot := newRuntimeStateService(a).updateInFlightTurnItemPayload(threadID, turnID, item.EffectiveID(""), item.MergedRaw())
-			if quietmode.WorkingCardEnabled(feishuConfig(a)) {
-				newTurnStreamService(a).updateInFlightTurnItemPayload(ctx, threadID, turnID, item.EffectiveID(""), snapshot)
-			}
-		},
-		PlanUpdated:   func(turnID, plan string) { newTurnStreamService(a).updatePendingPlan(turnID, plan) },
-		TurnStarted:   func(threadID, turnID string) { onTurnStartedNotification(a, threadID, turnID) },
-		TurnCompleted: func(threadID, turnID, status string) { finishTurn(a, threadID, turnID, status) },
-		RecordError: func(threadID, turnID, message string) {
-			newTurnStreamService(a).recordTurnError(threadID, turnID, message)
-		},
-		FailCompact: func(threadID, turnID, message string) bool {
-			return newCompactionService(a).FailStandaloneCompactTurn(threadID, turnID, message)
-		},
-		FailSubmission: func(threadID, turnID string) {
-			newSubmissionQueueServiceFromApp(a).UpdateSubmissionByTurn(threadID, turnID, func(sub *submission.Submission) { sub.Status = submission.SubmissionStatusFailed.String() })
-		},
-		UsageUpdated: func(threadID, turnID string, usage turn.ThreadTokenUsage) {
-			onThreadTokenUsageUpdated(a, threadID, turnID, codex.ProtocolThreadUsage(usage))
-		},
-		GoalUpdated: func(threadID string, goal conversation.ThreadGoal) {
-			onThreadGoalUpdated(a, codexrpc.ThreadGoalUpdatedNotification{ThreadID: threadID, Goal: goal})
-		},
-		GoalCleared: func(threadID string) {
-			onThreadGoalCleared(a, codexrpc.ThreadGoalClearedNotification{ThreadID: threadID})
-		},
-		RequestResolved: func(id string) {
-			pending := newRuntimeStateService(a).resolveServerPendingRequest(id)
-			a.ServerRequestService().ResumeSubmissionAfterRequest(pending)
-		},
-		InteractionRequested: func(ctx context.Context, event application.BackendEvent) error {
-			return deliverBackendInteraction(a, ctx, event)
-		},
+	return backendevents.Service{Sink: backendEventSink{app: a}}
+}
+
+type backendEventSink struct{ app *App }
+
+func (s backendEventSink) ItemStarted(ctx context.Context, threadID, turnID string, item turn.ProtocolItem) {
+	a := s.app
+	newRuntimeStateService(a).noteTurnItemStartedPayload(threadID, turnID, item)
+	newCompactionService(a).NoteStandaloneCompactItemStarted(threadID, turnID, item.MergedRaw())
+	if turnitem.NormalizeTurnItemType(item.Type) == "mcp_tool_call" {
+		newTurnStreamService(a).updateInFlightTurnItemPayload(ctx, threadID, turnID, item.EffectiveID(""), item)
 	}
+}
+
+func (s backendEventSink) ItemCompleted(ctx context.Context, threadID, turnID string, item turn.ProtocolItem) {
+	a := s.app
+	newTurnStreamService(a).completeTurnItemPayload(ctx, threadID, turnID, item.EffectiveID(""), item)
+}
+
+func (s backendEventSink) ItemProgress(ctx context.Context, threadID, turnID string, item turn.ProtocolItem) {
+	a := s.app
+	snapshot := newRuntimeStateService(a).updateInFlightTurnItemPayload(threadID, turnID, item.EffectiveID(""), item.MergedRaw())
+	if quietmode.WorkingCardEnabled(feishuConfig(a)) {
+		newTurnStreamService(a).updateInFlightTurnItemPayload(ctx, threadID, turnID, item.EffectiveID(""), snapshot)
+	}
+}
+
+func (s backendEventSink) PlanUpdated(turnID, plan string) {
+	newTurnStreamService(s.app).updatePendingPlan(turnID, plan)
+}
+func (s backendEventSink) TurnStarted(threadID, turnID string) {
+	onTurnStartedNotification(s.app, threadID, turnID)
+}
+func (s backendEventSink) TurnCompleted(threadID, turnID, status string) {
+	finishTurn(s.app, threadID, turnID, status)
+}
+func (s backendEventSink) RecordError(threadID, turnID, message string) {
+	a := s.app
+	newTurnStreamService(a).recordTurnError(threadID, turnID, message)
+}
+func (s backendEventSink) FailCompact(threadID, turnID, message string) bool {
+	return newCompactionService(s.app).FailStandaloneCompactTurn(threadID, turnID, message)
+}
+func (s backendEventSink) FailSubmission(threadID, turnID string) {
+	a := s.app
+	newSubmissionQueueServiceFromApp(a).UpdateSubmissionByTurn(threadID, turnID, func(sub *submission.Submission) { sub.Status = submission.SubmissionStatusFailed.String() })
+}
+func (s backendEventSink) UsageUpdated(threadID, turnID string, usage turn.ThreadTokenUsage) {
+	a := s.app
+	onThreadTokenUsageUpdated(a, threadID, turnID, codex.ProtocolThreadUsage(usage))
+}
+func (s backendEventSink) GoalUpdated(threadID string, goal conversation.ThreadGoal) {
+	a := s.app
+	onThreadGoalUpdated(a, codexrpc.ThreadGoalUpdatedNotification{ThreadID: threadID, Goal: goal})
+}
+func (s backendEventSink) GoalCleared(threadID string) {
+	a := s.app
+	onThreadGoalCleared(a, codexrpc.ThreadGoalClearedNotification{ThreadID: threadID})
+}
+func (s backendEventSink) RequestResolved(id string) {
+	a := s.app
+	pending := newRuntimeStateService(a).resolveServerPendingRequest(id)
+	a.ServerRequestService().ResumeSubmissionAfterRequest(pending)
+}
+func (s backendEventSink) InteractionRequested(ctx context.Context, event application.BackendEvent) error {
+	return deliverBackendInteraction(s.app, ctx, event)
 }
 func deliverBackendInteraction(a *App, _ context.Context, event application.BackendEvent) error {
 	token := json.RawMessage(event.ResponseToken)

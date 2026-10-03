@@ -112,7 +112,7 @@ func (s bindingService) renderBindingWorkspaceSettingCard(sessionKey string, bin
 		})
 	}
 	buttons = append(buttons, groupBindingBackButton(sessionKey))
-	return s.app.feishu.SimpleStatusCard(setting.Title, "blue", menuCardBody(setting.MenuAction, body), buttons), nil
+	return s.renderer.SimpleStatusCard(setting.Title, "blue", menuCardBody(setting.MenuAction, body), buttons), nil
 }
 
 type bindingWorkspaceSettingSpec struct {

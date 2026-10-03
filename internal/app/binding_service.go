@@ -22,11 +22,23 @@ import (
 )
 
 type bindingService struct {
-	app *App
+	app      *App
+	renderer bindingCardRenderer
+}
+
+// bindingCardRenderer is the presentation capability used by group binding
+// commands. Keeping it on the service makes card construction an explicit
+// consumer-owned port instead of reaching through the host App for Feishu.
+type bindingCardRenderer interface {
+	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
 }
 
 func newBindingService(a *App) bindingService {
-	return bindingService{app: a}
+	var renderer bindingCardRenderer
+	if a != nil {
+		renderer = a.feishu
+	}
+	return bindingService{app: a, renderer: renderer}
 }
 
 func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage, args []string) error {
@@ -401,7 +413,7 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 	}
 	card := s.renderBindingStatusCard(makeSessionKey(s.app, msg), agentBindingForChat(s.app, msg.ChatType, msg.ChatID))
 	if strings.TrimSpace(body) != "" {
-		card = s.app.feishu.SimpleStatusCard("当前 Bot 群内配置", "green", strings.TrimSpace(body), nil)
+		card = s.renderer.SimpleStatusCard("当前 Bot 群内配置", "green", strings.TrimSpace(body), nil)
 	}
 	return replyCardEffect(s.app, msg, card)
 }
@@ -411,7 +423,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 	primaryLabel := onOffLabel(isGroupPrimary(s.app, chatType, chatID))
 	if binding == nil {
 		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，也可以用 `@Bot /workspace new worktree` 基于当前 Git 仓库创建隔离 worktree，或用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
-		return s.app.feishu.SimpleStatusCard("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
+		return s.renderer.SimpleStatusCard("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
 	}
 	statusLine := "状态: `工作区未配置`"
 	workspaceLine := "workspace: `(未配置)`"
@@ -460,7 +472,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 	if binding.Status != state.AgentBindingStatusActive.String() || strings.TrimSpace(binding.WorkspaceID) == "" {
 		color = "orange"
 	}
-	return s.app.feishu.SimpleStatusCard("工作区管理", color, menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
+	return s.renderer.SimpleStatusCard("工作区管理", color, menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
 }
 
 func currentBotMenuContext(a *App, sessionKey string) (chatType, chatID, rootMessageID, userID string) {

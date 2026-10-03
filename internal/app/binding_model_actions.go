@@ -43,7 +43,7 @@ func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *s
 		buttons = append(buttons, feishu.Button{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}})
 	}
 	buttons = append(buttons, feishu.Button{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}})
-	return s.app.feishu.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", strings.Join(lines, "\n")), buttons)
+	return s.renderer.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", strings.Join(lines, "\n")), buttons)
 }
 
 func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
@@ -66,7 +66,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 			"backend: `" + textutil.FirstNonEmpty(configuredBackend(s.app), "unset") + "`",
 			unsupportedGroupModelBackendMessage(configuredBackend(s.app)),
 		}, "\n")
-		return s.app.feishu.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
+		return s.renderer.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
 	}
 }
 
@@ -530,7 +530,7 @@ func (s bindingService) renderBindingFastCard(sessionKey string, binding *state.
 		{Text: fastLabel, Type: fastType, Value: map[string]any{"action": "service_tier.set", "session_key": sessionKey, "service_tier": appservicetiercmd.ServiceTierFast}},
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}},
 	}
-	return s.app.feishu.SimpleStatusCard("响应速度", "blue", menuCardBody("menu.fast", body), buttons)
+	return s.renderer.SimpleStatusCard("响应速度", "blue", menuCardBody("menu.fast", body), buttons)
 }
 
 func bindingServiceTierOverride(binding *state.AgentBinding) string {

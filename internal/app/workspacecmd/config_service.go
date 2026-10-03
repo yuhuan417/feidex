@@ -22,7 +22,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 	if len(args) == 0 {
 		return s.ShowWorkspaceMenu(msg)
 	}
-	sessionKey := appcore.MakeSessionKey(s.App, msg)
+	sessionKey := appcore.MakeSessionKey(s.Deps, msg)
 	if args[0] == "list" {
 		return s.ShowWorkspaceMenu(msg)
 	}
@@ -79,10 +79,10 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 			return err
 		}
 		reply := "已删除工作区 " + workspaceID + "，仅移除配置，未删除目录"
-		return s.App.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		return s.Deps.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	}
 	if args[0] == "permissions" || args[0] == "sandbox" || args[0] == "policy" || args[0] == "multiagent" {
-		return s.App.PermissionDriver().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
+		return s.Deps.PermissionDriver().HandleWorkspaceCommand(appbackend.WorkspacePermissionCommandRequest{
 			Message:    msg,
 			Args:       args,
 			SessionKey: sessionKey,
@@ -96,14 +96,14 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 				return s.ShowWorkspacePolicyMenu(msg)
 			},
 			ShowWorkspacePermissionModeMenu: func(msg *feishu.InboundMessage) error {
-				card, err := s.App.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
-					App:            s.App,
+				card, err := s.Deps.PermissionDriver().RenderWorkspacePermissionModeMenu(sessionKey, appbackend.WorkspacePermissionRenderDeps{
+					App:            s.Deps,
 					FormatMenuBody: s.FormatMenuBody,
 				})
 				if err != nil {
 					return err
 				}
-				_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+				_, err = s.Deps.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 				return err
 			},
 			ShowWorkspaceMultiAgentMenu: func(msg *feishu.InboundMessage) error {
@@ -129,7 +129,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		return s.ShowWorkspaceChooseMenu(msg)
 	}
 	if len(args) >= 2 && args[0] == "use" {
-		ws := config.FindWorkspace(s.App.Config(), args[1])
+		ws := config.FindWorkspace(s.Deps.Config(), args[1])
 		if ws == nil {
 			return fmt.Errorf("workspace %q not found", args[1])
 		}
@@ -140,7 +140,7 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		if reason := workspaceSwitchBlockedReason(sess, s.SessionHasInFlight(sess)); reason != "" {
 			return fmt.Errorf("%s", reason)
 		}
-		if err := setSelectedWorkspaceForMessage(s.App, msg, ws.ID); err != nil {
+		if err := setSelectedWorkspaceForMessage(s.Deps, msg, ws.ID); err != nil {
 			return err
 		}
 		reply := "已切换工作区到 " + ws.ID
@@ -151,76 +151,76 @@ func (s *ConfigService) CommandWorkspace(msg *feishu.InboundMessage, args []stri
 		if err != nil {
 			// Log warning but don't fail
 			reply += s.BackendWorkspaceSwitchBindingFailureNotice()
-			return s.App.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+			return s.Deps.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 		}
 		reply += s.BackendWorkspaceSwitchBindingNotice(binding)
-		return s.App.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+		return s.Deps.OutboundCapability().ReplyText(context.Background(), msg.MessageID, reply, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	}
 	return fmt.Errorf("usage: %s", s.BackendWorkspaceCommandUsage())
 }
 
 // ShowWorkspaceMenu shows the workspace management menu.
 func (s *ConfigService) ShowWorkspaceMenu(msg *feishu.InboundMessage) error {
-	card := s.RenderMenuCard(appcore.MakeSessionKey(s.App, msg))
-	_, err := s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	card := s.RenderMenuCard(appcore.MakeSessionKey(s.Deps, msg))
+	_, err := s.Deps.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	return err
 }
 
 // ShowWorkspaceChooseMenu shows the workspace choose card with buttons.
 func (s *ConfigService) ShowWorkspaceChooseMenu(msg *feishu.InboundMessage) error {
-	card := s.RenderChooseMenuCard(appcore.MakeSessionKey(s.App, msg))
+	card := s.RenderChooseMenuCard(appcore.MakeSessionKey(s.Deps, msg))
 	if card == nil {
 		return s.ShowWorkspaceMenu(msg)
 	}
-	_, err := s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err := s.Deps.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	return err
 }
 
 // CurrentWorkspaceForMessage returns the session key, session, and workspace for a message.
 func (s *ConfigService) CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace) {
-	sessionKey = appcore.MakeSessionKey(s.App, msg)
+	sessionKey = appcore.MakeSessionKey(s.Deps, msg)
 	sess = s.GetSession(sessionKey)
-	workspaceID := selectedWorkspaceIDForMessage(s.App, msg, sess)
-	return sessionKey, sess, config.FindWorkspace(s.App.Config(), workspaceID)
+	workspaceID := selectedWorkspaceIDForMessage(s.Deps, msg, sess)
+	return sessionKey, sess, config.FindWorkspace(s.Deps.Config(), workspaceID)
 }
 
 // ShowWorkspaceSandboxMenu shows the sandbox configuration menu.
 func (s *ConfigService) ShowWorkspaceSandboxMenu(msg *feishu.InboundMessage) error {
-	card, err := s.RenderSandboxMenuCard(appcore.MakeSessionKey(s.App, msg))
+	card, err := s.RenderSandboxMenuCard(appcore.MakeSessionKey(s.Deps, msg))
 	if err != nil {
 		return err
 	}
-	_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err = s.Deps.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	return err
 }
 
 // ShowWorkspacePolicyMenu shows the policy configuration menu.
 func (s *ConfigService) ShowWorkspacePolicyMenu(msg *feishu.InboundMessage) error {
-	card, err := s.RenderPolicyMenuCard(appcore.MakeSessionKey(s.App, msg))
+	card, err := s.RenderPolicyMenuCard(appcore.MakeSessionKey(s.Deps, msg))
 	if err != nil {
 		return err
 	}
-	_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err = s.Deps.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	return err
 }
 
 // ShowWorkspaceMultiAgentMenu shows the multi-agent mode configuration menu.
 func (s *ConfigService) ShowWorkspaceMultiAgentMenu(msg *feishu.InboundMessage) error {
-	card, err := s.RenderMultiAgentMenuCard(appcore.MakeSessionKey(s.App, msg))
+	card, err := s.RenderMultiAgentMenuCard(appcore.MakeSessionKey(s.Deps, msg))
 	if err != nil {
 		return err
 	}
-	_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err = s.Deps.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	return err
 }
 
 // ShowWorkspaceDeleteMenu shows the workspace delete menu.
 func (s *ConfigService) ShowWorkspaceDeleteMenu(msg *feishu.InboundMessage) error {
-	card, err := s.RenderDeleteMenuCard(appcore.MakeSessionKey(s.App, msg))
+	card, err := s.RenderDeleteMenuCard(appcore.MakeSessionKey(s.Deps, msg))
 	if err != nil {
 		return err
 	}
-	_, err = s.App.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.App, msg.ChatType))
+	_, err = s.Deps.OutboundCapability().ReplyCard(context.Background(), msg.MessageID, card, appcore.ReplyInThreadEnabled(s.Deps, msg.ChatType))
 	return err
 }
 
@@ -230,7 +230,7 @@ func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string
 	if workspaceID == "" {
 		return fmt.Errorf("请指定 workspace_id")
 	}
-	repository := configadapter.NewWorkspaceRepository(s.App)
+	repository := configadapter.NewWorkspaceRepository(s.Deps)
 	workspace, err := repository.Get(workspaceID)
 	if err != nil {
 		return err
@@ -241,7 +241,7 @@ func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string
 	if len(repository.List()) <= 1 {
 		return fmt.Errorf("至少保留一个 workspace")
 	}
-	currentID := selectedWorkspaceIDForSession(s.App, s.GetSession(sessionKey))
+	currentID := selectedWorkspaceIDForSession(s.Deps, s.GetSession(sessionKey))
 	if workspaceID == currentID {
 		return fmt.Errorf("不能删除当前 workspace，请先切换到其他 workspace")
 	}
@@ -253,10 +253,10 @@ func (s *ConfigService) ValidateWorkspaceDeletion(sessionKey, workspaceID string
 			return fmt.Errorf("workspace %q 仍有运行中的任务，无法删除", workspaceID)
 		}
 	}
-	if s.App.ConfigProvider != nil && s.App.Store() != nil {
-		frontendID := strings.TrimSpace(s.App.FrontendID())
-		legacyFallback := appcore.AllowLegacyFrontendFallback(s.App)
-		for _, binding := range s.App.Store().AllAgentBindings() {
+	if s.Deps.ConfigProvider != nil && s.Deps.Store() != nil {
+		frontendID := strings.TrimSpace(s.Deps.FrontendID())
+		legacyFallback := appcore.AllowLegacyFrontendFallback(s.Deps)
+		for _, binding := range s.Deps.Store().AllAgentBindings() {
 			if binding == nil || (strings.TrimSpace(binding.FrontendID) != frontendID && !(strings.TrimSpace(binding.FrontendID) == "" && legacyFallback)) {
 				continue
 			}
@@ -274,7 +274,7 @@ func (s *ConfigService) DeleteWorkspace(sessionKey, workspaceID string) error {
 		return err
 	}
 	workspaceID = strings.TrimSpace(workspaceID)
-	fallbackID, err := (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.App)}).Delete(workspaceID)
+	fallbackID, err := (appworkspace.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(s.Deps)}).Delete(workspaceID)
 	if err != nil {
 		return err
 	}

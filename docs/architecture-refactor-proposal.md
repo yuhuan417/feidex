@@ -556,3 +556,10 @@ Codex server request
 - `internal/application` 的 `CardAction`、backend event 和 interaction payload 仍保留部分 `map[string]any`/`any`，完整的 semantic presentation model 尚未覆盖所有菜单、表单和协议 item。
 - workspace 的创建、默认值更新、删除和群绑定创建已迁移到 workspace application configuration use case 与 config storage adapter；backend selection、Quiet Mode、auto-retry、debug level 和 model config 的配置写入已通过配置 application ports/adapter 收口；workspace 查询展示、部分 backend maintenance、history/recovery 数据组装、model menu policy 和 runtime 配置读路径仍保留在 transitional app。
 - architecture guard 已能阻止跨层 import、具体 `App` 能力字段和旧宽接口回归，但还没有对所有 service callback 环和同步 outbound 做完整静态约束。
+
+### 2026-10-03 本轮边界收敛
+
+- 群绑定的模型、响应速度和工作区状态卡改为显式 `CardRenderer` capability；binding service 不再从宿主直接读取 Feishu renderer。
+- backend event application service 的十余个匿名 callback 字段收敛为单一 consumer-owned `EventSink` port；Feishu/app 入口只负责组装 sink 实现，事件分发器不再持有隐式 service callback 集合。
+- workspace command capability carrier 从兼容性的 `App` 重命名为 `Dependencies`，Config/Management/Render service 内部统一使用 `Deps` 字段；composition 仍负责注入 outbound、renderer、state 和 runtime ports。
+- architecture tests 新增 application 禁止同步 Feishu outbound 调用、backend event 必须使用单一 sink port 的守卫。

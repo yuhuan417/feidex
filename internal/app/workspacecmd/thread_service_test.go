@@ -33,7 +33,7 @@ func TestCreateWorkspaceAndSwitchUsesClaudeRuntimeWhenBackendIsClaude(t *testing
 		},
 	})
 	mgmt := NewManagementService(ManagementDeps{
-		App:            App{ConfigProvider: app},
+		Dependencies:   Dependencies{ConfigProvider: app},
 		State:          newTestStateDeps(&session),
 		SessionContext: testSessionContextDeps(),
 		Threads: ThreadDeps{

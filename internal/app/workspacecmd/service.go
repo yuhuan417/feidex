@@ -87,14 +87,14 @@ var (
 )
 
 // ---------------------------------------------------------------------------
-// App is the workspace command capability set. It is assembled at the
+// Dependencies is the workspace command capability set. It is assembled at the
 // composition root; workspace commands never receive the application root.
 // ---------------------------------------------------------------------------
 
-// App provides config, state, and Feishu client access. workspacecmd uses
+// Dependencies provides config, state, and Feishu client access. workspacecmd uses
 // appcore helpers (DefaultWorkspaceID, ConfiguredBackend, MakeSessionKey,
 // ReplyInThreadEnabled, FirstNonEmpty) which all accept this interface.
-type App struct {
+type Dependencies struct {
 	ConfigProvider interface {
 		appcore.ConfigurationSource
 		appcore.FrontendIdentity
@@ -109,57 +109,57 @@ type App struct {
 	BackendDriver   appbackend.Driver
 }
 
-func (a App) Config() *config.Config {
+func (a Dependencies) Config() *config.Config {
 	if a.ConfigProvider == nil {
 		return nil
 	}
 	return a.ConfigProvider.Config()
 }
-func (a App) ConfigMu() *sync.RWMutex {
+func (a Dependencies) ConfigMu() *sync.RWMutex {
 	if a.ConfigProvider == nil {
 		return nil
 	}
 	return a.ConfigProvider.ConfigMu()
 }
-func (a App) Backend() string {
+func (a Dependencies) Backend() string {
 	if a.ConfigProvider == nil {
 		return ""
 	}
 	return a.ConfigProvider.Backend()
 }
-func (a App) FrontendID() string {
+func (a Dependencies) FrontendID() string {
 	if a.ConfigProvider == nil {
 		return ""
 	}
 	return a.ConfigProvider.FrontendID()
 }
-func (a App) FrontendConfigIndex() int {
+func (a Dependencies) FrontendConfigIndex() int {
 	if a.ConfigProvider == nil {
 		return -1
 	}
 	return a.ConfigProvider.FrontendConfigIndex()
 }
-func (a App) Store() *state.Store {
+func (a Dependencies) Store() *state.Store {
 	if a.ConfigProvider == nil {
 		return nil
 	}
 	return a.ConfigProvider.Store()
 }
-func (a App) ConfigPath() string {
+func (a Dependencies) ConfigPath() string {
 	if a.ConfigProvider == nil {
 		return ""
 	}
 	return a.ConfigProvider.ConfigPath()
 }
-func (a App) OutboundCapability() Outbound { return a.Outbound }
-func (a App) Renderer() CardRenderer       { return a.CardRenderer }
-func (a App) BotName() string {
+func (a Dependencies) OutboundCapability() Outbound { return a.Outbound }
+func (a Dependencies) Renderer() CardRenderer       { return a.CardRenderer }
+func (a Dependencies) BotName() string {
 	if a.BotNameFn == nil {
 		return ""
 	}
 	return a.BotNameFn()
 }
-func (a App) Context() context.Context {
+func (a Dependencies) Context() context.Context {
 	if a.ContextProvider != nil {
 		if c := a.ContextProvider.Context(); c != nil {
 			return c
@@ -179,7 +179,7 @@ type CardRenderer interface {
 	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }
 
-func (a App) PermissionDriver() appbackend.PermissionDriver {
+func (a Dependencies) PermissionDriver() appbackend.PermissionDriver {
 	if a.BackendDriver == nil {
 		return nil
 	}
@@ -399,7 +399,7 @@ type ClaudeDeps struct {
 }
 
 type ConfigDeps struct {
-	App            App
+	Dependencies   Dependencies
 	State          StateDeps
 	SessionContext SessionContextDeps
 	Threads        ThreadDeps
@@ -410,7 +410,7 @@ type ConfigDeps struct {
 }
 
 type ManagementDeps struct {
-	App            App
+	Dependencies   Dependencies
 	State          StateDeps
 	SessionContext SessionContextDeps
 	Threads        ThreadDeps
@@ -424,7 +424,7 @@ type ManagementDeps struct {
 }
 
 type RenderDeps struct {
-	App                    App
+	Dependencies           Dependencies
 	State                  StateDeps
 	Backend                BackendConfigDeps
 	Formatting             FormattingDeps
@@ -442,13 +442,13 @@ type RenderDeps struct {
 // ConfigService handles workspace listing, configuration menus (sandbox,
 // policy), and workspace deletion.
 type ConfigService struct {
-	App  App
+	Deps Dependencies
 	deps ConfigDeps
 }
 
 // NewConfigService creates a new ConfigService.
 func NewConfigService(deps ConfigDeps) *ConfigService {
-	return &ConfigService{App: deps.App, deps: deps}
+	return &ConfigService{Deps: deps.Dependencies, deps: deps}
 }
 
 func (s ConfigService) GetSession(key string) *conversation.Session {
@@ -646,13 +646,13 @@ func (s ConfigService) RenderCloneSwitchExistingCard(sessionKey, workspaceID, ta
 // ManagementService handles workspace creation, cloning, and workspace
 // use/switch operations.
 type ManagementService struct {
-	App  App
+	Deps Dependencies
 	deps ManagementDeps
 }
 
 // NewManagementService creates a new ManagementService.
 func NewManagementService(deps ManagementDeps) *ManagementService {
-	return &ManagementService{App: deps.App, deps: deps}
+	return &ManagementService{Deps: deps.Dependencies, deps: deps}
 }
 
 func (s ManagementService) GetSession(key string) *conversation.Session {
@@ -950,13 +950,13 @@ func (s ManagementService) RenderMenuCard(sessionKey string) map[string]any {
 
 // RenderService handles all workspace card rendering.
 type RenderService struct {
-	App  App
+	Deps Dependencies
 	deps RenderDeps
 }
 
 // NewRenderService creates a new RenderService.
 func NewRenderService(deps RenderDeps) *RenderService {
-	return &RenderService{App: deps.App, deps: deps}
+	return &RenderService{Deps: deps.Dependencies, deps: deps}
 }
 
 func (s RenderService) GetSession(key string) *conversation.Session {
@@ -970,7 +970,7 @@ func (s RenderService) WorkspaceIDForSession(sessionKey string, sess *conversati
 	if s.deps.WorkspaceIDForSession != nil {
 		return strings.TrimSpace(s.deps.WorkspaceIDForSession(sessionKey, sess))
 	}
-	return selectedWorkspaceIDForSession(s.App, sess)
+	return selectedWorkspaceIDForSession(s.Deps, sess)
 }
 
 func (s RenderService) WorkspaceMenuBodyLines(sessionKey string, sess *conversation.Session, lines []string) []string {
@@ -1017,7 +1017,7 @@ func (s RenderService) DefaultWorkspaceCloneParent(ws *config.Workspace) string 
 	return s.deps.Management.DefaultWorkspaceCloneParent(ws)
 }
 
-func (a App) WorkspaceSelection() workspace.SelectionService {
+func (a Dependencies) WorkspaceSelection() workspace.SelectionService {
 	if a.ConfigProvider == nil {
 		return workspace.SelectionService{}
 	}
