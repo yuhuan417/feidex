@@ -13,6 +13,15 @@ import (
 
 // Feishu returns the Feishu client. Sub-packages should define narrow
 // interfaces for the methods they need rather than depending on this type.
+// AsyncRunner exposes the frontend's async executor so composition can hand
+// it to components that need to schedule work off the callback path.
+func (a *App) AsyncRunner() func(func()) {
+	if a == nil {
+		return nil
+	}
+	return a.asyncRunner
+}
+
 func (a *App) Feishu() FeishuClient {
 	if a == nil {
 		return nil

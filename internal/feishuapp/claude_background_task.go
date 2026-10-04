@@ -48,7 +48,7 @@ func sendClaudeBackgroundTaskNotification(a *App, ctx context.Context, target ap
 	}
 	card := a.feishu.SimpleStatusCard(title, color, strings.Join(lines, "\n"), nil)
 	if triggerID := strings.TrimSpace(target.TriggerMessageID); triggerID != "" {
-		if err := newEffectRunner(a).Run(ctx, []application.Effect{application.SendCard{
+		if err := newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.SendCard{
 			Frontend:       identity.FrontendID(a.FrontendID()),
 			Chat:           identity.ChatRef{ID: target.ChatID},
 			ReplyMessageID: triggerID,

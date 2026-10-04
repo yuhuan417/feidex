@@ -21,7 +21,7 @@ func patchMaintenanceCard(a *App, messageID string, card map[string]any, warnMsg
 	if strings.TrimSpace(messageID) == "" || card == nil {
 		return
 	}
-	if err := newEffectRunner(a).Run(a.Context(), []application.Effect{application.PatchCard{Frontend: identity.FrontendID(a.FrontendID()), MessageID: messageID, View: feishuoutbound.Card(card)}}); err != nil {
+	if err := newEffectRunner(a.runtimeOwner).Run(a.Context(), []application.Effect{application.PatchCard{Frontend: identity.FrontendID(a.FrontendID()), MessageID: messageID, View: feishuoutbound.Card(card)}}); err != nil {
 		slog.Warn(warnMsg, append(attrs, "error", err)...)
 	}
 }

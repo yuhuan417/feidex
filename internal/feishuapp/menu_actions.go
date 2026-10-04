@@ -163,7 +163,7 @@ func (s menuActionService) completeServiceTierSet(action *feishu.CardAction, ses
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 service tier"},
-		Card:  rawCard(renderServiceTierMenuCard(s.app, sessionKey)),
+		Card:  rawCard(renderServiceTierMenuCard(s.app.State(), sessionKey)),
 	}, nil
 }
 

@@ -22,7 +22,7 @@ type backendUpgradeService struct {
 }
 
 func BuildBackendUpgrades(app *App) backendUpgradeService {
-	return backendUpgradeService{app: app, runner: newEffectRunner(app)}
+	return backendUpgradeService{app: app, runner: newEffectRunner(app.runtimeOwner)}
 }
 
 func (s backendUpgradeService) replyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {

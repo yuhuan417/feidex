@@ -79,7 +79,7 @@ func prepareTestApp(a *App) *App {
 	}
 	a.bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(a)}
 	a.bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
-	a.bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: a.State(), Backend: func() string { return configuredBackend(a) }, Context: a.Context, Run: SessionTaskRunner(a), Effects: newEffectRunner(a)}}
+	a.bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: a.State(), Backend: func() string { return configuredBackend(a) }, Context: a.Context, Run: SessionTaskRunner(a), Effects: newEffectRunner(a.runtimeOwner)}}
 	a.bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(a.FrontendID()), Repository: scoped.WorkspaceSelections{Store: a.State()}, DefaultWorkspaceID: DefaultWorkspaceID(a)}
 	a.bindings.GoalManagement = &goal.Management{Tracker: a.bindings.Goals, Context: a.Context, Gateway: func() (goal.Gateway, error) { return RequireCodexGoalGateway(a) }}
 	a.bindings.CardActions = cardaction.NewService(CardActionPorts(a))
@@ -89,12 +89,12 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ModelAcknowledgements = modelconfig.AcknowledgementService{Repository: a.State()}
 	a.bindings.ClaudeFactory = func(cfg config.ClaudeConfig) ClaudeCore { return clauderuntime.NewService(ClaudeRuntimePorts(a, cfg)) }
 	routingConfiguration := routing.ConfigurationService{Repository: a.State(), Frontend: identity.FrontendID(a.FrontendID())}
-	a.bindings.RoutingConfiguration = compositionkit.RoutingConfiguration{ConfigurationService: routingConfiguration, Runner: newEffectRunner(a), Context: a.Context()}
-	a.bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: func() string { return configuredBackend(a) }}, Runner: newEffectRunner(a), Context: a.Context()}
+	a.bindings.RoutingConfiguration = compositionkit.RoutingConfiguration{ConfigurationService: routingConfiguration, Runner: newEffectRunner(a.runtimeOwner), Context: a.Context()}
+	a.bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: func() string { return configuredBackend(a) }}, Runner: newEffectRunner(a.runtimeOwner), Context: a.Context()}
 	primaryRepository := statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())
 	a.bindings.Primary = routing.Service{Repository: primaryRepository}
 	a.bindings.GroupMessages = routing.GroupMessages{Frontend: a.FrontendID(), Primary: a.bindings.Primary, Links: a.State(), SelfOpenID: func() string { return currentLiveBotOpenID(a) }}
-	a.bindings.Announcements = announcement.Service{Repository: a.State(), Gateway: AnnouncementGateway(a), Frontend: a.FrontendID(), Primary: func(chatID string) bool {
+	a.bindings.Announcements = announcement.Service{Repository: a.State(), Gateway: AnnouncementGateway(a.feishu), Frontend: a.FrontendID(), Primary: func(chatID string) bool {
 		enabled, _ := a.bindings.Primary.IsPrimary(a.FrontendID(), "group", chatID)
 		return enabled
 	}}
@@ -158,7 +158,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ModelDefaults = modelconfig.DefaultsService{Repository: configadapter.ModelDefaultsRepository{Source: a, Scope: a.State()}, Admission: ModelWriteAdmission(a), Frontend: a.FrontendID(), Publisher: ModelDefaultsPublisher(a)}
 	a.bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: a}}
 	a.bindings.ConversationConfiguration = conversation.Configuration{Models: a.bindings.ModelSnapshots, ServiceName: CodexServiceName(a)}
-	a.bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(a.FrontendID()), Effects: newEffectRunner(a), Collaboration: a.bindings.Plan}
+	a.bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(a.FrontendID()), Effects: newEffectRunner(a.runtimeOwner), Collaboration: a.bindings.Plan}
 	a.bindings.BindingPending = routing.PendingService{Configuration: a.bindings.RoutingConfiguration.ConfigurationService, Repository: a.State()}
 	a.bindings.BackendConfiguration = BuildBackendConfiguration(a)
 	a.bindings.BackendActions = BuildBackendActions(a)

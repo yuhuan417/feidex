@@ -18,5 +18,5 @@ func (r workspaceEffectRuntime) Replay(ctx context.Context, id string) error {
 func WorkspaceEffectRuntime(a *App) workspace.EffectRuntime { return workspaceEffectRuntime{app: a} }
 
 func BindingReplayPorts(a *App) (*runtime.SessionActors, runtime.EffectRunner) {
-	return a.sessionActorRuntime(), newEffectRunner(a)
+	return a.sessionActorRuntime(), newEffectRunner(a.runtimeOwner)
 }

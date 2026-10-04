@@ -17,7 +17,7 @@ func replyCardEffect(a *App, msg *feishu.InboundMessage, card map[string]any) er
 	if a == nil || msg == nil {
 		return nil
 	}
-	return newEffectRunner(a).Run(context.Background(), []application.Effect{application.SendCard{
+	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
@@ -30,7 +30,7 @@ func replyTextEffect(a *App, msg *feishu.InboundMessage, text string) error {
 	if a == nil || msg == nil {
 		return nil
 	}
-	return newEffectRunner(a).Run(context.Background(), []application.Effect{application.SendMessage{
+	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendMessage{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
@@ -43,7 +43,7 @@ func sendCardEffect(ctx context.Context, a *App, chatID string, card map[string]
 	if a == nil {
 		return nil
 	}
-	return newEffectRunner(a).Run(ctx, []application.Effect{application.SendCard{
+	return newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.SendCard{
 		Frontend: identity.FrontendID(a.FrontendID()),
 		Chat:     identity.ChatRef{ID: chatID},
 		View:     feishuoutbound.Card(card),
@@ -54,11 +54,11 @@ func replyCardWithIDEffect(ctx context.Context, a *App, parentMessageID string, 
 	if a == nil {
 		return "", nil
 	}
-	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, View: feishuoutbound.Card(card), InThread: inThread})
+	return newEffectRunner(a.runtimeOwner).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, View: feishuoutbound.Card(card), InThread: inThread})
 }
 
 func replyInteractionCardEffect(ctx context.Context, a *App, requestID, parentMessageID string, card map[string]any, inThread bool) (string, error) {
-	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{
+	return newEffectRunner(a.runtimeOwner).RunSendCard(ctx, application.SendCard{
 		Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID,
 		View: feishuoutbound.Card(card), InThread: inThread,
 		IdempotencyKey: application.StableEffectKey("interaction-card", a.FrontendID(), requestID),
@@ -69,21 +69,21 @@ func sendCardWithIDEffect(ctx context.Context, a *App, chatID string, card map[s
 	if a == nil {
 		return "", nil
 	}
-	return newEffectRunner(a).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: chatID}, View: feishuoutbound.Card(card)})
+	return newEffectRunner(a.runtimeOwner).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: chatID}, View: feishuoutbound.Card(card)})
 }
 
 func replyTextWithIDEffect(ctx context.Context, a *App, parentMessageID, text string, inThread bool) (string, error) {
 	if a == nil {
 		return "", nil
 	}
-	return newEffectRunner(a).RunSendMessage(ctx, application.SendMessage{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, Text: text, InThread: inThread})
+	return newEffectRunner(a.runtimeOwner).RunSendMessage(ctx, application.SendMessage{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, Text: text, InThread: inThread})
 }
 
 func patchCardEffect(ctx context.Context, a *App, messageID string, card map[string]any) error {
 	if a == nil {
 		return nil
 	}
-	return newEffectRunner(a).Run(ctx, []application.Effect{application.PatchCard{
+	return newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.PatchCard{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		MessageID:      messageID,
 		View:           feishuoutbound.Card(card),
@@ -106,7 +106,7 @@ func replyTextByAnchorEffect(ctx context.Context, a *App, messageID, text string
 	if a == nil {
 		return nil
 	}
-	return newEffectRunner(a).Run(ctx, []application.Effect{application.SendMessage{
+	return newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.SendMessage{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		ReplyMessageID: messageID,
 		Text:           text,
@@ -118,7 +118,7 @@ func sendTextEffect(ctx context.Context, a *App, chatID, text string) error {
 	if a == nil {
 		return nil
 	}
-	return newEffectRunner(a).Run(ctx, []application.Effect{application.SendMessage{
+	return newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.SendMessage{
 		Frontend: identity.FrontendID(a.FrontendID()),
 		Chat:     identity.ChatRef{ID: chatID},
 		Text:     text,

@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"feidex/internal/domain/conversation"
+	appruntime "feidex/internal/runtime"
 
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/config"
@@ -37,9 +38,9 @@ func buildWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService 
 			},
 		},
 		Clone: appworkspacecmd.CloneDeps{
-			SetCloneOp:   workspaceCloneSetOp(a),
-			GetCloneOp:   workspaceCloneGetOp(a),
-			ClearCloneOp: workspaceCloneClearOp(a),
+			SetCloneOp:   workspaceCloneSetOp(a.runtimeOwner),
+			GetCloneOp:   workspaceCloneGetOp(a.runtimeOwner),
+			ClearCloneOp: workspaceCloneClearOp(a.runtimeOwner),
 			GitClone:     workspaceGitClone,
 		},
 		Backend: appworkspacecmd.BackendConfigDeps{
@@ -114,12 +115,12 @@ func buildWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService 
 	})
 }
 
-func workspaceCloneSetOp(a *App) func(string, *appworkspacecmd.CloneOperation) {
-	return a.runtimeOwner.WorkspaceCloneOps.Set
+func workspaceCloneSetOp(runtimeowner *appruntime.FrontendOwner) func(string, *appworkspacecmd.CloneOperation) {
+	return runtimeowner.WorkspaceCloneOps.Set
 }
-func workspaceCloneGetOp(a *App) func(string) *appworkspacecmd.CloneOperation {
-	return a.runtimeOwner.WorkspaceCloneOps.Get
+func workspaceCloneGetOp(runtimeowner *appruntime.FrontendOwner) func(string) *appworkspacecmd.CloneOperation {
+	return runtimeowner.WorkspaceCloneOps.Get
 }
-func workspaceCloneClearOp(a *App) func(string) {
-	return a.runtimeOwner.WorkspaceCloneOps.Clear
+func workspaceCloneClearOp(runtimeowner *appruntime.FrontendOwner) func(string) {
+	return runtimeowner.WorkspaceCloneOps.Clear
 }

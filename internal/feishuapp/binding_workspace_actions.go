@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	"feidex/internal/config"
 	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
@@ -55,7 +56,7 @@ func (s bindingService) renderBindingWorkspaceSettingCard(sessionKey string, bin
 	if binding == nil {
 		return nil, fmt.Errorf("当前群内工作区配置未初始化")
 	}
-	setting, err := bindingWorkspaceSetting(fieldName, s.app)
+	setting, err := bindingWorkspaceSetting(fieldName, s.app.cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,7 @@ type bindingWorkspaceSettingSpec struct {
 	current    func(*state.AgentBinding) string
 }
 
-func bindingWorkspaceSetting(fieldName string, a *App) (bindingWorkspaceSettingSpec, error) {
+func bindingWorkspaceSetting(fieldName string, cfg *config.Config) (bindingWorkspaceSettingSpec, error) {
 	switch normalizeBindingWorkspaceSettingName(fieldName) {
 	case "sandbox":
 		return bindingWorkspaceSettingSpec{
@@ -158,7 +159,7 @@ func bindingWorkspaceSetting(fieldName string, a *App) (bindingWorkspaceSettingS
 		}, nil
 	case "permissions":
 		options := make([]appworkspacecmd.SettingOption, 0, 3)
-		for _, opt := range claudePermissionModeOptions(isClaudeBypassPermissionsEnabled(a.cfg)) {
+		for _, opt := range claudePermissionModeOptions(isClaudeBypassPermissionsEnabled(cfg)) {
 			options = append(options, appworkspacecmd.SettingOption{Value: opt.Value, Label: opt.Label})
 		}
 		return bindingWorkspaceSettingSpec{

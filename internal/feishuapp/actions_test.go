@@ -138,7 +138,7 @@ func TestCompleteWorkspaceUseRejectsRunningTurn(t *testing.T) {
 	if sess.ActiveTurnID != "turn-1" || sess.ActiveSubmissionID != "sub-1" {
 		t.Fatalf("expected turn lineage preserved, got %#v", sess)
 	}
-	if selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "c-1", "u-1")); selection != nil {
+	if selection := a.store.GetSession(makeWorkspaceSelectionKey(a.FrontendID(), "p2p", "c-1", "u-1")); selection != nil {
 		t.Fatalf("workspace selection session = %+v, want unchanged", selection)
 	}
 }
@@ -249,7 +249,7 @@ func TestCompleteWorkspaceUseClearsIdleThreadLineageAndPlanMode(t *testing.T) {
 	if sessionHasLiveThread(a, "sess-1", "thread-old") {
 		t.Fatal("expected old live thread binding to be cleared")
 	}
-	selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "c-1", "u-1"))
+	selection := a.store.GetSession(makeWorkspaceSelectionKey(a.FrontendID(), "p2p", "c-1", "u-1"))
 	if selection == nil || selection.WorkspaceID != "alt" {
 		t.Fatalf("workspace selection session = %+v, want alt", selection)
 	}

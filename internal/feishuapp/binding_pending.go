@@ -16,7 +16,7 @@ func (s bindingService) gatePendingGroupMessage(msg *feishu.InboundMessage) (boo
 	if err != nil || !result.Handled {
 		return result.Handled, err
 	}
-	if err := newEffectRunner(s.app).Run(s.app.Context(), result.Effects); err != nil {
+	if err := newEffectRunner(s.app.runtimeOwner).Run(s.app.Context(), result.Effects); err != nil {
 		return false, err
 	}
 	card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(makeSessionKey(s.app, msg))

@@ -155,7 +155,7 @@ func TestHandleCommandWorkspaceUseRejectsRunningTurn(t *testing.T) {
 	if sess == nil || sess.WorkspaceID != "default" || sess.ActiveThreadID != "thread-1" || sess.ActiveThreadWorkspaceID != "default" {
 		t.Fatalf("session after blocked workspace switch = %+v", sess)
 	}
-	if selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "chat", "user")); selection != nil {
+	if selection := a.store.GetSession(makeWorkspaceSelectionKey(a.FrontendID(), "p2p", "chat", "user")); selection != nil {
 		t.Fatalf("workspace selection session = %+v, want unchanged", selection)
 	}
 }
@@ -221,7 +221,7 @@ func TestHandleCommandWorkspaceUseClearsIdleThreadLineage(t *testing.T) {
 	if sessionHasLiveThread(a, sessionKey, "thread-old") {
 		t.Fatal("expected old live thread binding to be cleared")
 	}
-	selection := a.store.GetSession(makeWorkspaceSelectionKey(a, "p2p", "chat", "user"))
+	selection := a.store.GetSession(makeWorkspaceSelectionKey(a.FrontendID(), "p2p", "chat", "user"))
 	if selection == nil || selection.WorkspaceID != "alt" {
 		t.Fatalf("workspace selection session = %+v, want alt", selection)
 	}

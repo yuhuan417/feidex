@@ -74,7 +74,7 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		{name: "backend", p2p: renderBackendMenuCard(a, p2pKey), group: renderBackendMenuCard(a, groupKey)},
 		{name: "workspace", p2p: p2pWorkspace, group: groupWorkspace},
 		{name: "model overview", p2p: a.bindings.BackendConfiguration.RenderModelMenuCard(p2pKey), group: a.bindings.BindingCommands.renderBindingModelMenuCard(groupKey, binding)},
-		{name: "service tier", p2p: renderServiceTierMenuCard(a, p2pKey), group: a.bindings.BindingCommands.renderBindingFastCard(groupKey, binding)},
+		{name: "service tier", p2p: renderServiceTierMenuCard(a.State(), p2pKey), group: a.bindings.BindingCommands.renderBindingFastCard(groupKey, binding)},
 		{name: "thread/session", p2p: p2pThread, group: groupThread},
 		{name: "model config", p2p: p2pModelConfig, group: groupModelConfig},
 	}

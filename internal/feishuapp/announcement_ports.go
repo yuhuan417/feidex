@@ -8,7 +8,9 @@ import (
 
 type announcementGateway struct{ client FeishuClient }
 
-func AnnouncementGateway(a *App) announcement.Gateway { return announcementGateway{client: a.feishu} }
+func AnnouncementGateway(feishu FeishuClient) announcement.Gateway {
+	return announcementGateway{client: feishu}
+}
 
 func (g announcementGateway) List(ctx context.Context, chatID string) ([]announcement.Block, error) {
 	blocks, err := g.client.ListAnnouncementBlocks(ctx, chatID)

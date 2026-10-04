@@ -12,7 +12,7 @@ import (
 	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
-	frontendruntime "feidex/internal/runtime"
+	appruntime "feidex/internal/runtime"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -68,7 +68,7 @@ func dispatchInput(a *App, input application.Input) (application.Result, error) 
 	if err != nil {
 		return result, err
 	}
-	return result, newEffectRunner(a).Run(a.Context(), result.Effects)
+	return result, newEffectRunner(a.runtimeOwner).Run(a.Context(), result.Effects)
 }
 
 func dispatchBackendEvent(a *App, event application.BackendEvent) {
@@ -102,13 +102,13 @@ func dispatchCodexRequest(a *App, req codexrpc.RequestEnvelope) {
 	dispatchBackendEvent(a, codex.DecodeRequest(req))
 }
 
-func newEffectRunner(a *App) frontendruntime.EffectRunner {
-	return *a.runtimeOwner.EffectRunner
+func newEffectRunner(runtimeowner *appruntime.FrontendOwner) appruntime.EffectRunner {
+	return *runtimeowner.EffectRunner
 }
 
-func buildEffectRunner(a *App) frontendruntime.EffectRunner {
+func buildEffectRunner(a *App) appruntime.EffectRunner {
 	if a == nil {
-		return frontendruntime.EffectRunner{}
+		return appruntime.EffectRunner{}
 	}
 	transport := a.feishu
 	if a.transport != nil {

@@ -17,7 +17,7 @@ import (
 )
 
 func ConversationPorts(a *App) conversation.Dependencies {
-	s := conversation.Dependencies{Context: a.Context, Backend: func() string { return configuredBackend(a) }, Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context}, Live: sqLiveThreadAdapter{app: a}}
+	s := conversation.Dependencies{Context: a.Context, Backend: func() string { return configuredBackend(a) }, Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a.runtimeOwner), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context}, Live: sqLiveThreadAdapter{app: a}}
 	s.ModelSettings = a.bindings.ModelSnapshots
 	s.Operations = a.State()
 	s.ThreadBinding = conversation.ThreadBindingDependencies{

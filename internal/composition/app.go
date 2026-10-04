@@ -108,7 +108,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	primaryRepository := statejson.NewGroupPrimaryRepository(frontend.Store(), frontend.FrontendID())
 	bindings.Primary = routing.Service{Repository: primaryRepository}
 	bindings.GroupMessages = routing.GroupMessages{Frontend: frontend.FrontendID(), Primary: bindings.Primary, Links: frontend.State(), SelfOpenID: feishuapp.LiveBotOpenID(frontend)}
-	bindings.Announcements = announcement.Service{Repository: frontend.State(), Gateway: feishuapp.AnnouncementGateway(frontend), Frontend: frontend.FrontendID(), Primary: func(chatID string) bool {
+	bindings.Announcements = announcement.Service{Repository: frontend.State(), Gateway: feishuapp.AnnouncementGateway(frontend.Feishu()), Frontend: frontend.FrontendID(), Primary: func(chatID string) bool {
 		enabled, _ := bindings.Primary.IsPrimary(frontend.FrontendID(), "group", chatID)
 		return enabled
 	}}
@@ -143,7 +143,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		installer, busy, backendRuntime, publisher := feishuapp.BackendMaintenancePorts(frontend, kind)
 		service := &backendmaintenance.Service{Name: name, Kind: kind, Forms: bindings.Forms, Installer: installer, State: scope.RuntimeOwner.MaintenanceTrackers.Get(runtime.BackendKey(kind)), BusyReason: busy, Runtime: backendRuntime, Publisher: publisher}
 		bindings.BackendMaintenance[kind] = service
-		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(frontend)}
+		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(frontend.AsyncRunner())}
 	}
 	bindings.StartupState = conversation.StartupState{Repository: frontend.State(), DefaultWorkspaceID: func() string { return frontend.WorkspaceSelection().ResolveSession(nil) }}
 	bindings.UpgradePoller = upgrade.Poller{Repository: frontend.State(), Units: upgradeunits.Units{}}

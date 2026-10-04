@@ -11,22 +11,22 @@ import (
 	"feidex/internal/state"
 )
 
-func makeWorkspaceSelectionKey(a *App, chatType, chatID, userID string) string {
-	return workspace.SelectionKey(identity.FrontendID(a.FrontendID()), chatType, chatID, userID)
+func makeWorkspaceSelectionKey(frontendid string, chatType, chatID, userID string) string {
+	return workspace.SelectionKey(identity.FrontendID(frontendid), chatType, chatID, userID)
 }
 
-func resolveWorkspaceSelectionForMessage(a *App, msg *feishu.InboundMessage, fallback *conversation.Session) string {
+func resolveWorkspaceSelectionForMessage(workspaceselection workspace.SelectionService, msg *feishu.InboundMessage, fallback *conversation.Session) string {
 	if msg == nil {
-		return a.WorkspaceSelection().Resolve("", "", "", fallback)
+		return workspaceselection.Resolve("", "", "", fallback)
 	}
-	return a.WorkspaceSelection().Resolve(msg.ChatType, msg.ChatID, msg.UserID, fallback)
+	return workspaceselection.Resolve(msg.ChatType, msg.ChatID, msg.UserID, fallback)
 }
 
-func setWorkspaceSelectionForMessage(a *App, msg *feishu.InboundMessage, workspaceID string) error {
+func setWorkspaceSelectionForMessage(workspaceselection workspace.SelectionService, msg *feishu.InboundMessage, workspaceID string) error {
 	if msg == nil {
 		return nil
 	}
-	return a.WorkspaceSelection().Select(msg.ChatType, msg.ChatID, msg.UserID, workspaceID)
+	return workspaceselection.Select(msg.ChatType, msg.ChatID, msg.UserID, workspaceID)
 }
 
 func resolveThreadWorkspaceID(sess *conversation.Session, fallback string) string {
@@ -48,12 +48,12 @@ func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conv
 	if bindOnlyCurrentRoot {
 		return textutil.FirstNonEmpty(
 			resolveThreadWorkspaceID(sess, ""),
-			resolveWorkspaceSelectionForMessage(a, msg, sess),
+			resolveWorkspaceSelectionForMessage(a.WorkspaceSelection(), msg, sess),
 			defaultWorkspaceID(a),
 		)
 	}
 	return textutil.FirstNonEmpty(
-		resolveWorkspaceSelectionForMessage(a, msg, sess),
+		resolveWorkspaceSelectionForMessage(a.WorkspaceSelection(), msg, sess),
 		strings.TrimSpace(func() string {
 			if sess == nil {
 				return ""

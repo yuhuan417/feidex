@@ -55,7 +55,7 @@ func patchClaudePermissionMenuRuntimeFailure(a *App, messageID, sessionKey strin
 	}
 	warning := "⚠️ 运行时未生效：" + applyErr.Error() + "（设置已保存，将在会话重启后生效）"
 	card = cards.PrependMarkdownWarning(card, warning)
-	if err := newEffectRunner(a).Run(context.Background(), []application.Effect{application.PatchCard{
+	if err := newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.PatchCard{
 		Frontend:  identity.FrontendID(a.FrontendID()),
 		MessageID: messageID,
 		View:      feishuoutbound.Card(card),
@@ -81,7 +81,7 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 	if err != nil {
 		return err
 	}
-	return newEffectRunner(a).Run(context.Background(), []application.Effect{application.SendCard{
+	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
@@ -99,7 +99,7 @@ func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error
 	if err != nil {
 		return err
 	}
-	return newEffectRunner(a).Run(context.Background(), []application.Effect{application.SendCard{
+	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,

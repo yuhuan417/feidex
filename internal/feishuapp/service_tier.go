@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	tier "feidex/internal/adapter/feishu/servicetier"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 )
@@ -19,8 +20,8 @@ func (o serviceTierOutbound) ReplyText(ctx context.Context, messageID, text stri
 func BuildServiceTier(a *App) tier.Service {
 	return tier.Service{Service: a.bindings.ThreadSettings, Context: a.Context, Outbound: serviceTierOutbound{app: a}, SessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) }}
 }
-func renderServiceTierMenuCard(a *App, key string) map[string]any {
-	return tier.RenderMenuCard(key, a.State().Session(key))
+func renderServiceTierMenuCard(state *appstate.Store, key string) map[string]any {
+	return tier.RenderMenuCard(key, state.Session(key))
 }
 func setThreadServiceTier(a *App, key, threadID, value string) (*conversation.Session, error) {
 	return a.bindings.ThreadSettings.SetThreadServiceTier(key, threadID, value)

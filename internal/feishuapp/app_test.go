@@ -2842,7 +2842,7 @@ func TestHandleFeishuMessageP2PQueuesSubmissionOnSelectedWorkspace(t *testing.T)
 		t.Fatalf("UpsertSession(p2p active) error = %v", err)
 	}
 
-	if err := setWorkspaceSelectionForMessage(a, &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}, "alt"); err != nil {
+	if err := setWorkspaceSelectionForMessage(a.WorkspaceSelection(), &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}, "alt"); err != nil {
 		t.Fatalf("setWorkspaceSelectionForMessage() error = %v", err)
 	}
 

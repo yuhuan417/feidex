@@ -56,7 +56,7 @@ func (p interactionExpiryPresentation) ExpiredInteraction(pending *domaininterac
 	}
 	title := contentCardTitleForSession(a, pending.SessionKey, "", "请求已失效")
 	card := a.feishu.SimpleStatusCard(title, "grey", body, nil)
-	if err := newEffectRunner(a).Run(context.Background(), []application.Effect{application.PatchCard{
+	if err := newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.PatchCard{
 		Frontend:  identity.FrontendID(a.FrontendID()),
 		MessageID: messageID,
 		View:      feishuoutbound.Card(card),

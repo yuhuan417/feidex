@@ -56,7 +56,7 @@ func BackendMaintenancePorts(a *App, kind string) (func() backendmaintenance.Ins
 	return installer, busy, backendMaintenanceRuntime{a, kind}, backendMaintenancePublisher{a, kind}
 }
 
-func AsyncExecutor(a *App) func(func()) { return a.asyncRunner }
+func AsyncExecutor(asyncrunner func(func())) func(func()) { return asyncrunner }
 
 func ClaudeMaintenancePorts(a *App) (func(context.Context) error, func() bool, func() interface{ Close() error }, func()) {
 	smoke := func(ctx context.Context) error {

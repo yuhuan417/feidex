@@ -119,7 +119,7 @@ func TestPrepareSubmissionCardMarkdownLinkifiesInlineCodeURLsForContentCards(t *
 	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
-	body := prepareSubmissionCardMarkdown(a, sub, "授权链接：`https://accounts.feishu.cn/oauth/v1/device/verify?x=1`")
+	body := prepareSubmissionCardMarkdown(a.cfg, sub, "授权链接：`https://accounts.feishu.cn/oauth/v1/device/verify?x=1`")
 	if !strings.Contains(body, "[https://accounts.feishu.cn/oauth/v1/device/verify?x=1](https://accounts.feishu.cn/oauth/v1/device/verify?x=1)") {
 		t.Fatalf("prepareSubmissionCardMarkdown(inline-code url) = %q, want markdown link", body)
 	}

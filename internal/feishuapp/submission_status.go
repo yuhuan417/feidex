@@ -9,10 +9,10 @@ import (
 	"feidex/internal/config"
 )
 
-func prepareSubmissionCardMarkdown(a *App, sub *domainsubmission.Submission, text string) string {
+func prepareSubmissionCardMarkdown(cfg *config.Config, sub *domainsubmission.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	text = applinkutil.LinkifyInlineCodeURLs(text)
-	if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
+	if ws := config.FindWorkspace(cfg, sub.WorkspaceID); ws != nil {
 		text = attachments.NeutralizeLocalMarkdownLinks(text, ws.Cwd)
 	}
 	return applinkutil.NormalizeCardMarkdown(text)
