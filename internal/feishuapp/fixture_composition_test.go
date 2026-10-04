@@ -4,11 +4,14 @@ import (
 	"context"
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/approval"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/finalcardpatch"
 	"feidex/internal/adapter/feishu/goalcmd"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/adapter/feishu/turnmeta"
 	"feidex/internal/adapter/feishu/turnstream"
+	"feidex/internal/adapter/feishu/upgraderender"
 	filesystempicker "feidex/internal/adapter/filesystem/pathpicker"
 	statejson "feidex/internal/adapter/storage/json"
 	scoped "feidex/internal/adapter/storage/json/scoped"
@@ -124,14 +127,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Upgrades = BuildUpgrades(a)
 
 	a.bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(a.runtimeOwner.MaintenanceTrackers, MaintenanceRepository(a))
-	a.bindings.BackendMaintenance = make(map[string]*backendmaintenance.Service)
-	a.bindings.MaintenanceRunners = make(map[string]maintenance.OperationRunner)
-	for kind, name := range map[string]string{"codex": "Codex", "claude": "Claude"} {
-		installer, busy, backendRuntime, publisher := BackendMaintenancePorts(a, kind)
-		service := &backendmaintenance.Service{Name: name, Kind: kind, Forms: a.bindings.Forms, Installer: installer, State: a.runtimeOwner.MaintenanceTrackers.Get(runtime.BackendKey(kind)), BusyReason: busy, Runtime: backendRuntime, Publisher: publisher}
-		a.bindings.BackendMaintenance[kind] = service
-		a.bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &a.runtimeOwner.Lifecycle, Service: service, Executor: a.asyncRunner}
-	}
 	a.bindings.StartupState = conversation.StartupState{Repository: a.State(), DefaultWorkspaceID: func() string { return a.WorkspaceSelection().ResolveSession(nil) }}
 	a.bindings.UpgradePoller = upgrade.Poller{Repository: a.State(), Units: upgradeunits.Units{}}
 	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a, func() {
@@ -158,6 +153,38 @@ func prepareTestApp(a *App) *App {
 	a.bindings.CodexUpgrade = codexUpgrade
 	smoke, active, current, create := ClaudeMaintenancePorts(a.Config(), a.ConfigMu(), a.Context, a.runtimeOwner, a.FrontendConfigIndex(), a.bindings.ClaudeFactory)
 	a.bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
+	a.bindings.BackendMaintenance = make(map[string]*backendmaintenance.Service)
+	a.bindings.MaintenanceRunners = make(map[string]maintenance.OperationRunner)
+	maintenanceRenderer := a.feishu
+	maintenanceFrontend := identity.FrontendID(a.FrontendID())
+	maintenanceEffects := newEffectRunner(a.runtimeOwner)
+	for kind, name := range map[string]string{"codex": "Codex", "claude": "Claude"} {
+		spec := upgraderender.CodexSpec
+		if kind == "claude" {
+			spec = upgraderender.ClaudeSpec
+		}
+		renderUpgrade := func(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
+			return upgraderender.RenderUpgradeOperationCard(spec, maintenanceRenderer, sessionKey, snapshot)
+		}
+		renderRestart := func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
+			return upgraderender.RenderRestartOperationCard(spec, maintenanceRenderer, sessionKey, snapshot)
+		}
+		patchCard := func(ctx context.Context, messageID string, card map[string]any) error {
+			return maintenanceEffects.Run(ctx, []application.Effect{application.PatchCard{
+				Frontend: maintenanceFrontend, MessageID: messageID,
+				View: feishuoutbound.Card(card),
+			}})
+		}
+		installer, busy, backendRuntime, publisher := BackendMaintenancePorts(BackendMaintenancePortValues{
+			Config: a.Config(), ConfigMu: a.ConfigMu(), Kind: kind,
+			Frontend: identity.FrontendID(a.FrontendID()), State: a.bindings.Maintenance,
+			CodexUpgrade: a.bindings.CodexUpgrade, ClaudeMaintenance: a.bindings.ClaudeMaintenance,
+			RenderUpgrade: renderUpgrade, RenderRestart: renderRestart, PatchCard: patchCard,
+		})
+		service := &backendmaintenance.Service{Name: name, Kind: kind, Forms: a.bindings.Forms, Installer: installer, State: a.runtimeOwner.MaintenanceTrackers.Get(runtime.BackendKey(kind)), BusyReason: busy, Runtime: backendRuntime, Publisher: publisher}
+		a.bindings.BackendMaintenance[kind] = service
+		a.bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &a.runtimeOwner.Lifecycle, Service: service, Executor: a.asyncRunner}
+	}
 	a.bindings.History = BuildHistory(a)
 	sharedArtifacts, downloadPresentation, downloadRunner := FileSharePorts(a)
 	a.bindings.FileSharing = &fileshare.Service{Forms: a.bindings.Forms, Repository: a.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: a.Context, Run: downloadRunner}

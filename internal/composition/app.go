@@ -11,12 +11,15 @@ import (
 
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/approval"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/adapter/feishu/finalcardpatch"
 	"feidex/internal/adapter/feishu/goalcmd"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/adapter/feishu/turnmeta"
 	"feidex/internal/adapter/feishu/turnstream"
+	"feidex/internal/adapter/feishu/upgraderender"
 	filesystempicker "feidex/internal/adapter/filesystem/pathpicker"
 	statejson "feidex/internal/adapter/storage/json"
 	scoped "feidex/internal/adapter/storage/json/scoped"
@@ -142,14 +145,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Upgrades = feishuapp.BuildUpgrades(frontend)
 
 	bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(scope.RuntimeOwner.MaintenanceTrackers, feishuapp.MaintenanceRepository(frontend))
-	bindings.BackendMaintenance = make(map[string]*backendmaintenance.Service)
-	bindings.MaintenanceRunners = make(map[string]maintenance.OperationRunner)
-	for kind, name := range map[string]string{"codex": "Codex", "claude": "Claude"} {
-		installer, busy, backendRuntime, publisher := feishuapp.BackendMaintenancePorts(frontend, kind)
-		service := &backendmaintenance.Service{Name: name, Kind: kind, Forms: bindings.Forms, Installer: installer, State: scope.RuntimeOwner.MaintenanceTrackers.Get(runtime.BackendKey(kind)), BusyReason: busy, Runtime: backendRuntime, Publisher: publisher}
-		bindings.BackendMaintenance[kind] = service
-		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(frontend.AsyncRunner())}
-	}
 	bindings.StartupState = conversation.StartupState{Repository: frontend.State(), DefaultWorkspaceID: func() string { return frontend.WorkspaceSelection().ResolveSession(nil) }}
 	bindings.UpgradePoller = upgrade.Poller{Repository: frontend.State(), Units: upgradeunits.Units{}}
 	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend, func() {
@@ -176,6 +171,38 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.CodexUpgrade = codexUpgrade
 	smoke, active, current, create := feishuapp.ClaudeMaintenancePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, scope.RuntimeOwner, frontend.FrontendConfigIndex(), bindings.ClaudeFactory)
 	bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
+	bindings.BackendMaintenance = make(map[string]*backendmaintenance.Service)
+	bindings.MaintenanceRunners = make(map[string]maintenance.OperationRunner)
+	maintenanceRenderer := frontend.Feishu()
+	maintenanceFrontend := identity.FrontendID(frontend.FrontendID())
+	maintenanceEffects := *scope.RuntimeOwner.EffectRunner
+	for kind, name := range map[string]string{"codex": "Codex", "claude": "Claude"} {
+		spec := upgraderender.CodexSpec
+		if kind == "claude" {
+			spec = upgraderender.ClaudeSpec
+		}
+		renderUpgrade := func(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
+			return upgraderender.RenderUpgradeOperationCard(spec, maintenanceRenderer, sessionKey, snapshot)
+		}
+		renderRestart := func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
+			return upgraderender.RenderRestartOperationCard(spec, maintenanceRenderer, sessionKey, snapshot)
+		}
+		patchCard := func(ctx context.Context, messageID string, card map[string]any) error {
+			return maintenanceEffects.Run(ctx, []application.Effect{application.PatchCard{
+				Frontend: maintenanceFrontend, MessageID: messageID,
+				View: feishuoutbound.Card(card),
+			}})
+		}
+		installer, busy, backendRuntime, publisher := feishuapp.BackendMaintenancePorts(feishuapp.BackendMaintenancePortValues{
+			Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), Kind: kind,
+			Frontend: identity.FrontendID(frontend.FrontendID()), State: bindings.Maintenance,
+			CodexUpgrade: bindings.CodexUpgrade, ClaudeMaintenance: bindings.ClaudeMaintenance,
+			RenderUpgrade: renderUpgrade, RenderRestart: renderRestart, PatchCard: patchCard,
+		})
+		service := &backendmaintenance.Service{Name: name, Kind: kind, Forms: bindings.Forms, Installer: installer, State: scope.RuntimeOwner.MaintenanceTrackers.Get(runtime.BackendKey(kind)), BusyReason: busy, Runtime: backendRuntime, Publisher: publisher}
+		bindings.BackendMaintenance[kind] = service
+		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(frontend.AsyncRunner())}
+	}
 	bindings.History = feishuapp.BuildHistory(frontend)
 	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend)
 	bindings.FileSharing = &fileshare.Service{Forms: bindings.Forms, Repository: frontend.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: frontend.Context, Run: downloadRunner}

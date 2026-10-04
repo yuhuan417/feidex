@@ -28,13 +28,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 512 |
-| 收 `*App` 的顶层函数 | 312 |
-| 收 `*App` 的 `*Ports` 工厂 | 20 |
-| **持有 `*App` 字段的结构体** | **70** |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 509 |
+| 收 `*App` 的顶层函数 | 310 |
+| 收 `*App` 的 `*Ports` 工厂 | 18 |
+| **持有 `*App` 字段的结构体** | **68** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 36。
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
 如果调用点本身在闭包里，惰性读取预算会**上涨**——读取从 `f` 的函数体（不算惰性）
@@ -55,73 +55,47 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 结构体方法 --调用--> 收 *App 的 helper
 ```
 
-### 修正：扇入数的是"碰过它的工厂"，不是"转换它能解放的工厂"
+### 当前工厂排序（2026-10-04）
 
-`cardRenderer` 被 6 个工厂依赖，按扇入是最高杠杆点。转换之后——6 个工厂
-的依赖里它确实都消失了，**但没有一个工厂自由**，因为它们各自还依赖 2-7 个
-别的结构体。工厂只有在**全部**结构体依赖都转换后才会自由。
+以下计数由 `go run . <repo>/internal/feishuapp --json` 生成：direct 是工厂直接
+读取的不同 `App` 成员数，helpers 是直接调用的收 `*App` 函数数，structs 是工厂
+实例化的持有 `*App` 字段结构体数。它们是依赖图规模指标，不代表改动成本。
 
-正确的排序指标是「**哪些结构体是某个工厂的最后一个阻塞点**」：
+当前扇入最高的 App-bearing structures：
 
-| 解放工厂数 | 结构体 |
-|---|---|
-| **2** | `sqLiveThreadAdapter` |
-| 1 | `backendInteractionPresenter` |
-| 1 | `backendSelectionRuntime` |
-| 1 | `cardActionService` |
-| 1 | `claudeTurnStreamPort` |
-| 1 | `conversationRuntimeControl` |
-
-以及「已经只剩 helper、没有结构体依赖」的 3 个工厂：
-
-`CodexUpgradePorts`(0 helper)、`StartupRecoveryPorts`(3)、
-`CodexRecoveryPorts`(6)。
-
-### 第一优先：按结构体扇入施工
-
-结构体（而不是工厂）才是依赖单元。扇入最高的：
-
-| 工厂数 | 结构体 | 方法数 | 需转换的 helper |
+| 工厂数 | 结构体 | 方法数 | helper 数 |
 |---|---|---|---|
-| 6 | `cardRenderer` | 5 | 1 |
-| 3 | `sqLiveThreadAdapter` | 3 | 3 |
 | 3 | `outboundCardService` | 7 | 12 |
 | 3 | `pendingCardPresenter` | 1 | 3 |
+| 3 | `sqLiveThreadAdapter` | 3 | 3 |
 | 2 | `menuActionService` | 21 | 15 |
+| 2 | `planModeOutbound` | 4 | 4 |
 | 2 | `goalOutbound` | 3 | 3 |
 | 2 | `turnRuntimePort` | 3 | 2 |
-| 2 | `planModeOutbound` | 4 | 4 |
+| 2 | `planModeCardRenderer` | 1 | 0 |
 
-`cardRenderer` 是最高杠杆点：改一个结构体解锁 6 个工厂。
+`cardRenderer` 已不再持有 `*App`，不属于这份图。当前工厂按直接依赖总数排序：
 
-### 第二优先：工厂按"自身成员 + 传递 helper + 结构体"排序
-
-| 合计 | 工厂 | 自身成员 | 传递 helper | 结构体 |
+| 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
+| 1 | `GoalCommandPorts` | 0 | 1 | 0 |
+| 2 | `BackendEventPorts` | 1 | 0 | 1 |
 | 3 | `CardActionPorts` | 2 | 0 | 1 |
-| 5 | `BackendMaintenancePorts` | 2 | 1 | 2 |
-| 7 | `CodexUpgradePorts` | 7 | 0 | 0 |
-| 10 | `ConversationControlPorts` | 7 | 2 | 1 |
-| 12 | `BackendEventPorts` | 7 | 4 | 1 |
-| 12 | `StartupRecoveryPorts` | 9 | 3 | 0 |
-| 14 | `CodexRecoveryPorts` | 8 | 6 | 0 |
-| 15 | `ConversationPorts` | 9 | 5 | 1 |
-| 16 | `GoalContinuationPorts` | 6 | 8 | 2 |
-| 17 | `BackendSwitchPorts` | 2 | 14 | 1 |
-| 17 | `AutoRetryPorts` | 9 | 7 | 1 |
-| 33 | `InboundPorts` | 8 | 19 | 6 |
-| 34 | `ReviewPorts` | 3 | 27 | 4 |
-| 42 | `GoalCommandPorts` | 0 | 39 | 3 |
-| 48 | `FileSharePorts` | 2 | 38 | 8 |
-| 50 | `BackendFailurePorts` | 10 | 37 | 3 |
-| 51 | `TurnPresentationPorts` | 8 | 38 | 5 |
-| 60 | `ClaudeRuntimePorts` | 13 | 45 | 2 |
-| 63 | `TurnPorts` | 11 | 45 | 7 |
-| 71 | `SubmissionPorts` | 19 | 46 | 6 |
-
-注意 `BackendSwitchPorts`：自身只碰 2 个成员，但传递依赖 14 个 helper + 1
-个结构体 —— 先做过一轮，撞墙了才明白瓶颈不在工厂而在
-`backendSelectionRuntime` 的方法链。
+| 3 | `BackendSwitchPorts` | 2 | 0 | 1 |
+| 5 | `ConversationControlPorts` | 4 | 0 | 1 |
+| 5 | `FileSharePorts` | 2 | 2 | 1 |
+| 5 | `ReviewPorts` | 1 | 1 | 3 |
+| 6 | `BackendFailurePorts` | 3 | 3 | 0 |
+| 6 | `GoalContinuationPorts` | 4 | 0 | 2 |
+| 6 | `TurnPresentationPorts` | 3 | 1 | 2 |
+| 7 | `ConversationPorts` | 6 | 0 | 1 |
+| 7 | `TurnPorts` | 2 | 3 | 2 |
+| 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
+| 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
+| 10 | `AutoRetryPorts` | 7 | 2 | 1 |
+| 12 | `InboundPorts` | 5 | 2 | 5 |
+| 16 | `ClaudeRuntimePorts` | 6 | 9 | 1 |
+| 19 | `SubmissionPorts` | 7 | 9 | 3 |
 
 ## 已完成的骨架
 
@@ -148,9 +122,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 10 | `ClaudeMaintenancePorts` | 显式接收配置、配置锁、context、runtime owner、frontend 配置索引与 Claude core factory；运行时选择与配置仍动态读取 |
 | 11 | `ConversationRecoveryPorts` | 显式接收 scoped repository、conversation service、配置视图、runtime owner、Codex recovery 与 conversation configuration；恢复 endpoint 仍捕获当前 client 并校验其有效性 |
 | 12 | `CodexUpgradePorts` | 显式接收配置、配置锁、frontend 身份、runtime owner、runtime dependency snapshot、Codex recovery 与 startup recovery；配置和 backend 仍动态读取 |
+| 13 | `BackendMaintenancePorts` | 改为显式接收配置/锁、maintenance state、Codex upgrade 与 Claude maintenance owner、渲染和 patch ports；runtime callback 仍观察 Claude service 的更新字段 |
 
-前两个是 29 个里仅有的**立即求值、不捕获**的工厂。步骤 3-5 走的是同一
-条路：值在调用时已经就绪，惰性读取纯属写法惯性。
+在最初纳入分析的 29 个工厂中，前两个是仅有的**立即求值、不捕获**工厂；当时
+步骤 3-5 也沿用这条路径：值在调用时已经就绪，惰性读取纯属写法惯性。
 
 步骤 7 保留动态配置读取与当前 frontend 的 Codex client 查询，不把构造期 client
 冻结进 catalog。`plan_ports_test.go` 覆盖配置更新、session 模型覆盖、workspace 更新、
@@ -191,6 +166,15 @@ upgrade service 值完成回调连接；ports 本身不再读取 `App` 或 `Bind
 transport handler 注入和 startup recovery 回调。对照 SM-03：没有改变 startup
 recovery 中的 thread resume、失败后的 fresh start 或状态绑定顺序；惰性读取预算由
 37 降至 36。
+
+步骤 13 将两种 maintenance runtime/publisher 从捕获 `App` 的 struct 改为窄依赖，
+并把 backend maintenance map 的构造移到 Codex/Claude runtime service 就绪之后。配置命令
+仍在调用 installer 时从配置锁下读取；Claude runtime adapter 持有 service pointer，
+每次执行时读取最新 smoke/config callbacks；renderer 和 patcher 只捕获局部 transport、
+frontend identity 与 effect runner。`backend_maintenance_ports_test.go` 覆盖配置更新、
+runtime callback、operation card 渲染与 patch 路径；Claude upgrade/restart 失败时旧
+runtime 保持打开的既有用例也通过。没有改变维护 operation 的开始、验证、切换或失败
+收口顺序；惰性读取预算由 36 降至 34。
 
 ## 方法
 

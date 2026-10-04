@@ -2,61 +2,109 @@ package feishuapp
 
 import (
 	"context"
-	"feidex/internal/adapter/feishu/upgraderender"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/application/backendmaintenance"
 	"feidex/internal/config"
+	"feidex/internal/domain/identity"
 	frontendruntime "feidex/internal/runtime"
 	clauderuntime "feidex/internal/runtime/claude"
+	codexruntime "feidex/internal/runtime/codex"
+	"log/slog"
 	"strings"
 	"sync"
 )
 
 type backendMaintenanceRuntime struct {
-	app  *App
-	kind string
+	kind              string
+	codexUpgrade      codexruntime.UpgradeService
+	claudeMaintenance *clauderuntime.Maintenance
 }
 
 func (p backendMaintenanceRuntime) Refresh(ctx context.Context) (bool, error) {
 	if p.kind == "claude" {
-		return p.app.bindings.ClaudeMaintenance.Refresh(ctx)
+		if p.claudeMaintenance == nil {
+			return false, nil
+		}
+		return p.claudeMaintenance.Refresh(ctx)
 	}
-	return p.app.bindings.CodexUpgrade.RefreshRuntimeAfterMaintenance(ctx)
+	return p.codexUpgrade.RefreshRuntimeAfterMaintenance(ctx)
 }
 
 type backendMaintenancePublisher struct {
-	app  *App
-	kind string
+	frontend      identity.FrontendID
+	kind          string
+	renderUpgrade func(string, appbackend.BackendUpgradeSnapshot) map[string]any
+	renderRestart func(string, appbackend.BackendRestartSnapshot) map[string]any
+	patchCard     func(context.Context, string, map[string]any) error
 }
 
 func (p backendMaintenancePublisher) Publish(ctx context.Context, progress backendmaintenance.Progress) {
-	spec := upgraderender.CodexSpec
-	if p.kind == "claude" {
-		spec = upgraderender.ClaudeSpec
-	}
 	var card map[string]any
-	if progress.Upgrade != nil {
-		card = p.app.bindings.UpgradePresentation.renderUpgradeOperationCard(spec, progress.Operation.SessionKey, *progress.Upgrade)
+	if progress.Upgrade != nil && p.renderUpgrade != nil {
+		card = p.renderUpgrade(progress.Operation.SessionKey, *progress.Upgrade)
 	}
-	if progress.Restart != nil {
-		card = p.app.bindings.UpgradePresentation.renderRestartOperationCard(spec, progress.Operation.SessionKey, *progress.Restart)
+	if progress.Restart != nil && p.renderRestart != nil {
+		card = p.renderRestart(progress.Operation.SessionKey, *progress.Restart)
 	}
-	patchMaintenanceCard(p.app, progress.Operation.MessageID, card, "backend maintenance progress patch failed")
+	if strings.TrimSpace(progress.Operation.MessageID) == "" || card == nil || p.patchCard == nil {
+		return
+	}
+	if err := p.patchCard(ctx, progress.Operation.MessageID, card); err != nil {
+		slog.Warn("backend maintenance progress patch failed",
+			"frontend_id", string(p.frontend), "kind", p.kind,
+			"message_id", progress.Operation.MessageID, "error", err)
+	}
 }
 
-func BackendMaintenancePorts(a *App, kind string) (func() backendmaintenance.Installer, func() string, backendmaintenance.Runtime, backendmaintenance.Publisher) {
-	installer := func() backendmaintenance.Installer {
-		if kind == "claude" {
-			return newClaudeInstallManager(a.cfg.Claude.Command)
+type BackendMaintenancePortValues struct {
+	Config            *config.Config
+	ConfigMu          *sync.RWMutex
+	Kind              string
+	Frontend          identity.FrontendID
+	State             backendmaintenance.MaintenanceStateService
+	CodexUpgrade      codexruntime.UpgradeService
+	ClaudeMaintenance *clauderuntime.Maintenance
+	RenderUpgrade     func(string, appbackend.BackendUpgradeSnapshot) map[string]any
+	RenderRestart     func(string, appbackend.BackendRestartSnapshot) map[string]any
+	PatchCard         func(context.Context, string, map[string]any) error
+}
+
+func BackendMaintenancePorts(values BackendMaintenancePortValues) (func() backendmaintenance.Installer, func() string, backendmaintenance.Runtime, backendmaintenance.Publisher) {
+	command := func() string {
+		if values.Config == nil {
+			return ""
 		}
-		return newCodexInstallManager(a.cfg.Codex.Command)
+		if values.ConfigMu != nil {
+			values.ConfigMu.RLock()
+			defer values.ConfigMu.RUnlock()
+		}
+		if values.Kind == "claude" {
+			return values.Config.Claude.Command
+		}
+		return values.Config.Codex.Command
+	}
+	installer := func() backendmaintenance.Installer {
+		if values.Kind == "claude" {
+			return newClaudeInstallManager(command())
+		}
+		return newCodexInstallManager(command())
 	}
 	busy := func() string {
-		if kind == "claude" {
-			return a.bindings.Maintenance.ClaudeUpgradeRuntimeBusyReason()
+		if values.Kind == "claude" {
+			return values.State.ClaudeUpgradeRuntimeBusyReason()
 		}
-		return a.bindings.Maintenance.CodexUpgradeRuntimeBusyReason()
+		return values.State.CodexUpgradeRuntimeBusyReason()
 	}
-	return installer, busy, backendMaintenanceRuntime{a, kind}, backendMaintenancePublisher{a, kind}
+	runtime := backendMaintenanceRuntime{
+		kind: values.Kind, codexUpgrade: values.CodexUpgrade,
+		claudeMaintenance: values.ClaudeMaintenance,
+	}
+	publisher := backendMaintenancePublisher{
+		frontend: values.Frontend, kind: values.Kind,
+		renderUpgrade: values.RenderUpgrade, renderRestart: values.RenderRestart,
+		patchCard: values.PatchCard,
+	}
+	return installer, busy, runtime, publisher
 }
 
 func AsyncExecutor(asyncrunner func(func())) func(func()) { return asyncrunner }
