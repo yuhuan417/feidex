@@ -30,6 +30,7 @@ func (a *App) StartBackground() {
 	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 24*time.Hour, a.bindings.MaintenanceCommands.RunDriveArtifactGC)
 	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 30*time.Second, a.bindings.MaintenanceCommands.CheckPendingUpgrades)
 	scheduleStartupGroupAnnouncementRefreshes(a.runtimeOwner.Announcements, a.bindings.AnnouncementQuery)
-	runAsync(a, func() { sendStartupReadyNotifications(a) })
+	startupRecovery := a.bindings.StartupRecovery
+	runAsync(a, func() { startupRecovery.SendStartupReadyNotifications() })
 	runAsync(a, func() { runFeishuAppConfigHeal(a) })
 }

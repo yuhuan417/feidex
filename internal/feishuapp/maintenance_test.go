@@ -115,10 +115,8 @@ func TestMiscAppFunctions(t *testing.T) {
 	}
 }
 
-func TestReplyAndStartupHelpersReturnEarly(t *testing.T) {
+func TestReplyErrorWithEmptyInputReturnsEarly(t *testing.T) {
 	if err := replyError(prepareTestApp(&App{}), nil, nil); err != nil {
 		t.Fatalf("replyError(nil, nil) error = %v", err)
 	}
-	var a *App
-	sendStartupReadyNotifications(a)
 }

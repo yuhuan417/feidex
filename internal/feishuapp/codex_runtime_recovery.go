@@ -30,7 +30,7 @@ func CodexRecoveryPorts(a *App,
 		State:     recoveryState(a.runtimeView()),
 		Context:   a.Context,
 		RunAsync:  func(fn func()) { runAsync(a, fn) },
-		ClearLive: func() { resetLiveThreadState(a) },
+		ClearLive: func() { resetAppLiveThreadTracker(a) },
 		FailActiveWork: func(cause error) {
 			message := "Codex 后端异常退出。"
 			if detail := strings.TrimSpace(errorText(cause)); detail != "" {

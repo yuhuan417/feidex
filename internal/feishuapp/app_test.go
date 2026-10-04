@@ -326,7 +326,7 @@ func TestSendCommandMenuAndStartupReadyNotifications(t *testing.T) {
 	if err := a.store.UpsertSession(&conversation.Session{Key: "s4", ChatID: "chat-group", ChatType: "group"}); err != nil {
 		t.Fatalf("UpsertSession(s4) error = %v", err)
 	}
-	sendStartupReadyNotifications(a)
+	a.bindings.StartupRecovery.SendStartupReadyNotifications()
 	if len(ff.sentTexts) != 2 {
 		t.Fatalf("expected startup notifications only to p2p chats, got %+v", ff.sentTexts)
 	}
