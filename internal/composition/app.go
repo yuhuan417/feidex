@@ -195,7 +195,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(frontend)
 	*bindings.PendingQueue = submission.NewPendingQueueService(feishuapp.PendingQueuePorts(frontend.Context, frontend.State(), bindings.SubmissionCleanup, frontend.Config(), frontend.ConfigMu(), frontend.Feishu()))
 	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend)
-	bindings.Compaction.Deps = feishuapp.CompactionPorts(frontend)
+	bindings.Compaction.Deps = feishuapp.CompactionPorts(frontend.Context, frontend.State(), scope.RuntimeOwner, frontend.FrontendID(), frontend.Feishu() != nil)
 	bindings.GoalContinuation.Deps = feishuapp.GoalContinuationPorts(frontend)
 	*bindings.GoalCommands = goalcmd.NewService(feishuapp.GoalCommandPorts(frontend))
 	bindings.Interactions.Deps = feishuapp.InteractionPorts(frontend.State(), bindings.SubmissionLookup)

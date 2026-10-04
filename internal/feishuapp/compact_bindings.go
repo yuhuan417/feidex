@@ -3,9 +3,13 @@ package feishuapp
 import (
 	"context"
 	codexadapter "feidex/internal/adapter/backend/codex"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application"
 	compaction "feidex/internal/application/compaction"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"fmt"
 )
 
@@ -23,17 +27,18 @@ func (s compactSessionStoreAdapter) SaveSession(sess *conversation.Session) erro
 	return s.Save(sess)
 }
 
-func CompactionPorts(a *App) compaction.Dependencies {
-	if a == nil {
-		return compaction.Dependencies{}
-	}
-	st := a.State()
+func CompactionPorts(contextFn func() context.Context, st *appstate.Store, owner *frontendruntime.FrontendOwner, frontendID string, noticesEnabled bool) compaction.Dependencies {
+	runtime := runtimeView{owner: owner}
 	return compaction.Dependencies{
-		Context: a.Context, Repository: compactSessionStoreAdapter{Session: st.Session, Sessions: st.Sessions, Save: st.SaveSession},
-		Gateway: compactGateway{client: func() (CodexClient, error) { return a.runtimeView().requireCodexClient() }},
+		Context: contextFn, Repository: compactSessionStoreAdapter{Session: st.Session, Sessions: st.Sessions, Save: st.SaveSession},
+		Gateway: compactGateway{client: runtime.requireCodexClient},
 		Notices: func(ctx context.Context, sess *conversation.Session, text string) {
-			if a.feishu != nil && sess.ChatID != "" {
-				_ = sendTextEffect(ctx, a, sess.ChatID, text)
+			if noticesEnabled && sess.ChatID != "" {
+				_ = newEffectRunner(owner).Run(ctx, []application.Effect{application.SendMessage{
+					Frontend: identity.FrontendID(frontendID),
+					Chat:     identity.ChatRef{ID: sess.ChatID},
+					Text:     text,
+				}})
 			}
 		},
 	}

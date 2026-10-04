@@ -28,9 +28,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 520 |
-| 收 `*App` 的顶层函数 | 317 |
-| 收 `*App` 的 `*Ports` 工厂 | 24 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 519 |
+| 收 `*App` 的顶层函数 | 316 |
+| 收 `*App` 的 `*Ports` 工厂 | 23 |
 | **持有 `*App` 字段的结构体** | **70** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -72,10 +72,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `claudeTurnStreamPort` |
 | 1 | `conversationRuntimeControl` |
 
-以及「已经只剩 helper、没有结构体依赖」的 7 个工厂：
+以及「已经只剩 helper、没有结构体依赖」的 6 个工厂：
 
 `CodexUpgradePorts`(0 helper)、`ConversationRecoveryPorts`(0)、
-`ClaudeMaintenancePorts`(1)、`CompactionPorts`(1)、`ContinuationPorts`(1)、
+`ClaudeMaintenancePorts`(1)、`ContinuationPorts`(1)、
 `StartupRecoveryPorts`(3)、`CodexRecoveryPorts`(6)。
 
 ### 第一优先：按结构体扇入施工
@@ -102,7 +102,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 3 | `CardActionPorts` | 2 | 0 | 1 |
 | 5 | `BackendMaintenancePorts` | 2 | 1 | 2 |
 | 5 | `ClaudeMaintenancePorts` | 4 | 1 | 0 |
-| 5 | `CompactionPorts` | 4 | 1 | 0 |
 | 6 | `ConversationRecoveryPorts` | 6 | 0 | 0 |
 | 7 | `CodexUpgradePorts` | 7 | 0 | 0 |
 | 8 | `ContinuationPorts` | 7 | 1 | 0 |
@@ -148,6 +147,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 5 | `buildBackendConfigurationService` | 删掉死代码权限链后，`ModelCommands` 改为构造期读取 |
 | 6 | 18 个"只用一个成员"的 helper | 单成员函数改收那个成员（store、tracker、lookup、query、service、client），不再收聚合 |
 | 7 | `PlanPorts` / `planSettingsSource` | 显式接收配置、配置锁、模型快照服务和 runtime owner；返回对象不再持有 `App`，生产 composition 与测试 fixture 使用同一组输入 |
+| 8 | `CompactionPorts` | 显式接收 context、scoped store、runtime owner、frontend ID 与通知开关；client 查询和通知闭包不再捕获 `App` |
 
 前两个是 29 个里仅有的**立即求值、不捕获**的工厂。步骤 3-5 走的是同一
 条路：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -156,6 +156,12 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 冻结进 catalog。`plan_ports_test.go` 覆盖配置更新、session 模型覆盖、workspace 更新、
 client 替换与移除。对照 SM-04/05：Plan 配置仍在本地 turn 启动时捕获，steer 仍沿用
 原 turn；本次只改变依赖传递方式。惰性读取预算保持 38。
+
+步骤 8 保留当前 frontend 的动态 Codex client 查询，通知继续通过 runtime effect
+runner 投递到 session 的 chat，无 Feishu 或 chat ID 时跳过通知。
+`compact_ports_test.go` 覆盖 client 替换与移除、effect 的 frontend/chat 身份、
+operation context 与取消。对照 SM-08：compact 的 started/item/completed 绑定和
+终态保持不变；构造期环与反向 eager 读取仍为 0，惰性读取预算保持 38。
 
 ## 方法
 

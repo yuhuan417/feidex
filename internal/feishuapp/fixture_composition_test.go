@@ -180,7 +180,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.SkillCommands = BuildSkillCommands(a)
 	*a.bindings.PendingQueue = submission.NewPendingQueueService(PendingQueuePorts(a.Context, a.State(), a.bindings.SubmissionCleanup, a.Config(), a.ConfigMu(), a.Feishu()))
 	a.bindings.Continuation.Deps = ContinuationPorts(a)
-	a.bindings.Compaction.Deps = CompactionPorts(a)
+	a.bindings.Compaction.Deps = CompactionPorts(a.Context, a.State(), a.runtimeOwner, a.FrontendID(), a.feishu != nil)
 	a.bindings.GoalContinuation.Deps = GoalContinuationPorts(a)
 	*a.bindings.GoalCommands = goalcmd.NewService(GoalCommandPorts(a))
 	a.bindings.Interactions.Deps = InteractionPorts(a.State(), a.bindings.SubmissionLookup)

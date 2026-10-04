@@ -71,7 +71,7 @@
 - **lazy**：`a.bindings.Y` 在 func literal 里读 —— 闭包运行时才发生，**不构成构造
   顺序约束**，但会挡住快照式的能力包
 
-实测结果（2026-10-04，93 条赋值语句，319 个收 `*App` 的顶层函数、约 230 个结构体
+实测结果（2026-10-04，93 条赋值语句，316 个收 `*App` 的顶层函数、约 230 个结构体
 方法）：
 
 | | 数量 | 环 |
@@ -318,7 +318,7 @@ builder 改成构造期参数后，这条边变成了正向的显式依赖。
 
 | 测试 | 起始值 | 当前 | 目标 |
 |---|---|---|---|
-| `TestFeishuAppAggregateDoesNotGrow` | 541 | 520 | 0 |
+| `TestFeishuAppAggregateDoesNotGrow` | 541 | 519 | 0 |
 | `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **38** | **0** |
 
 ### 分析口径的第三次修正：语句级图必须闭包到 wrapper 的实现
