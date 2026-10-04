@@ -2,9 +2,12 @@ package feishuapp
 
 import (
 	"feidex/internal/adapter/feishu/planmode"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
+	runtimemaintenance "feidex/internal/runtime/maintenance"
+	"sync"
 
 	"context"
 	"feidex/internal/domain/conversation"
@@ -113,23 +116,33 @@ func (a sqBackendRuntimeFullAdapter) DeferQueuedSubmissionsDuringRecovery() bool
 // Convenience constructors
 // ---------------------------------------------------------------------------
 
-func PendingQueuePorts(a *App) appsubmission.PendingDependencies {
+// PendingQueuePorts takes the values it needs instead of the frontend
+// aggregate, so composition can supply them from what it already holds.
+func PendingQueuePorts(
+	contextFn func() context.Context,
+	store *appstate.Store,
+	cleanup runtimemaintenance.SubmissionCleanup,
+	cfg *config.Config,
+	mu *sync.RWMutex,
+	feishuClient FeishuClient,
+) appsubmission.PendingDependencies {
+	config := frontendConfigView{cfg: cfg, mu: mu}
 	return appsubmission.PendingDependencies{
-		Context:            a.Context,
-		State:              a.State(),
-		Maintenance:        a.bindings.SubmissionCleanup,
-		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
+		Context:            contextFn,
+		State:              store,
+		Maintenance:        cleanup,
+		DefaultWorkspaceID: func() string { return config.defaultWorkspaceID() },
 		AddReaction: func(ctx context.Context, messageID, emoji string) error {
-			if a.feishu == nil {
+			if feishuClient == nil {
 				return nil
 			}
-			return a.feishu.AddReaction(ctx, messageID, emoji)
+			return feishuClient.AddReaction(ctx, messageID, emoji)
 		},
 		RemoveReaction: func(ctx context.Context, messageID, emoji string) error {
-			if a.feishu == nil {
+			if feishuClient == nil {
 				return nil
 			}
-			return a.feishu.RemoveReaction(ctx, messageID, emoji)
+			return feishuClient.RemoveReaction(ctx, messageID, emoji)
 		},
 		LogSessionState: logSessionState,
 	}

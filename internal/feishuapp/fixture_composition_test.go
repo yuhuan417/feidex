@@ -170,7 +170,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ServerRequests = BuildServerRequests(a)
 	a.bindings.Skills = compositionkit.NewSkillService(SkillUseCasePorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner.PendingSkills, a.FrontendID(), a.runtimeOwner))
 	a.bindings.SkillCommands = BuildSkillCommands(a)
-	*a.bindings.PendingQueue = submission.NewPendingQueueService(PendingQueuePorts(a))
+	*a.bindings.PendingQueue = submission.NewPendingQueueService(PendingQueuePorts(a.Context, a.State(), a.bindings.SubmissionCleanup, a.Config(), a.ConfigMu(), a.Feishu()))
 	a.bindings.Continuation.Deps = ContinuationPorts(a)
 	a.bindings.Compaction.Deps = CompactionPorts(a)
 	a.bindings.GoalContinuation.Deps = GoalContinuationPorts(a)
