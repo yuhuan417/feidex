@@ -2,8 +2,10 @@ package feishuapp
 
 import (
 	"feidex/internal/adapter/feishu/planmode"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	conversationapp "feidex/internal/application/conversation"
+	appplan "feidex/internal/application/plan"
 	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
 	runtimemaintenance "feidex/internal/runtime/maintenance"
@@ -155,9 +157,9 @@ func (a claudeClientAdapter) CanRetryFreshSession(sessionKey string) bool {
 	return true
 }
 
-func SubmissionPorts(a *App) appsubmission.Dependencies {
+func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstream.Service) appsubmission.Dependencies {
 	return appsubmission.Dependencies{
-		PlanConfirmation: a.bindings.Plan,
+		PlanConfirmation: plan,
 		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
 			if pending.FeishuMsgID != "" {
 				_ = patchCardEffect(ctx, a, pending.FeishuMsgID, planmode.ExitExpiredCard(newPlanModeAppAdapter(a), pending.SessionKey, "", "当前已有新的提交，旧的计划确认已失效。"))
@@ -173,7 +175,7 @@ func SubmissionPorts(a *App) appsubmission.Dependencies {
 		Items:              a.bindings.TurnItems,
 		RuntimeMaintenance: a.bindings.SubmissionCleanup,
 		ReplyContinuation:  a.bindings.Continuation,
-		TurnStream:         a.bindings.TurnPresentation,
+		TurnStream:         turnPresentation,
 		AutoRetry:          a.bindings.AutoRetry,
 
 		BackendRuntime: sqBackendRuntimeFullAdapter{app: a},

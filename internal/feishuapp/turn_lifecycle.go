@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	"feidex/internal/adapter/feishu/planmode"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/application/compaction"
 	"feidex/internal/application/goal"
 	applicationturn "feidex/internal/application/turn"
@@ -62,10 +63,10 @@ func (p turnDiagnosticsPort) LogSessionState(event, sessionKey string, sess *con
 	logSessionState(event, sessionKey, sess)
 }
 
-func TurnPorts(app *App) applicationturn.Dependencies {
+func TurnPorts(app *App, turnPresentation *appturnstream.Service) applicationturn.Dependencies {
 	return applicationturn.Dependencies{
 		State: app.State(), Bindings: app.bindings.TurnMetadata,
-		Replies: app.bindings.Continuation, Streams: app.bindings.TurnPresentation,
+		Replies: app.bindings.Continuation, Streams: turnPresentation,
 		Reactions: app.bindings.PendingQueue, Cards: newOutboundCardService(app),
 		Queue: app.bindings.Submissions, Retry: app.bindings.AutoRetry,
 		Cleanup: app.bindings.SubmissionCleanup,

@@ -110,6 +110,18 @@ func scanBindings(repoRoot string) *BindingGraph {
 		i = j + 1
 	}
 
+	// Bindings pre-created as placeholders in the composite literal
+	// (`Plan: &planapp.Service{}`) exist from the first line, so passing the
+	// pointer around is not a construction-order constraint. Reads of them are
+	// satisfied immediately.
+	placeholder := map[string]bool{}
+	if lm := regexp.MustCompile(`bindings\s*:?=\s*&?\w*\.?Bindings\{([\s\S]*?)\n\t\}`).FindStringSubmatch(text); lm != nil {
+		for _, pm := range regexp.MustCompile(`(\w+):\s*&`).FindAllStringSubmatch(lm[1], -1) {
+			placeholder[pm[1]] = true
+		}
+	}
+	fmt.Fprintf(os.Stderr, "占位符 binding: %d 个\n", len(placeholder))
+
 	// resolve edges
 	assigned := map[string]bool{}
 	for _, st := range g.Stmts {
@@ -119,7 +131,7 @@ func scanBindings(repoRoot string) *BindingGraph {
 		eager := map[string]bool{}
 		any := map[string]bool{}
 		for _, r := range st.Direct {
-			if r.Binding == st.Produces || !assigned[r.Binding] {
+			if r.Binding == st.Produces || !assigned[r.Binding] || placeholder[r.Binding] {
 				continue
 			}
 			any[r.Binding] = true
@@ -129,7 +141,7 @@ func scanBindings(repoRoot string) *BindingGraph {
 		}
 		for _, fn := range st.Funcs {
 			for _, r := range g.Funcs[fn] {
-				if r.Binding == st.Produces || !assigned[r.Binding] {
+				if r.Binding == st.Produces || !assigned[r.Binding] || placeholder[r.Binding] {
 					continue
 				}
 				any[r.Binding] = true

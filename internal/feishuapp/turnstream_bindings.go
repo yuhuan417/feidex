@@ -4,6 +4,7 @@ import (
 	"context"
 	"feidex/internal/adapter/feishu/turn"
 	"feidex/internal/adapter/feishu/turnitem"
+	appturn "feidex/internal/application/turn"
 	"feidex/internal/config"
 	domainsubmission "feidex/internal/domain/submission"
 
@@ -61,10 +62,10 @@ func (p claudeTurnStreamPort) MarkTurnStreamFinal(turnID string) {
 	p.app.bindings.TurnPresentation.MarkStreamFinal(turnID)
 }
 
-func TurnPresentationPorts(a *App) appturnstream.Dependencies {
+func TurnPresentationPorts(a *App, turns *appturn.Service) appturnstream.Dependencies {
 	return appturnstream.Dependencies{
 		Context: a.Context,
-		Tracker: a.bindings.TurnStreams, Finder: a.bindings.SubmissionLookup, Lifecycle: a.bindings.Turns, Runtime: turnItemsPort{tracker: a.bindings.TurnItems},
+		Tracker: a.bindings.TurnStreams, Finder: a.bindings.SubmissionLookup, Lifecycle: turns, Runtime: turnItemsPort{tracker: a.bindings.TurnItems},
 		Outbound: turnStreamOutboundCardAdapter{app: a, compact: a.bindings.Compaction}, Quiet: turnStreamQuietCardExecutorAdapter{app: a},
 		SendStartedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
 			maybeSendSubmissionStartedNotice(a, ctx, sub)

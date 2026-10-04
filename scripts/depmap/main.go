@@ -53,7 +53,7 @@ type Report struct {
 func main() {
 	dir := os.Args[1]
 	if len(os.Args) > 2 && os.Args[2] == "--bindings" {
-		runBindings(dir, false)
+		runBindings(dir, len(os.Args) > 3 && os.Args[3] == "--json")
 		return
 	}
 	fset := token.NewFileSet()

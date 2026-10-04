@@ -187,9 +187,9 @@ func prepareTestApp(a *App) *App {
 	*a.bindings.GoalCommands = goalcmd.NewService(GoalCommandPorts(a))
 	a.bindings.Interactions.Deps = InteractionPorts(a.State(), a.bindings.SubmissionLookup)
 	a.bindings.InteractionDelivery = &interaction.DeliveryService{Repository: a.State()}
-	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(a))
-	*a.bindings.Turns = turn.NewService(TurnPorts(a))
-	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(a))
+	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(a, a.bindings.Plan, a.bindings.TurnPresentation))
+	*a.bindings.Turns = turn.NewService(TurnPorts(a, a.bindings.TurnPresentation))
+	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(a, a.bindings.Turns))
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}
 	a.bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: ClaudeSessionStopped(a), Session: a.State().Session, Finish: a.bindings.Turns.FinishTurn}
 	a.bindings.BackendEvents.Deps = BackendEventPorts(a)

@@ -202,9 +202,9 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	*bindings.GoalCommands = goalcmd.NewService(feishuapp.GoalCommandPorts(frontend))
 	bindings.Interactions.Deps = feishuapp.InteractionPorts(frontend.State(), bindings.SubmissionLookup)
 	bindings.InteractionDelivery = &interaction.DeliveryService{Repository: frontend.State()}
-	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(frontend))
-	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(frontend))
-	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend))
+	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(frontend, bindings.Plan, bindings.TurnPresentation))
+	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(frontend, bindings.TurnPresentation))
+	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend, bindings.Turns))
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
 	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(frontend), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}
 	bindings.BackendEvents.Deps = feishuapp.BackendEventPorts(frontend)
