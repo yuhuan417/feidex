@@ -148,7 +148,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ModelCommands = feishuapp.BuildModelCommands(frontend)
 	bindings.BindingCommands = feishuapp.BuildBindingCommands(frontend)
 	bindings.BackendUpgrades = feishuapp.BuildBackendUpgrades(frontend)
-	bindings.UpgradePresentation = feishuapp.BuildUpgradePresentation(frontend)
 	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner)
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 	bindings.Upgrades = feishuapp.BuildUpgrades(frontend)
@@ -215,6 +214,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		bindings.BackendMaintenance[kind] = service
 		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(frontend.AsyncRunner())}
 	}
+	bindings.UpgradePresentation = feishuapp.BuildUpgradePresentation(maintenanceRenderer, bindings.BackendMaintenance)
 	frontendID := identity.FrontendID(frontend.FrontendID())
 	bindings.History = feishuapp.BuildHistory(
 		frontendID, frontend.State(), feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex()),

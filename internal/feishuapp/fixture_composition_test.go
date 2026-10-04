@@ -128,7 +128,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ModelCommands = BuildModelCommands(a)
 	a.bindings.BindingCommands = BuildBindingCommands(a)
 	a.bindings.BackendUpgrades = BuildBackendUpgrades(a)
-	a.bindings.UpgradePresentation = BuildUpgradePresentation(a)
 	platform, releases, artifacts, launcher := UpgradeWorkflowPorts(a.Config(), a.ConfigMu(), a.runtimeOwner)
 	a.bindings.UpgradeWorkflow = &upgrade.Service{Forms: a.bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 	a.bindings.Upgrades = BuildUpgrades(a)
@@ -195,6 +194,7 @@ func prepareTestApp(a *App) *App {
 		a.bindings.BackendMaintenance[kind] = service
 		a.bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &a.runtimeOwner.Lifecycle, Service: service, Executor: a.asyncRunner}
 	}
+	a.bindings.UpgradePresentation = BuildUpgradePresentation(maintenanceRenderer, a.bindings.BackendMaintenance)
 	a.bindings.History = BuildHistory(
 		identity.FrontendID(a.FrontendID()), a.State(), ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
 		func() codexadapter.RPCClient { return a.runtimeView().currentCodexClient() },

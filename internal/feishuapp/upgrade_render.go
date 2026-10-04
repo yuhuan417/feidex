@@ -9,19 +9,15 @@ import (
 )
 
 type upgradeRenderService struct {
-	app      *App
-	renderer upgraderender.StatusCardRenderer
+	backendMaintenance map[string]*backendmaintenance.Service
+	renderer           upgraderender.StatusCardRenderer
 }
 
 // upgradeTargetMatchesCurrent reports whether targetVersion names the version
 // already installed. "latest" and empty never match.
 
-func BuildUpgradePresentation(app *App) upgradeRenderService {
-	var renderer upgraderender.StatusCardRenderer
-	if app != nil {
-		renderer = app.feishu
-	}
-	return upgradeRenderService{app: app, renderer: renderer}
+func BuildUpgradePresentation(renderer upgraderender.StatusCardRenderer, backendMaintenance map[string]*backendmaintenance.Service) upgradeRenderService {
+	return upgradeRenderService{backendMaintenance: backendMaintenance, renderer: renderer}
 }
 
 func (s upgradeRenderService) renderUpgradeStatusCard(spec upgraderender.Spec, sessionKey string, view upgraderender.UpgradeView, latestChecked bool) map[string]any {
@@ -32,7 +28,7 @@ func (s upgradeRenderService) renderUpgradeStatusCard(spec upgraderender.Spec, s
 // request, or returns the status card when the upgrade cannot start.
 func (s upgradeRenderService) prepareUpgradeCard(spec upgraderender.Spec, pendingKind, idPrefix string, sessionKey, ownerUserID string, view upgraderender.UpgradeView) (map[string]any, string, error) {
 	kind := strings.TrimSuffix(pendingKind, "_self_upgrade")
-	confirmation, err := s.app.bindings.BackendMaintenance[kind].Prepare(sessionKey, ownerUserID, backendmaintenance.View{Probe: view.Probe, BusyReason: view.BusyReason, Snapshot: view.Snapshot, Restart: view.Restart, LatestVersion: view.LatestVersion, LatestError: view.LatestError})
+	confirmation, err := s.backendMaintenance[kind].Prepare(sessionKey, ownerUserID, backendmaintenance.View{Probe: view.Probe, BusyReason: view.BusyReason, Snapshot: view.Snapshot, Restart: view.Restart, LatestVersion: view.LatestVersion, LatestError: view.LatestError})
 	if err != nil {
 		return nil, "", err
 	}

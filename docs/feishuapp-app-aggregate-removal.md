@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 434 |
-| 收 `*App` 的顶层函数 | 272 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 432 |
+| 收 `*App` 的顶层函数 | 271 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **32** |
+| **持有 `*App` 字段的结构体** | **30** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -484,6 +484,12 @@ frontend identity 与 effect runner；失效卡标题仍按原 session state 添
 实现 `PermissionDependencies`。composition 和 test fixture 都从已构造对象注入这些值，避免再次
 将 App 作为“窄接口”传递；生产 `*App` 引用预算由 436 降至 434，收 `*App` 的函数由 274 降至
 272，持有 App 字段的结构体预算保持 31；lazy binding-read 预算保持 13。
+
+步骤 62 将 `upgradeRenderService` 改为显式持有 Feishu status-card renderer 与
+`BackendMaintenance` service map。生产 composition 和 test fixture 都在 maintenance service map
+构造完成后创建该 presentation owner；升级确认仍调用对应 backend 的原 `Prepare` service，卡片
+渲染和 pending request 行为不变。生产 `*App` 引用预算由 434 降至 432，收 `*App` 的函数由
+272 降至 271，持有 App 字段的结构体由 31 降至 30；lazy binding-read 预算保持 13。
 
 ## 方法
 
