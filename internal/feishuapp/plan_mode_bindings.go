@@ -46,8 +46,8 @@ func (a *App) ContentCardTitleForSession(sessionKey, workspaceID, title string) 
 	return contentCardTitleForSession(a, sessionKey, workspaceID, title)
 }
 
-func contentCardTitleForSubmission(a *App, sub *domainsubmission.Submission, title string) string {
-	return planmode.ContentCardTitleForSubmission(planPresentationContext(a), sub, title)
+func contentCardTitleForSubmission(state planmode.SessionStateProvider, sub *domainsubmission.Submission, title string) string {
+	return planmode.ContentCardTitleForSubmissionFromState(state, true, sub, title)
 }
 
 func contentCardTitleForSession(a *App, sessionKey, workspaceID, title string) string {

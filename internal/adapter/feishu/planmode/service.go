@@ -179,6 +179,10 @@ type StateProvider interface {
 	Submission(id string) *domainsubmission.Submission
 }
 
+type SessionStateProvider interface {
+	Session(key string) *conversation.Session
+}
+
 type PlanSettingsProvider interface {
 	EffectivePlanSettings(sess *conversation.Session) (model, effort string)
 }
@@ -258,28 +262,52 @@ func PlanModeTitleForSession(a Dependencies, sessionKey, title string) string {
 }
 
 func ContentCardTitleForSubmission(a Dependencies, sub *domainsubmission.Submission, title string) string {
+	return ContentCardTitleForSubmissionFromState(a.StateProvider, a.ConfigProvider != nil, sub, title)
+}
+
+// ContentCardTitleForSubmissionFromState projects session presentation state
+// without requiring the frontend configuration aggregate. Callers that have
+// already established a live frontend can pass its scoped state provider.
+func ContentCardTitleForSubmissionFromState(state SessionStateProvider, enabled bool, sub *domainsubmission.Submission, title string) string {
 	if sub == nil {
 		return strings.TrimSpace(title)
 	}
-	return ContentCardTitleForSession(a, sub.SessionKey, sub.WorkspaceID, title)
+	return ContentCardTitleForSessionFromState(state, enabled, sub.SessionKey, sub.WorkspaceID, title)
 }
 
 func ContentCardTitleForSession(a Dependencies, sessionKey, workspaceID, title string) string {
+	return ContentCardTitleForSessionFromState(a.StateProvider, a.ConfigProvider != nil, sessionKey, workspaceID, title)
+}
+
+// ContentCardTitleForSessionFromState renders workspace and plan-mode prefixes
+// from the current scoped session snapshot.
+func ContentCardTitleForSessionFromState(state SessionStateProvider, enabled bool, sessionKey, workspaceID, title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return ""
 	}
 	sessionKey = strings.TrimSpace(sessionKey)
-	if strings.TrimSpace(workspaceID) == "" && a.ConfigProvider != nil && sessionKey != "" {
-		if sess := a.State().Session(sessionKey); sess != nil {
+	if strings.TrimSpace(workspaceID) == "" && enabled && state != nil && sessionKey != "" {
+		if sess := state.Session(sessionKey); sess != nil {
 			workspaceID = strings.TrimSpace(sess.WorkspaceID)
 		}
 	}
 	planMode := false
-	if mode := PlanModeForSession(a, sessionKey); mode != nil {
+	if mode := planModeForState(state, enabled, sessionKey); mode != nil {
 		planMode = strings.EqualFold(mode.Mode, "plan")
 	}
 	return normalizeContentCardTitle(title, workspaceID, planMode)
+}
+
+func planModeForState(state SessionStateProvider, enabled bool, sessionKey string) *conversation.SessionCollaborationMode {
+	if !enabled || state == nil || strings.TrimSpace(sessionKey) == "" {
+		return nil
+	}
+	sess := state.Session(sessionKey)
+	if sess == nil {
+		return nil
+	}
+	return conversation.NormalizeCollaborationMode(sess.ActiveThreadCollaborationMode)
 }
 
 func normalizeContentCardTitle(title, workspaceID string, planMode bool) string {

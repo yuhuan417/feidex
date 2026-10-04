@@ -123,7 +123,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 		return ids
 	}
 
-	card := newCardRenderer(a.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(a, sub, title), color, "", text, nil)
+	card := newCardRenderer(a.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(a.State(), sub, title), color, "", text, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := patchCardEffect(ctx, a, reuseMessageID, card); err == nil {
 			_ = appState.SaveMessageLink(&state.MessageLink{

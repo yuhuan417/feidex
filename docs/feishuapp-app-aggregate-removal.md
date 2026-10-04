@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 464 |
-| 收 `*App` 的顶层函数 | 291 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 463 |
+| 收 `*App` 的顶层函数 | 290 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **42** |
 
@@ -335,6 +335,13 @@ runtime owner 与 frontend ID。移除已无调用方的 `replyInteractionCardEf
 465 降至 464，app-bearing 函数数由 292 降至 291，持有 App 字段的结构体预算保持 42。
 `outboundCardService` 仍是最高扇入候选，后续继续拆其投递、pending-card、message-link 与异步
 patch owners。
+
+步骤 39 将卡片标题投影从 `ContentCardTitleForSubmission(*App, ...)` 改为
+`ContentCardTitleForSubmissionFromState(SessionStateProvider, ...)`。投影只需要 scoped session
+的 workspace 与 collaboration mode；调用时读取当前 session，不冻结 Plan mode 标题。原
+Dependencies API 保留并委托到同一 state 投影，维持其它 planmode 调用行为。production
+`*App` 引用预算由 464 降至 463，app-bearing 函数数由 291 降至 290，持有 App 字段的结构体
+预算保持 42。
 
 ## 方法
 

@@ -60,11 +60,11 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 		if body == "" {
 			body = payload.DetailText
 		}
-		title := contentCardTitleForSubmission(s.app, sub, turnitem.ReplyTurnItemCardTitle(payload))
+		title := contentCardTitleForSubmission(s.app.State(), sub, turnitem.ReplyTurnItemCardTitle(payload))
 		color := payload.Color
 		if !payload.IsFinalAnswer {
 			title, color, _, _ = outboundMessageCardMeta("turn_output", sub.WorkspaceID)
-			title = contentCardTitleForSubmission(s.app, sub, title)
+			title = contentCardTitleForSubmission(s.app.State(), sub, title)
 		}
 		results := sendReplyCardChunksWithReuse(s.app,
 			ctx,
@@ -134,7 +134,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 		return ""
 	}
 	if strings.TrimSpace(reuseMessageID) != "" {
-		card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app, sub, title), color, "", body, nil)
+		card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, title), color, "", body, nil)
 		if err := patchCardEffect(ctx, s.app, reuseMessageID, card); err == nil {
 			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
@@ -154,7 +154,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	if body == "" {
 		return ""
 	}
-	card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app, sub, title), color, "", body, nil)
+	card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, title), color, "", body, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := patchCardEffect(ctx, s.app, reuseMessageID, card); err == nil {
 			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
@@ -172,10 +172,10 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 
 func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, enablePreview bool) map[string]any {
 	if turnitem.IsReplyTurnItem(payload.ItemType) {
-		return newCardRenderer(s.app.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(s.app, sub, turnitem.ReplyTurnItemCardTitle(payload)), payload.Color, payload.IsFinalAnswer, turnitem.ReplyTurnItemCardBody(payload), nil, enablePreview)
+		return newCardRenderer(s.app.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(s.app.State(), sub, turnitem.ReplyTurnItemCardTitle(payload)), payload.Color, payload.IsFinalAnswer, turnitem.ReplyTurnItemCardBody(payload), nil, enablePreview)
 	}
 	meta, body := turnitem.CompactTurnItemCardContent(payload)
-	return newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app, sub, payload.Title), payload.Color, meta, body, nil)
+	return newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, payload.Title), payload.Color, meta, body, nil)
 }
 
 // SendTerminalCard executes the turn use case's semantic terminal effect.

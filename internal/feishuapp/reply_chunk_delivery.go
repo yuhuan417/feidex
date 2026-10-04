@@ -57,7 +57,7 @@ func sendReplyChunk(a *App, ctx context.Context, sub *domainsubmission.Submissio
 		return appdelivery.SentReplyChunk{}, false
 	}
 
-	card := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, spec.Title), spec.Color, spec.ShowHeader, spec.Body, nil, spec.EnablePreview)
+	card := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a.State(), sub, spec.Title), spec.Color, spec.ShowHeader, spec.Body, nil, spec.EnablePreview)
 	appendReplyCardFooter(card, spec.FooterLines)
 
 	cardID := ""
