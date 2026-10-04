@@ -357,7 +357,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		GoalContinuation: bindings.GoalContinuation, PlanMode: turnPlanMode,
 		AnnouncementQuery: bindings.AnnouncementQuery, AsyncRunner: frontend.AsyncRunner(),
 	}))
-	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend, bindings.Turns))
+	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(feishuapp.TurnPresentationPortInputs{
+		Runtime: runtimeDeps, Turns: bindings.Turns, TurnPresentation: bindings.TurnPresentation,
+		Tracker: bindings.TurnStreams, Finder: bindings.SubmissionLookup, Items: bindings.TurnItems,
+		Compaction: bindings.Compaction, SubmissionStatus: bindings.SubmissionStatus, Cards: turnCards,
+	}))
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend.BackendRuntimeDeps()), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
 	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex()), scope.RuntimeOwner.ClaudeCore), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}
 	workspaceRepository := configadapter.NewWorkspaceRepository(frontend)

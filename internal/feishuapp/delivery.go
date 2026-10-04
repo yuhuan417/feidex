@@ -74,10 +74,6 @@ type feishuTextReplier interface {
 	ReplyTextWithID(context.Context, string, string, bool) (string, error)
 }
 
-func sendTurnEventMessages(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, inThread bool, kind string) []string {
-	return sendReplyMessages(a, ctx, sub, text, inThread, kind)
-}
-
 func sendReplyMessages(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, inThread bool, kind string) []string {
 	return sendReplyMessagesWithReuse(a, ctx, sub, text, inThread, kind, "")
 }

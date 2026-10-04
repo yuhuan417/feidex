@@ -2,9 +2,12 @@ package feishuapp
 
 import (
 	"context"
+
 	appapproval "feidex/internal/adapter/feishu/approval"
 	"feidex/internal/adapter/feishu/turn"
 	"feidex/internal/adapter/feishu/turnitem"
+	"feidex/internal/application/compaction"
+	appsubmission "feidex/internal/application/submission"
 	appturn "feidex/internal/application/turn"
 	"feidex/internal/config"
 	domainsubmission "feidex/internal/domain/submission"
@@ -60,26 +63,41 @@ func (p claudeTurnStreamPort) MarkTurnStreamFinal(turnID string) {
 	p.turnPresentation.MarkStreamFinal(turnID)
 }
 
-func TurnPresentationPorts(a *App, turns *appturn.Service) appturnstream.Dependencies {
-	cards := newOutboundCardService(a)
+type TurnPresentationPortInputs struct {
+	Runtime          BackendRuntimeDeps
+	Turns            *appturn.Service
+	TurnPresentation *appturnstream.Service
+	Tracker          *appturnstream.Tracker
+	Finder           appsubmission.SubmissionLookupService
+	Items            *turnitem.Tracker
+	Compaction       *compaction.Service
+	SubmissionStatus appsubmission.StatusService
+	Cards            OutboundCardService
+}
+
+func TurnPresentationPorts(inputs TurnPresentationPortInputs) appturnstream.Dependencies {
+	runtimeDeps := inputs.Runtime
+	owner := runtimeDeps.runtime.owner
+	stateStore := runtimeDeps.stateView
+	cards := inputs.Cards
 	return appturnstream.Dependencies{
-		Context: a.Context,
-		Tracker: a.bindings.TurnStreams, Finder: a.bindings.SubmissionLookup, Lifecycle: turns, Runtime: turnItemsPort{tracker: a.bindings.TurnItems},
-		Outbound: turnStreamOutboundCardAdapter{cards: cards, compact: a.bindings.Compaction},
+		Context: owner.Lifecycle.Context,
+		Tracker: inputs.Tracker, Finder: inputs.Finder, Lifecycle: inputs.Turns, Runtime: turnItemsPort{tracker: inputs.Items},
+		Outbound: turnStreamOutboundCardAdapter{cards: cards, compact: inputs.Compaction},
 		Quiet: quietWorkingCardExecutor{
 			renderer: cards.replyChunks.renderer, state: cards.replyChunks.state, outbound: cards.replyChunks.outbound,
-			links: cards.links, turns: a.bindings.TurnPresentation, ready: cards.replyChunks.ready,
+			links: cards.links, turns: inputs.TurnPresentation, ready: cards.replyChunks.ready,
 		},
 		SendStartedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
-			maybeSendSubmissionStartedNotice(a, ctx, sub)
+			maybeSendSubmissionStartedNotice(inputs.SubmissionStatus, stateStore, cards, ctx, sub)
 		},
 		WorkspaceCwd: func(id string) string {
-			if ws := config.FindWorkspace(a.cfg, id); ws != nil {
+			if ws := config.FindWorkspace(runtimeDeps.cfg, id); ws != nil {
 				return ws.Cwd
 			}
 			return ""
 		},
-		FeishuConfig: func() *config.FeishuConfig { return a.configView().feishuConfig() },
+		FeishuConfig: func() *config.FeishuConfig { return runtimeDeps.view.feishuConfig() },
 	}
 }
 

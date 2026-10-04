@@ -342,7 +342,11 @@ func prepareTestApp(a *App) *App {
 		GoalContinuation: a.bindings.GoalContinuation, PlanMode: turnPlanMode,
 		AnnouncementQuery: a.bindings.AnnouncementQuery, AsyncRunner: a.AsyncRunner(),
 	}))
-	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(a, a.bindings.Turns))
+	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(TurnPresentationPortInputs{
+		Runtime: runtimeDeps, Turns: a.bindings.Turns, TurnPresentation: a.bindings.TurnPresentation,
+		Tracker: a.bindings.TurnStreams, Finder: a.bindings.SubmissionLookup, Items: a.bindings.TurnItems,
+		Compaction: a.bindings.Compaction, SubmissionStatus: a.bindings.SubmissionStatus, Cards: turnCards,
+	}))
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a.BackendRuntimeDeps()), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}
 	a.bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: ClaudeSessionStopped(ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()), a.runtimeOwner.ClaudeCore), Session: a.State().Session, Finish: a.bindings.Turns.FinishTurn}
 	workspaceRepository := configadapter.NewWorkspaceRepository(a)

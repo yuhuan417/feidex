@@ -65,13 +65,6 @@ func SubmissionNoticePorts(inputs SubmissionNoticeInputs) (func(context.Context,
 	return cards.sendSubmissionQueuedNotice, cards.expirePlanConfirmation
 }
 
-func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *domainsubmission.Submission) {
-	if sub == nil {
-		return
-	}
-	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", replyInThreadForSubmission(sub), "turn_started")
-}
-
 func (s OutboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string {
 	return s.sendTurnEventCardWithReuse(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", "", reuseMessageID)
 }
