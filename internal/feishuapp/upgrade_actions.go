@@ -32,6 +32,14 @@ type backendUpgradeHooks struct {
 	loadView    func(ctx context.Context, includeLatest bool) (upgraderender.UpgradeView, error)
 }
 
+type upgradeActionCommandCompleter func(
+	action *feishu.CardAction,
+	sessionKey, rawCommand, toastText string,
+	preparingCard map[string]any,
+	failureCard func(sessionKey, errText string) map[string]any,
+	patchLog string,
+) (*callback.CardActionTriggerResponse, error)
+
 func upgradeHooksFor(backendupgrades backendUpgradeService, kind backendUpgradeKind) backendUpgradeHooks {
 	svc := backendupgrades
 	if kind == backendUpgradeClaude {
@@ -52,47 +60,47 @@ func upgradeHooksFor(backendupgrades backendUpgradeService, kind backendUpgradeK
 	}
 }
 
-func (s backendUpgradeService) completeMenuUpgrade(kind backendUpgradeKind, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s backendUpgradeService) completeMenuUpgrade(kind backendUpgradeKind, action *feishu.CardAction, complete upgradeActionCommandCompleter) (*callback.CardActionTriggerResponse, error) {
 	h := upgradeHooksFor(s, kind)
 	return s.completeUpgradeAsyncAction(h, action,
 		h.rawCommand,
 		"正在加载 "+h.spec.Name+" 状态",
-		"正在读取本机 "+h.spec.Name+" 状态，请稍候。")
+		"正在读取本机 "+h.spec.Name+" 状态，请稍候。", complete)
 }
 
-func (s backendUpgradeService) completeUpgradeRefresh(kind backendUpgradeKind, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s backendUpgradeService) completeUpgradeRefresh(kind backendUpgradeKind, action *feishu.CardAction, complete upgradeActionCommandCompleter) (*callback.CardActionTriggerResponse, error) {
 	h := upgradeHooksFor(s, kind)
 	return s.completeUpgradeAsyncAction(h, action,
 		h.rawCommand,
 		"正在刷新 "+h.spec.Name+" 状态",
-		"正在刷新本机 "+h.spec.Name+" 状态，请稍候。")
+		"正在刷新本机 "+h.spec.Name+" 状态，请稍候。", complete)
 }
 
-func (s backendUpgradeService) completeUpgradeCheck(kind backendUpgradeKind, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s backendUpgradeService) completeUpgradeCheck(kind backendUpgradeKind, action *feishu.CardAction, complete upgradeActionCommandCompleter) (*callback.CardActionTriggerResponse, error) {
 	h := upgradeHooksFor(s, kind)
 	return s.completeUpgradeAsyncAction(h, action,
 		h.rawCommand+" check",
 		"正在检查 "+h.spec.Name+" 自升级命令",
-		"正在检查 "+h.spec.Name+" 自升级命令，请稍候。")
+		"正在检查 "+h.spec.Name+" 自升级命令，请稍候。", complete)
 }
 
-func (s backendUpgradeService) completeUpgradePrepare(kind backendUpgradeKind, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func (s backendUpgradeService) completeUpgradePrepare(kind backendUpgradeKind, action *feishu.CardAction, complete upgradeActionCommandCompleter) (*callback.CardActionTriggerResponse, error) {
 	h := upgradeHooksFor(s, kind)
 	return s.completeUpgradeAsyncAction(h, action,
 		h.rawCommand+" upgrade",
 		"正在准备自升级确认",
-		"正在准备自升级确认，请稍候。")
+		"正在准备自升级确认，请稍候。", complete)
 }
 
 func (s backendUpgradeService) completeRestartRun(kind backendUpgradeKind, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	h := upgradeHooksFor(s, kind)
-	service := s.app.bindings.BackendMaintenance[string(kind)]
-	render := s.app.bindings.UpgradePresentation
+	service := s.backendMaintenance[string(kind)]
+	render := s.presentation
 	return completeMaintenanceRestartRun(
 		action,
 		service.BeginRestart,
 		func(messageID, sessionKey string) {
-			_ = s.app.bindings.MaintenanceRunners[string(kind)].Start(backendmaintenance.Operation{MessageID: messageID, SessionKey: sessionKey, Restart: true})
+			_ = s.maintenanceRunners[string(kind)].Start(backendmaintenance.Operation{MessageID: messageID, SessionKey: sessionKey, Restart: true})
 		},
 		func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
 			return render.renderRestartOperationCard(h.spec, sessionKey, snapshot)
@@ -111,12 +119,11 @@ func (s backendUpgradeService) completeRestartRun(kind backendUpgradeKind, actio
 	)
 }
 
-func (s backendUpgradeService) completeUpgradeAsyncAction(h backendUpgradeHooks, action *feishu.CardAction, rawCommand, toastText, preparingText string) (*callback.CardActionTriggerResponse, error) {
-	render := s.app.bindings.UpgradePresentation
+func (s backendUpgradeService) completeUpgradeAsyncAction(h backendUpgradeHooks, action *feishu.CardAction, rawCommand, toastText, preparingText string, complete upgradeActionCommandCompleter) (*callback.CardActionTriggerResponse, error) {
+	render := s.presentation
 	sessionKey := actionSessionKey(action)
-	return completeAsyncCommandAction(s.app, action, sessionKey, rawCommand,
-		"menu.group.system", toastText,
-		render.renderUpgradePreparingCard(h.spec, sessionKey, preparingText), nil,
+	return complete(action, sessionKey, rawCommand, toastText,
+		render.renderUpgradePreparingCard(h.spec, sessionKey, preparingText),
 		func(key, errText string) map[string]any {
 			return render.renderUpgradeFailedCard(h.spec, key, errText)
 		},
@@ -126,8 +133,8 @@ func (s backendUpgradeService) completeUpgradeAsyncAction(h backendUpgradeHooks,
 
 func (s backendUpgradeService) completeUpgradeAction(kind backendUpgradeKind, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
 	h := upgradeHooksFor(s, kind)
-	render := s.app.bindings.UpgradePresentation
-	service := s.app.bindings.BackendMaintenance[string(kind)]
+	render := s.presentation
+	service := s.backendMaintenance[string(kind)]
 	requestID := actionStringValue(action, "request_id")
 	if actionName == h.spec.ActionPrefix+".cancel" {
 		request, err := service.Cancel(requestID, action.UserID)
@@ -135,16 +142,16 @@ func (s backendUpgradeService) completeUpgradeAction(kind backendUpgradeKind, ac
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 		}
 		sessionKey := request.SessionKey
-		runAsync(s.app, func() {
-			ctx, cancel := context.WithTimeout(s.app.Context(), 20*time.Second)
+		s.lifecycle.Run(func() {
+			ctx, cancel := context.WithTimeout(s.lifecycle.Context(), 20*time.Second)
 			defer cancel()
 			view, err := h.loadView(ctx, false)
 			if err != nil {
-				patchMaintenanceCard(s.app.Context(), s.app.FrontendID(), newEffectRunner(s.app.runtimeOwner), action.MessageID, render.renderUpgradeFailedCard(h.spec, sessionKey, err.Error()), h.patchLog)
+				patchMaintenanceCard(s.lifecycle.Context(), string(s.frontendID), s.runner, action.MessageID, render.renderUpgradeFailedCard(h.spec, sessionKey, err.Error()), h.patchLog)
 				return
 			}
-			patchMaintenanceCard(s.app.Context(), s.app.FrontendID(), newEffectRunner(s.app.runtimeOwner), action.MessageID, render.renderUpgradeStatusCard(h.spec, sessionKey, view, false), h.patchLog)
-		})
+			patchMaintenanceCard(s.lifecycle.Context(), string(s.frontendID), s.runner, action.MessageID, render.renderUpgradeStatusCard(h.spec, sessionKey, view, false), h.patchLog)
+		}, s.asyncRunner)
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已取消升级"}, Card: rawCard(render.renderUpgradePreparingCard(h.spec, sessionKey, "已取消升级"))}, nil
 	}
 	operation, err := service.Confirm(requestID, action.UserID, action.MessageID)
@@ -152,7 +159,7 @@ func (s backendUpgradeService) completeUpgradeAction(kind backendUpgradeKind, ac
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	snapshot := service.State.UpgradeState()
-	if err := s.app.bindings.MaintenanceRunners[string(kind)].Start(operation); err != nil {
+	if err := s.maintenanceRunners[string(kind)].Start(operation); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: h.spec.Name + " 升级已开始"}, Card: rawCard(render.renderUpgradeOperationCard(h.spec, operation.SessionKey, snapshot))}, nil

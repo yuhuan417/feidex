@@ -15,7 +15,13 @@ func maintenanceCardActionHandlers() map[string]cardActionHandler {
 	}
 }
 
-func maintenancePortCardActionHandlers(upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService) map[string]cardActionPortHandler {
+func backendUpgradeCommandCompleter(service cardActionService) upgradeActionCommandCompleter {
+	return func(action *feishu.CardAction, sessionKey, rawCommand, toastText string, preparingCard map[string]any, failureCard func(string, string) map[string]any, patchLog string) (*callback.CardActionTriggerResponse, error) {
+		return completeAsyncCommandAction(service.app, action, sessionKey, rawCommand, "menu.group.system", toastText, preparingCard, nil, failureCard, patchLog)
+	}
+}
+
+func maintenancePortCardActionHandlers(upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService, complete upgradeActionCommandCompleter) map[string]cardActionPortHandler {
 	return map[string]cardActionPortHandler{
 		"upgrade.confirm": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return upgrades.CompleteUpgradeAction(action, "upgrade.confirm")
@@ -27,13 +33,13 @@ func maintenancePortCardActionHandlers(upgrades appupgradecmd.UpgradeService, ba
 			return upgrades.CompleteUpgradeLocalPick(action)
 		},
 		"codex_upgrade.refresh": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return backendUpgrades.completeUpgradeRefresh(backendUpgradeCodex, action)
+			return backendUpgrades.completeUpgradeRefresh(backendUpgradeCodex, action, complete)
 		},
 		"codex_upgrade.check": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return backendUpgrades.completeUpgradeCheck(backendUpgradeCodex, action)
+			return backendUpgrades.completeUpgradeCheck(backendUpgradeCodex, action, complete)
 		},
 		"codex_upgrade.prepare": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return backendUpgrades.completeUpgradePrepare(backendUpgradeCodex, action)
+			return backendUpgrades.completeUpgradePrepare(backendUpgradeCodex, action, complete)
 		},
 		"codex_restart.run": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return backendUpgrades.completeRestartRun(backendUpgradeCodex, action)
@@ -45,13 +51,13 @@ func maintenancePortCardActionHandlers(upgrades appupgradecmd.UpgradeService, ba
 			return backendUpgrades.completeUpgradeAction(backendUpgradeCodex, action, "codex_upgrade.cancel")
 		},
 		"claude_upgrade.refresh": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return backendUpgrades.completeUpgradeRefresh(backendUpgradeClaude, action)
+			return backendUpgrades.completeUpgradeRefresh(backendUpgradeClaude, action, complete)
 		},
 		"claude_upgrade.check": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return backendUpgrades.completeUpgradeCheck(backendUpgradeClaude, action)
+			return backendUpgrades.completeUpgradeCheck(backendUpgradeClaude, action, complete)
 		},
 		"claude_upgrade.prepare": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return backendUpgrades.completeUpgradePrepare(backendUpgradeClaude, action)
+			return backendUpgrades.completeUpgradePrepare(backendUpgradeClaude, action, complete)
 		},
 		"claude_restart.run": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return backendUpgrades.completeRestartRun(backendUpgradeClaude, action)

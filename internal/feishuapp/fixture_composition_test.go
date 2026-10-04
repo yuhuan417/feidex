@@ -137,7 +137,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.WorkspaceWorkflow = &workspaceapp.Workflow{Forms: a.bindings.Forms, Planning: a.bindings.WorkspacePlanning, Creation: a.bindings.WorkspaceCreation}
 	a.bindings.WorkspacePresentation = NewWorkspacePresentation(a)
 	a.bindings.BindingCommands = BuildBindingCommands(a)
-	a.bindings.BackendUpgrades = BuildBackendUpgrades(a)
 	platform, releases, artifacts, launcher := UpgradeWorkflowPorts(a.Config(), a.ConfigMu(), a.runtimeOwner)
 	a.bindings.UpgradeWorkflow = &upgrade.Service{Forms: a.bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 
@@ -217,6 +216,14 @@ func prepareTestApp(a *App) *App {
 		a.bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &a.runtimeOwner.Lifecycle, Service: service, Executor: a.asyncRunner}
 	}
 	a.bindings.UpgradePresentation = BuildUpgradePresentation(maintenanceRenderer, a.bindings.BackendMaintenance)
+	a.bindings.BackendUpgrades = BuildBackendUpgrades(BackendUpgradeInputs{
+		SessionKey: SessionKeyBuilder(a.FrontendID()), ReplyInThread: func() bool { return false },
+		FrontendID: identity.FrontendID(a.FrontendID()), Runner: *a.runtimeOwner.EffectRunner,
+		Lifecycle: &a.runtimeOwner.Lifecycle, AsyncRunner: a.asyncRunner,
+		BackendMaintenance: a.bindings.BackendMaintenance, MaintenanceRunners: a.bindings.MaintenanceRunners,
+		Maintenance: a.bindings.Maintenance, Presentation: a.bindings.UpgradePresentation,
+		Forms: a.bindings.Forms, CodexUpgrade: a.bindings.CodexUpgrade,
+	})
 	a.bindings.History = BuildHistory(
 		identity.FrontendID(a.FrontendID()), a.State(), ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
 		func() codexadapter.RPCClient { return a.runtimeView().currentCodexClient() },

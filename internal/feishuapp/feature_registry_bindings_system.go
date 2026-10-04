@@ -94,7 +94,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if actionName != "menu.codex_upgrade" {
 				return nil, nil
 			}
-			return s.app.bindings.BackendUpgrades.completeMenuUpgrade(backendUpgradeCodex, action)
+			return s.app.bindings.BackendUpgrades.completeMenuUpgrade(backendUpgradeCodex, action, backendUpgradeCommandCompleter(s))
 		},
 	}
 	bindings["menu.claude_upgrade"] = featureBinding{
@@ -122,7 +122,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if actionName != "menu.claude_upgrade" {
 				return nil, nil
 			}
-			return s.app.bindings.BackendUpgrades.completeMenuUpgrade(backendUpgradeClaude, action)
+			return s.app.bindings.BackendUpgrades.completeMenuUpgrade(backendUpgradeClaude, action, backendUpgradeCommandCompleter(s))
 		},
 	}
 	bindings["menu.upgrade"] = featureBinding{

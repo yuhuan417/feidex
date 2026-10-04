@@ -81,26 +81,24 @@ func CodexUpgradePorts(
 }
 
 func (s backendUpgradeService) refreshCodexRuntimeAfterMaintenance(ctx context.Context) (bool, error) {
-	return s.app.bindings.CodexUpgrade.RefreshRuntimeAfterMaintenance(ctx)
+	return s.codexUpgrade.RefreshRuntimeAfterMaintenance(ctx)
 }
 
 func (s backendUpgradeService) startCodexRestartFromMessage(msg *feishu.InboundMessage) error {
 	return startMaintenanceRestartFromMessage(
-		s.app.configView(),
+		s.sessionKey,
 		msg,
-		func(ctx context.Context, parent string, card map[string]any, inThread bool) (string, error) {
-			return replyCardWithIDEffect(ctx, s.app, parent, card, inThread)
-		},
-		s.app.configView().replyInThreadEnabled(),
-		s.app.bindings.BackendMaintenance["codex"].BeginRestart,
+		s.replyCardWithID,
+		s.replyInThread(),
+		s.backendMaintenance["codex"].BeginRestart,
 		func(messageID, sessionKey string) {
-			_ = s.app.bindings.MaintenanceRunners["codex"].Start(backendmaintenance.Operation{MessageID: messageID, SessionKey: sessionKey, Restart: true})
+			_ = s.maintenanceRunners["codex"].Start(backendmaintenance.Operation{MessageID: messageID, SessionKey: sessionKey, Restart: true})
 		},
 		func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
-			return s.app.bindings.UpgradePresentation.renderRestartOperationCard(upgraderender.CodexSpec, sessionKey, snapshot)
+			return s.presentation.renderRestartOperationCard(upgraderender.CodexSpec, sessionKey, snapshot)
 		},
 		func(message string) {
-			s.app.bindings.Maintenance.FinishCodexRestart("failed", message)
+			s.maintenance.FinishCodexRestart("failed", message)
 		},
 	)
 }

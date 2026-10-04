@@ -34,7 +34,7 @@ func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedR
 		pendingCardActionHandlers(),
 	)
 	portHandlers := mergeCardActionPortHandlerSets(
-		maintenancePortCardActionHandlers(upgrades, backendUpgrades),
+		maintenancePortCardActionHandlers(upgrades, backendUpgrades, backendUpgradeCommandCompleter(cardActionService{app: app})),
 		pendingPortCardActionHandlers(claudeSupport, reviewCommands),
 		workspaceDeletePortCardActionHandlers(workspaceDeleteActions),
 		historyCardActionHandlers(historyService),

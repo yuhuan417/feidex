@@ -38,7 +38,7 @@ func completeMaintenanceRestartRun[S any](
 }
 
 func startMaintenanceRestartFromMessage[S any](
-	view frontendConfigView,
+	makeSessionKey func(*feishu.InboundMessage) string,
 	msg *feishu.InboundMessage,
 	reply func(context.Context, string, map[string]any, bool) (string, error),
 	inThread bool,
@@ -47,7 +47,7 @@ func startMaintenanceRestartFromMessage[S any](
 	renderOperationCard func(sessionKey string, snapshot S) map[string]any,
 	finishFailed func(message string),
 ) error {
-	sessionKey := view.makeSessionKey(msg)
+	sessionKey := makeSessionKey(msg)
 	return appmaintenance.StartRestartFromMessage(msg, sessionKey,
 		reply, inThread, begin, run, renderOperationCard, finishFailed)
 }
