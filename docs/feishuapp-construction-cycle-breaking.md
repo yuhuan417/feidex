@@ -265,6 +265,54 @@ client）。建议把"启动已验证 client"抽成一个独立的 port，由 co
 那部分状态/能力，而不是整条业务链。建议把 `Forward*` 真正需要的那个能力
 （投递入口）抽成一个显式 port，由 composition 注入，两边都不再持有对方的服务。
 
+## 惰性读：也是依赖没整理清
+
+拆环过程中发现，环消失之后**依赖并没有变得清晰**，只是从"构造期环"变成了"惰性读"
+—— 注入的闭包把依赖藏进了运行时。顺着这条线做了统计：
+
+| 类别 | 数量 | 含义 |
+|---|---|---|
+| 值早已就绪、惰性纯属多余 | 14 | 依赖被闭包藏起来，类型系统和静态分析都看不见 |
+| 值确实在后面、惰性必需 | 5 | 真正的晚绑定 |
+
+**74% 的惰性读不是语义需要，而是写法惯性。**
+
+### 提升惰性读会立刻暴露真实的顺序违规
+
+把读从闭包提到构造期后，三次里**两次立刻挂测试**：
+
+| 提升处 | 暴露的问题 |
+|---|---|
+| `SubmissionPorts` 读 `Review` | 测试 fixture 在 `SubmissionPorts` 之后才赋值 `Review`，生产 composition 是之前 —— **两个构造入口的顺序本来就不一致** |
+| `BuildUpgrades` 读 `WorkspaceConfiguration` | 同上，且把 fixture 的顺序改对之后又冒出 `BuildWorkspaceConfiguration` 自身的第二个 nil |
+
+结论：**惰性读在替不一致的构造顺序兜底**，把本该校验出来的错误推迟成运行时的
+nil。这也解释了为什么 `SubmissionPorts` 那处能改、而 `BuildUpgrades` 那处不行
+—— 后者的两个入口还没对齐。
+
+### 已提升的与待处理的
+
+已提升 7 处（`FrontendFacts`、`CodexUpgradePorts`、`BuildClaudeSupport`、
+`BuildServerRequests`×2、`ConversationRecoveryPorts`×2，以及更早的
+`SubmissionPorts`×4）。
+
+**待处理**：
+
+- `BuildUpgrades ← WorkspacePresentation`、`CodexUpgradePorts ← CodexRecovery`
+  —— 值确实在后面，需要先拆掉它俩的依赖（后者是环 2 注入的残留，正解是抽出
+  共享的恢复状态载体）
+- `BuildUpgrades ← WorkspaceConfiguration` —— **要先统一生产和 fixture 的构造
+  顺序**。建议让 fixture 复用生产的那段构造逻辑，而不是自己再写一遍
+
+### 棘轮
+
+`internal/architecture` 里有两条预算测试，**都只许降**，且降了必须同步改预算：
+
+| 测试 | 起始值 | 目标 |
+|---|---|---|
+| `TestFeishuAppAggregateDoesNotGrow` | 541 | 0 |
+| `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **0** |
+
 ## 施工顺序
 
 1. **拓扑排序**（不改语义，纯重排 composition 的构造顺序）—— 消掉所有非环的向后读。

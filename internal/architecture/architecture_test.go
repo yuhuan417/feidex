@@ -1116,3 +1116,90 @@ func TestFeishuAppAggregateDoesNotGrow(t *testing.T) {
 			"lower the budget in the same commit", count, budget)
 	}
 }
+
+// TestFeishuAppLazyBindingReadsDoesNotGrow pins the number of backend-binding
+// reads that sit inside closures in functions taking *App.
+//
+// A read inside a closure happens when the closure runs, not when the factory
+// is called, which hides the dependency from the type system and from static
+// analysis. It also lets two construction entry points disagree about the
+// order services are built without anything failing — converting these to
+// construction-time reads surfaced two such disagreements.
+//
+// The goal is zero. The budget only ratchets down; lower it in the same
+// commit that removes reads.
+func TestFeishuAppLazyBindingReadsDoesNotGrow(t *testing.T) {
+	const budget = 86 // goal: 0
+
+	root := repositoryRoot(t)
+	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	count := 0
+	for _, path := range entries {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil || fn.Type.Params == nil {
+				continue
+			}
+			var appVar string
+			for _, prm := range fn.Type.Params.List {
+				star, ok := prm.Type.(*ast.StarExpr)
+				if !ok {
+					continue
+				}
+				if id, ok := star.X.(*ast.Ident); ok && id.Name == "App" && len(prm.Names) > 0 {
+					appVar = prm.Names[0].Name
+				}
+			}
+			if appVar == "" {
+				continue
+			}
+			count += lazyBindingReads(fn.Body, appVar)
+		}
+	}
+	if count != budget {
+		t.Fatalf("internal/feishuapp has %d lazy backend-binding reads, budget is %d; "+
+			"read the value once at construction instead, or lower the budget in the same commit", count, budget)
+	}
+}
+
+// lazyBindingReads counts appVar.bindings.X reads that appear inside a func
+// literal, and reads of appVar itself inside one (which forwards the whole
+// aggregate).
+func lazyBindingReads(body *ast.BlockStmt, appVar string) int {
+	count := 0
+	var walk func(n ast.Node, lazy bool)
+	walk = func(n ast.Node, lazy bool) {
+		ast.Inspect(n, func(m ast.Node) bool {
+			switch x := m.(type) {
+			case *ast.FuncLit:
+				walk(x.Body, true)
+				return false
+			case *ast.SelectorExpr:
+				if !lazy {
+					return true
+				}
+				inner, ok := x.X.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				if id, ok := inner.X.(*ast.Ident); ok && id.Name == appVar && inner.Sel.Name == "bindings" {
+					count++
+				}
+			}
+			return true
+		})
+	}
+	walk(body, false)
+	return count
+}
