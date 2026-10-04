@@ -25,57 +25,84 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 582 |
-| 收 `*App` 的顶层函数 | 376 |
-| `*Ports` 工厂 | 29 |
-| 工厂传递依赖的不同 `*App` helper | 108 |
-| `Bindings` 字段 | 104 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 543 |
+| 收 `*App` 的顶层函数 | 350 |
+| `*Ports` 工厂 | 25 |
+| **持有 `*App` 字段的结构体** | **72** |
 
-工具（`scripts/apprewrite`）只能做参数替换；工厂改造是**逐个判断**的活，
-因为每个闭包要单独决定捕获哪些窄值。所以下面按"先改 helper、再改工厂"
-排序，而不是按文件顺序。
+## 施工顺序（2026-10 修正版）
 
-## 施工顺序
+**先前的施工图是错的**：它只统计工厂函数体内**直接调用**的 `*App` helper，
+于是 `CardActionPorts` 显示"零依赖"，而它实际把一个 `*App` 结构体交了出去。
+真实形态是：**依赖藏在工厂交出去的结构体的方法里**。
 
-### 第一阶段：按扇入改 helper
+`scripts/depmap` 现在沿三条边求传递闭包：
 
-下面这些 helper 被最多工厂（传递地）依赖，先改它们，每个能解锁若干工厂。
-括号里是依赖它的工厂数。
+```
+工厂 --调用--> 收 *App 的 helper
+工厂 --实例化--> 字段为 *App 的结构体
+结构体方法 --调用--> 收 *App 的 helper
+```
 
-| helper | 工厂数 | 当前形态 | 需要的输入 |
+### 第一优先：按结构体扇入施工
+
+结构体（而不是工厂）才是依赖单元。扇入最高的：
+
+| 工厂数 | 结构体 | 方法数 | 需转换的 helper |
 |---|---|---|---|
-| `ensureRuntimeOwner` | 18 | `return a.runtimeOwner` | `*frontendruntime.FrontendOwner` |
-| `feishuConfigUnlocked` | 15 | 用 `Config()` + `FrontendConfigIndex()` | `*config.Config, int` |
-| `configuredBackend` | 14 | 用 `Backend()` + `ConfigMu()` | 同上 |
-| `getCodex` | 13 | — | — |
-| `currentCodexClient` | 9 | — | — |
-| `normalizeSessionKey` | 8 | 用 `FrontendID()` | `string` |
-| `requireCodexClient` | 8 | — | — |
-| `runAsync` | 7 | 用 `asyncRunner` | `func(func())` |
-| `currentClaudeCore` | 7 | — | — |
-| `currentMCPPublication` | 6 | 用 `runtimeOwner` + `bindings.MCP` | 二者 |
-| `defaultWorkspaceID` | 6 | 用 `Config()` + `ConfigMu()` | 同上 |
-| `sessionKeyForBackendEvent` | 6 | 用 `bindings.ConversationQuery` | 该服务 |
-| `failBackendActiveWork` | 6 | 用 `store` + `bindings.BackendFailure` | 二者 |
-| `makeSessionKey` | 6 | 用 `FrontendID()` | `string` |
+| 6 | `cardRenderer` | 5 | 1 |
+| 3 | `sqLiveThreadAdapter` | 3 | 3 |
+| 3 | `outboundCardService` | 7 | 12 |
+| 3 | `pendingCardPresenter` | 1 | 3 |
+| 2 | `menuActionService` | 21 | 15 |
+| 2 | `goalOutbound` | 3 | 3 |
+| 2 | `turnRuntimePort` | 3 | 2 |
+| 2 | `planModeOutbound` | 4 | 4 |
 
-这些函数的共同点：`direct` 和 `bindings` 加起来只有 1-2 项，转换是机械的。
-`ensureRuntimeOwner` 甚至只是返回一个字段，可以直接内联掉。
+`cardRenderer` 是最高杠杆点：改一个结构体解锁 6 个工厂。
 
-### 第二阶段：按传递依赖从小到大改工厂
+### 第二优先：工厂按"自身成员 + 传递 helper + 结构体"排序
 
-依赖规模（传递触达的 helper 数）决定难度：
+| 合计 | 工厂 | 自身成员 | 传递 helper | 结构体 |
+|---|---|---|---|---|
+| 3 | `PlanPorts` | 1 | 1 | 1 |
+| 3 | `CardActionPorts` | 2 | 0 | 1 |
+| 5 | `BackendMaintenancePorts` | 2 | 1 | 2 |
+| 5 | `ClaudeMaintenancePorts` | 4 | 1 | 0 |
+| 5 | `CompactionPorts` | 4 | 1 | 0 |
+| 6 | `ConversationRecoveryPorts` | 6 | 0 | 0 |
+| 7 | `CodexUpgradePorts` | 7 | 0 | 0 |
+| 8 | `ContinuationPorts` | 7 | 1 | 0 |
+| 10 | `ConversationControlPorts` | 7 | 2 | 1 |
+| 12 | `BackendEventPorts` | 7 | 4 | 1 |
+| 12 | `StartupRecoveryPorts` | 9 | 3 | 0 |
+| 14 | `CodexRecoveryPorts` | 8 | 6 | 0 |
+| 15 | `ConversationPorts` | 9 | 5 | 1 |
+| 16 | `GoalContinuationPorts` | 6 | 8 | 2 |
+| 17 | `BackendSwitchPorts` | 2 | 14 | 1 |
+| 17 | `AutoRetryPorts` | 9 | 7 | 1 |
+| 33 | `InboundPorts` | 8 | 19 | 6 |
+| 34 | `ReviewPorts` | 3 | 27 | 4 |
+| 42 | `GoalCommandPorts` | 0 | 39 | 3 |
+| 48 | `FileSharePorts` | 2 | 38 | 8 |
+| 50 | `BackendFailurePorts` | 10 | 37 | 3 |
+| 51 | `TurnPresentationPorts` | 8 | 38 | 5 |
+| 60 | `ClaudeRuntimePorts` | 13 | 45 | 2 |
+| 63 | `TurnPorts` | 11 | 45 | 7 |
+| 71 | `SubmissionPorts` | 19 | 46 | 6 |
 
-| 传递依赖数 | 工厂 |
-|---|---|
-| 0 | `BackendMaintenancePorts`, `ConversationControlPorts`, `SkillUseCasePorts`, `UpgradeWorkflowPorts`, `WorkspaceCreationPorts` |
-| 1 | `BackendEventPorts`, `CardActionPorts`, `PendingQueuePorts` |
-| 2-5 | `BackendSwitchPorts`, `GoalContinuationPorts`, `CompactionPorts`, `InboundPorts`, `PlanPorts`, `ReviewPorts` |
-| 6-11 | `ClaudeMaintenancePorts`, `ConversationRecoveryPorts`, `ConversationPorts`, `BackendFailurePorts`, `ContinuationPorts`, `CodexRecoveryPorts` |
-| 15-29 | `CodexUpgradePorts`, `TurnPorts`, `AutoRetryPorts`, `StartupRecoveryPorts`, `TurnPresentationPorts` |
-| 36-51 | `FileSharePorts`, `GoalCommandPorts`, `SubmissionPorts`, `ClaudeRuntimePorts` |
+注意 `BackendSwitchPorts`：自身只碰 2 个成员，但传递依赖 14 个 helper + 1
+个结构体 —— 先做过一轮，撞墙了才明白瓶颈不在工厂而在
+`backendSelectionRuntime` 的方法链。
 
-第一阶段做完后，这张表里的数字会普遍下降，届时需要重新生成（见下）。
+## 已完成的骨架
+
+`BackendRuntimeDeps` 是已经落地的能力包：导出类型、字段不导出，由
+`App.BackendRuntimeDeps()` 构造。composition 拿到它传给工厂，`*App` 的捕获
+被关在这一个方法里。后续的包照此办理。
+
+已完成的两条能力视图：`frontendConfigView`（配置 + 锁 + frontend 身份）、
+`runtimeView`（runtime owner 及其后端客户端）。
 
 ## 已完成
 
