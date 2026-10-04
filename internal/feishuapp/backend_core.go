@@ -30,8 +30,11 @@ func setRuntimeBackend(a *App, backend string) {
 	a.SetBackend(backend)
 }
 
-func configuredSessionInflightMode(a *App) sessionInflightMode {
-	return sessionInflightModeForBackend(a.configView().configuredBackend())
+func configuredSessionInflightMode(backend func() string) sessionInflightMode {
+	if backend == nil {
+		return sessionInflightSingle
+	}
+	return sessionInflightModeForBackend(backend())
 }
 
 func pendingBackend(a *App, pending *state.PendingRequest) string {

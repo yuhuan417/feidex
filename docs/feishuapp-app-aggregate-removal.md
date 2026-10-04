@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 400 |
-| 收 `*App` 的顶层函数 | 244 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 398 |
+| 收 `*App` 的顶层函数 | 242 |
 | 收 `*App` 的 `*Ports` 工厂 | 14 |
 | **持有 `*App` 字段的结构体** | **25** |
 
@@ -550,6 +550,11 @@ repository、model settings、thread binding、conversation configuration 与 ru
 core 和 Codex client 仍从 runtime owner 动态读取；新增测试覆盖 backend override 变化及清空后的配置回退。
 生产 `*App` 引用由 401 降至 400，收 `*App` 的函数由 245 降至 244，App-bearing `*Ports` 工厂由 15
 降至 14，持有 App 字段的结构体预算保持 25；lazy binding-read 预算保持 13。
+
+步骤 74 将 Submission workspace 解析和 inflight mode helper 改为接收 scoped state、workspace
+selection、default workspace supplier 与 backend supplier；`SubmissionPorts` 的配置闭包改为捕获配置视图，
+backend 仍通过 runtime owner 动态查询。生产 `*App` 引用由 400 降至 398，收 `*App` 的函数由 244 降至
+242，App-bearing `*Ports` 工厂保持 14，持有 App 字段的结构体保持 25；lazy binding-read 预算保持 13。
 
 ## 方法
 

@@ -14,7 +14,7 @@ func TestConfiguredSessionInflightModeCodexWSRemainsSingle(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Codex.Transport = "ws"
 
-	if got := configuredSessionInflightMode(a); got != sessionInflightSingle {
+	if got := configuredSessionInflightMode(func() string { return a.configView().configuredBackend() }); got != sessionInflightSingle {
 		t.Fatalf("configuredSessionInflightMode() = %q, want %q", got, sessionInflightSingle)
 	}
 }

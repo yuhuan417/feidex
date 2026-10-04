@@ -128,7 +128,7 @@ func TestModelConfigClaudeRestartedTurnFailureRetainsQueueAndLineage(t *testing.
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionID: "original-thread", startTurnErr: errors.New("restarted process rejected turn")}
-	a.runtimeOwner = testOwnerWithClaude(&modelConfigProtectedClaude{fake})
+	a.runtimeOwner.SetClaudeCore(&modelConfigProtectedClaude{fake})
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
 	second := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "second")
 	if err := startNextSubmission(a.bindings.Submissions, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {

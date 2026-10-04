@@ -213,6 +213,14 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 	review := a.bindings.Review
 	conversationConfiguration := a.bindings.ConversationConfiguration
 	starts := a.runtimeOwner.SubmissionStarts
+	cfg, configMu := a.Config(), a.ConfigMu()
+	frontendID, frontendConfigIndex := a.FrontendID(), a.FrontendConfigIndex()
+	stateStore, runtimeOwner := a.State(), a.runtimeOwner
+	configView := frontendConfigView{cfg: cfg, mu: configMu, frontendID: frontendID, frontendConfigIndex: frontendConfigIndex}
+	configuredBackend := ConfiguredBackendBuilder(cfg, configMu, runtimeOwner.Backend, frontendID, frontendConfigIndex)
+	workspaceSelection := a.bindings.WorkspaceSelection
+	defaultWorkspaceID := func() string { return configView.defaultWorkspaceID() }
+	runtime := runtimeView{owner: runtimeOwner}
 	return appsubmission.Dependencies{
 		PlanConfirmation: plan,
 		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
@@ -235,25 +243,25 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 
 		BackendRuntime: sqBackendRuntimeAdapter{deps: a.BackendRuntimeDeps(), backendOwner: a.runtimeOwner},
 		DefaultWorkspaceID: func() string {
-			return a.configView().defaultWorkspaceID()
+			return defaultWorkspaceID()
 		},
 		Workspace: func(id string) *config.Workspace {
-			return config.FindWorkspace(a.cfg, id)
+			return config.FindWorkspace(cfg, id)
 		},
 		ReplyInThreadEnabled: func(chatType string) bool {
-			return a.configView().replyInThreadEnabled()
+			return configView.replyInThreadEnabled()
 		},
 		ReplyInThreadForSubmission: func(sub *domainsubmission.Submission) bool {
 			return replyInThreadForSubmission(sub)
 		},
 		ConfiguredInflightMode: func() appsubmission.QueueInflightMode {
-			return inflightModeToInt(configuredSessionInflightMode(a))
+			return inflightModeToInt(configuredSessionInflightMode(configuredBackend))
 		},
 		InflightAllowsAdditional: func(mode appsubmission.QueueInflightMode) bool {
 			return sessionInflightAllowsAdditional(intToInflightMode(mode))
 		},
 		ResolveWorkspaceID: func(msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string {
-			return resolveSubmissionWorkspaceID(a, msg, sess, bindOnlyCurrentRoot)
+			return resolveSubmissionWorkspaceID(stateStore, workspaceSelection, defaultWorkspaceID, msg, sess, bindOnlyCurrentRoot)
 		},
 		ReplyText: func(ctx context.Context, messageID, text string, inThread bool) error {
 			return replyTextByAnchorEffect(ctx, a, messageID, text, inThread)
@@ -295,7 +303,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			return review.StartSubmission(ctx, threadID, sub)
 		},
 		StartConversation: func(ctx context.Context, ws *config.Workspace, sess *conversation.Session, sub *domainsubmission.Submission, model string) (appsubmission.ConversationStarted, error) {
-			client, err := a.runtimeView().requireCodexClient()
+			client, err := runtime.requireCodexClient()
 			if err != nil {
 				return appsubmission.ConversationStarted{}, err
 			}
@@ -303,12 +311,12 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 		},
 		DeleteTurnArtifacts: a.State().DeleteTurnArtifacts,
 		ClaudePrompt:        claudeadapter.BuildPrompt,
-		Backend:             func() string { return a.configView().configuredBackend() },
+		Backend:             configuredBackend,
 		ClaudeClient: func() appsubmission.QueueClaudeClient {
-			if a.runtimeView().currentClaudeCore() == nil {
+			if runtime.currentClaudeCore() == nil {
 				return nil
 			}
-			return claudeClientAdapter{claude: a.runtimeView().currentClaudeCore()}
+			return claudeClientAdapter{claude: runtime.currentClaudeCore()}
 		},
 		AgentBinding: func(chatType, chatID string) *state.AgentBinding {
 			return agentBindingForChat(a.State(), chatType, chatID)

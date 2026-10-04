@@ -37,8 +37,8 @@ func resolveThreadWorkspaceID(sess *conversation.Session, fallback string) strin
 	return textutil.FirstNonEmpty(strings.TrimSpace(sess.ActiveThreadWorkspaceID), strings.TrimSpace(sess.WorkspaceID), strings.TrimSpace(fallback))
 }
 
-func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string {
-	if binding := agentBindingForSession(a.State(), sess); binding != nil {
+func resolveSubmissionWorkspaceID(store *appstate.Store, selection workspace.SelectionService, defaultWorkspaceID func() string, msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string {
+	if binding := agentBindingForSession(store, sess); binding != nil {
 		if bindOnlyCurrentRoot {
 			if workspaceID := strings.TrimSpace(sess.ActiveThreadWorkspaceID); workspaceID != "" {
 				return workspaceID
@@ -49,19 +49,19 @@ func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conv
 	if bindOnlyCurrentRoot {
 		return textutil.FirstNonEmpty(
 			resolveThreadWorkspaceID(sess, ""),
-			resolveWorkspaceSelectionForMessage(a.WorkspaceSelection(), msg, sess),
-			a.configView().defaultWorkspaceID(),
+			resolveWorkspaceSelectionForMessage(selection, msg, sess),
+			defaultWorkspaceID(),
 		)
 	}
 	return textutil.FirstNonEmpty(
-		resolveWorkspaceSelectionForMessage(a.WorkspaceSelection(), msg, sess),
+		resolveWorkspaceSelectionForMessage(selection, msg, sess),
 		strings.TrimSpace(func() string {
 			if sess == nil {
 				return ""
 			}
 			return sess.WorkspaceID
 		}()),
-		a.configView().defaultWorkspaceID(),
+		defaultWorkspaceID(),
 	)
 }
 
