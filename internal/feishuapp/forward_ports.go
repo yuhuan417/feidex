@@ -37,10 +37,10 @@ func ForwardFailure(contextFn func() context.Context, frontendID string, runner 
 // ForwardProcessor takes the inbound entry point as a value rather than
 // reaching for a.bindings.Inbound, so composition can wire the two services
 // together after both exist instead of them holding each other.
-func ForwardProcessor(a *App, process func(*application.InboundMessage) error) func(*application.InboundMessage) error {
+func ForwardProcessor(actors *frontendruntime.SessionActors, sessionKey func(*application.InboundMessage) string, process func(*application.InboundMessage) error) func(*application.InboundMessage) error {
 	return func(msg *application.InboundMessage) error {
 		var err error
-		runSession(a, a.configView().makeSessionKey(msg), func() { err = process(msg) })
+		runSessionOnActor(actors, sessionKey(msg), func() { err = process(msg) })
 		return err
 	}
 }

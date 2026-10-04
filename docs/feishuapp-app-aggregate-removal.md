@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 300 |
-| 收 `*App` 的顶层函数 | 180 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 299 |
+| 收 `*App` 的顶层函数 | 179 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
 | **持有 `*App` 字段的结构体** | **6** |
 
@@ -761,6 +761,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 126 将 Claude stopped-session 查询改为接收 backend 与 Claude core suppliers；core 与 backend 仍在每次查询时动态取得，停止判定逻辑不变。生产 `*App` 引用预算由 302 降至 301，收 `*App` 的顶层函数由 182 降至 181，lazy binding-read 预算保持 0。
 
 步骤 127 将 `ForwardFailure` 改为接收 lifecycle context、frontend ID 与 effect runner，并抽出显式依赖的错误回复 helper；forward 处理失败仍使用原 frontend 的生命周期 context 与 Feishu effect runner。生产 `*App` 引用预算由 301 降至 300，收 `*App` 的顶层函数由 181 降至 180，lazy binding-read 预算保持 0。
+
+步骤 128 将 `ForwardProcessor` 改为接收 frontend session actors 与 session-key builder；处理仍在同一 session actor 内串行执行，key 继续按当前 frontend 规范化。生产 `*App` 引用预算由 300 降至 299，收 `*App` 的顶层函数由 180 降至 179，lazy binding-read 预算保持 0。
 
 ## 方法
 

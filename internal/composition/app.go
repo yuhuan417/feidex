@@ -361,7 +361,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// built from the other's finished value. They are wired here instead: the
 	// two entry points are passed in after both exist.
 	inboundService := &inbound.Service{}
-	forwardService := inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend.Feishu()), Tasks: feishuapp.ForwardTasks(&scope.RuntimeOwner.Lifecycle, frontend.AsyncRunner()), Context: frontend.Context, Process: feishuapp.ForwardProcessor(frontend, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(scope.RuntimeOwner.Lifecycle.Context, frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner)}
+	forwardService := inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend.Feishu()), Tasks: feishuapp.ForwardTasks(&scope.RuntimeOwner.Lifecycle, frontend.AsyncRunner()), Context: frontend.Context, Process: feishuapp.ForwardProcessor(scope.RuntimeOwner.SessionActors, feishuapp.SessionKeyBuilder(frontend.FrontendID()), func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(scope.RuntimeOwner.Lifecycle.Context, frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner)}
 	bindings.ForwardInputs = forwardService
 	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(feishuapp.ConversationPortInputs{
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),
