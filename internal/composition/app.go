@@ -431,7 +431,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		return nil, err
 	}
 	if backend := feishuapp.BackendKind(frontend); backend != "" {
-		handle, err := feishuapp.BuildBackendRuntimeHandle(frontend, backend)
+		handle, err := feishuapp.BuildBackendRuntimeHandle(frontend.BackendRuntimeDeps(), backend)
 		if err != nil {
 			return nil, err
 		}

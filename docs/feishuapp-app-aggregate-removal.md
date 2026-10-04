@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 296 |
-| 收 `*App` 的顶层函数 | 176 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 294 |
+| 收 `*App` 的顶层函数 | 174 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
 | **持有 `*App` 字段的结构体** | **6** |
 
@@ -767,6 +767,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 129 删除生产代码中已无调用方的 `replyError(*App, ...)` 包装器；回复逻辑统一由显式 context/frontend/effect-runner helper 执行，测试通过 test-only fixture 调用同一 helper。生产 `*App` 引用预算由 299 降至 298，收 `*App` 的顶层函数由 179 降至 178，lazy binding-read 预算保持 0。
 
 步骤 130 将 session-key migration helper 改为接收持久化 `state.Store`，不再经 `*App` 读取 store；key 规范化与 auxiliary-key 保留规则未变。生产 `*App` 引用预算由 298 降至 296，收 `*App` 的顶层函数由 178 降至 176，lazy binding-read 预算保持 0。
+
+步骤 131 将 backend runtime handle builder 改为接收 `BackendRuntimeDeps`；composition 在构造 handle 时传入能力快照，backend runtime context 构建保持原有配置与 runtime owner。生产 `*App` 引用预算由 296 降至 294，收 `*App` 的顶层函数由 176 降至 174，lazy binding-read 预算保持 0。
 
 ## 方法
 

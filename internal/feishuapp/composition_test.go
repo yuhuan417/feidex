@@ -34,7 +34,7 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 		return nil, err
 	}
 	if backend := BackendKind(a); backend != "" {
-		handle, err := BuildBackendRuntimeHandle(a, backend)
+		handle, err := BuildBackendRuntimeHandle(a.BackendRuntimeDeps(), backend)
 		if err != nil {
 			return nil, err
 		}

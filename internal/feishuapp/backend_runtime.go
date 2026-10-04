@@ -102,12 +102,12 @@ func installBackendRuntime(a *App, h *backendruntime.BackendHandle) {
 	a.runtimeView().setClaudeCore(h.Claude)
 }
 
-func buildBackendRuntimeHandle(a *App, target string) (*backendruntime.BackendHandle, error) {
+func buildBackendRuntimeHandle(deps BackendRuntimeDeps, target string) (*backendruntime.BackendHandle, error) {
 	backend := backendruntime.BackendForKind(target)
 	if backend == nil {
 		return nil, fmt.Errorf("unsupported backend %q", target)
 	}
-	return backend.BuildRuntime(backendRuntimeContextForApp(a.BackendRuntimeDeps())), nil
+	return backend.BuildRuntime(backendRuntimeContextForApp(deps)), nil
 }
 
 func startPreparedBackendRuntime(a *App, ctx context.Context, handle *backendruntime.BackendHandle) error {
@@ -122,7 +122,7 @@ func startPreparedBackendRuntime(a *App, ctx context.Context, handle *backendrun
 }
 
 func prepareBackendRuntime(a *App, ctx context.Context, target string) (*backendruntime.BackendHandle, error) {
-	handle, err := buildBackendRuntimeHandle(a, target)
+	handle, err := buildBackendRuntimeHandle(a.BackendRuntimeDeps(), target)
 	if err != nil {
 		return nil, err
 	}
