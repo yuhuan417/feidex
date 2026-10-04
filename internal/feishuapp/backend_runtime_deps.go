@@ -34,8 +34,8 @@ type BackendRuntimeDeps struct {
 	conversationQuery conversation.Query
 
 	codexRecovery        appcodexruntime.RecoveryService
-	turnReconciliation   turn.Reconciliation
-	claudeReconciliation turn.StoppedReconciliation
+	turnReconciliation   *turn.Reconciliation
+	claudeReconciliation *turn.StoppedReconciliation
 	conversations        *conversation.Service
 	maintenance          backendmaintenance.MaintenanceStateService
 	backendFailure       *backendfailure.BackendFailureService
@@ -66,8 +66,8 @@ func (a *App) BackendRuntimeDeps() BackendRuntimeDeps {
 	if a.bindings != nil {
 		d.conversationQuery = a.bindings.ConversationQuery
 		d.codexRecovery = a.bindings.CodexRecovery
-		d.turnReconciliation = a.bindings.TurnReconciliation
-		d.claudeReconciliation = a.bindings.ClaudeReconciliation
+		d.turnReconciliation = &a.bindings.TurnReconciliation
+		d.claudeReconciliation = &a.bindings.ClaudeReconciliation
 		d.conversations = a.bindings.Conversations
 		d.maintenance = a.bindings.Maintenance
 		d.backendFailure = a.bindings.BackendFailure

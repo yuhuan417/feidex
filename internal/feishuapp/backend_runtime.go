@@ -22,9 +22,15 @@ func backendRuntimeContextForApp(d BackendRuntimeDeps) backendruntime.BackendCon
 	}
 	ctx.BeginStartupRecoveryScope = func() func() { return beginCodexAutoThreadRecoveryScope(d.codexRecovery) }
 	ctx.ReconcileCompletedTurn = func(key string, sess *conversation.Session) *conversation.Session {
-		return reconcileCompletedCodexTurnFromFinalOutput(d.turnReconciliation, key, sess)
+		if d.turnReconciliation == nil {
+			return sess
+		}
+		return reconcileCompletedCodexTurnFromFinalOutput(*d.turnReconciliation, key, sess)
 	}
 	ctx.ReconcileClaudeCompletedTurn = func(key string, sess *conversation.Session) *conversation.Session {
+		if d.claudeReconciliation == nil {
+			return sess
+		}
 		return d.claudeReconciliation.Reconcile(key, sess)
 	}
 	ctx.ClearActiveOperations = func(key string, sess *conversation.Session) *conversation.Session {

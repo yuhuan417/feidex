@@ -123,23 +123,37 @@ func (a sqAttachmentResolverFullAdapter) ResolveInboundAttachments(msg *feishu.I
 	return resolveInboundAttachments(a.cfg, a.contextFn, a.feishuClient, msg, workspaceID, sessionKey)
 }
 
-type sqBackendRuntimeFullAdapter struct{ app *App }
+type sqBackendRuntimeAdapter struct {
+	deps         BackendRuntimeDeps
+	backendOwner *frontendruntime.FrontendOwner
+}
 
-func (a sqBackendRuntimeFullAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session {
-	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app.BackendRuntimeDeps()), sessionKey, sess)
+func (a sqBackendRuntimeAdapter) currentDeps() BackendRuntimeDeps {
+	deps := a.deps
+	if a.backendOwner != nil {
+		deps.view.backend = a.backendOwner.Backend()
+	}
+	return deps
+}
+
+func (a sqBackendRuntimeAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session {
+	deps := a.currentDeps()
+	if runtime := frontendruntime.BackendForKind(deps.view.configuredBackend()); runtime != nil {
+		return runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(deps), sessionKey, sess)
 	}
 	return sess
 }
-func (a sqBackendRuntimeFullAdapter) DropThreadLineageAfterStartFailure(err error) bool {
-	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.DropThreadLineageAfterStartFailure(backendRuntimeContextForApp(a.app.BackendRuntimeDeps()), err)
+func (a sqBackendRuntimeAdapter) DropThreadLineageAfterStartFailure(err error) bool {
+	deps := a.currentDeps()
+	if runtime := frontendruntime.BackendForKind(deps.view.configuredBackend()); runtime != nil {
+		return runtime.DropThreadLineageAfterStartFailure(backendRuntimeContextForApp(deps), err)
 	}
 	return false
 }
-func (a sqBackendRuntimeFullAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
-	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a.app.BackendRuntimeDeps()))
+func (a sqBackendRuntimeAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
+	deps := a.currentDeps()
+	if runtime := frontendruntime.BackendForKind(deps.view.configuredBackend()); runtime != nil {
+		return runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(deps))
 	}
 	return false
 }
@@ -218,7 +232,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 		TurnStream:         turnPresentation,
 		AutoRetry:          a.bindings.AutoRetry,
 
-		BackendRuntime: sqBackendRuntimeFullAdapter{app: a},
+		BackendRuntime: sqBackendRuntimeAdapter{deps: a.BackendRuntimeDeps(), backendOwner: a.runtimeOwner},
 		DefaultWorkspaceID: func() string {
 			return a.configView().defaultWorkspaceID()
 		},

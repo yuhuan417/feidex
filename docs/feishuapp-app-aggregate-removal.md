@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 447 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 446 |
 | 收 `*App` 的顶层函数 | 281 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **35** |
+| **持有 `*App` 字段的结构体** | **34** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -433,6 +433,14 @@ messages 也直接复用 chunk delivery owner。`effectOutbound` 增加 chat 文
 与 Feishu client，并继续委托共享的 `resolveInboundAttachments`。附件目录、源消息选择、30 秒
 下载超时和附件字段映射均不变。生产 `*App` 引用预算由 448 降至 447，持有 App 字段的结构体由
 36 降至 35，收 `*App` 的函数预算保持 281；lazy binding-read 预算保持 13。
+
+步骤 53 将 `sqBackendRuntimeFullAdapter` 改为持有 `BackendRuntimeDeps` 与 frontend runtime
+owner。每次调用从 owner 刷新当前 backend，再构造 facade 和 backend context；Codex→Claude 切换
+后不沿用构造时的 facade，当前 Codex/Claude client 仍从 runtime owner 动态读取。
+`BackendRuntimeDeps` 对 turn/Claude reconciliation 保留绑定字段的稳定指针，因为 queue 在这两个
+service 填充前构造；调用时读取已就绪 owner，不冻结零值。生产 `*App`
+引用预算由 447 降至 446，持有 App 字段的结构体由 35 降至 34，收 `*App` 的函数预算保持 281；
+lazy binding-read 预算保持 13。
 
 ## 方法
 

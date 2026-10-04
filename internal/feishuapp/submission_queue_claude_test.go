@@ -1,12 +1,29 @@
 package feishuapp
 
 import (
+	"errors"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
 )
+
+func TestSubmissionBackendRuntimeAdapterTracksSelectedBackend(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.SetBackend(domainbackend.BackendCodex)
+	adapter := sqBackendRuntimeAdapter{deps: a.BackendRuntimeDeps(), backendOwner: a.runtimeOwner}
+	startFailure := errors.New("codex client not initialized")
+
+	if !adapter.DropThreadLineageAfterStartFailure(startFailure) {
+		t.Fatal("Codex adapter should drop thread lineage after a missing client")
+	}
+
+	a.SetBackend(domainbackend.BackendClaude)
+	if adapter.DropThreadLineageAfterStartFailure(startFailure) {
+		t.Fatal("adapter should use the currently selected Claude backend")
+	}
+}
 
 func TestStartNextClaudeSubmissionFailsGracefullyWhenRuntimeUnavailable(t *testing.T) {
 	a, _, _ := newTestApp(t)
