@@ -41,6 +41,8 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 	if a == nil {
 		return appreviewcmd.Dependencies{}
 	}
+	submissions := a.bindings.Submissions
+	pendingQueue := a.bindings.PendingQueue
 	return appreviewcmd.Dependencies{
 		UseCase:        a.bindings.Review,
 		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
@@ -53,9 +55,9 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 			return commandMessageFromAction(a, x, s, r)
 		},
 		SessionHasActiveWorkFn: sessionHasActiveWork, SessionHasInFlightSubmissionFn: conversation.HasInFlightSubmission,
-		StartNextSubmissionFn:           func(s string) error { return startNextSubmission(a.bindings.Submissions, s) },
+		StartNextSubmissionFn:           func(s string) error { return startNextSubmission(submissions, s) },
 		SendSubmissionQueuedNoticeFn:    func(c context.Context, s *domainsubmission.Submission) { sendSubmissionQueuedNotice(a, c, s) },
-		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { a.bindings.PendingQueue.MarkSubmissionQueuedReactions(s) },
+		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { pendingQueue.MarkSubmissionQueuedReactions(s) },
 		CompleteAsyncCommandActionFn: func(x *feishu.CardAction, s, r, f, t string, p map[string]any, ok, fail func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
 			return completeAsyncCommandAction(a, x, s, r, f, t, p, ok, fail, w)
 		},

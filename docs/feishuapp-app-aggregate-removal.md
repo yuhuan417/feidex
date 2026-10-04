@@ -34,7 +34,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | **持有 `*App` 字段的结构体** | **37** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 15。
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
 如果调用点本身在闭包里，惰性读取预算会**上涨**——读取从 `f` 的函数体（不算惰性）
@@ -415,6 +415,11 @@ binding-read 预算保持 18。
 改为构造期局部快照。三个 owner 在 adapter 组装时已就绪，计划设置仍通过原 snapshot service
 读取，workspace thread 启动与下一 submission 行为不变。lazy binding-read 预算由 18 降至
 15；`*App` 引用预算保持 449。
+
+步骤 50 将 `newReviewAppAdapter` 闭包中的 Submissions 和 PendingQueue 改为构造期指针
+快照。ReviewCommands 在 composition 中于两个稳定 service pointer 初始化后构造；review
+dispatch 仍通过 queue service 处理下一 submission 和 queued reactions。lazy binding-read
+预算由 15 降至 13，`*App` 引用预算保持 449。
 
 ## 方法
 
