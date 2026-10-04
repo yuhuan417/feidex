@@ -20,6 +20,8 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 	}
 	announcementRefresh := app.runtimeOwner.Announcements
 	announcementQuery := app.bindings.AnnouncementQuery
+	startupRecovery := app.bindings.StartupRecovery
+	autoRetry := app.bindings.AutoRetry
 
 	return backend.NewSelectionService(backend.SelectionDeps{
 		Source:  app,
@@ -35,7 +37,7 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 				return snapshotRuntimeForApp(app)
 			},
 			RecoverState: func() {
-				recoverFrontendRuntimeState(app.bindings.StartupRecovery)
+				recoverFrontendRuntimeState(startupRecovery)
 				scheduleAllGroupAnnouncementStatusRefreshes(announcementRefresh, announcementQuery)
 			},
 			IdleBlockedReason: func() string {
@@ -70,7 +72,7 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 		},
 		Commands: backend.SelectionCommandDeps{
 			CommandAutoRetry: func(msg *feishu.InboundMessage, args []string) error {
-				return app.bindings.AutoRetry.CommandAutoRetry(msg, args)
+				return autoRetry.CommandAutoRetry(msg, args)
 			},
 		},
 	})

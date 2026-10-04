@@ -34,7 +34,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | **持有 `*App` 字段的结构体** | **21** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 12。`*App`
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 7。`*App`
 引用与 lazy binding-read 都只允许单向下降；即使某一步只改善其中一项，也不能让另一项回升。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
@@ -674,6 +674,23 @@ lazy binding-read 预算仍为 12。
 server-request composition 显式传入 runtime client owner。recovery state 仍 frontend-scoped，错误回复仍发给
 当前 Codex client；对照 SM-09/10/22/23，不改变 pending request 的 reply/resolved 边界。生产 `*App` 引用由
 372 降至 370，收 `*App` 的函数由 221 降至 219，App-bearing 结构体保持 21；lazy binding-read 预算仍为 12。
+
+步骤 93 在注册 Feishu group-message policy callback 前捕获已构造的 `GroupMessages` service，移除闭包内的
+`a.bindings.GroupMessages` 惰性读取。callback 仍使用同一 policy owner 和相同的 root/reply/mention 输入映射；
+架构计数只将 lazy binding-read 预算由 12 降至 11，生产 `*App` 引用与函数预算不变。
+
+步骤 94 `buildBackendSelectionService` 在两个 composition 入口中都晚于 `StartupRecovery` 和 `AutoRetry` 的
+赋值，因此构造时捕获这两个 ready service，移除 RecoverState 与 CommandAutoRetry callback 内的 binding 读取。
+backend recovery、auto-retry 命令仍委托原 owners；lazy binding-read 预算由 11 降至 9，`*App` 引用预算不变。
+
+步骤 95 `newInputDispatcher` 在 auto-retry owner 装配完成后构造，Retry handler 改为捕获已就绪的 `AutoRetry`
+service，移除 callback 内的 binding 读取。enqueue effect runner 在 composition 初始化早期创建，先于 submission
+queue，仍需在 effect 执行时读取该 queue；保留这处真实的晚绑定。lazy binding-read 预算由 9 降至 8，`*App`
+引用预算不变。
+
+步骤 96 `mcpDependenciesForApp` 在 `BuildMCP` 时捕获已初始化的 `TurnItems` tracker；MCP callback 每次仍从该
+tracker 查询最新 started-item 状态，只移除对 App bindings 字段的惰性查找。lazy binding-read 预算由 8 降至 7，
+`*App` 引用预算不变。
 
 ## 方法
 

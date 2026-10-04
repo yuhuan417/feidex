@@ -1129,7 +1129,7 @@ func TestFeishuAppAggregateDoesNotGrow(t *testing.T) {
 // The goal is zero. The budget only ratchets down; lower it in the same
 // commit that removes reads.
 func TestFeishuAppLazyBindingReadsDoesNotGrow(t *testing.T) {
-	const budget = 12 // goal: 0
+	const budget = 7 // goal: 0
 
 	root := repositoryRoot(t)
 	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))
@@ -1138,6 +1138,7 @@ func TestFeishuAppLazyBindingReadsDoesNotGrow(t *testing.T) {
 	}
 	fset := token.NewFileSet()
 	count := 0
+	locations := []string{}
 	for _, path := range entries {
 		if strings.HasSuffix(path, "_test.go") {
 			continue
@@ -1164,19 +1165,21 @@ func TestFeishuAppLazyBindingReadsDoesNotGrow(t *testing.T) {
 			if appVar == "" {
 				continue
 			}
-			count += lazyBindingReads(fn.Body, appVar)
+			count += lazyBindingReads(fn.Body, appVar, func(pos token.Pos) {
+				locations = append(locations, fset.Position(pos).String())
+			})
 		}
 	}
 	if count != budget {
 		t.Fatalf("internal/feishuapp has %d lazy backend-binding reads, budget is %d; "+
-			"read the value once at construction instead, or lower the budget in the same commit", count, budget)
+			"read the value once at construction instead, or lower the budget in the same commit; reads: %s", count, budget, strings.Join(locations, ", "))
 	}
 }
 
 // lazyBindingReads counts appVar.bindings.X reads that appear inside a func
 // literal, and reads of appVar itself inside one (which forwards the whole
 // aggregate).
-func lazyBindingReads(body *ast.BlockStmt, appVar string) int {
+func lazyBindingReads(body *ast.BlockStmt, appVar string, onRead func(token.Pos)) int {
 	count := 0
 	var walk func(n ast.Node, lazy bool)
 	walk = func(n ast.Node, lazy bool) {
@@ -1195,6 +1198,9 @@ func lazyBindingReads(body *ast.BlockStmt, appVar string) int {
 				}
 				if id, ok := inner.X.(*ast.Ident); ok && id.Name == appVar && inner.Sel.Name == "bindings" {
 					count++
+					if onRead != nil {
+						onRead(x.Pos())
+					}
 				}
 			}
 			return true

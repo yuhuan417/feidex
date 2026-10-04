@@ -61,15 +61,15 @@ func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {
 		return mcpbridge.Dependencies{}
 	}
 	submissionLookup := a.bindings.SubmissionLookup
+	turnItems := a.bindings.TurnItems
 	return mcpbridge.Dependencies{
 		AttachmentSender: a.feishu,
 		StateProvider:    a.store,
 		StartedTurnItemsFn: func() []mcpbridge.StartedTurnItem {
-			tracker := a.bindings.TurnItems
-			if tracker == nil {
+			if turnItems == nil {
 				return nil
 			}
-			started := tracker.StartedItems()
+			started := turnItems.StartedItems()
 			items := make([]mcpbridge.StartedTurnItem, 0, len(started))
 			for _, itemState := range started {
 				raw := itemState.Started.MergedRaw()

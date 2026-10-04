@@ -27,8 +27,9 @@ func configureGroupMessagePolicy(a *App) {
 	if !ok {
 		return
 	}
+	groupMessages := a.bindings.GroupMessages
 	configurer.SetGroupMessagePolicy(func(input feishu.GroupMessagePolicyInput) bool {
-		return shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, input)
+		return shouldDeliverGroupMessageToApp(groupMessages, input)
 	})
 }
 

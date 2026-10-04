@@ -25,6 +25,7 @@ import (
 // decoding has already completed when Dispatch is called.
 func newInputDispatcher(a *App) application.Dispatcher {
 	owner := a.runtimeOwner
+	autoRetry := a.bindings.AutoRetry
 	frontendID := identity.FrontendID(a.FrontendID())
 	runner := newEffectRunner(owner)
 	inThread := a.configView().replyInThreadEnabled()
@@ -61,7 +62,7 @@ func newInputDispatcher(a *App) application.Dispatcher {
 			return application.Result{}, nil
 		},
 		Retry: func(_ context.Context, event application.RetryTimerFired) (application.Result, error) {
-			a.bindings.AutoRetry.RunAutoRetryTimer(string(event.SessionKey), event.Sequence)
+			autoRetry.RunAutoRetryTimer(string(event.SessionKey), event.Sequence)
 			return application.Result{}, nil
 		},
 		Backend: func(ctx context.Context, event application.BackendEventReceived) (application.Result, error) {
