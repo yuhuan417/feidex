@@ -189,7 +189,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Compaction.Deps = feishuapp.CompactionPorts(frontend)
 	bindings.GoalContinuation.Deps = feishuapp.GoalContinuationPorts(frontend)
 	*bindings.GoalCommands = goalcmd.NewService(feishuapp.GoalCommandPorts(frontend))
-	bindings.Interactions.Deps = feishuapp.InteractionPorts(frontend)
+	bindings.Interactions.Deps = feishuapp.InteractionPorts(frontend.State(), bindings.SubmissionLookup)
 	bindings.InteractionDelivery = &interaction.DeliveryService{Repository: frontend.State()}
 	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(frontend))
 	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(frontend))

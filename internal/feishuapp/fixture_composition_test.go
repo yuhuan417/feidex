@@ -175,7 +175,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Compaction.Deps = CompactionPorts(a)
 	a.bindings.GoalContinuation.Deps = GoalContinuationPorts(a)
 	*a.bindings.GoalCommands = goalcmd.NewService(GoalCommandPorts(a))
-	a.bindings.Interactions.Deps = InteractionPorts(a)
+	a.bindings.Interactions.Deps = InteractionPorts(a.State(), a.bindings.SubmissionLookup)
 	a.bindings.InteractionDelivery = &interaction.DeliveryService{Repository: a.State()}
 	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(a))
 	*a.bindings.Turns = turn.NewService(TurnPorts(a))
