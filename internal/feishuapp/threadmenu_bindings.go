@@ -9,6 +9,7 @@ import (
 	appbackend "feidex/internal/adapter/feishu/backend"
 
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -42,23 +43,25 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 // ---------------------------------------------------------------------------
 
 type threadMenuConversationBackendAdapter struct {
-	app *App
+	threadCards   threadCardInputs
+	conversations *conversationapp.Service
+	runtimeDeps   BackendRuntimeDeps
 }
 
 func (a threadMenuConversationBackendAdapter) RenderThreadsCard(sessionKey string, includeAll bool) (map[string]any, error) {
-	return renderThreadsCard(a.app, sessionKey, includeAll)
+	return renderThreadsCard(a.threadCards, sessionKey, includeAll)
 }
 func (a threadMenuConversationBackendAdapter) InterruptActiveTurn(ctx context.Context, sessionKey string, sess *conversation.Session) error {
-	return interruptConversation(a.app.bindings.Conversations, a.app.BackendRuntimeDeps(), ctx, sessionKey, sess)
+	return interruptConversation(a.conversations, a.runtimeDeps, ctx, sessionKey, sess)
 }
 func (a threadMenuConversationBackendAdapter) ContinueActiveTurn(sessionKey string, text string) error {
-	return a.app.bindings.Conversations.ContinueActiveTurn(sessionKey, text)
+	return a.conversations.ContinueActiveTurn(sessionKey, text)
 }
 func (a threadMenuConversationBackendAdapter) ResumeSelectedThread(sessionKey string, sess *conversation.Session, ws *config.Workspace, selection appthreadmenu.ThreadResumeSelection) (*appthreadmenu.ThreadBinding, error) {
-	return a.app.bindings.Conversations.ResumeSelectedThread(sessionKey, sess, ws, conversation.ThreadSelection(selection))
+	return a.conversations.ResumeSelectedThread(sessionKey, sess, ws, conversation.ThreadSelection(selection))
 }
 func (a threadMenuConversationBackendAdapter) ForkReplyMessage(forkedID string) string {
-	return forkReplyMessage(a.app, forkedID)
+	return forkReplyMessage(a.threadCards.Backend(), forkedID)
 }
 
 type threadMenuBackendRuntimeAdapter struct {
@@ -104,7 +107,12 @@ func (a *App) ThreadMenuEffectiveSessionKey(sessionKey string) string {
 }
 
 func (a *App) ThreadMenuConversationBackend() appthreadmenu.ConversationBackendProvider {
-	return threadMenuConversationBackendAdapter{app: a}
+	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	conversations := a.bindings.Conversations
+	return threadMenuConversationBackendAdapter{
+		threadCards:   threadCardInputs{Repository: a.State(), Config: a.Config(), Backend: backend, Conversations: conversations},
+		conversations: conversations, runtimeDeps: a.BackendRuntimeDeps(),
+	}
 }
 
 func (a *App) ThreadMenuBackendRuntime() appthreadmenu.BackendRuntimeProvider {

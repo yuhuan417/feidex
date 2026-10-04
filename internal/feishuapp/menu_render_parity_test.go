@@ -52,11 +52,11 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 
 	p2pWorkspace := a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(p2pKey)
 	groupWorkspace := a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(groupKey)
-	p2pThread, err := renderThreadsCard(a, p2pKey, false)
+	p2pThread, err := renderThreadsCardForTest(a, p2pKey, false)
 	if err != nil {
 		t.Fatalf("render p2p thread menu: %v", err)
 	}
-	groupThread, err := renderThreadsCard(a, groupKey, false)
+	groupThread, err := renderThreadsCardForTest(a, groupKey, false)
 	if err != nil {
 		t.Fatalf("render group thread menu: %v", err)
 	}

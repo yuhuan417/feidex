@@ -62,25 +62,33 @@ func ConversationPorts(inputs ConversationPortInputs) conversation.Dependencies 
 	}}
 	return deps
 }
-func renderThreadsCard(a *App, key string, all bool) (map[string]any, error) {
-	sess := a.State().Session(key)
-	ws := &a.cfg.Workspaces[0]
+
+type threadCardInputs struct {
+	Repository    *appstate.Store
+	Config        *config.Config
+	Backend       func() string
+	Conversations *conversation.Service
+}
+
+func renderThreadsCard(inputs threadCardInputs, key string, all bool) (map[string]any, error) {
+	sess := inputs.Repository.Session(key)
+	ws := &inputs.Config.Workspaces[0]
 	if sess != nil {
-		if selected := config.FindWorkspace(a.cfg, sess.WorkspaceID); selected != nil {
+		if selected := config.FindWorkspace(inputs.Config, sess.WorkspaceID); selected != nil {
 			ws = selected
 		}
 	}
-	items, err := a.bindings.Conversations.ListWorkspaceThreads(key, ws, all)
+	items, err := inputs.Conversations.ListWorkspaceThreads(key, ws, all)
 	if err != nil {
 		return nil, err
 	}
-	if a.configView().configuredBackend() == domainbackend.BackendClaude {
-		return threadview.RenderClaudeThreadsCard(key, sess, ws, a.configView().configuredBackend(), a.cfg.Claude, items, all)
+	if inputs.Backend() == domainbackend.BackendClaude {
+		return threadview.RenderClaudeThreadsCard(key, sess, ws, inputs.Backend(), inputs.Config.Claude, items, all)
 	}
-	return threadview.RenderCodexThreadsCard(key, sess, *ws, a.configView().configuredBackend(), items, all)
+	return threadview.RenderCodexThreadsCard(key, sess, *ws, inputs.Backend(), items, all)
 }
-func forkReplyMessage(a *App, id string) string {
-	if a.configView().configuredBackend() == domainbackend.BackendClaude {
+func forkReplyMessage(backend, id string) string {
+	if backend == domainbackend.BackendClaude {
 		if strings.TrimSpace(id) == "" {
 			return "prepared to fork current session. new Claude branch session will be created and switched on next message."
 		}

@@ -22,7 +22,7 @@ func commandFork(a *App, msg *feishu.InboundMessage, args []string) error {
 	if err != nil {
 		return err
 	}
-	reply := forkReplyMessage(a, forkedID)
+	reply := forkReplyMessage(a.configView().configuredBackend(), forkedID)
 	if discarded > 0 {
 		reply += fmt.Sprintf(" 已丢弃 %d 条排队或暂存输入。", discarded)
 	}

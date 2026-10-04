@@ -64,7 +64,10 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				return nil, false
 			}
 			sessionKey = threadMenuEffectiveSessionKey(a, sessionKey)
-			card, err := renderThreadsCard(a, sessionKey, false)
+			backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+			card, err := renderThreadsCard(threadCardInputs{
+				Repository: a.State(), Config: a.Config(), Backend: backend, Conversations: a.bindings.Conversations,
+			}, sessionKey, false)
 			if err != nil {
 				return nil, false
 			}

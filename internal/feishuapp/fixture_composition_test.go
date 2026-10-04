@@ -398,6 +398,13 @@ func prepareTestApp(a *App) *App {
 	return a
 }
 
+func renderThreadsCardForTest(a *App, key string, all bool) (map[string]any, error) {
+	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	return renderThreadsCard(threadCardInputs{
+		Repository: a.State(), Config: a.Config(), Backend: backend, Conversations: a.bindings.Conversations,
+	}, key, all)
+}
+
 func recomposeTestApp(a *App) {
 	a.stateView = NewStateView(a)
 	a.transport = a.feishu

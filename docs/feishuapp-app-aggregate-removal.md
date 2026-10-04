@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 361 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 358 |
 | 收 `*App` 的顶层函数 | 224 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **21** |
@@ -722,6 +722,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 106 删除 startup recovery 的两个单点 App 包装；Codex recovery 直接复用 live-thread tracker owner，后台通知闭包捕获已就绪的 StartupRecovery 值。恢复状态清理与通知调度时序不变，生产 `*App` 引用预算由 364 降至 362，lazy binding-read 预算保持 0。
 
 步骤 107 将 `threadMenuBackendRuntimeAdapter` 的 `*App` 字段替换为 `BackendRuntimeDeps` 快照；两个 runtime operation 仍使用当前 config/runtime view 和同一 facade，adapter 不再持有聚合。生产 `*App` 引用预算由 362 降至 361，lazy binding-read 预算保持 0。
+
+步骤 108 将 `threadMenuConversationBackendAdapter` 改为持有 scoped store、config/backend supplier、conversation service 与 `BackendRuntimeDeps`；线程列表和 fork 提示 helper 也改为显式输入。线程查询、fork 提示、interrupt 和 resume 仍委托原 owners，生产 `*App` 引用预算由 361 降至 358，lazy binding-read 预算保持 0。
 
 ## 方法
 
