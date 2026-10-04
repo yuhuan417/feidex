@@ -28,15 +28,6 @@ func (o workspaceOutbound) PatchCard(ctx context.Context, messageID string, card
 	return patchCardEffect(ctx, o.app, messageID, card)
 }
 
-type workspaceCardRenderer struct{ app *App }
-
-func (r workspaceCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
-	if r.app == nil || r.app.feishu == nil {
-		return nil
-	}
-	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
-}
-
 func workspaceCommandApp(a *App) workspacecmd.Dependencies {
 	if a == nil {
 		return workspacecmd.Dependencies{}
@@ -48,7 +39,7 @@ func workspaceCommandApp(a *App) workspacecmd.Dependencies {
 		Workflow:       a.bindings.WorkspaceWorkflow,
 		Forms:          a.bindings.Forms,
 		Outbound:       workspaceOutbound{app: a},
-		CardRenderer:   workspaceCardRenderer{app: a},
+		CardRenderer:   simpleStatusCardRenderer{client: a.feishu},
 		BotNameFn: func() string {
 			if a == nil || a.feishu == nil {
 				return ""

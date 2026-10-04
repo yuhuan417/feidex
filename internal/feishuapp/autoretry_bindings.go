@@ -25,18 +25,9 @@ func (o autoRetryOutbound) SendCard(ctx context.Context, chatID string, card map
 	return sendCardWithIDEffect(ctx, o.app, chatID, card)
 }
 
-type autoRetryCardRenderer struct{ app *App }
-
-func (r autoRetryCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
-	if r.app == nil || r.app.feishu == nil {
-		return nil
-	}
-	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
-}
-
 func AutoRetryView(a *App) retryview.Service {
 	view := retryview.Service{
-		Context: a.Context, Outbound: autoRetryOutbound{app: a}, Renderer: autoRetryCardRenderer{app: a}, MenuBody: menuCardBody,
+		Context: a.Context, Outbound: autoRetryOutbound{app: a}, Renderer: simpleStatusCardRenderer{client: a.feishu}, MenuBody: menuCardBody,
 		Settings: func() retryview.Settings {
 			cfg := a.configView().feishuConfig()
 			return retryview.Settings{FrontendID: a.FrontendID(), Backend: a.configView().configuredBackend(), Title: a.BackendDriver().Runtime().AutoRetryTitle(), Enabled: cfg != nil && cfg.AutoRetry}

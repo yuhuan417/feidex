@@ -57,7 +57,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 	}
 	return appreviewcmd.Dependencies{
 		UseCase:        a.bindings.Review,
-		ConfigProvider: a, Outbound: reviewOutbound{app: a}, CardRenderer: reviewCardRenderer{app: a}, StateProvider: a.State(),
+		ConfigProvider: a, Outbound: reviewOutbound{app: a}, CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
 		ContextProvider:        a,
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
 		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return requireCodexGateway(a) },
@@ -77,15 +77,6 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 			return completeAsyncRenderedCardAction(a, x, s, t, p, r, f, w)
 		},
 	}
-}
-
-type reviewCardRenderer struct{ app *App }
-
-func (r reviewCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
-	if r.app == nil || r.app.feishu == nil {
-		return nil
-	}
-	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
 func BuildReviewCommands(app *App) appreviewcmd.ReviewFormService {

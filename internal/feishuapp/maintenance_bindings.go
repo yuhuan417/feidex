@@ -5,7 +5,6 @@ import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	"feidex/internal/config"
-	"feidex/internal/feishu"
 	"feidex/internal/runtime/maintenance"
 	"feidex/internal/state"
 )
@@ -40,7 +39,7 @@ func BuildMaintenanceCommands(a *App) appmaintenance.RuntimeMaintenanceService {
 		Context: a.Context, Repository: a.State(), Poller: a.bindings.UpgradePoller,
 		ArtifactClient:   a.feishu,
 		Outbound:         maintenanceOutbound{app: a},
-		Renderer:         maintenanceCardRenderer{app: a},
+		Renderer:         simpleStatusCardRenderer{client: a.feishu},
 		PermissionNotify: maintenancePermissionNotifier{client: a.feishu},
 		MenuBody:         menuCardBody,
 		Workspaces: func() []config.Workspace {
@@ -69,13 +68,4 @@ type maintenanceOutbound struct{ app *App }
 
 func (o maintenanceOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
 	return patchCardEffect(ctx, o.app, messageID, card)
-}
-
-type maintenanceCardRenderer struct{ app *App }
-
-func (r maintenanceCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
-	if r.app == nil || r.app.feishu == nil {
-		return nil
-	}
-	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }

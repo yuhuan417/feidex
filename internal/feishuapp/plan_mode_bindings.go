@@ -144,7 +144,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		ContextProvider:        a,
 		StateProvider:          a.State(),
 		Outbound:               planModeOutbound{app: a},
-		CardRenderer:           planModeCardRenderer{app: a},
+		CardRenderer:           simpleStatusCardRenderer{client: a.feishu},
 		CodexClientProvider:    func() (planmode.CodexClient, error) { return requireCodexGateway(a) },
 		MakeSessionKeyFn:       func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		ReplyInThreadEnabledFn: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
@@ -182,15 +182,6 @@ func (o planModeOutbound) ReplyCard(ctx context.Context, messageID string, card 
 
 func (o planModeOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
 	return patchCardEffect(ctx, o.app, messageID, card)
-}
-
-type planModeCardRenderer struct{ app *App }
-
-func (r planModeCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
-	if r.app == nil || r.app.feishu == nil {
-		return nil
-	}
-	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
 type planSettingsSource struct {

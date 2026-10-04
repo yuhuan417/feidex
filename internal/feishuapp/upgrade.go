@@ -17,15 +17,6 @@ func (o upgradeOutbound) ReplyCard(ctx context.Context, messageID string, card m
 	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
 }
 
-type upgradeCardRenderer struct{ app *App }
-
-func (r upgradeCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
-	if r.app == nil || r.app.feishu == nil {
-		return nil
-	}
-	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
-}
-
 func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 
 	deps := appupgradecmd.UpgradeServiceDeps{
@@ -42,7 +33,7 @@ func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 	adapter := &appupgradecmd.DefaultApp{
 		ContextFunc:      app.Context,
 		OutboundFunc:     func() appupgradecmd.Outbound { return upgradeOutbound{app: app} },
-		CardRendererFunc: func() appupgradecmd.CardRenderer { return upgradeCardRenderer{app: app} },
+		CardRendererFunc: func() appupgradecmd.CardRenderer { return simpleStatusCardRenderer{client: app.feishu} },
 		StateFunc: func() appupgradecmd.UpgradeState {
 			return app.State()
 		},

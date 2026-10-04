@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 482 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 475 |
 | 收 `*App` 的顶层函数 | 293 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **58** |
+| **持有 `*App` 字段的结构体** | **51** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -311,6 +311,11 @@ actors、live-thread tracker 和 BindingReplay。composition 与 fixture 在构�
 `FileSharePorts` 仅在构造边界提取对应 client，nil client 仍返回 `context.Canceled`。文件名、
 URL 和大小的映射及上传错误透传不变。生产 `*App` 引用预算由 483 降至 482，持有 App 字段
 的结构体由 59 降至 58。
+
+步骤 36 将 auto-retry、debug、maintenance、plan、upgrade、workspace 与 review 的同形
+`SimpleStatusCard` renderer 合并为共享的 Feishu capability adapter。七处构造分别注入现有
+Feishu client，空 client 仍返回 nil，卡片调用参数和结果不变。生产 `*App` 引用预算由 482
+降至 475，持有 App 字段的结构体由 58 降至 51。
 
 ## 方法
 
