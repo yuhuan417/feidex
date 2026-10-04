@@ -9,48 +9,68 @@ import (
 	"log/slog"
 	"time"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	appapproval "feidex/internal/adapter/feishu/approval"
-
-	appclauderuntime "feidex/internal/runtime/claude"
-
+	"feidex/internal/adapter/feishu/claudesupport"
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	appdelivery "feidex/internal/adapter/feishu/delivery"
-
 	apppendingforms "feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/adapter/feishu/quietmode"
-
 	appturn "feidex/internal/adapter/feishu/turn"
+	"feidex/internal/adapter/feishu/turnmeta"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
+	applicationbackendfailure "feidex/internal/application/backendfailure"
+	applicationconversation "feidex/internal/application/conversation"
+	applicationinteraction "feidex/internal/application/interaction"
+	applicationmodelconfig "feidex/internal/application/modelconfig"
+	"feidex/internal/application/submission"
+	applicationturn "feidex/internal/application/turn"
 	"feidex/internal/claudecli"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
-
-	codexadapter "feidex/internal/adapter/backend/codex"
 	domainmodelconfig "feidex/internal/domain/modelconfig"
+	appclauderuntime "feidex/internal/runtime/claude"
 )
 
-func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps {
-	// The ports are built by a runtime factory, so these are read here rather
-	// than through app.bindings inside the callbacks below.
-	submissionLookup := app.bindings.SubmissionLookup
-	modelSnapshots := app.bindings.ModelSnapshots
-	modelAcknowledgements := app.bindings.ModelAcknowledgements
-	mcpService := app.bindings.MCP
-	claudeSupport := app.bindings.ClaudeSupport
-	interactionLifecycle := app.bindings.InteractionLifecycle
-	itemContext := app.bindings.ItemContext
-	turnPresentation := app.bindings.TurnPresentation
-	turns := app.bindings.Turns
-	backendFailure := app.bindings.BackendFailure
-	usageRecorder := app.bindings.Usage
-	turnMetadata := app.bindings.TurnMetadata
-	stateStore := app.State()
-	conversationQuery := app.bindings.ConversationQuery
-	conversations := app.bindings.Conversations
-	sessionActors := app.runtimeOwner.SessionActors
-	runtimeDeps := app.BackendRuntimeDeps()
-	runtimeOwner := app.runtimeOwner
-	appConfig := app.cfg
-	contextFn := app.runtimeOwner.Lifecycle.Context
-	cards := newOutboundCardService(app)
+type ClaudeRuntimePortInputs struct {
+	Runtime               BackendRuntimeDeps
+	Config                config.ClaudeConfig
+	Cards                 OutboundCardService
+	SubmissionLookup      submission.SubmissionLookupService
+	ModelSnapshots        applicationmodelconfig.SnapshotService
+	ModelAcknowledgements applicationmodelconfig.AcknowledgementService
+	ClaudeSupport         *claudesupport.Service
+	InteractionLifecycle  applicationinteraction.LifecycleService
+	ItemContext           appapproval.ItemContext
+	TurnPresentation      *appturnstream.Service
+	Turns                 *applicationturn.Service
+	BackendFailure        *applicationbackendfailure.BackendFailureService
+	Usage                 appdebugviewcmd.UsageService
+	TurnMetadata          turnmeta.Service
+	ConversationQuery     applicationconversation.Query
+	Conversations         *applicationconversation.Service
+}
+
+func ClaudeRuntimePorts(inputs ClaudeRuntimePortInputs) appclauderuntime.Deps {
+	runtimeDeps := inputs.Runtime
+	runtimeOwner := runtimeDeps.runtime.owner
+	stateStore := runtimeDeps.stateView
+	submissionLookup := inputs.SubmissionLookup
+	modelSnapshots := inputs.ModelSnapshots
+	modelAcknowledgements := inputs.ModelAcknowledgements
+	claudeSupport := inputs.ClaudeSupport
+	interactionLifecycle := inputs.InteractionLifecycle
+	itemContext := inputs.ItemContext
+	turnPresentation := inputs.TurnPresentation
+	turns := inputs.Turns
+	backendFailure := inputs.BackendFailure
+	usageRecorder := inputs.Usage
+	turnMetadata := inputs.TurnMetadata
+	conversationQuery := inputs.ConversationQuery
+	conversations := inputs.Conversations
+	sessionActors := runtimeDeps.sessionActors
+	contextFn := runtimeOwner.Lifecycle.Context
+	cards := inputs.Cards
 	backgroundTasks := claudeBackgroundTaskNotifier{
 		client: cards.statusCards.client, state: cards.replyChunks.state,
 		frontend: cards.replyChunks.outbound.frontend, runner: cards.replyChunks.outbound.runner,
@@ -70,7 +90,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	}
 	return appclauderuntime.Deps{
 		Context: contextFn,
-		Cfg:     cfg,
+		Cfg:     inputs.Config,
 		Lifecycle: appclauderuntime.LifecycleDeps{
 			BindClaudeSessionThread: func(sessionKey, turnID, threadID string) {
 				runSessionOnActor(sessionActors, sessionKey, func() {
@@ -115,10 +135,10 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				})
 			},
 			RecordTurnTokenUsage: func(threadID, turnID string, usage codexrpc.ThreadTokenUsage) {
-				app.runtimeOwner.TurnBindings.RecordTurnTokenUsage(threadID, turnID, codexadapter.ThreadUsage(usage))
+				runtimeOwner.TurnBindings.RecordTurnTokenUsage(threadID, turnID, codexadapter.ThreadUsage(usage))
 			},
 			RecordTurnContextUsagePercent: func(turnID string, percent float64) {
-				app.runtimeOwner.TurnBindings.RecordTurnContextUsagePercent(turnID, percent)
+				runtimeOwner.TurnBindings.RecordTurnContextUsagePercent(turnID, percent)
 			},
 			TurnFinalFooterLines: func(turnID string, completedAt time.Time) []string {
 				return turnMetadata.TurnFinalFooterLines(turnID, completedAt)
@@ -178,31 +198,32 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				return findSubmissionByTurn(submissionLookup, threadID, turnID)
 			},
 			GetSession: func(sessionKey string) *conversation.Session {
-				return app.State().Session(sessionKey)
+				return stateStore.Session(sessionKey)
 			},
 			SessionHasActiveOps: func(sess *conversation.Session) bool {
 				return conversation.HasActiveOperations(sess)
 			},
 			NextLocalID: func(prefix string) (string, error) {
-				return app.State().NextLocalID(prefix)
+				return stateStore.NextLocalID(prefix)
 			},
 			WorkspaceCwd: func(workspaceID string) string {
-				return workspaceCwd(app.cfg, workspaceID)
+				return workspaceCwd(runtimeDeps.cfg, workspaceID)
 			},
 		},
 		Permission: appclauderuntime.PermissionDeps{
 			EffectivePermissionMode: func(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
-				return effectiveBindingClaudePermissionMode(app.State(), sess, ws, cfg)
+				return effectiveBindingClaudePermissionMode(stateStore, sess, ws, cfg)
 			},
 			QuietWorkingCardEnabled: func() bool {
-				return quietmode.WorkingCardEnabled(app.configView().feishuConfig())
+				return quietmode.WorkingCardEnabled(runtimeDeps.currentBackend().view.feishuConfig())
 			},
 		},
 		PrepareClaudeMCPConfig: func(sessionKey string) (string, []string, func(), error) {
-			return prepareClaudeMCPConfig(appConfig, runtimeOwner, mcpService, sessionKey)
+			return runtimeDeps.prepareClaudeMCPConfig(sessionKey)
 		},
 		ModelSettings: func(sessionKey string) domainmodelconfig.Snapshot {
-			sess := app.State().Session(app.configView().normalizeSessionKey(sessionKey))
+			view := runtimeDeps.currentBackend().view
+			sess := stateStore.Session(view.normalizeSessionKey(sessionKey))
 			return modelConfigSnapshot(modelSnapshots, sess, domainbackend.BackendClaude)
 		},
 		ModelSettingsApplied: func(sessionKey string, settings domainmodelconfig.Snapshot) {
@@ -212,7 +233,8 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 			}
 		},
 		AuxiliaryModels: func(sessionKey string) (string, string) {
-			sess := app.State().Session(app.configView().normalizeSessionKey(sessionKey))
+			view := runtimeDeps.currentBackend().view
+			sess := stateStore.Session(view.normalizeSessionKey(sessionKey))
 			settings := modelSnapshots.Desired(domainbackend.BackendClaude, sess)
 			return settings.SmallModel, settings.SubagentModel
 		},

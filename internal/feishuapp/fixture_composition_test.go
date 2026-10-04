@@ -94,7 +94,9 @@ func prepareTestApp(a *App) *App {
 	a.bindings.SubmissionStatus = submission.StatusService{Lookup: a.bindings.SubmissionLookup, Repository: a.State()}
 	a.bindings.InteractionLifecycle = interaction.LifecycleService{Repository: a.State(), Frontend: a.FrontendID(), Presentation: InteractionExpiryPresentation(a.Feishu(), a.State(), identity.FrontendID(a.FrontendID()), *a.runtimeOwner.EffectRunner)}
 	a.bindings.ModelAcknowledgements = modelconfig.AcknowledgementService{Repository: a.State()}
-	a.bindings.ClaudeFactory = func(cfg config.ClaudeConfig) ClaudeCore { return clauderuntime.NewService(ClaudeRuntimePorts(a, cfg)) }
+	a.bindings.ClaudeFactory = func(cfg config.ClaudeConfig) ClaudeCore {
+		return clauderuntime.NewService(testClaudeRuntimePorts(a, cfg))
+	}
 	routingConfiguration := routing.ConfigurationService{Repository: a.State(), Frontend: identity.FrontendID(a.FrontendID())}
 	a.bindings.RoutingConfiguration = compositionkit.RoutingConfiguration{ConfigurationService: routingConfiguration, Runner: newEffectRunner(a.runtimeOwner), Context: a.Context()}
 	a.bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: func() string { return a.configView().configuredBackend() }}, Runner: newEffectRunner(a.runtimeOwner), Context: a.Context()}

@@ -23,14 +23,14 @@ func replyInThreadForSubmission(_ *domainsubmission.Submission) bool {
 	return false
 }
 
-func (s outboundCardService) sendSubmissionQueuedNotice(ctx context.Context, sub *domainsubmission.Submission) {
+func (s OutboundCardService) sendSubmissionQueuedNotice(ctx context.Context, sub *domainsubmission.Submission) {
 	if sub == nil {
 		return
 	}
 	s.replyChunks.SendMessagesWithReuse(ctx, sub, "已加入队列，等待当前任务结束后开始处理。", replyInThreadForSubmission(sub), "turn_queued", "")
 }
 
-func (s outboundCardService) expirePlanConfirmation(ctx context.Context, pending *interaction.PendingRequest) {
+func (s OutboundCardService) expirePlanConfirmation(ctx context.Context, pending *interaction.PendingRequest) {
 	if pending == nil || strings.TrimSpace(pending.FeishuMsgID) == "" {
 		return
 	}
@@ -61,7 +61,7 @@ func SubmissionNoticePorts(inputs SubmissionNoticeInputs) (func(context.Context,
 	chunks := newReplyChunkDelivery(
 		newCardRenderer(inputs.Config), inputs.State, outbound, inputs.Feishu != nil, view, links, localFileLinkPatcher{},
 	)
-	cards := outboundCardService{replyChunks: chunks, statusCards: simpleStatusCardRenderer{client: inputs.Feishu}}
+	cards := OutboundCardService{replyChunks: chunks, statusCards: simpleStatusCardRenderer{client: inputs.Feishu}}
 	return cards.sendSubmissionQueuedNotice, cards.expirePlanConfirmation
 }
 
@@ -72,11 +72,11 @@ func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *domainsubmiss
 	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", replyInThreadForSubmission(sub), "turn_started")
 }
 
-func (s outboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string {
+func (s OutboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string {
 	return s.sendTurnEventCardWithReuse(ctx, sub, "计划更新", "blue", "计划:\n"+strings.TrimSpace(planText), "turn_plan", "", reuseMessageID)
 }
 
-func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
+func (s OutboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
 	if !s.replyChunks.ready || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -166,11 +166,11 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 }
 
 // Exported wrapper for sub-package interface satisfaction.
-func (s outboundCardService) ReplaceTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
+func (s OutboundCardService) ReplaceTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	return s.replaceTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, reuseMessageID)
 }
 
-func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
+func (s OutboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	if !s.replyChunks.ready || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -188,7 +188,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 	return s.sendTurnEventCardWithReuse(ctx, sub, title, color, body, kind, itemID, "")
 }
 
-func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
+func (s OutboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
 	if !s.replyChunks.ready || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
@@ -216,7 +216,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	return id
 }
 
-func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, enablePreview bool) map[string]any {
+func (s OutboundCardService) renderTurnItemCard(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, enablePreview bool) map[string]any {
 	if turnitem.IsReplyTurnItem(payload.ItemType) {
 		return s.replyChunks.renderer.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(s.replyChunks.state, sub, turnitem.ReplyTurnItemCardTitle(payload)), payload.Color, payload.IsFinalAnswer, turnitem.ReplyTurnItemCardBody(payload), nil, enablePreview)
 	}
@@ -225,6 +225,6 @@ func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *domain
 }
 
 // SendTerminalCard executes the turn use case's semantic terminal effect.
-func (s outboundCardService) SendTerminalCard(ctx context.Context, sub *domainsubmission.Submission, text, attentionUserID, reuseMessageID string) {
+func (s OutboundCardService) SendTerminalCard(ctx context.Context, sub *domainsubmission.Submission, text, attentionUserID, reuseMessageID string) {
 	s.ReplaceTurnEventCardWithReuse(ctx, sub, "任务状态", "grey", apputil.PrependAttentionMentionMarkdown(text, attentionUserID), "turn_terminal", "", reuseMessageID)
 }

@@ -89,3 +89,7 @@ func (d BackendRuntimeDeps) currentBackend() BackendRuntimeDeps {
 	}
 	return d
 }
+
+func (d BackendRuntimeDeps) prepareClaudeMCPConfig(sessionKey string) (string, []string, func(), error) {
+	return prepareClaudeMCPConfig(d.cfg, d.runtime.owner, d.mcp, sessionKey)
+}

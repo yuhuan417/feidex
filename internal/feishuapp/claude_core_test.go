@@ -604,7 +604,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 func TestClaudeHandleTurnCompleteSuppressesFailedCompletionDuringStart(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
+	runtime := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{

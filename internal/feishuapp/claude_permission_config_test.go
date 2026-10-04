@@ -17,7 +17,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 	a.SetBackend(domainbackend.BackendClaude)
 	a.runtimeView().setCodex(nil)
 
-	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
+	runtime := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
 	a.runtimeView().setClaudeCore(runtime)
 	defer runtime.Close()
 
@@ -97,7 +97,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 	a.cfg.Claude.DangerouslySkipPermissions = false
 	a.runtimeView().setCodex(nil)
 
-	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
+	runtime := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
 	a.runtimeView().setClaudeCore(runtime)
 	defer runtime.Close()
 
@@ -135,7 +135,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *tes
 	a.SetBackend(domainbackend.BackendClaude)
 	a.runtimeView().setCodex(nil)
 
-	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
+	runtime := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
 	a.runtimeView().setClaudeCore(runtime)
 	defer runtime.Close()
 

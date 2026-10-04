@@ -17,7 +17,7 @@ func TestClaudeRuntimeWarmInitializeReturnsBeforeReadyAndLateBindsSessionID(t *t
 	a.runtimeView().setCodex(nil)
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
-	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
+	runtime := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
 	a.runtimeView().setClaudeCore(runtime)
 	defer runtime.Close()
 
@@ -77,7 +77,7 @@ func TestClaudeRuntimeWarmForkReturnsBeforeReadyAndLateBindsSessionID(t *testing
 	a.runtimeView().setCodex(nil)
 	a.cfg.Claude.Command = writeFakeClaudeWarmupCLI(t)
 
-	runtime := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
+	runtime := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
 	a.runtimeView().setClaudeCore(runtime)
 	defer runtime.Close()
 

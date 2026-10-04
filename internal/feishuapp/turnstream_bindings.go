@@ -17,7 +17,7 @@ import (
 // ---------------------------------------------------------------------------
 
 type turnStreamOutboundCardAdapter struct {
-	cards   outboundCardService
+	cards   OutboundCardService
 	compact interface {
 		CompleteStandaloneCompactItem(string, string, map[string]any) bool
 	}

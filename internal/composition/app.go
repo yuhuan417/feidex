@@ -107,8 +107,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.SubmissionStatus = submission.StatusService{Lookup: bindings.SubmissionLookup, Repository: frontend.State()}
 	bindings.InteractionLifecycle = interaction.LifecycleService{Repository: frontend.State(), Frontend: frontend.FrontendID(), Presentation: feishuapp.InteractionExpiryPresentation(frontend.Feishu(), frontend.State(), identity.FrontendID(frontend.FrontendID()), *scope.RuntimeOwner.EffectRunner)}
 	bindings.ModelAcknowledgements = modelconfig.AcknowledgementService{Repository: frontend.State()}
+	claudeRuntimeInputs := &feishuapp.ClaudeRuntimePortInputs{}
 	bindings.ClaudeFactory = func(cfg config.ClaudeConfig) feishuapp.ClaudeCore {
-		return clauderuntime.NewService(feishuapp.ClaudeRuntimePorts(frontend, cfg))
+		inputs := *claudeRuntimeInputs
+		inputs.Config = cfg
+		return clauderuntime.NewService(feishuapp.ClaudeRuntimePorts(inputs))
 	}
 	routingConfiguration := routing.ConfigurationService{Repository: frontend.State(), Frontend: identity.FrontendID(frontend.FrontendID())}
 	bindings.RoutingConfiguration = compositionkit.RoutingConfiguration{ConfigurationService: routingConfiguration, Runner: feishuapp.NewEffectRunner(frontend), Context: frontend.Context()}
@@ -474,6 +477,23 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			return nil, err
 		}
 		feishuapp.InstallBackendRuntime(frontend.BackendRuntimeDeps(), handle)
+	}
+	deps := frontend.BackendRuntimeDeps()
+	*claudeRuntimeInputs = feishuapp.ClaudeRuntimePortInputs{
+		Runtime: deps,
+		Cards: feishuapp.NewOutboundCardService(feishuapp.OutboundCardInputs{
+			RuntimeDeps: deps, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+			InteractionDelivery: bindings.InteractionDelivery, TurnPresentation: bindings.TurnPresentation,
+			Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
+			TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,
+		}),
+		SubmissionLookup: bindings.SubmissionLookup, ModelSnapshots: bindings.ModelSnapshots,
+		ModelAcknowledgements: bindings.ModelAcknowledgements, ClaudeSupport: bindings.ClaudeSupport,
+		InteractionLifecycle: bindings.InteractionLifecycle, ItemContext: bindings.ItemContext,
+		TurnPresentation: bindings.TurnPresentation, Turns: bindings.Turns,
+		BackendFailure: bindings.BackendFailure, Usage: bindings.Usage,
+		TurnMetadata: bindings.TurnMetadata, ConversationQuery: bindings.ConversationQuery,
+		Conversations: bindings.Conversations,
 	}
 	feishuapp.InstallFeishuPolicies(frontend)
 	transport, ok := scope.FeishuTransport.(app.HandlerSet)

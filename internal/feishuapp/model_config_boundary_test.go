@@ -475,7 +475,7 @@ func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	cli, logPath := writeModelConfigCLI(t)
 	a.cfg.Claude.Command, a.cfg.Claude.Model, a.cfg.Claude.Effort, a.cfg.Claude.SubagentModel = cli, "sonnet", "low", "fixed-subagent"
-	r := appclauderuntime.NewService(ClaudeRuntimePorts(a, a.cfg.Claude))
+	r := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
 	a.runtimeView().setClaudeCore(r)
 	t.Cleanup(func() { _ = r.Close() })
 	for _, key := range []string{"one", "two"} {

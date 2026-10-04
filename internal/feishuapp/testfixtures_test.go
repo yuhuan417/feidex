@@ -972,3 +972,23 @@ func newTestClaudeRuntime(t *testing.T, a *App) *appclauderuntime.Service {
 	}
 	return rt
 }
+
+func testClaudeRuntimePorts(a *App, cfg config.ClaudeConfig) appclauderuntime.Deps {
+	deps := a.BackendRuntimeDeps()
+	return ClaudeRuntimePorts(ClaudeRuntimePortInputs{
+		Runtime: deps, Config: cfg,
+		Cards: NewOutboundCardService(OutboundCardInputs{
+			RuntimeDeps: deps, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+			InteractionDelivery: a.bindings.InteractionDelivery, TurnPresentation: a.bindings.TurnPresentation,
+			Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
+			TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,
+		}),
+		SubmissionLookup: a.bindings.SubmissionLookup, ModelSnapshots: a.bindings.ModelSnapshots,
+		ModelAcknowledgements: a.bindings.ModelAcknowledgements, ClaudeSupport: a.bindings.ClaudeSupport,
+		InteractionLifecycle: a.bindings.InteractionLifecycle, ItemContext: a.bindings.ItemContext,
+		TurnPresentation: a.bindings.TurnPresentation, Turns: a.bindings.Turns,
+		BackendFailure: a.bindings.BackendFailure, Usage: a.bindings.Usage,
+		TurnMetadata: a.bindings.TurnMetadata, ConversationQuery: a.bindings.ConversationQuery,
+		Conversations: a.bindings.Conversations,
+	})
+}

@@ -127,7 +127,7 @@ func (r reviewTargetResolver) Resolve(cwd string, target appreview.TargetSpec) (
 type reviewDispatcher struct {
 	submissions  *appsubmission.SubmissionQueueService
 	pendingQueue *appsubmission.PendingQueueService
-	queuedNotice outboundCardService
+	queuedNotice OutboundCardService
 }
 
 func (d reviewDispatcher) StartNext(key string) error {
