@@ -211,10 +211,12 @@ func prepareTestApp(a *App) *App {
 		a.runtimeOwner.Lifecycle.Context, *a.runtimeOwner.EffectRunner,
 		SessionKeyBuilder(a.FrontendID()), func(string) bool { return false },
 	)
-	sharedArtifacts, downloadPresentation, downloadRunner := FileSharePorts(a)
+	debugViewDependencies := DebugViewDependencies(a)
+	sharedArtifacts, downloadPresentation, downloadRunner := FileSharePorts(a.feishu, debugViewDependencies, &a.runtimeOwner.Lifecycle, a.runtimeOwner.SessionActors, a.asyncRunner)
 	a.bindings.FileSharing = &fileshare.Service{Forms: a.bindings.Forms, Repository: a.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: a.Context, Run: downloadRunner}
-	a.bindings.Debug = BuildDebug(a)
-	a.bindings.Usage = BuildUsage(a)
+	debugViewDependencies.FileSharing = a.bindings.FileSharing
+	a.bindings.Debug = BuildDebug(debugViewDependencies)
+	a.bindings.Usage = BuildUsage(debugViewDependencies)
 	a.bindings.FinalCardPatch = BuildFinalCardPatch(FinalCardPatchInputs{
 		Context: a.Context, Tracker: a.bindings.FinalCardPatches, Finder: a.State(),
 		Patcher: a.Feishu(), RunAsync: a.AsyncRunner(), Config: a.Config(), State: a.State(),

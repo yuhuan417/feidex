@@ -1193,7 +1193,7 @@ func TestDownloadFilePickAndConfirmSharesFile(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	if err := appdebugviewcmd.CommandDownload(newDebugViewAppAdapter(a), msg, nil); err != nil {
+	if err := appdebugviewcmd.CommandDownload(DebugViewDependencies(a), msg, nil); err != nil {
 		t.Fatalf("commandDownload() error = %v", err)
 	}
 	pending := a.store.AllPendingRequests()

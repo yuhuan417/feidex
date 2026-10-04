@@ -163,7 +163,7 @@ func completePathPickerAction(a *App, action *feishu.CardAction, actionName stri
 			if err := a.bindings.Forms.SaveDraft(requestID, payload, "", 0, ""); err != nil {
 				return nil, err
 			}
-			return appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), action, pending, payload, selectedPath)
+			return appdebugviewcmd.CompleteDownloadFileConfirm(DebugViewDependencies(a), action, pending, payload, selectedPath)
 		}
 		if pending.Kind == appupgradecmd.UpgradeLocalBinaryPendingKind {
 			payload.SelectedPath = selectedPath

@@ -880,7 +880,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("UpsertSession(download) error = %v", err)
 			}
-			return appdebugviewcmd.CompleteMenuDownload(newDebugViewAppAdapter(a), &feishu.CardAction{
+			return appdebugviewcmd.CompleteMenuDownload(DebugViewDependencies(a), &feishu.CardAction{
 				UserID:      "user-1",
 				ChatID:      "chat-1",
 				MessageID:   "msg-download",

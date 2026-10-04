@@ -231,10 +231,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		scope.RuntimeOwner.Lifecycle.Context, *scope.RuntimeOwner.EffectRunner,
 		feishuapp.SessionKeyBuilder(frontend.FrontendID()), func(string) bool { return false },
 	)
-	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend)
+	debugViewDependencies := feishuapp.DebugViewDependencies(frontend)
+	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend.Feishu(), debugViewDependencies, &scope.RuntimeOwner.Lifecycle, scope.RuntimeOwner.SessionActors, frontend.AsyncRunner())
 	bindings.FileSharing = &fileshare.Service{Forms: bindings.Forms, Repository: frontend.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: frontend.Context, Run: downloadRunner}
-	bindings.Debug = feishuapp.BuildDebug(frontend)
-	bindings.Usage = feishuapp.BuildUsage(frontend)
+	debugViewDependencies.FileSharing = bindings.FileSharing
+	bindings.Debug = feishuapp.BuildDebug(debugViewDependencies)
+	bindings.Usage = feishuapp.BuildUsage(debugViewDependencies)
 	bindings.FinalCardPatch = feishuapp.BuildFinalCardPatch(feishuapp.FinalCardPatchInputs{
 		Context: frontend.Context, Tracker: bindings.FinalCardPatches, Finder: frontend.State(),
 		Patcher: frontend.Feishu(), RunAsync: frontend.AsyncRunner(), Config: frontend.Config(), State: frontend.State(),

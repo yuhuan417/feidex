@@ -144,7 +144,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"download": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return debugviewcmd.CommandDownload(newDebugViewAppAdapter(a), msg, args)
+					return debugviewcmd.CommandDownload(DebugViewDependencies(a), msg, args)
 				},
 			},
 		},
@@ -152,7 +152,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.download" {
 				return nil, nil
 			}
-			return debugviewcmd.CompleteMenuDownload(newDebugViewAppAdapter(s.app), action, actionSessionKey(action))
+			return debugviewcmd.CompleteMenuDownload(DebugViewDependencies(s.app), action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.history"] = featureBinding{

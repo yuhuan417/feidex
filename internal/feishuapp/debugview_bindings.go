@@ -13,6 +13,7 @@ import (
 	domainturn "feidex/internal/domain/turn"
 	domainworkspace "feidex/internal/domain/workspace"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -32,17 +33,16 @@ func (o debugArtifactSharer) Share(ctx context.Context, req fileshare.Request) (
 	return fileshare.Result{FileName: result.FileName, URL: result.URL, SizeBytes: result.SizeBytes}, err
 }
 
-func FileSharePorts(a *App) (fileshare.Artifacts, fileshare.Presentation, func(string, func()) bool) {
-	var client debugFileSharer
-	if a != nil {
-		client = a.feishu
-	}
-	return debugArtifactSharer{client: client}, appdebugviewcmd.DownloadPresentation{Dependencies: newDebugViewAppAdapter(a)}, func(key string, fn func()) bool {
-		return a.runtimeOwner.Lifecycle.Run(func() { runSession(a, key, fn) }, a.asyncRunner)
+func FileSharePorts(client debugFileSharer, dependencies appdebugviewcmd.Dependencies, lifecycle *frontendruntime.FrontendRuntime, actors *frontendruntime.SessionActors, asyncRunner func(func())) (fileshare.Artifacts, fileshare.Presentation, func(string, func()) bool) {
+	return debugArtifactSharer{client: client}, appdebugviewcmd.DownloadPresentation{Dependencies: dependencies}, func(key string, fn func()) bool {
+		if lifecycle == nil {
+			return false
+		}
+		return lifecycle.Run(func() { runSessionOnActor(actors, key, fn) }, asyncRunner)
 	}
 }
 
-func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
+func DebugViewDependencies(app *App) appdebugviewcmd.Dependencies {
 	if app == nil {
 		return appdebugviewcmd.Dependencies{}
 	}
@@ -67,12 +67,12 @@ func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 	}
 }
 
-func BuildDebug(app *App) appdebugviewcmd.DebugService {
-	return appdebugviewcmd.NewDebugService(newDebugViewAppAdapter(app))
+func BuildDebug(dependencies appdebugviewcmd.Dependencies) appdebugviewcmd.DebugService {
+	return appdebugviewcmd.NewDebugService(dependencies)
 }
 
-func BuildUsage(app *App) appdebugviewcmd.UsageService {
-	return appdebugviewcmd.NewUsageService(newDebugViewAppAdapter(app))
+func BuildUsage(dependencies appdebugviewcmd.Dependencies) appdebugviewcmd.UsageService {
+	return appdebugviewcmd.NewUsageService(dependencies)
 }
 
 type debugTurnBindingTracker interface {

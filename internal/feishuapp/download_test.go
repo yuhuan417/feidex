@@ -98,12 +98,12 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 		CurrentPath: workspace,
 	}
 
-	resp, err := appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), &feishu.CardAction{}, nil, payload, selectedPath)
+	resp, err := appdebugviewcmd.CompleteDownloadFileConfirm(DebugViewDependencies(a), &feishu.CardAction{}, nil, payload, selectedPath)
 	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Content != "下载请求已过期" {
 		t.Fatalf("completeDownloadFileConfirm(nil pending) = %+v, %v", resp, err)
 	}
 
-	resp, err = appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), &feishu.CardAction{}, &state.PendingRequest{Status: "processing"}, payload, selectedPath)
+	resp, err = appdebugviewcmd.CompleteDownloadFileConfirm(DebugViewDependencies(a), &feishu.CardAction{}, &state.PendingRequest{Status: "processing"}, payload, selectedPath)
 	if err != nil || resp == nil || resp.Toast == nil || resp.Toast.Content != "正在生成下载链接，请稍候" {
 		t.Fatalf("completeDownloadFileConfirm(processing) = %+v, %v", resp, err)
 	}
@@ -127,7 +127,7 @@ func TestCompleteDownloadFileConfirmBranches(t *testing.T) {
 		t.Fatalf("UpsertPending(download-confirm) error = %v", err)
 	}
 	ff.sharedFileResult = feishu.SharedFileResult{FileName: "report.txt", URL: "https://example.test/download"}
-	resp, err = appdebugviewcmd.CompleteDownloadFileConfirm(newDebugViewAppAdapter(a), &feishu.CardAction{
+	resp, err = appdebugviewcmd.CompleteDownloadFileConfirm(DebugViewDependencies(a), &feishu.CardAction{
 		ChatID:    "",
 		UserID:    "owner-1",
 		MessageID: "",
