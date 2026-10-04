@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 485 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 483 |
 | 收 `*App` 的顶层函数 | 294 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **60** |
+| **持有 `*App` 字段的结构体** | **59** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -300,6 +300,12 @@ group query 和 refresh scheduler；构造处从 composition 显式传入这些 
 coalescer 的创建相应提前到 SubmissionPorts 之前。session/thread 校验、tracker 标记/清理和
 群 session live 时的公告刷新均保留。对照 SM-04，未更改 turn 启动/started/completed 顺序；
 `*App` 引用预算由 486 降至 485，持有 App 字段的结构体由 61 降至 60。
+
+步骤 34 将 `workspaceEffectRuntime` 改为显式持有 frontend lifecycle、异步 executor、session
+actors、live-thread tracker 和 BindingReplay。composition 与 fixture 在构造 WorkspaceEffects 前
+先完成 BindingReplay，再把依赖直接传入；ClearLive、session actor 串行化、生命周期 admission
+和 replay 行为保持不变。对照 SM-03/SM-04，不更改 thread/turn 协议状态和 turn 事件顺序；
+生产 `*App` 引用预算由 485 降至 483，持有 App 字段的结构体由 60 降至 59。
 
 ## 方法
 
