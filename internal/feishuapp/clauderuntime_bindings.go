@@ -48,6 +48,11 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	runtimeDeps := app.BackendRuntimeDeps()
 	contextFn := app.runtimeOwner.Lifecycle.Context
 	cards := newOutboundCardService(app)
+	backgroundTasks := claudeBackgroundTaskNotifier{
+		client: cards.statusCards.client, state: cards.replyChunks.state,
+		frontend: cards.replyChunks.outbound.frontend, runner: cards.replyChunks.outbound.runner,
+		ready: cards.replyChunks.ready,
+	}
 	outputSegments := claudeOutputSegmentDelivery{
 		delivery: cards.replyChunks,
 		findSubmission: func(threadID, turnID string) (string, *domainsubmission.Submission) {
@@ -133,7 +138,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				return replyInThreadForSubmission(sub)
 			},
 			SendBackgroundTaskNotification: func(ctx context.Context, target appclauderuntime.BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
-				sendClaudeBackgroundTaskNotification(app, ctx, target, event)
+				backgroundTasks.Send(ctx, target, event)
 			},
 		},
 		Interactive: appclauderuntime.InteractiveDeps{

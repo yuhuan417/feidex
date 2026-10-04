@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 388 |
-| 收 `*App` 的顶层函数 | 233 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 386 |
+| 收 `*App` 的顶层函数 | 231 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **24** |
 
@@ -78,10 +78,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
-| 11 | `ClaudeRuntimePorts` | 5 | 6 | 0 |
 | 11 | `InboundPorts` | 5 | 2 | 4 |
 | 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
 | 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
+| 8 | `ClaudeRuntimePorts` | 5 | 3 | 0 |
 | 7 | `TurnPorts` | 2 | 3 | 2 |
 | 6 | `BackendFailurePorts` | 3 | 3 | 0 |
 | 6 | `GoalContinuationPorts` | 5 | 0 | 1 |
@@ -613,6 +613,14 @@ lookup、turn-final footer 与 stream-final marker。quiet-mode gate、chunk/reu
 副作用。对照 SM-04：仅改变 Feishu delivery adapter 的依赖传递，不改变 turn/item/terminal 状态机。生产 `*App`
 引用由 391 降至 388，收 `*App` 的函数由 236 降至 233；`ClaudeRuntimePorts` direct/helper/structs 由 5/6/0
 降至 5/4/0，App-bearing 工厂与结构体数保持 12、24，lazy binding-read 预算保持 12。
+
+步骤 84 将 Claude 后台任务通知从 `sendClaudeBackgroundTaskNotification(*App, ...)` 改为显式
+`claudeBackgroundTaskNotifier`，由 Claude runtime factory 注入 scoped state、Feishu status-card client、frontend
+identity 与 effect runner。标题仍依据当前 session 的 workspace/plan 状态生成；通知仍携带原 chat 与 parent
+message 身份，reply 失败后仍尝试向原 chat 独立发送。通知的 status、内容与 fallback 测试通过。生产 `*App`
+引用由 388 降至 386，收 `*App` 的函数由 233 降至 231；Staticcheck 随后发现只被该 helper 使用的
+`sendCardEffect(*App, ...)` 已无调用点，因此一并删除。`ClaudeRuntimePorts` direct/helper/structs 由 5/4/0
+降至 5/3/0；App-bearing 工厂与结构体数保持 12、24，lazy binding-read 预算保持 12。
 
 ## 方法
 

@@ -2,20 +2,27 @@ package feishuapp
 
 import (
 	"context"
-	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"strings"
 
+	"feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/application"
 	"feidex/internal/claudecli"
 	"feidex/internal/domain/identity"
+	frontendruntime "feidex/internal/runtime"
 	appclauderuntime "feidex/internal/runtime/claude"
 )
 
-// sendClaudeBackgroundTaskNotification delivers the task_notification event
-// on the original conversation, even when the parent submission has already
-// been finalized and removed from runtime state.
-func sendClaudeBackgroundTaskNotification(a *App, ctx context.Context, target appclauderuntime.BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
-	if a == nil || a.feishu == nil {
+type claudeBackgroundTaskNotifier struct {
+	client   simpleStatusCardClient
+	state    planmode.SessionStateProvider
+	frontend identity.FrontendID
+	runner   frontendruntime.EffectRunner
+	ready    bool
+}
+
+func (n claudeBackgroundTaskNotifier) Send(ctx context.Context, target appclauderuntime.BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
+	if !n.ready {
 		return
 	}
 	if ctx == nil {
@@ -36,7 +43,7 @@ func sendClaudeBackgroundTaskNotification(a *App, ctx context.Context, target ap
 		color = "grey"
 		title = "后台 Agent 已取消"
 	}
-	title = contentCardTitleForSession(a, target.SessionKey, target.WorkspaceID, title)
+	title = planmode.ContentCardTitleForSessionFromState(n.state, true, target.SessionKey, target.WorkspaceID, title)
 
 	lines := []string{"Claude 后台 Agent 任务已返回。"}
 	if description := strings.TrimSpace(event.Description); description != "" {
@@ -46,23 +53,23 @@ func sendClaudeBackgroundTaskNotification(a *App, ctx context.Context, target ap
 	if summary := strings.TrimSpace(event.Summary); summary != "" {
 		lines = append(lines, "", "结果：", summary)
 	}
-	card := a.feishu.SimpleStatusCard(title, color, strings.Join(lines, "\n"), nil)
+	card := n.client.SimpleStatusCard(title, color, strings.Join(lines, "\n"), nil)
 	if triggerID := strings.TrimSpace(target.TriggerMessageID); triggerID != "" {
-		if err := newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.SendCard{
-			Frontend:       identity.FrontendID(a.FrontendID()),
+		err := n.runner.Run(ctx, []application.Effect{application.SendCard{
+			Frontend:       n.frontend,
 			Chat:           identity.ChatRef{ID: target.ChatID},
 			ReplyMessageID: triggerID,
-			View:           feishuoutbound.Card(card),
-		}}); err != nil {
-			// The original message can be unavailable after retention or recall;
-			// fall back to a standalone card when a chat ID is known.
-			if chatID := strings.TrimSpace(target.ChatID); chatID != "" {
-				_ = sendCardEffect(ctx, a, chatID, card)
-			}
+			View:           outbound.Card(card),
+		}})
+		if err == nil {
+			return
 		}
-		return
 	}
 	if chatID := strings.TrimSpace(target.ChatID); chatID != "" {
-		_ = sendCardEffect(ctx, a, chatID, card)
+		_ = n.runner.Run(ctx, []application.Effect{application.SendCard{
+			Frontend: n.frontend,
+			Chat:     identity.ChatRef{ID: chatID},
+			View:     outbound.Card(card),
+		}})
 	}
 }

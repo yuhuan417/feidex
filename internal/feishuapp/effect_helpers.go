@@ -39,17 +39,6 @@ func replyTextEffect(a *App, msg *feishu.InboundMessage, text string) error {
 	}})
 }
 
-func sendCardEffect(ctx context.Context, a *App, chatID string, card map[string]any) error {
-	if a == nil {
-		return nil
-	}
-	return newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.SendCard{
-		Frontend: identity.FrontendID(a.FrontendID()),
-		Chat:     identity.ChatRef{ID: chatID},
-		View:     feishuoutbound.Card(card),
-	}})
-}
-
 func replyCardWithIDEffect(ctx context.Context, a *App, parentMessageID string, card map[string]any, inThread bool) (string, error) {
 	if a == nil {
 		return "", nil

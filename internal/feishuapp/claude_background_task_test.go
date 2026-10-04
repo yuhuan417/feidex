@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"feidex/internal/claudecli"
+	"feidex/internal/domain/identity"
 	appclauderuntime "feidex/internal/runtime/claude"
 )
 
 func TestSendClaudeBackgroundTaskNotificationRepliesWithStatusCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	sendClaudeBackgroundTaskNotification(a, context.Background(), appclauderuntime.BackgroundTaskTarget{
+	newTestClaudeBackgroundTaskNotifier(a).Send(context.Background(), appclauderuntime.BackgroundTaskTarget{
 		SessionKey:       "sess-1",
 		WorkspaceID:      a.cfg.Workspaces[0].ID,
 		TriggerMessageID: "trigger-1",
@@ -37,7 +38,7 @@ func TestSendClaudeBackgroundTaskNotificationRepliesWithStatusCard(t *testing.T)
 func TestSendClaudeBackgroundTaskNotificationFallsBackToChatCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	ff.replyCardErr = context.Canceled
-	sendClaudeBackgroundTaskNotification(a, context.Background(), appclauderuntime.BackgroundTaskTarget{
+	newTestClaudeBackgroundTaskNotifier(a).Send(context.Background(), appclauderuntime.BackgroundTaskTarget{
 		TriggerMessageID: "expired-trigger",
 		ChatID:           "chat-1",
 	}, claudecli.BackgroundTaskEvent{Status: "failed", Summary: "agent stopped"})
@@ -47,5 +48,12 @@ func TestSendClaudeBackgroundTaskNotificationFallsBackToChatCard(t *testing.T) {
 	}
 	if got := cardHeaderTitle(t, ff.sendCards[0]); !strings.Contains(got, "后台 Agent 未完成") {
 		t.Fatalf("fallback card title = %q", got)
+	}
+}
+
+func newTestClaudeBackgroundTaskNotifier(a *App) claudeBackgroundTaskNotifier {
+	return claudeBackgroundTaskNotifier{
+		client: a.feishu, state: a.State(), frontend: identity.FrontendID(a.FrontendID()),
+		runner: *a.runtimeOwner.EffectRunner, ready: a.feishu != nil,
 	}
 }
