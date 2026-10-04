@@ -4,12 +4,29 @@ import (
 	"context"
 	"feidex/internal/application"
 	"feidex/internal/application/inbound"
+	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 )
 
-type forwardPorts struct{ app *App }
+type forwardGateway interface {
+	ResolveMergeForward(context.Context, string, []string) (string, []feishu.Attachment, error)
+}
 
-func ForwardGateway(a *App) inbound.ForwardGateway { return forwardPorts{app: a} }
-func ForwardTasks(a *App) inbound.ForwardTasks     { return forwardPorts{app: a} }
+type forwardGatewayAdapter struct{ client forwardGateway }
+
+func ForwardGateway(client forwardGateway) inbound.ForwardGateway {
+	return forwardGatewayAdapter{client: client}
+}
+
+type forwardTaskAdapter struct {
+	lifecycle *frontendruntime.FrontendRuntime
+	runner    func(func())
+}
+
+func ForwardTasks(lifecycle *frontendruntime.FrontendRuntime, runner func(func())) inbound.ForwardTasks {
+	return forwardTaskAdapter{lifecycle: lifecycle, runner: runner}
+}
+
 func ForwardFailure(a *App) func(*application.InboundMessage, error) {
 	return func(msg *application.InboundMessage, err error) { _ = replyError(a, msg, err) }
 }
@@ -24,7 +41,10 @@ func ForwardProcessor(a *App, process func(*application.InboundMessage) error) f
 		return err
 	}
 }
-func (p forwardPorts) ResolveForward(ctx context.Context, id string, ids []string) (string, []application.Attachment, error) {
-	return p.app.feishu.ResolveMergeForward(ctx, id, ids)
+func (p forwardGatewayAdapter) ResolveForward(ctx context.Context, id string, ids []string) (string, []application.Attachment, error) {
+	return p.client.ResolveMergeForward(ctx, id, ids)
 }
-func (p forwardPorts) Run(fn func()) bool { return runAsync(p.app, fn) }
+
+func (p forwardTaskAdapter) Run(fn func()) bool {
+	return p.lifecycle.Run(fn, p.runner)
+}

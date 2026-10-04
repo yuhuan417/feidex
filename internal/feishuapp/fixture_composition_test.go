@@ -280,7 +280,7 @@ func prepareTestApp(a *App) *App {
 	failure := backendfailure.NewBackendFailureService(BackendFailurePorts(a))
 	a.bindings.BackendFailure = &failure
 	inboundService := &inbound.Service{}
-	forwardService := inbound.ForwardService{Gateway: ForwardGateway(a), Tasks: ForwardTasks(a), Context: a.Context, Process: ForwardProcessor(a, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a)}
+	forwardService := inbound.ForwardService{Gateway: ForwardGateway(a.feishu), Tasks: ForwardTasks(&a.runtimeOwner.Lifecycle, a.asyncRunner), Context: a.Context, Process: ForwardProcessor(a, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a)}
 	inboundService.Deps = InboundPorts(a, forwardService.Start)
 	a.bindings.Inbound = inboundService
 	a.bindings.ForwardInputs = forwardService

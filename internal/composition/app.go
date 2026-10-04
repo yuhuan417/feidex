@@ -299,7 +299,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// built from the other's finished value. They are wired here instead: the
 	// two entry points are passed in after both exist.
 	inboundService := &inbound.Service{}
-	forwardService := inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend), Tasks: feishuapp.ForwardTasks(frontend), Context: frontend.Context, Process: feishuapp.ForwardProcessor(frontend, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(frontend)}
+	forwardService := inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend.Feishu()), Tasks: feishuapp.ForwardTasks(&scope.RuntimeOwner.Lifecycle, frontend.AsyncRunner()), Context: frontend.Context, Process: feishuapp.ForwardProcessor(frontend, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(frontend)}
 	inboundService.Deps = feishuapp.InboundPorts(frontend, forwardService.Start)
 	bindings.Inbound = inboundService
 	bindings.ForwardInputs = forwardService

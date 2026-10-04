@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 489 |
-| 收 `*App` 的顶层函数 | 296 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 486 |
+| 收 `*App` 的顶层函数 | 294 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **62** |
+| **持有 `*App` 字段的结构体** | **61** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -288,6 +288,12 @@ session key，菜单文案、backend 选择与 action breadcrumb 均不变。生
 `sessionKeysEqual` 中未使用的 App 参数；server-request 的 session 匹配改为直接调用纯比较。
 规范化及 auxiliary session-key 保留规则不变。生产 `*App` 引用预算由 491 降至 489，
 app-bearing 函数数由 298 降至 296。
+
+步骤 32 将原 `forwardPorts` 拆为 `forwardGatewayAdapter` 与 `forwardTaskAdapter`：前者只持有
+单方法 merge-forward Feishu capability，后者只持有 frontend lifecycle 与 async executor。
+composition 和 fixture 传入已持有的 transport/runtime owner，ForwardService 的超时、排队、
+失败与 shutdown admission 行为不变。生产 `*App` 引用预算由 489 降至 486，app-bearing
+函数数由 296 降至 294，持有 App 字段的结构体由 62 降至 61。
 
 ## 方法
 
