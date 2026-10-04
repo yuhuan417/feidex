@@ -195,7 +195,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			return a.configView().replyInThreadEnabled()
 		},
 		ReplyInThreadForSubmission: func(sub *domainsubmission.Submission) bool {
-			return replyInThreadForSubmission(a, sub)
+			return replyInThreadForSubmission(sub)
 		},
 		ConfiguredInflightMode: func() appsubmission.QueueInflightMode {
 			return inflightModeToInt(configuredSessionInflightMode(a))

@@ -155,7 +155,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		},
 		ActionStringValueFn:          actionStringValue,
 		RunAsyncFn:                   func(fn func()) { runAsync(a, fn) },
-		ReplyInThreadForSubmissionFn: func(sub *domainsubmission.Submission) bool { return replyInThreadForSubmission(a, sub) },
+		ReplyInThreadForSubmissionFn: func(sub *domainsubmission.Submission) bool { return replyInThreadForSubmission(sub) },
 		SendLocalTurnFollowupCardFn: func(ctx context.Context, parent string, card map[string]any, reply bool, sub *domainsubmission.Submission, kind string) (string, error) {
 			return sendLocalTurnFollowupCard(ctx, a, parent, card, reply, sub, kind)
 		},

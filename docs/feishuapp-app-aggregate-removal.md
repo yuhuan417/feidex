@@ -243,6 +243,11 @@ callbacks 的完整调度路径不再持有 App。菜单、workspace、`upgrade.
 `appmaintenance.CompleteRestartRun`；restart 执行及异步维护边界不变。架构预算由 501 降至
 500；不涉及 app-server turn 或 pending request 状态转换。
 
+步骤 24 将 `replyInThreadForSubmission` 改为只接收 submission。原函数把 `*App` 与
+submission 都标为未使用并恒返回 `false`；所有 turn、delivery、MCP、Plan 与 Claude
+streaming 调用点不再把 App 传入该决策函数。线程回复策略和调用路径结果不变。架构预算由
+500 降至 499；不涉及 app-server lifecycle 或 request 状态。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

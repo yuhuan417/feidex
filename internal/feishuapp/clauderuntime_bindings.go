@@ -104,7 +104,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				return sendFinalMessagesWithFooterAndReuse(app, ctx, sub, text, footerLines, inThread, reuseMessageIDs)
 			},
 			ReplyInThread: func(sub *domainsubmission.Submission) bool {
-				return replyInThreadForSubmission(app, sub)
+				return replyInThreadForSubmission(sub)
 			},
 			SendBackgroundTaskNotification: func(ctx context.Context, target appclauderuntime.BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
 				sendClaudeBackgroundTaskNotification(app, ctx, target, event)

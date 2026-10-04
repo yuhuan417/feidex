@@ -21,7 +21,7 @@ func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *domainsubmissio
 		if strings.TrimSpace(op.Body) == "" {
 			return
 		}
-		messageID, err := replyCardWithIDEffect(ctx, a, sub.TriggerMessageID, card, replyInThreadForSubmission(a, sub))
+		messageID, err := replyCardWithIDEffect(ctx, a, sub.TriggerMessageID, card, replyInThreadForSubmission(sub))
 		if err != nil || strings.TrimSpace(messageID) == "" {
 			slog.Warn("send quiet working card failed",
 				"turn_id", op.TurnID,

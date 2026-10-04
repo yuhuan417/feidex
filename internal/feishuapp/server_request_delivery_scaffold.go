@@ -56,7 +56,7 @@ func anchorForSubmission(a *App, sub *domainsubmission.Submission) pendingCardAn
 		threadID:         strings.TrimSpace(sub.ThreadID),
 		turnID:           strings.TrimSpace(sub.TurnID),
 		ownerUserID:      strings.TrimSpace(sub.UserID),
-		replyInThread:    replyInThreadForSubmission(a, sub),
+		replyInThread:    replyInThreadForSubmission(sub),
 	}
 }
 

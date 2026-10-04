@@ -38,7 +38,7 @@ func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, b
 	}
 
 	if final {
-		results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, body, a.bindings.TurnMetadata.TurnFinalFooterLines(turnID, time.Now()), replyInThreadForSubmission(a, sub), nil)
+		results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, body, a.bindings.TurnMetadata.TurnFinalFooterLines(turnID, time.Now()), replyInThreadForSubmission(sub), nil)
 		if len(results) == 0 {
 			return nil, false
 		}
@@ -48,7 +48,7 @@ func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, b
 
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind, sub.WorkspaceID)
 	if !replyClass {
-		ids := sendReplyMessagesWithReuse(a, ctx, sub, body, replyInThreadForSubmission(a, sub), kind, reuseMessageID)
+		ids := sendReplyMessagesWithReuse(a, ctx, sub, body, replyInThreadForSubmission(sub), kind, reuseMessageID)
 		if len(ids) == 0 {
 			return nil, false
 		}
@@ -60,7 +60,7 @@ func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, b
 		title,
 		color,
 		appdelivery.BuildReplyCardChunks(body, showHeader, nil),
-		replyInThreadForSubmission(a, sub),
+		replyInThreadForSubmission(sub),
 		false,
 		func() []string {
 			if strings.TrimSpace(reuseMessageID) == "" {

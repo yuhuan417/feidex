@@ -91,7 +91,7 @@ func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {
 			return findSubmissionByTurn(submissionLookup, threadID, turnID)
 		},
 		ReplyInThreadForSubmissionFn: func(sub *domainsubmission.Submission) bool {
-			return replyInThreadForSubmission(a, sub)
+			return replyInThreadForSubmission(sub)
 		},
 	}
 }

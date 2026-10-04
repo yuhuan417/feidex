@@ -34,7 +34,7 @@ func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmiss
 	if reuseMessageID != "" {
 		reuseIDs = []string{reuseMessageID}
 	}
-	results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, text, footerLines, replyInThreadForSubmission(a, sub), reuseIDs)
+	results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, text, footerLines, replyInThreadForSubmission(sub), reuseIDs)
 	ids := make([]string, 0, len(results))
 	for _, result := range results {
 		ids = append(ids, result.MessageID)

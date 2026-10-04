@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func replyInThreadForSubmission(_ *App, _ *domainsubmission.Submission) bool {
+func replyInThreadForSubmission(_ *domainsubmission.Submission) bool {
 	return false
 }
 
@@ -20,14 +20,14 @@ func sendSubmissionQueuedNotice(a *App, ctx context.Context, sub *domainsubmissi
 	if sub == nil {
 		return
 	}
-	sendTurnEventMessages(a, ctx, sub, "已加入队列，等待当前任务结束后开始处理。", replyInThreadForSubmission(a, sub), "turn_queued")
+	sendTurnEventMessages(a, ctx, sub, "已加入队列，等待当前任务结束后开始处理。", replyInThreadForSubmission(sub), "turn_queued")
 }
 
 func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *domainsubmission.Submission) {
 	if sub == nil {
 		return
 	}
-	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", replyInThreadForSubmission(a, sub), "turn_started")
+	sendTurnEventMessages(a, ctx, sub, "已轮到这条消息，开始处理。", replyInThreadForSubmission(sub), "turn_started")
 }
 
 func (s outboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string {
@@ -72,7 +72,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			title,
 			color,
 			appdelivery.BuildReplyCardChunks(body, true, footerLines),
-			replyInThreadForSubmission(s.app, sub),
+			replyInThreadForSubmission(sub),
 			payload.IsFinalAnswer,
 			reuseMessageID,
 		)
@@ -82,9 +82,9 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 				fallback = payload.DetailText
 			}
 			if payload.IsFinalAnswer {
-				sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, replyInThreadForSubmission(s.app, sub))
+				sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, replyInThreadForSubmission(sub))
 			} else {
-				sendTurnEventMessages(s.app, ctx, sub, fallback, replyInThreadForSubmission(s.app, sub), kind)
+				sendTurnEventMessages(s.app, ctx, sub, fallback, replyInThreadForSubmission(sub), kind)
 			}
 			return ""
 		}
@@ -103,16 +103,16 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			return reuseMessageID
 		}
 	}
-	id, err := replyCardWithIDEffect(ctx, s.app, sub.TriggerMessageID, card, replyInThreadForSubmission(s.app, sub))
+	id, err := replyCardWithIDEffect(ctx, s.app, sub.TriggerMessageID, card, replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := payload.SummaryText
 		if fallback == "" {
 			fallback = payload.DetailText
 		}
 		if payload.IsFinalAnswer {
-			sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, replyInThreadForSubmission(s.app, sub))
+			sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, replyInThreadForSubmission(sub))
 		} else {
-			sendTurnEventMessages(s.app, ctx, sub, fallback, replyInThreadForSubmission(s.app, sub), kind)
+			sendTurnEventMessages(s.app, ctx, sub, fallback, replyInThreadForSubmission(sub), kind)
 		}
 		return ""
 	}
@@ -161,9 +161,9 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 			return reuseMessageID
 		}
 	}
-	id, err := replyCardWithIDEffect(ctx, s.app, sub.TriggerMessageID, card, replyInThreadForSubmission(s.app, sub))
+	id, err := replyCardWithIDEffect(ctx, s.app, sub.TriggerMessageID, card, replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
-		sendTurnEventMessages(s.app, ctx, sub, body, replyInThreadForSubmission(s.app, sub), kind)
+		sendTurnEventMessages(s.app, ctx, sub, body, replyInThreadForSubmission(sub), kind)
 		return ""
 	}
 	recordMessageLink(s.app, id, kind, sub, itemID)

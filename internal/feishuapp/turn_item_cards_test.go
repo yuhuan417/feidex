@@ -176,7 +176,7 @@ func TestTurnItemCardAdditionalBranches(t *testing.T) {
 		t.Fatalf("sendTurnEventCardWithReuse(reuse fallback) = %q", got)
 	}
 
-	if got := replyInThreadForSubmission(prepareTestApp(&App{}), nil); got {
+	if got := replyInThreadForSubmission(nil); got {
 		t.Fatal("replyInThreadForSubmission(nil) should be false")
 	}
 }
