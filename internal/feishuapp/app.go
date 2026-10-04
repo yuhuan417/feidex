@@ -177,13 +177,6 @@ func startNextSubmission(submissions *submission.SubmissionQueueService, session
 	return submissions.StartNextSubmission(sessionKey)
 }
 
-func replyError(a *App, msg *feishu.InboundMessage, err error) error {
-	if msg == nil || err == nil {
-		return nil
-	}
-	return replyErrorWith(a.Context, identity.FrontendID(a.FrontendID()), newEffectRunner(a.runtimeOwner), msg, err)
-}
-
 func replyErrorWith(contextFn func() context.Context, frontend identity.FrontendID, runner frontendruntime.EffectRunner, msg *feishu.InboundMessage, err error) error {
 	if msg == nil || err == nil {
 		return nil

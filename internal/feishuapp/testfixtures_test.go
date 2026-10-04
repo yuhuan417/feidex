@@ -20,6 +20,7 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 	"feidex/internal/release"
 	appclauderuntime "feidex/internal/runtime/claude"
@@ -31,8 +32,12 @@ import (
 
 func newFeishuEventRouterForTest(a *App) *feishuEventRouter {
 	return newFeishuEventRouter(a.started, a.bindings.Inbound, a.runtimeOwner.InboundDeduper, a.runtimeOwner, func(msg *feishu.InboundMessage, err error) {
-		_ = replyError(a, msg, err)
+		_ = replyErrorForTest(a, msg, err)
 	})
+}
+
+func replyErrorForTest(a *App, msg *feishu.InboundMessage, err error) error {
+	return replyErrorWith(a.Context, identity.FrontendID(a.FrontendID()), newEffectRunner(a.runtimeOwner), msg, err)
 }
 
 // downloadFeishuStub records the message IDs it was asked to download and

@@ -116,7 +116,7 @@ func TestMiscAppFunctions(t *testing.T) {
 }
 
 func TestReplyErrorWithEmptyInputReturnsEarly(t *testing.T) {
-	if err := replyError(prepareTestApp(&App{}), nil, nil); err != nil {
+	if err := replyErrorForTest(prepareTestApp(&App{}), nil, nil); err != nil {
 		t.Fatalf("replyError(nil, nil) error = %v", err)
 	}
 }

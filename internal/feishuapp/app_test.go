@@ -257,11 +257,11 @@ func TestRecoverRuntimeStateStartsFreshThreadWhenResumeFails(t *testing.T) {
 func TestAppMiscMessageHelpers(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 
-	if err := replyError(a, nil, nil); err != nil {
+	if err := replyErrorForTest(a, nil, nil); err != nil {
 		t.Fatalf("replyError(nil, nil) error = %v", err)
 	}
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group"}
-	if err := replyError(a, msg, errors.New("boom")); err != nil {
+	if err := replyErrorForTest(a, msg, errors.New("boom")); err != nil {
 		t.Fatalf("replyError(reply) error = %v", err)
 	}
 	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "执行失败: boom") {
@@ -270,7 +270,7 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 
 	ff.replyTexts = nil
 	ff.sentTexts = nil
-	if err := replyError(a, &feishu.InboundMessage{ChatID: "chat-1"}, errors.New("boom2")); err != nil {
+	if err := replyErrorForTest(a, &feishu.InboundMessage{ChatID: "chat-1"}, errors.New("boom2")); err != nil {
 		t.Fatalf("replyError(send) error = %v", err)
 	}
 	if len(ff.sentTexts) == 0 || !strings.Contains(ff.sentTexts[0], "执行失败: boom2") {
