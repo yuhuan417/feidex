@@ -283,7 +283,27 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.InteractionDelivery = &interaction.DeliveryService{Repository: frontend.State()}
 	review := reviewapp.NewService(feishuapp.ReviewPorts(frontend))
 	bindings.Review = &review
-	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(frontend, bindings.Plan, bindings.TurnPresentation, liveThreads))
+	queuedNotice, expirePlan := feishuapp.SubmissionNoticePorts(feishuapp.SubmissionNoticeInputs{
+		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),
+		FrontendConfigIndex: frontend.FrontendConfigIndex(), State: frontend.State(), RuntimeOwner: scope.RuntimeOwner,
+		Continuation: bindings.Continuation, Feishu: frontend.Feishu(), Runner: *scope.RuntimeOwner.EffectRunner,
+	})
+	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(feishuapp.SubmissionPortInputs{
+		Plan: bindings.Plan, TurnPresentation: bindings.TurnPresentation, LiveThreads: liveThreads,
+		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),
+		FrontendConfigIndex: frontend.FrontendConfigIndex(), State: frontend.State(), Context: frontend.Context,
+		Feishu: frontend.Feishu(), RuntimeOwner: scope.RuntimeOwner, RuntimeDeps: frontend.BackendRuntimeDeps(),
+		AsyncRunner: frontend.AsyncRunner(), PendingQueue: bindings.Continuation, SkillResolver: bindings.Skills,
+		Continuation: bindings.Continuation, TurnItems: bindings.TurnItems, RuntimeMaintenance: bindings.SubmissionCleanup,
+		AutoRetry: bindings.AutoRetry, WorkspaceSelection: bindings.WorkspaceSelection,
+		ModelSettings: bindings.ModelSnapshots, ConversationConfiguration: bindings.ConversationConfiguration,
+		Starts: scope.RuntimeOwner.SubmissionStarts, QueuedNotice: queuedNotice, ExpirePlan: expirePlan,
+		ReplyText:       feishuapp.SubmissionReplyTextPort(frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner),
+		MarkQueued:      bindings.PendingQueue.MarkSubmissionQueuedReactions,
+		MarkRunning:     bindings.PendingQueue.MarkSubmissionRunningReactions,
+		ClearProcessing: bindings.PendingQueue.ClearSubmissionProcessingReactions,
+		StartTurn:       bindings.TurnStarter.Start, StartReview: bindings.Review.StartSubmission,
+	}))
 	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(frontend, bindings.TurnPresentation))
 	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend, bindings.Turns))
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}

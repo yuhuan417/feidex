@@ -272,7 +272,27 @@ func prepareTestApp(a *App) *App {
 	a.bindings.InteractionDelivery = &interaction.DeliveryService{Repository: a.State()}
 	review := reviewapp.NewService(ReviewPorts(a))
 	a.bindings.Review = &review
-	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(a, a.bindings.Plan, a.bindings.TurnPresentation, liveThreads))
+	queuedNotice, expirePlan := SubmissionNoticePorts(SubmissionNoticeInputs{
+		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),
+		FrontendConfigIndex: a.FrontendConfigIndex(), State: a.State(), RuntimeOwner: a.runtimeOwner,
+		Continuation: a.bindings.Continuation, Feishu: a.feishu, Runner: *a.runtimeOwner.EffectRunner,
+	})
+	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(SubmissionPortInputs{
+		Plan: a.bindings.Plan, TurnPresentation: a.bindings.TurnPresentation, LiveThreads: liveThreads,
+		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),
+		FrontendConfigIndex: a.FrontendConfigIndex(), State: a.State(), Context: a.Context,
+		Feishu: a.feishu, RuntimeOwner: a.runtimeOwner, RuntimeDeps: a.BackendRuntimeDeps(),
+		AsyncRunner: a.AsyncRunner(), PendingQueue: a.bindings.Continuation, SkillResolver: a.bindings.Skills,
+		Continuation: a.bindings.Continuation, TurnItems: a.bindings.TurnItems, RuntimeMaintenance: a.bindings.SubmissionCleanup,
+		AutoRetry: a.bindings.AutoRetry, WorkspaceSelection: a.bindings.WorkspaceSelection,
+		ModelSettings: a.bindings.ModelSnapshots, ConversationConfiguration: a.bindings.ConversationConfiguration,
+		Starts: a.runtimeOwner.SubmissionStarts, QueuedNotice: queuedNotice, ExpirePlan: expirePlan,
+		ReplyText:       SubmissionReplyTextPort(a.FrontendID(), *a.runtimeOwner.EffectRunner),
+		MarkQueued:      a.bindings.PendingQueue.MarkSubmissionQueuedReactions,
+		MarkRunning:     a.bindings.PendingQueue.MarkSubmissionRunningReactions,
+		ClearProcessing: a.bindings.PendingQueue.ClearSubmissionProcessingReactions,
+		StartTurn:       a.bindings.TurnStarter.Start, StartReview: a.bindings.Review.StartSubmission,
+	}))
 	*a.bindings.Turns = turn.NewService(TurnPorts(a, a.bindings.TurnPresentation))
 	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(a, a.bindings.Turns))
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}

@@ -28,9 +28,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 396 |
-| 收 `*App` 的顶层函数 | 240 |
-| 收 `*App` 的 `*Ports` 工厂 | 14 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 395 |
+| 收 `*App` 的顶层函数 | 239 |
+| 收 `*App` 的 `*Ports` 工厂 | 13 |
 | **持有 `*App` 字段的结构体** | **25** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -78,7 +78,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
-| 17 | `SubmissionPorts` | 7 | 8 | 2 |
 | 15 | `ClaudeRuntimePorts` | 6 | 8 | 1 |
 | 12 | `InboundPorts` | 5 | 2 | 5 |
 | 9 | `AutoRetryPorts` | 7 | 2 | 0 |
@@ -570,6 +569,13 @@ reply/session-async callbacks 改捕获 effect outbound、frontend lifecycle、s
 `outboundCardService`。过期提示仍使用当前 scoped session 的 workspace/plan 标题、原灰色卡片与提示文案；新增
 回归测试验证渲染和 patch。该 helper 原本只经已有的 `newPlanModeAppAdapter(a)` 间接使用 App，没有减少 AST
 `*App` 数量，本步只缩小 callback 的运行时捕获边界；接下来继续把 `SubmissionPorts` 改为显式 inputs。
+
+步骤 78 将 `SubmissionPorts(*App, ...)` 改为 `SubmissionPorts(SubmissionPortInputs)`，production composition
+与 test fixture 注入 state/config、runtime owner/deps、session actor、queue/turn/review services 和 notice/reply
+ports。queued 与 expiry notice 的构造另改为接收 config view、scoped state、runtime owner、continuation、Feishu
+client 与 effect runner；backend/client 仍在执行时从 owner 查询，session async 仍经过 lifecycle admission 后由
+session actor 串行。生产 `*App` 引用由 395 的前一基线 396 降至 395，收 `*App` 的函数由 240 降至 239，
+App-bearing `*Ports` 工厂由 14 降至 13，持有 App 字段的结构体保持 25；lazy binding-read 预算保持 13。
 
 ## 方法
 

@@ -3,8 +3,13 @@ package feishuapp
 import (
 	"context"
 	"feidex/internal/adapter/feishu/planmode"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application/continuation"
+	"feidex/internal/config"
 	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
+	frontendruntime "feidex/internal/runtime"
+	"sync"
 
 	appdelivery "feidex/internal/adapter/feishu/delivery"
 	"feidex/internal/adapter/feishu/quietmode"
@@ -32,6 +37,32 @@ func (s outboundCardService) expirePlanConfirmation(ctx context.Context, pending
 	title := planmode.ContentCardTitleForSessionFromState(s.replyChunks.state, true, pending.SessionKey, "", planmode.ExitExpiredTitle)
 	card := s.statusCards.SimpleStatusCard(title, "grey", "当前已有新的提交，旧的计划确认已失效。", nil)
 	_ = s.replyChunks.outbound.PatchCard(ctx, pending.FeishuMsgID, card)
+}
+
+type SubmissionNoticeInputs struct {
+	Config              *config.Config
+	ConfigMu            *sync.RWMutex
+	FrontendID          string
+	FrontendConfigIndex int
+	State               *appstate.Store
+	RuntimeOwner        *frontendruntime.FrontendOwner
+	Continuation        *continuation.Service
+	Feishu              FeishuClient
+	Runner              frontendruntime.EffectRunner
+}
+
+func SubmissionNoticePorts(inputs SubmissionNoticeInputs) (func(context.Context, *domainsubmission.Submission), func(context.Context, *interaction.PendingRequest)) {
+	view := frontendConfigView{
+		cfg: inputs.Config, mu: inputs.ConfigMu, frontendID: inputs.FrontendID,
+		frontendConfigIndex: inputs.FrontendConfigIndex,
+	}
+	outbound := newEffectOutbound(inputs.FrontendID, inputs.Runner)
+	links := newMessageLinkRecorder(view, inputs.RuntimeOwner, inputs.Continuation)
+	chunks := newReplyChunkDelivery(
+		newCardRenderer(inputs.Config), inputs.State, outbound, inputs.Feishu != nil, view, links, localFileLinkPatcher{},
+	)
+	cards := outboundCardService{replyChunks: chunks, statusCards: simpleStatusCardRenderer{client: inputs.Feishu}}
+	return cards.sendSubmissionQueuedNotice, cards.expirePlanConfirmation
 }
 
 func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *domainsubmission.Submission) {

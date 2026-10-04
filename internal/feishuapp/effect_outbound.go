@@ -60,3 +60,8 @@ func (o effectOutbound) PatchCard(ctx context.Context, messageID string, card ma
 func newEffectOutbound(frontend string, runner runtime.EffectRunner) effectOutbound {
 	return effectOutbound{frontend: identity.FrontendID(frontend), runner: runner}
 }
+
+func SubmissionReplyTextPort(frontend string, runner runtime.EffectRunner) func(context.Context, string, string, bool) error {
+	outbound := newEffectOutbound(frontend, runner)
+	return outbound.ReplyText
+}

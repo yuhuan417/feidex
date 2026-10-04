@@ -6,6 +6,7 @@ import (
 	"feidex/internal/application/announcement"
 	conversationapp "feidex/internal/application/conversation"
 	appplan "feidex/internal/application/plan"
+	appworkspace "feidex/internal/application/workspace"
 	"feidex/internal/domain/identity"
 	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
@@ -204,48 +205,71 @@ func (a claudeClientAdapter) CanRetryFreshSession(sessionKey string) bool {
 	return true
 }
 
-func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstream.Service, liveThreads appsubmission.QueueLiveThreadProvider) appsubmission.Dependencies {
-	// Read the sibling services once, at construction time, so the dependency
-	// is visible instead of hidden in the closures below.
-	pendingQueue := a.bindings.PendingQueue
-	turnStarter := a.bindings.TurnStarter
-	review := a.bindings.Review
-	conversationConfiguration := a.bindings.ConversationConfiguration
-	starts := a.runtimeOwner.SubmissionStarts
-	cfg, configMu := a.Config(), a.ConfigMu()
-	frontendID, frontendConfigIndex := a.FrontendID(), a.FrontendConfigIndex()
-	stateStore, runtimeOwner := a.State(), a.runtimeOwner
-	contextFn, feishuClient := runtimeOwner.Lifecycle.Context, a.feishu
-	asyncRunner, sessionActors := a.AsyncRunner(), runtimeOwner.SessionActors
-	continuation, skillResolver := a.bindings.Continuation, a.bindings.Skills
-	turnItems, runtimeMaintenance := a.bindings.TurnItems, a.bindings.SubmissionCleanup
-	autoRetry, modelSettings := a.bindings.AutoRetry, a.bindings.ModelSnapshots
+type submissionStartTracker interface {
+	TryBegin(string) bool
+	Finish(string) bool
+}
+
+type SubmissionPortInputs struct {
+	Plan                      *appplan.Service
+	TurnPresentation          *appturnstream.Service
+	LiveThreads               appsubmission.QueueLiveThreadProvider
+	Config                    *config.Config
+	ConfigMu                  *sync.RWMutex
+	FrontendID                string
+	FrontendConfigIndex       int
+	State                     *appstate.Store
+	Context                   func() context.Context
+	Feishu                    FeishuClient
+	RuntimeOwner              *frontendruntime.FrontendOwner
+	RuntimeDeps               BackendRuntimeDeps
+	AsyncRunner               func(func())
+	PendingQueue              appsubmission.QueuePendingQueueProvider
+	SkillResolver             appsubmission.QueueSkillResolver
+	Continuation              appsubmission.QueueReplyContinuationProvider
+	TurnItems                 interface{ ClearTurn(string) }
+	RuntimeMaintenance        appsubmission.QueueRuntimeMaintenanceProvider
+	AutoRetry                 appsubmission.QueueAutoRetryProvider
+	WorkspaceSelection        appworkspace.SelectionService
+	ModelSettings             appsubmission.ModelSettings
+	ConversationConfiguration conversationapp.Configuration
+	Starts                    submissionStartTracker
+	QueuedNotice              func(context.Context, *domainsubmission.Submission)
+	ExpirePlan                func(context.Context, *interaction.PendingRequest)
+	ReplyText                 func(context.Context, string, string, bool) error
+	MarkQueued                func(*domainsubmission.Submission)
+	MarkRunning               func(*domainsubmission.Submission)
+	ClearProcessing           func(*domainsubmission.Submission)
+	StartTurn                 func(context.Context, string, string, *domainsubmission.Submission, string, string, string, string, string, string, string) (string, error)
+	StartReview               func(context.Context, string, *domainsubmission.Submission) (string, error)
+}
+
+func SubmissionPorts(inputs SubmissionPortInputs) appsubmission.Dependencies {
+	cfg, configMu := inputs.Config, inputs.ConfigMu
+	frontendID, frontendConfigIndex := inputs.FrontendID, inputs.FrontendConfigIndex
+	stateStore, runtimeOwner := inputs.State, inputs.RuntimeOwner
+	contextFn, feishuClient := inputs.Context, inputs.Feishu
 	configView := frontendConfigView{cfg: cfg, mu: configMu, frontendID: frontendID, frontendConfigIndex: frontendConfigIndex}
 	configuredBackend := ConfiguredBackendBuilder(cfg, configMu, runtimeOwner.Backend, frontendID, frontendConfigIndex)
-	workspaceSelection := a.bindings.WorkspaceSelection
 	defaultWorkspaceID := func() string { return configView.defaultWorkspaceID() }
 	runtime := runtimeView{owner: runtimeOwner}
-	queuedNotice := newOutboundCardService(a)
-	replyOutbound := newEffectOutbound(frontendID, newEffectRunner(runtimeOwner))
 	return appsubmission.Dependencies{
-		PlanConfirmation: plan,
-		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
-			queuedNotice.expirePlanConfirmation(ctx, pending)
-		},
+		PlanConfirmation:   inputs.Plan,
+		PlanExpired:        inputs.ExpirePlan,
 		Context:            contextFn,
 		AppState:           stateStore,
-		SkillResolver:      skillResolver,
+		SkillResolver:      inputs.SkillResolver,
 		AttachmentResolver: sqAttachmentResolverFullAdapter{cfg: cfg, contextFn: contextFn, feishuClient: feishuClient},
-		LiveThread:         liveThreads,
-		PendingQueue:       continuation,
+		LiveThread:         inputs.LiveThreads,
+		PendingQueue:       inputs.PendingQueue,
 		RuntimeState:       runtimeOwner.TurnBindings,
-		Items:              turnItems,
-		RuntimeMaintenance: runtimeMaintenance,
-		ReplyContinuation:  continuation,
-		TurnStream:         turnPresentation,
-		AutoRetry:          autoRetry,
+		Items:              inputs.TurnItems,
+		RuntimeMaintenance: inputs.RuntimeMaintenance,
+		ReplyContinuation:  inputs.Continuation,
+		TurnStream:         inputs.TurnPresentation,
+		AutoRetry:          inputs.AutoRetry,
 
-		BackendRuntime: sqBackendRuntimeAdapter{deps: a.BackendRuntimeDeps(), backendOwner: a.runtimeOwner},
+		BackendRuntime: sqBackendRuntimeAdapter{deps: inputs.RuntimeDeps, backendOwner: runtimeOwner},
 		DefaultWorkspaceID: func() string {
 			return defaultWorkspaceID()
 		},
@@ -265,53 +289,45 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			return sessionInflightAllowsAdditional(intToInflightMode(mode))
 		},
 		ResolveWorkspaceID: func(msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string {
-			return resolveSubmissionWorkspaceID(stateStore, workspaceSelection, defaultWorkspaceID, msg, sess, bindOnlyCurrentRoot)
+			return resolveSubmissionWorkspaceID(stateStore, inputs.WorkspaceSelection, defaultWorkspaceID, msg, sess, bindOnlyCurrentRoot)
 		},
 		ReplyText: func(ctx context.Context, messageID, text string, inThread bool) error {
-			return replyOutbound.ReplyText(ctx, messageID, text, inThread)
+			return inputs.ReplyText(ctx, messageID, text, inThread)
 		},
-		SendQueuedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
-			queuedNotice.sendSubmissionQueuedNotice(ctx, sub)
-		},
+		SendQueuedNotice: inputs.QueuedNotice,
 		RunSessionAsync: func(sessionKey string, fn func()) {
 			if fn == nil {
 				return
 			}
-			runtimeOwner.Lifecycle.Run(func() { sessionActors.Run("session:"+strings.TrimSpace(sessionKey), fn) }, asyncRunner)
+			runtimeOwner.Lifecycle.Run(func() { runtimeOwner.SessionActors.Run("session:"+strings.TrimSpace(sessionKey), fn) }, inputs.AsyncRunner)
 		},
 		TryBeginStart: func(sessionKey string) bool {
-			return starts.TryBegin(sessionKey)
+			return inputs.Starts.TryBegin(sessionKey)
 		},
 		FinishStart: func(sessionKey string) bool {
-			return starts.Finish(sessionKey)
+			return inputs.Starts.Finish(sessionKey)
 		},
 		LogSessionState: func(event, sessionKey string, sess *conversation.Session) {
 			logSessionState(event, sessionKey, sess)
 		},
-		MarkSubmissionQueuedReactions: func(sub *domainsubmission.Submission) {
-			pendingQueue.MarkSubmissionQueuedReactions(sub)
-		},
-		MarkSubmissionRunningReactions: func(sub *domainsubmission.Submission) {
-			pendingQueue.MarkSubmissionRunningReactions(sub)
-		},
-		ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
-			pendingQueue.ClearSubmissionProcessingReactions(sub)
-		},
+		MarkSubmissionQueuedReactions:      inputs.MarkQueued,
+		MarkSubmissionRunningReactions:     inputs.MarkRunning,
+		ClearSubmissionProcessingReactions: inputs.ClearProcessing,
 		IsReviewSubmission: func(sub *domainsubmission.Submission) bool {
 			return appreviewcmd.IsReviewSubmission(sub)
 		},
 		StartSubmissionTurn: func(ctx context.Context, sessionKey, threadID string, sub *domainsubmission.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
-			return turnStarter.Start(ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode)
+			return inputs.StartTurn(ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode)
 		},
 		StartSubmissionReview: func(ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error) {
-			return review.StartSubmission(ctx, threadID, sub)
+			return inputs.StartReview(ctx, threadID, sub)
 		},
 		StartConversation: func(ctx context.Context, ws *config.Workspace, sess *conversation.Session, sub *domainsubmission.Submission, model string) (appsubmission.ConversationStarted, error) {
 			client, err := runtime.requireCodexClient()
 			if err != nil {
 				return appsubmission.ConversationStarted{}, err
 			}
-			return codexadapter.StartConversation(ctx, client, conversationConfiguration.ThreadStart(conversationapp.Request{Workspace: ws, Session: sess, Model: model}), sub.ModelConfig)
+			return codexadapter.StartConversation(ctx, client, inputs.ConversationConfiguration.ThreadStart(conversationapp.Request{Workspace: ws, Session: sess, Model: model}), sub.ModelConfig)
 		},
 		DeleteTurnArtifacts: stateStore.DeleteTurnArtifacts,
 		ClaudePrompt:        claudeadapter.BuildPrompt,
@@ -331,7 +347,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 		BotProfile: func() *state.BotProfile {
 			return stateStore.BotProfile()
 		},
-		ModelSettings: modelSettings,
+		ModelSettings: inputs.ModelSettings,
 	}
 }
 
