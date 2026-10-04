@@ -113,10 +113,14 @@ func (a claudeClientAdapter) StartSteerTurn(ctx context.Context, sessionKey, thr
 // Full adapter types for providers that need app access
 // ---------------------------------------------------------------------------
 
-type sqAttachmentResolverFullAdapter struct{ app *App }
+type sqAttachmentResolverFullAdapter struct {
+	cfg          *config.Config
+	contextFn    func() context.Context
+	feishuClient FeishuClient
+}
 
 func (a sqAttachmentResolverFullAdapter) ResolveInboundAttachments(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
-	return resolveInboundAttachments(a.app.cfg, a.app.Context, a.app.feishu, msg, workspaceID, sessionKey)
+	return resolveInboundAttachments(a.cfg, a.contextFn, a.feishuClient, msg, workspaceID, sessionKey)
 }
 
 type sqBackendRuntimeFullAdapter struct{ app *App }
@@ -204,7 +208,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 		Context:            a.Context,
 		AppState:           a.State(),
 		SkillResolver:      a.bindings.Skills,
-		AttachmentResolver: sqAttachmentResolverFullAdapter{app: a},
+		AttachmentResolver: sqAttachmentResolverFullAdapter{cfg: a.cfg, contextFn: a.Context, feishuClient: a.feishu},
 		LiveThread:         liveThreads,
 		PendingQueue:       a.bindings.Continuation,
 		RuntimeState:       a.runtimeOwner.TurnBindings,
