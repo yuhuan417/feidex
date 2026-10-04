@@ -48,7 +48,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 		return ""
 	}
 	if payload.ItemType == "user_input" && payload.UserInput != nil {
-		return sendAsyncUserInputCard(s.app, sub, *payload.UserInput, reuseMessageID)
+		return s.asyncInput.Send(sub, *payload.UserInput, reuseMessageID)
 	}
 	kind := turnitem.TurnItemEventKind(payload.ItemType)
 	footerLines := []string(nil)

@@ -15,10 +15,17 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload, reuseMessageID string) string {
+type asyncUserInputCardSender struct {
+	pending interface {
+		Pending(string) *state.PendingRequest
+	}
+	delivery pendingCardDeliveryService
+}
+
+func (s asyncUserInputCardSender) Send(sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload, reuseMessageID string) string {
 	payload.ThreadID, payload.TurnID = sub.ThreadID, sub.TurnID
 	requestID := pendingforms.AsyncUserInputPendingKind + ":" + sub.TurnID + ":" + payload.ItemID
-	if pending := a.State().Pending(requestID); pending != nil && (strings.TrimSpace(pending.FeishuMsgID) != "" || state.NormalizePendingRequestStatus(pending.Status) != state.PendingRequestStatusPending) {
+	if pending := s.pending.Pending(requestID); pending != nil && (strings.TrimSpace(pending.FeishuMsgID) != "" || state.NormalizePendingRequestStatus(pending.Status) != state.PendingRequestStatusPending) {
 		return pending.FeishuMsgID
 	}
 	drafts := pendingforms.FormDrafts{Values: map[string]string{}}
@@ -28,7 +35,7 @@ func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pe
 		}
 	}
 	card := pendingforms.RenderAsyncUserInputFormCard(requestID, payload, drafts, sub.UserID)
-	if err := deliverPendingCard(a, sub, card, pendingCardDelivery{
+	if err := s.delivery.Deliver(anchorForSubmission(sub), card, pendingCardDelivery{
 		requestKey: requestID, backend: domainbackend.BackendCodex, kind: pendingforms.AsyncUserInputPendingKind,
 		sessionKey: sub.SessionKey, threadID: sub.ThreadID, turnID: sub.TurnID,
 		itemID: payload.ItemID, ownerUserID: sub.UserID, payloadJSON: mustJSON(payload),
@@ -37,7 +44,7 @@ func sendAsyncUserInputCard(a *App, sub *domainsubmission.Submission, payload pe
 		slog.Error("async user input card failed", "turn_id", sub.TurnID, "item_id", payload.ItemID, "error", err)
 		return ""
 	}
-	return a.State().Pending(requestID).FeishuMsgID
+	return s.pending.Pending(requestID).FeishuMsgID
 }
 
 func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {

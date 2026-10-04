@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 456 |
-| 收 `*App` 的顶层函数 | 283 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 455 |
+| 收 `*App` 的顶层函数 | 282 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **42** |
 
@@ -352,6 +352,15 @@ owner，Claude stream、turn items 和 final delivery 共用同一实现。对�
 `turn/completed` 收口边界。`replyChunkDelivery` 构造时显式接收 card renderer、turn state、
 effect outbound 与 transport readiness，不再新增 `*App` 参数。生产 `*App` 引用预算由 463
 降至 456，app-bearing 函数数由 290 降至 283，持有 App 字段的结构体预算保持 42。
+
+步骤 41 将 outbound async user-input 卡从 `sendAsyncUserInputCard(*App, ...)` 拆成
+`asyncUserInputCardSender`，显式持有 scoped pending-state provider 与
+`pendingCardDeliveryService`。pending delivery owner 只接收 `InteractionDelivery`、frontend
+lifecycle/identity、effect deduper/runner 与 turn working-card state；非阻塞请求不写
+`waiting_user_input`，卡片仍只复用 reasoning-only working card。对照 SM-26，问题仍独立于
+final candidate，答案晚于 turn completion 时仍走同 thread continuation，回调认领和取消
+语义未变。生产 `*App` 引用预算由 456 降至 455，app-bearing 函数数由 283 降至 282，持有
+App 字段的结构体预算保持 42。
 
 ## 方法
 

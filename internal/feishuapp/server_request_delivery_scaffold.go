@@ -47,6 +47,51 @@ type pendingCardAnchor struct {
 	replyInThread    bool
 }
 
+type pendingWorkingTurnState interface {
+	TakeReasoningOnlyWorkingMessageID(string) string
+	DiscardWorkingCard(string)
+}
+
+type pendingCardDeliveryService struct {
+	interactions *applicationinteraction.DeliveryService
+	lifecycle    *runtime.FrontendRuntime
+	frontend     identity.FrontendID
+	deduper      runtime.EffectDeduper
+	turns        pendingWorkingTurnState
+	runner       runtime.EffectRunner
+	ready        bool
+}
+
+func (s pendingCardDeliveryService) Deliver(anchor pendingCardAnchor, card map[string]any, delivery pendingCardDelivery) error {
+	if !s.ready || s.lifecycle == nil {
+		return fmt.Errorf("pending card delivery unavailable")
+	}
+	requestKey := strings.TrimSpace(delivery.requestKey)
+	if requestKey == "" {
+		return fmt.Errorf("missing request id")
+	}
+	waitingStatus := strings.TrimSpace(delivery.waitingStatus)
+	if waitingStatus == "" && !delivery.nonBlocking {
+		return fmt.Errorf("missing waiting status")
+	}
+	linkKind := strings.TrimSpace(delivery.linkKind)
+	if linkKind == "" {
+		return fmt.Errorf("missing link kind")
+	}
+	ttl := delivery.ttl
+	if ttl <= 0 {
+		ttl = 30 * time.Minute
+	}
+	input := applicationinteraction.DeliveryInput{
+		Request:      interaction.PendingRequest{ID: requestKey, RequestIDRaw: strings.TrimSpace(delivery.requestIDStored), Backend: normalizeRuntimeBackend(delivery.backend), Kind: strings.TrimSpace(delivery.kind), SessionKey: strings.TrimSpace(delivery.sessionKey), ThreadID: strings.TrimSpace(delivery.threadID), TurnID: strings.TrimSpace(delivery.turnID), ItemID: strings.TrimSpace(delivery.itemID), OwnerUserID: strings.TrimSpace(delivery.ownerUserID), PayloadJSON: delivery.payloadJSON},
+		SubmissionID: anchor.submissionID, WaitingStatus: waitingStatus, NonBlocking: delivery.nonBlocking, TTL: ttl,
+	}
+	return s.interactions.Open(s.lifecycle.Context(), input, pendingCardPresenter{
+		frontend: s.frontend, deduper: s.deduper, turns: s.turns, runner: s.runner,
+		anchor: anchor, card: card, reuseMessageID: delivery.reuseMessageID,
+	})
+}
+
 func anchorForSubmission(sub *domainsubmission.Submission) pendingCardAnchor {
 	if sub == nil {
 		return pendingCardAnchor{}
@@ -82,40 +127,18 @@ func deliverPendingCardWithAnchor(a *App, anchor pendingCardAnchor, card map[str
 	if a == nil || a.feishu == nil {
 		return fmt.Errorf("pending card delivery unavailable")
 	}
-	requestKey := strings.TrimSpace(delivery.requestKey)
-	if requestKey == "" {
-		return fmt.Errorf("missing request id")
-	}
-	waitingStatus := strings.TrimSpace(delivery.waitingStatus)
-	if waitingStatus == "" && !delivery.nonBlocking {
-		return fmt.Errorf("missing waiting status")
-	}
-	linkKind := strings.TrimSpace(delivery.linkKind)
-	if linkKind == "" {
-		return fmt.Errorf("missing link kind")
-	}
-	ttl := delivery.ttl
-	if ttl <= 0 {
-		ttl = 30 * time.Minute
-	}
-	input := applicationinteraction.DeliveryInput{
-		Request:      interaction.PendingRequest{ID: requestKey, RequestIDRaw: strings.TrimSpace(delivery.requestIDStored), Backend: normalizeRuntimeBackend(delivery.backend), Kind: strings.TrimSpace(delivery.kind), SessionKey: strings.TrimSpace(delivery.sessionKey), ThreadID: strings.TrimSpace(delivery.threadID), TurnID: strings.TrimSpace(delivery.turnID), ItemID: strings.TrimSpace(delivery.itemID), OwnerUserID: strings.TrimSpace(delivery.ownerUserID), PayloadJSON: delivery.payloadJSON},
-		SubmissionID: anchor.submissionID, WaitingStatus: waitingStatus, NonBlocking: delivery.nonBlocking, TTL: ttl,
-	}
-	return a.bindings.InteractionDelivery.Open(a.Context(), input, pendingCardPresenter{
+	service := pendingCardDeliveryService{
+		interactions: a.bindings.InteractionDelivery, lifecycle: &a.runtimeOwner.Lifecycle,
 		frontend: identity.FrontendID(a.FrontendID()), deduper: a.runtimeOwner.EffectDeduper,
-		turns: a.bindings.TurnPresentation, runner: *a.runtimeOwner.EffectRunner,
-		anchor: anchor, card: card, reuseMessageID: delivery.reuseMessageID,
-	})
+		turns: a.bindings.TurnPresentation, runner: *a.runtimeOwner.EffectRunner, ready: true,
+	}
+	return service.Deliver(anchor, card, delivery)
 }
 
 type pendingCardPresenter struct {
-	frontend identity.FrontendID
-	deduper  runtime.EffectDeduper
-	turns    interface {
-		TakeReasoningOnlyWorkingMessageID(string) string
-		DiscardWorkingCard(string)
-	}
+	frontend       identity.FrontendID
+	deduper        runtime.EffectDeduper
+	turns          pendingWorkingTurnState
 	runner         runtime.EffectRunner
 	anchor         pendingCardAnchor
 	card           map[string]any
