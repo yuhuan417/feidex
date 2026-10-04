@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/domain/conversation"
 	"fmt"
@@ -58,13 +59,34 @@ func workspaceCommandApp(a *App) workspacecmd.Dependencies {
 	}
 }
 
+// workspaceBackendConfigDeps reads the backend-specific workspace notices from
+// the active driver at construction time. They are plain reads on the driver,
+// so the workspace services do not have to hold the backend configuration
+// service, which is assembled later in composition — reading it here would
+// capture its zero value.
+func workspaceBackendConfigDeps(driver appbackend.Driver) workspacecmd.BackendConfigDeps {
+	if driver == nil {
+		return workspacecmd.BackendConfigDeps{}
+	}
+	conversation := driver.Conversation()
+	permission := driver.Permission()
+	if conversation == nil || permission == nil {
+		return workspacecmd.BackendConfigDeps{}
+	}
+	return workspacecmd.BackendConfigDeps{
+		BackendWorkspaceSwitchBindingNotice:        conversation.WorkspaceSwitchBindingNotice,
+		BackendWorkspaceSwitchBindingFailureNotice: conversation.WorkspaceSwitchBindingFailureNotice,
+		BackendWorkspaceSwitchInFlightNotice:       conversation.WorkspaceSwitchInFlightNotice,
+		BackendWorkspaceCommandUsage:               permission.WorkspaceCommandUsage,
+	}
+}
+
 func buildWorkspaceConfigService(a *App) *workspacecmd.ConfigService {
 	if a == nil {
 		return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{})
 	}
 
 	st := a.State()
-	bcfg := a.bindings.BackendConfiguration
 	return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{
 		Dependencies: workspaceCommandApp(a),
 		State:        workspaceStateDeps(st),
@@ -77,13 +99,7 @@ func buildWorkspaceConfigService(a *App) *workspacecmd.ConfigService {
 				return a.bindings.Conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 		},
-		Backend: workspacecmd.BackendConfigDeps{
-			BackendWorkspaceSwitchBindingNotice:        bcfg.BackendWorkspaceSwitchBindingNotice,
-			BackendWorkspaceSwitchBindingFailureNotice: bcfg.BackendWorkspaceSwitchBindingFailureNotice,
-			BackendWorkspaceSwitchInFlightNotice:       bcfg.BackendWorkspaceSwitchInFlightNotice,
-			BackendWorkspaceCommandUsage:               bcfg.BackendWorkspaceCommandUsage,
-			BackendWorkspacePermissionCommand:          bcfg.HandleBackendWorkspacePermissionCommand,
-		},
+		Backend: workspaceBackendConfigDeps(a.BackendDriver()),
 		Actions: workspacecmd.ActionDeps{
 			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)

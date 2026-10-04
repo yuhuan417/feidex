@@ -19,7 +19,6 @@ func buildWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService 
 	}
 
 	st := a.State()
-	bcfg := a.bindings.BackendConfiguration
 	return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{
 		Dependencies: workspaceCommandApp(a),
 		State:        workspaceStateDeps(st),
@@ -43,13 +42,7 @@ func buildWorkspaceManagementService(a *App) *appworkspacecmd.ManagementService 
 			ClearCloneOp: workspaceCloneClearOp(a.runtimeOwner),
 			GitClone:     workspaceGitClone,
 		},
-		Backend: appworkspacecmd.BackendConfigDeps{
-			BackendWorkspaceSwitchBindingNotice:        bcfg.BackendWorkspaceSwitchBindingNotice,
-			BackendWorkspaceSwitchBindingFailureNotice: bcfg.BackendWorkspaceSwitchBindingFailureNotice,
-			BackendWorkspaceSwitchInFlightNotice:       bcfg.BackendWorkspaceSwitchInFlightNotice,
-			BackendWorkspaceCommandUsage:               bcfg.BackendWorkspaceCommandUsage,
-			BackendWorkspacePermissionCommand:          bcfg.HandleBackendWorkspacePermissionCommand,
-		},
+		Backend: workspaceBackendConfigDeps(a.BackendDriver()),
 		Actions: appworkspacecmd.ActionDeps{
 			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)

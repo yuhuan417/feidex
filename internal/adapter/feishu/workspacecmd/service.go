@@ -261,7 +261,6 @@ type (
 	BackendWorkspaceSwitchBindingFailureNoticeFn func() string
 	BackendWorkspaceSwitchInFlightNoticeFn       func() string
 	BackendWorkspaceCommandUsageFn               func() string
-	BackendWorkspacePermissionCommandFn          func(msg *feishu.InboundMessage, args []string, sessionKey string) error
 )
 
 // Action handling callbacks.
@@ -325,12 +324,14 @@ type CloneDeps struct {
 	GitWorktreeAdd GitWorktreeAddFn
 }
 
+// BackendConfigDeps carries the backend-specific notices the workspace
+// commands surface. Permission subcommands do not go through here: they are
+// dispatched by ConfigService.CommandWorkspace through Dependencies.BackendDriver.
 type BackendConfigDeps struct {
 	BackendWorkspaceSwitchBindingNotice        BackendWorkspaceSwitchBindingNoticeFn
 	BackendWorkspaceSwitchBindingFailureNotice BackendWorkspaceSwitchBindingFailureNoticeFn
 	BackendWorkspaceSwitchInFlightNotice       BackendWorkspaceSwitchInFlightNoticeFn
 	BackendWorkspaceCommandUsage               BackendWorkspaceCommandUsageFn
-	BackendWorkspacePermissionCommand          BackendWorkspacePermissionCommandFn
 }
 
 type ActionDeps struct {
@@ -483,12 +484,6 @@ func (s ConfigService) BackendWorkspaceCommandUsage() string {
 		return ""
 	}
 	return s.deps.Backend.BackendWorkspaceCommandUsage()
-}
-func (s ConfigService) BackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-	if s.deps.Backend.BackendWorkspacePermissionCommand == nil {
-		return nil
-	}
-	return s.deps.Backend.BackendWorkspacePermissionCommand(msg, args, sessionKey)
 }
 func (s ConfigService) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 	if s.deps.Actions.CompleteMenuCommand == nil {
@@ -680,12 +675,6 @@ func (s ManagementService) BackendWorkspaceCommandUsage() string {
 		return ""
 	}
 	return s.deps.Backend.BackendWorkspaceCommandUsage()
-}
-func (s ManagementService) BackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-	if s.deps.Backend.BackendWorkspacePermissionCommand == nil {
-		return nil
-	}
-	return s.deps.Backend.BackendWorkspacePermissionCommand(msg, args, sessionKey)
 }
 func (s ManagementService) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 	if s.deps.Actions.CompleteMenuCommand == nil {
