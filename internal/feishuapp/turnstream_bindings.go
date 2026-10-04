@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	appapproval "feidex/internal/adapter/feishu/approval"
 	"feidex/internal/adapter/feishu/turn"
 	"feidex/internal/adapter/feishu/turnitem"
 	appturn "feidex/internal/application/turn"
@@ -32,28 +33,31 @@ func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, t
 	return a.compact.CompleteStandaloneCompactItem(threadID, turnID, item.MergedRaw())
 }
 
-type claudeTurnStreamPort struct{ app *App }
+type claudeTurnStreamPort struct {
+	itemContext      appapproval.ItemContext
+	turnPresentation *appturnstream.Service
+}
 
 func (p claudeTurnStreamPort) NoteTurnItemStarted(threadID, turnID string, item turnitem.ProtocolItem) {
-	p.app.bindings.ItemContext.Start(threadID, turnID, item)
+	p.itemContext.Start(threadID, turnID, item)
 }
 func (p claudeTurnStreamPort) UpdateInFlightTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
-	p.app.bindings.TurnPresentation.UpdateInFlightTurnItem(ctx, threadID, turnID, itemID, item)
+	p.turnPresentation.UpdateInFlightTurnItem(ctx, threadID, turnID, itemID, item)
 }
 func (p claudeTurnStreamPort) RecordTurnError(threadID, turnID, message string) {
-	p.app.bindings.TurnPresentation.RecordTurnError(threadID, turnID, message)
+	p.turnPresentation.RecordTurnError(threadID, turnID, message)
 }
 func (p claudeTurnStreamPort) CompleteTurnItem(ctx context.Context, threadID, turnID, itemID string, item turnitem.ProtocolItem) {
-	p.app.bindings.TurnPresentation.CompleteTurnItem(ctx, threadID, turnID, itemID, item)
+	p.turnPresentation.CompleteTurnItem(ctx, threadID, turnID, itemID, item)
 }
 func (p claudeTurnStreamPort) PrepareTurnStreamQuietBoundary(turnID string) string {
-	return p.app.bindings.TurnPresentation.PrepareStreamQuietBoundary(turnID).ReuseMessageID
+	return p.turnPresentation.PrepareStreamQuietBoundary(turnID).ReuseMessageID
 }
 func (p claudeTurnStreamPort) PrepareTurnStreamQuietUpdate(sessionKey string, sub *domainsubmission.Submission, threadID, itemID string, item turnitem.ProtocolItem, workspaceCwd string) turn.QuietWorkingCardOp {
-	return p.app.bindings.TurnPresentation.PrepareStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
+	return p.turnPresentation.PrepareStreamQuietUpdate(sessionKey, sub, threadID, itemID, item, workspaceCwd)
 }
 func (p claudeTurnStreamPort) MarkTurnStreamFinal(turnID string) {
-	p.app.bindings.TurnPresentation.MarkStreamFinal(turnID)
+	p.turnPresentation.MarkStreamFinal(turnID)
 }
 
 func TurnPresentationPorts(a *App, turns *appturn.Service) appturnstream.Dependencies {

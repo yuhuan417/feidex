@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 450 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 449 |
 | 收 `*App` 的顶层函数 | 281 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **38** |
+| **持有 `*App` 字段的结构体** | **37** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 18。
@@ -68,7 +68,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `bindingService` | 40 | 20 |
 | 1 | `menuActionService` | 19 | 15 |
 | 1 | `backendUpgradeService` | 15 | 4 |
-| 1 | `claudeTurnStreamPort` | 7 | 0 |
 | 1 | `backendSelectionRuntime` | 6 | 6 |
 | 1 | `threadMenuConversationBackendAdapter` | 5 | 3 |
 | 1 | `inboundRouting` | 4 | 4 |
@@ -405,6 +404,12 @@ query 和 refresh coalescer，保留 thread 标记、group chat 识别与公告�
 outbound 和 message-link recorder。reply/patch 失败仍不提交 quiet-card render，成功 reply
 仍先记录链接再提交 turn-stream 状态。生产 `*App` 引用预算由 451 降至 450，持有 App 字段的
 结构体由 39 降至 38，收 `*App` 的函数预算保持 281；lazy binding-read 预算保持 18。
+
+步骤 48 将 `claudeTurnStreamPort` 改为持有 `ItemContext` 与 `TurnPresentation` owners，
+移除每次 item callback 都经 `App.Bindings` 转发的结构体字段。port 仍直接调用原 service，
+不改变 started/in-flight/completed item 顺序或 stream final 标记。生产 `*App` 引用预算由
+450 降至 449，持有 App 字段的结构体由 38 降至 37，收 `*App` 的函数预算保持 281；lazy
+binding-read 预算保持 18。
 
 ## 方法
 

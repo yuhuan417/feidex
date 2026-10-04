@@ -36,6 +36,8 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	modelAcknowledgements := app.bindings.ModelAcknowledgements
 	claudeSupport := app.bindings.ClaudeSupport
 	interactionLifecycle := app.bindings.InteractionLifecycle
+	itemContext := app.bindings.ItemContext
+	turnPresentation := app.bindings.TurnPresentation
 	turns := app.bindings.Turns
 	backendFailure := app.bindings.BackendFailure
 	usageRecorder := app.bindings.Usage
@@ -73,7 +75,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 			},
 		},
 		TurnStream: appclauderuntime.TurnStreamDeps{
-			Port: claudeTurnStreamPort{app: app},
+			Port: claudeTurnStreamPort{itemContext: itemContext, turnPresentation: turnPresentation},
 		},
 		Usage: appclauderuntime.UsageDeps{
 			RecordClaudeThreadUsage: func(threadID string, usage claudecli.TurnUsage) {
