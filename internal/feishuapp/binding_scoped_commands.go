@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	appstate "feidex/internal/adapter/storage/json/scoped"
+	appconversation "feidex/internal/application/conversation"
 	applicationrouting "feidex/internal/application/routing"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/routing"
@@ -87,15 +88,14 @@ func p2pSessionScopeActive(scope bindingSessionScope, sessionKey string) bool {
 	return strings.TrimSpace(chatID) != "" && strings.EqualFold(strings.TrimSpace(chatType), "p2p")
 }
 
-func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
+func threadMenuEffectiveSessionKey(normalizeSessionKey func(string) string, scope bindingSessionScope, conversations appconversation.Query, sessionKey string) string {
 	sessionKey = strings.TrimSpace(sessionKey)
-	if a == nil {
+	if normalizeSessionKey == nil {
 		return sessionKey
 	}
-	sessionKey = a.configView().normalizeSessionKey(sessionKey)
-	scope := a.bindings.BindingCommands.scope
+	sessionKey = normalizeSessionKey(sessionKey)
 	chatType, chatID := scope.chat(sessionKey)
-	if chatType != "group" || strings.TrimSpace(chatID) == "" {
+	if chatType != "group" || strings.TrimSpace(chatID) == "" || conversations.Repository == nil {
 		return sessionKey
 	}
 	binding := scope.Binding(sessionKey)
@@ -103,7 +103,7 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 	if binding != nil {
 		bindingID = strings.TrimSpace(binding.ID)
 	}
-	return a.bindings.ConversationQuery.EffectiveGroupSessionKey(sessionKey, chatID, bindingID)
+	return conversations.EffectiveGroupSessionKey(sessionKey, chatID, bindingID)
 }
 
 func groupBindingBackButton(sessionKey string) feishu.Button {

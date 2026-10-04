@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 257 |
-| 收 `*App` 的顶层函数 | 124 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 256 |
+| 收 `*App` 的顶层函数 | 123 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **3** |
 
@@ -790,6 +790,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 147 将 `groupBindingSessionScopeActive` 从 `*App` 参数改为已构造的 `bindingSessionScope`，命令、workspace callback 与 help renderer 复用 `BindingCommands` 持有的 state、session-key normalizer、primary service 和 frontend identity。session metadata 回退、group binding 检查与 primary lookup 失败时的非群判定保持不变。生产 `*App` 引用预算由 261 降至 260，depmap 顶层 App-taking 函数计数保持 127，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
 
 步骤 148 删除重复的 `sessionKeyChatForApp(*App)`，并让 p2p 判断、workspace thread menu、群配置状态卡和 command bridge 直接复用已构造的 `bindingSessionScope`。session metadata、规范化 session key、存储 session fallback、binding/primary 推断以及有效 group session key 查询保持原顺序和结果。生产 `*App` 引用预算由 260 降至 257，收 `*App` 的顶层函数由 127 降至 124，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
+
+步骤 149 将 `threadMenuEffectiveSessionKey` 改为接收 session-key normalizer、`bindingSessionScope` 和 `ConversationQuery`，由 menu renderer、fork command 与 thread-menu adapter 显式组装这些依赖。群 session 选择、binding ID 过滤和 active thread 优先级不变；缺少 normalizer 或 query repository 时仍原样返回 key。生产 `*App` 引用预算由 257 降至 256，收 `*App` 的顶层函数由 124 降至 123，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
 
 ## 方法
 

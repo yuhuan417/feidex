@@ -5,6 +5,7 @@ import (
 	backendruntime "feidex/internal/runtime"
 
 	"context"
+	"strings"
 
 	appbackend "feidex/internal/adapter/feishu/backend"
 
@@ -104,7 +105,10 @@ func (a *App) ThreadMenuAppState() appthreadmenu.StateProvider {
 }
 
 func (a *App) ThreadMenuEffectiveSessionKey(sessionKey string) string {
-	return threadMenuEffectiveSessionKey(a, sessionKey)
+	if a == nil {
+		return strings.TrimSpace(sessionKey)
+	}
+	return threadMenuEffectiveSessionKey(a.configView().normalizeSessionKey, a.bindings.BindingCommands.scope, a.bindings.ConversationQuery, sessionKey)
 }
 
 func (a *App) ThreadMenuConversationBackend() appthreadmenu.ConversationBackendProvider {

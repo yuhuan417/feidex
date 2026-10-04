@@ -6,6 +6,7 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+	appconversation "feidex/internal/application/conversation"
 
 	"context"
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
@@ -970,7 +971,7 @@ func TestGroupThreadMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *test
 		return nil
 	}
 
-	if got := threadMenuEffectiveSessionKey(a, menuKey); got != activeKey {
+	if got := threadMenuEffectiveSessionKey(a.configView().normalizeSessionKey, a.bindings.BindingCommands.scope, a.bindings.ConversationQuery, menuKey); got != activeKey {
 		t.Fatalf("threadMenuEffectiveSessionKey() = %q, want %q", got, activeKey)
 	}
 	card, ok := newMenuActionService(a).renderMenuNodeCard("menu.thread", menuKey)
@@ -1003,7 +1004,7 @@ func TestGroupThreadMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *test
 	if got, _ := selectValue["session_key"].(string); got != activeKey {
 		t.Fatalf("thread resume select session_key = %q, want %q", got, activeKey)
 	}
-	if got := threadMenuEffectiveSessionKey(nil, menuKey); got != menuKey {
+	if got := threadMenuEffectiveSessionKey(nil, bindingSessionScope{}, appconversation.Query{}, menuKey); got != menuKey {
 		t.Fatalf("nil app effective session key = %q, want original", got)
 	}
 }
@@ -1035,7 +1036,7 @@ func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(
 		}
 	}
 
-	if got := threadMenuEffectiveSessionKey(a, menuKey); got != activeKey {
+	if got := threadMenuEffectiveSessionKey(a.configView().normalizeSessionKey, a.bindings.BindingCommands.scope, a.bindings.ConversationQuery, menuKey); got != activeKey {
 		t.Fatalf("threadMenuEffectiveSessionKey() = %q, want %q", got, activeKey)
 	}
 	card, ok := newMenuActionService(a).renderMenuNodeCard("menu.thread", menuKey)
