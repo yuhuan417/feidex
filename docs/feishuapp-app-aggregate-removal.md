@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 383 |
-| 收 `*App` 的顶层函数 | 228 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 381 |
+| 收 `*App` 的顶层函数 | 227 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
-| **持有 `*App` 字段的结构体** | **24** |
+| **持有 `*App` 字段的结构体** | **23** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 12。`*App`
@@ -58,38 +58,39 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 ### 当前工厂排序（2026-10-04）
 
-以下计数由 `go run . <repo>/internal/feishuapp --json` 生成：direct 是工厂直接
-读取的不同 `App` 成员数，helpers 是直接调用的收 `*App` 函数数，structs 是工厂
-实例化的持有 `*App` 字段结构体数。它们是依赖图规模指标，不代表改动成本。
+以下计数由 `go run . <repo>/internal/feishuapp --json` 生成：`a.X` 是工厂直接读取的
+非 bindings 成员数，bindings 是直接读取的 `a.bindings.Y` 字段数，helpers 是直接调用的
+收 `*App` 函数数，structs 是依赖闭包中持有 `*App` 字段的结构体数。合计是这四类依赖边的
+总数，用来排序而不代表改动成本。
 
 当前扇入最高的 App-bearing structures：
 
 | 工厂数 | 结构体 | 方法数 | helper 数 |
 |---|---|---|---|
-| 1 | `bindingService` | 40 | 20 |
+| 1 | `bindingService` | 39 | 14 |
 | 1 | `menuActionService` | 19 | 15 |
 | 1 | `backendUpgradeService` | 15 | 4 |
-| 1 | `backendSelectionRuntime` | 6 | 6 |
-| 1 | `threadMenuConversationBackendAdapter` | 5 | 3 |
-| 1 | `inboundBackend` | 4 | 1 |
+| 1 | `backendSelectionRuntime` | 6 | 5 |
+| 1 | `threadMenuConversationBackendAdapter` | 5 | 2 |
+| 1 | `permissionPorts` | 3 | 3 |
 
 `cardRenderer`、`outboundCardService`、`turnStreamOutboundCardAdapter` 和 `turnRuntimePort`
 已不再持有 `*App`，不属于这份图。当前工厂按直接依赖总数排序：
 
-| 合计 | 工厂 | direct | helpers | structs |
-|---|---|---|---|---|
-| 11 | `InboundPorts` | 5 | 2 | 4 |
-| 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
-| 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
-| 6 | `ClaudeRuntimePorts` | 5 | 1 | 0 |
-| 7 | `TurnPorts` | 2 | 3 | 2 |
-| 6 | `BackendFailurePorts` | 3 | 3 | 0 |
-| 6 | `GoalContinuationPorts` | 5 | 0 | 1 |
-| 6 | `TurnPresentationPorts` | 3 | 2 | 1 |
-| 5 | `FileSharePorts` | 3 | 2 | 0 |
-| 5 | `ReviewPorts` | 1 | 1 | 3 |
-| 3 | `BackendSwitchPorts` | 2 | 0 | 1 |
-| 1 | `CardActionPorts` | 0 | 0 | 1 |
+| 合计 | 工厂 | `a.X` | bindings | helpers | structs |
+|---|---|---|---|---|---|
+| 26 | `InboundPorts` | 12 | 10 | 1 | 3 |
+| 20 | `ClaudeRuntimePorts` | 5 | 14 | 1 | 0 |
+| 16 | `TurnPorts` | 4 | 9 | 3 | 0 |
+| 13 | `BackendFailurePorts` | 3 | 7 | 3 | 0 |
+| 11 | `StartupRecoveryPorts` | 6 | 2 | 3 | 0 |
+| 10 | `CodexRecoveryPorts` | 5 | 1 | 4 | 0 |
+| 10 | `FileSharePorts` | 3 | 0 | 2 | 5 |
+| 10 | `GoalContinuationPorts` | 6 | 4 | 0 | 0 |
+| 10 | `TurnPresentationPorts` | 3 | 5 | 2 | 0 |
+| 8 | `ReviewPorts` | 1 | 2 | 2 | 3 |
+| 3 | `BackendSwitchPorts` | 2 | 0 | 0 | 1 |
+| 1 | `CardActionPorts` | 0 | 0 | 0 | 1 |
 
 ## 已完成的骨架
 
@@ -635,6 +636,14 @@ lazy binding-read 预算保持 12。
 配置 nil 时仍返回空结果；Claude factory 闭包捕获的是构造期快照。生产 `*App` 引用由 385 降至 383，收 `*App`
 的函数由 230 降至 228；`ClaudeRuntimePorts` direct/helper/structs 由 5/2/0 降至 5/1/0，App-bearing 工厂与
 结构体数保持 12、24，lazy binding-read 预算保持 12。
+
+步骤 87 将 inbound pending group gate 从 App-bearing `bindingService` method value 中移出，使用独立
+`pendingGroupMessageGate` 显式持有 pending/primary services、config view、runtime context、workspace renderer 与
+effect runner；`inboundBindings` 改为 App-free，并删除 `discardPendingBindingMessageByID(*App, ...)`。保持
+group/chat-id gate、primary 查询失败时按非 primary 处理、pending effects 执行后再回复 workspace menu，以及
+discard 失败日志和空 state 快速返回。生产 `*App` 引用由 383 降至 381，收 `*App` 的函数由 228 降至 227，
+App-bearing 结构体由 24 降至 23；InboundPorts 的 `a.X`/bindings/helpers/structs 实际依赖为 12/10/1/3，
+惰性读取预算保持 12。该步只调整 inbound adapter 的依赖传递，不改变 Codex thread/turn 状态机。
 
 ## 方法
 
