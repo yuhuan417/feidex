@@ -374,14 +374,17 @@ func currentBotMenuContext(a *App, sessionKey string) (chatType, chatID, rootMes
 	return chatType, chatID, rootMessageID, userID
 }
 
-func resolveConfigRelativePath(a *App, value string) string {
+// resolveConfigRelativePath resolves a config-relative path against the
+// directory holding the config file; it needs only that path, not the
+// frontend aggregate.
+func resolveConfigRelativePath(cfgPath string, value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" || filepath.IsAbs(value) {
 		return value
 	}
 	base := "."
-	if a != nil && strings.TrimSpace(a.cfgPath) != "" {
-		base = filepath.Dir(a.cfgPath)
+	if strings.TrimSpace(cfgPath) != "" {
+		base = filepath.Dir(cfgPath)
 	}
 	return filepath.Clean(filepath.Join(base, value))
 }

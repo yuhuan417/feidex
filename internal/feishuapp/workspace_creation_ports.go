@@ -8,10 +8,10 @@ import (
 	workspaceapp "feidex/internal/application/workspace"
 )
 
-type workspaceFilesystem struct{ app *App }
+type workspaceFilesystem struct{ cfgPath string }
 
 func (f workspaceFilesystem) ResolvePath(path string) string {
-	return resolveConfigRelativePath(f.app, path)
+	return resolveConfigRelativePath(f.cfgPath, path)
 }
 func (f workspaceFilesystem) MakeDirectory(path string) error { return os.MkdirAll(path, 0o755) }
 
@@ -24,6 +24,8 @@ func (workspaceGit) Worktree(ctx context.Context, repo, branch, target string) e
 	return appworkspacecmd.GitWorktreeAdd(ctx, repo, branch, target)
 }
 
-func WorkspaceCreationPorts(a *App) (workspaceapp.CreationFilesystem, workspaceapp.CreationGit) {
-	return workspaceFilesystem{app: a}, workspaceGit{}
+// WorkspaceCreationPorts needs only the config path to resolve relative
+// targets, so it takes that rather than the frontend aggregate.
+func WorkspaceCreationPorts(cfgPath string) (workspaceapp.CreationFilesystem, workspaceapp.CreationGit) {
+	return workspaceFilesystem{cfgPath: cfgPath}, workspaceGit{}
 }

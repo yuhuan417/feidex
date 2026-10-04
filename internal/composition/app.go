@@ -120,7 +120,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.TurnMetadata = turnmeta.Service{Tracker: scope.RuntimeOwner.TurnBindings}
 	bindings.ItemContext = approval.ItemContext{Items: bindings.TurnItems, Started: func(threadID, turnID string) { bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
 	bindings.PendingReplies = feishuapp.PendingReplyAdapter{Service: bindings.Interactions, Repository: frontend.State()}
-	filesystem, git := feishuapp.WorkspaceCreationPorts(frontend)
+	filesystem, git := feishuapp.WorkspaceCreationPorts(frontend.ConfigPath())
 	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(frontend.FrontendID()), Selection: frontend.WorkspaceSelection(), Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(frontend)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: frontend, Scope: frontend.State()}}
 	bindings.WorkspaceCreation = &workspaceapp.CreationService{Filesystem: filesystem, Git: git, Lifecycle: workspaceLifecycle}
 	bindings.WorkspaceSettings = workspaceapp.SettingsService{Frontend: frontend.FrontendID(), Repository: configadapter.WorkspaceSettingsRepository{Source: frontend, Scope: frontend.State()}}
