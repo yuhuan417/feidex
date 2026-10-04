@@ -729,7 +729,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 		t.Fatalf("submission before Claude ready = %+v", sub)
 	}
 
-	bindClaudeSessionThread(a, sessionKey, sub.TurnID, "claude-session-ready")
+	bindClaudeSessionThread(a.bindings.Conversations, sessionKey, sub.TurnID, "claude-session-ready")
 
 	sess = a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveThreadID != "claude-session-ready" {
@@ -796,7 +796,7 @@ func TestBindClaudeSessionThreadReadyDoesNotClearRootTurnBinding(t *testing.T) {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
 
-	bindClaudeSessionThread(a, sessionKey, "", "claude-session-ready")
+	bindClaudeSessionThread(a.bindings.Conversations, sessionKey, "", "claude-session-ready")
 
 	rootLink := a.store.GetMessageLink("root-1")
 	if rootLink == nil || rootLink.ThreadID != "claude-session-ready" || rootLink.TurnID != "claude-turn-1" {

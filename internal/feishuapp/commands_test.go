@@ -832,7 +832,7 @@ func TestClaudeNewCommandsBindSessionAfterFirstInput(t *testing.T) {
 				t.Fatalf("first input reused old lineage: ensure=%+v start=%+v", claude.ensureCalls, claude.startTurnCalls)
 			}
 			sub := a.store.GetSubmission(subID)
-			bindClaudeSessionThread(a, sessionKey, sub.TurnID, "claude-new")
+			bindClaudeSessionThread(a.bindings.Conversations, sessionKey, sub.TurnID, "claude-new")
 			if sess := a.store.GetSession(sessionKey); sess.ActiveThreadID != "claude-new" {
 				t.Fatalf("session after ready = %+v", sess)
 			}

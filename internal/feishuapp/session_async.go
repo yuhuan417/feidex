@@ -1,6 +1,10 @@
 package feishuapp
 
-import "strings"
+import (
+	"strings"
+
+	frontendruntime "feidex/internal/runtime"
+)
 
 func SessionTaskRunner(a *App) func(string, func()) bool {
 	return func(key string, fn func()) bool {
@@ -33,4 +37,15 @@ func runSession(a *App, sessionKey string, fn func()) {
 		return
 	}
 	a.sessionActorRuntime().Run("session:"+strings.TrimSpace(sessionKey), fn)
+}
+
+func runSessionOnActor(actors *frontendruntime.SessionActors, sessionKey string, fn func()) {
+	if fn == nil {
+		return
+	}
+	if actors == nil {
+		fn()
+		return
+	}
+	actors.Run("session:"+strings.TrimSpace(sessionKey), fn)
 }

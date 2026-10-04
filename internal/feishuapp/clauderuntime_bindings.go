@@ -10,7 +10,6 @@ import (
 	"time"
 
 	appapproval "feidex/internal/adapter/feishu/approval"
-	"feidex/internal/application"
 
 	appclauderuntime "feidex/internal/runtime/claude"
 
@@ -42,36 +41,43 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	backendFailure := app.bindings.BackendFailure
 	usageRecorder := app.bindings.Usage
 	turnMetadata := app.bindings.TurnMetadata
+	stateStore := app.State()
+	conversationQuery := app.bindings.ConversationQuery
+	conversations := app.bindings.Conversations
+	sessionActors := app.runtimeOwner.SessionActors
+	runtimeDeps := app.BackendRuntimeDeps()
+	contextFn := app.runtimeOwner.Lifecycle.Context
 	return appclauderuntime.Deps{
-		Context: app.Context,
+		Context: contextFn,
 		Cfg:     cfg,
 		Lifecycle: appclauderuntime.LifecycleDeps{
 			BindClaudeSessionThread: func(sessionKey, turnID, threadID string) {
-				runSession(app, sessionKey, func() {
-					bindClaudeSessionThread(app, sessionKey, turnID, threadID)
+				runSessionOnActor(sessionActors, sessionKey, func() {
+					bindClaudeSessionThread(conversations, sessionKey, turnID, threadID)
 				})
 			},
 			FinishTurn: func(threadID, turnID, status string) {
-				runSession(app, sessionKeyForBackendEvent(app.BackendRuntimeDeps(), application.BackendEvent{ThreadID: threadID}), func() {
+				sessionKey := conversationQuery.SessionForBackendThread(threadID)
+				runSessionOnActor(sessionActors, sessionKey, func() {
 					finishTurn(turns, threadID, turnID, status)
 				})
 			},
 			FinishSteerSubmission: func(submissionID, status string) {
 				sessionKey := ""
-				if sub := app.State().Submission(submissionID); sub != nil {
+				if sub := stateStore.Submission(submissionID); sub != nil {
 					sessionKey = sub.SessionKey
 				}
-				runSession(app, sessionKey, func() {
+				runSessionOnActor(sessionActors, sessionKey, func() {
 					turns.FinishSteerSubmission(submissionID, status)
 				})
 			},
 			FailClaudeSessionWork: func(sessionKey, threadID string, err error) {
-				runSession(app, sessionKey, func() {
+				runSessionOnActor(sessionActors, sessionKey, func() {
 					failClaudeSessionActiveWork(backendFailure, sessionKey, threadID, err)
 				})
 			},
 			FailBackendActiveWork: func(backend, sessionKey, threadID, message string) {
-				failBackendActiveWork(app.BackendRuntimeDeps(), backend, sessionKey, threadID, message)
+				failBackendActiveWork(runtimeDeps.currentBackend(), backend, sessionKey, threadID, message)
 			},
 		},
 		TurnStream: appclauderuntime.TurnStreamDeps{

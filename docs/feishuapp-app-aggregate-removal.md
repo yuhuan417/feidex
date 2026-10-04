@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 393 |
-| 收 `*App` 的顶层函数 | 238 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 392 |
+| 收 `*App` 的顶层函数 | 237 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **24** |
 
@@ -78,7 +78,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
-| 15 | `ClaudeRuntimePorts` | 6 | 8 | 1 |
+| 11 | `ClaudeRuntimePorts` | 5 | 6 | 0 |
 | 11 | `InboundPorts` | 5 | 2 | 4 |
 | 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
 | 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
@@ -590,6 +590,14 @@ repository、runtime owner、queue starter、config view、presenter 与 async r
 `RetryTimerFired` input。生产 `*App` 引用由 394 降至 393，收 `*App` 的函数由 239 降至 238，App-bearing
 `*Ports` 工厂由 13 降至 12，App-bearing 结构体保持 24；lazy binding-read 预算由 13 降至 12。自动重试优先级、
 失败后重排、停止后失效与 turn terminal presentation 用例覆盖行为边界。
+
+步骤 81 将 Claude runtime lifecycle callbacks 改为显式使用 session actors、conversation service/query、scoped
+state 与 `BackendRuntimeDeps`。Claude thread binding helper 不再接收 `*App`；thread/turn lifecycle callbacks
+继续使用同一 `session:<key>` actor 串行执行，turn 完成按 backend thread 查询 session 后再调用原 `FinishTurn`，
+steer completion 与 backend failure 的状态 owner 和执行顺序不变。对照 SM-03/SM-04：不改变 thread ID 绑定、
+turn terminal 识别或 session 状态收口。生产 `*App` 引用由 393 降至 392，收 `*App` 的函数由 238 降至 237；
+App-bearing 结构体与 `*Ports` 工厂数保持 24、12，lazy binding-read 预算保持 12。`claude_core_test.go` 中
+现有 ready binding 用例覆盖 thread binding 保留 root turn binding 的行为。
 
 ## 方法
 
