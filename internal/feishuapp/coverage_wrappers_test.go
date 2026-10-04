@@ -410,11 +410,11 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("event card body = %q", body)
 	}
 
-	card := cardRendererForApp(a).renderReplyMarkdownCard(sub, "", "green", "hello", nil)
+	card := newCardRenderer(a.Config()).renderReplyMarkdownCard(sub, "", "green", "hello", nil)
 	if body := cardMarkdownContent(t, card); !strings.Contains(body, "hello") {
 		t.Fatalf("renderReplyMarkdownCard() body = %q", body)
 	}
-	card = cardRendererForApp(a).renderReplyMarkdownCardWithOptions(context.Background(), sub, "", "green", "", nil, false)
+	card = newCardRenderer(a.Config()).renderReplyMarkdownCardWithOptions(context.Background(), sub, "", "green", "", nil, false)
 	if body := cardMarkdownContent(t, card); strings.TrimSpace(body) != "" {
 		t.Fatalf("renderReplyMarkdownCardWithOptions(empty) body = %q", body)
 	}

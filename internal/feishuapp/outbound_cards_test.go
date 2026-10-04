@@ -17,7 +17,7 @@ func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
-	reply := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.TODO(), sub, "Reply", "green", true, "", nil, false)
+	reply := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(context.TODO(), sub, "Reply", "green", true, "", nil, false)
 	if got := cardHeaderTitle(t, reply); got != "Reply" {
 		t.Fatalf("reply card title = %q, want Reply", got)
 	}
@@ -29,7 +29,7 @@ func TestRenderMarkdownCardsUsesPlaceholderAndMeta(t *testing.T) {
 		t.Fatalf("reply placeholder body = %q, want no plan banner", body)
 	}
 
-	compact := cardRendererForApp(a).renderCompactMarkdownCard(sub, "Status", "orange", " status=running ", "hello", []feishu.Button{{Text: "More", Type: "default"}})
+	compact := newCardRenderer(a.Config()).renderCompactMarkdownCard(sub, "Status", "orange", " status=running ", "hello", []feishu.Button{{Text: "More", Type: "default"}})
 	if got := cardHeaderTitle(t, compact); got != "Status" {
 		t.Fatalf("compact card title = %q, want Status", got)
 	}
@@ -134,12 +134,12 @@ func TestRenderContentCardsLinkifyInlineCodeURLs(t *testing.T) {
 	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
-	replyCard := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, "反馈中", "blue", true, "打开：`https://example.test/reply`", nil, false)
+	replyCard := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(context.Background(), sub, "反馈中", "blue", true, "打开：`https://example.test/reply`", nil, false)
 	if body := cardMarkdownContent(t, replyCard); !strings.Contains(body, "[https://example.test/reply](https://example.test/reply)") {
 		t.Fatalf("reply content card body = %q, want clickable markdown link", body)
 	}
 
-	compactCard := cardRendererForApp(a).renderCompactMarkdownCard(sub, "工作中", "blue", "", "打开：`https://example.test/compact`", nil)
+	compactCard := newCardRenderer(a.Config()).renderCompactMarkdownCard(sub, "工作中", "blue", "", "打开：`https://example.test/compact`", nil)
 	if body := cardMarkdownContent(t, compactCard); !strings.Contains(body, "[https://example.test/compact](https://example.test/compact)") {
 		t.Fatalf("compact content card body = %q, want clickable markdown link", body)
 	}

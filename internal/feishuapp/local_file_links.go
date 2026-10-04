@@ -76,7 +76,7 @@ func scheduleLocalFileLinkPatch(a *App, sub *domainsubmission.Submission, messag
 		if managed && a.bindings.FinalCardPatch.UpdateFinalCardPatchBody(messageID, rewritten) {
 			return
 		}
-		card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(a.Context(), sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, rewritten, nil, true)
+		card := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(a.Context(), sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, rewritten, nil, true)
 		appendReplyCardFooter(card, footerLines)
 		patchCtx, patchCancel := context.WithTimeout(a.Context(), 15*time.Second)
 		defer patchCancel()

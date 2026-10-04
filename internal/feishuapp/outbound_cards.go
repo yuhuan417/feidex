@@ -18,13 +18,6 @@ type cardRenderer struct {
 	cfg *config.Config
 }
 
-func cardRendererForApp(a *App) cardRenderer {
-	if a == nil {
-		return cardRenderer{}
-	}
-	return cardRenderer{cfg: a.cfg}
-}
-
 func newCardRenderer(cfg *config.Config) cardRenderer { return cardRenderer{cfg: cfg} }
 
 func (r cardRenderer) prepareCardMarkdown(sub *domainsubmission.Submission, text string) string {

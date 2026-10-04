@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 465 |
-| 收 `*App` 的顶层函数 | 292 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 464 |
+| 收 `*App` 的顶层函数 | 291 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **42** |
 
@@ -328,6 +328,13 @@ runtime `EffectRunner`；reply/send/patch effect payload、interaction-card 稳�
 card 幂等键均沿用原规则。升级 outbound 的按需构造继续读取 owner 当前 runner，但闭包只捕获
 runtime owner 与 frontend ID。移除已无调用方的 `replyInteractionCardEffect`。生产 `*App` 引用
 预算由 475 降至 465，app-bearing 函数数由 293 降至 292，持有 App 字段的结构体由 51 降至 42。
+
+步骤 38 删除 `cardRendererForApp(*App)` 这个纯转发 helper，生产调用方直接从已有
+`App.Config()` 读取配置并构造 `cardRenderer`。渲染器仍只持有配置，不引入 App 捕获或新的
+依赖 owner；renderer 用例覆盖 reply/compact markdown 与按钮内容。生产 `*App` 引用预算由
+465 降至 464，app-bearing 函数数由 292 降至 291，持有 App 字段的结构体预算保持 42。
+`outboundCardService` 仍是最高扇入候选，后续继续拆其投递、pending-card、message-link 与异步
+patch owners。
 
 ## 方法
 

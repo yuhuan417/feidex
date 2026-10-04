@@ -100,7 +100,7 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *domainsubmissio
 }
 
 func replyCardChunkFits(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
-	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
+	card := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
 	appendReplyCardFooter(card, chunk.FooterLines)
 	payload, err := json.Marshal(card)
 	if err != nil {
