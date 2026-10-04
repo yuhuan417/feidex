@@ -4,23 +4,69 @@ import (
 	"context"
 	"feidex/internal/adapter/feishu/planmode"
 	appturnstream "feidex/internal/adapter/feishu/turnstream"
+	"feidex/internal/application/announcement"
 	"feidex/internal/application/compaction"
 	"feidex/internal/application/goal"
 	applicationturn "feidex/internal/application/turn"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
+	frontendruntime "feidex/internal/runtime"
 	"strings"
 )
 
 // These small ports keep the turn use case independent from the transitional
 // App aggregate. They are composed here, where runtime, continuation and
 // delivery owners are known.
-type turnRuntimePort struct{ app *App }
+type turnRuntimePort struct {
+	lifecycle   *frontendruntime.FrontendRuntime
+	asyncRunner func(func())
+	liveThreads liveThreadMarker
+}
 
-func (p turnRuntimePort) Context() context.Context { return p.app.Context() }
-func (p turnRuntimePort) RunAsync(fn func())       { runAsync(p.app, fn) }
+func (p turnRuntimePort) Context() context.Context {
+	if p.lifecycle == nil {
+		return context.Background()
+	}
+	return p.lifecycle.Context()
+}
+func (p turnRuntimePort) RunAsync(fn func()) {
+	if p.lifecycle != nil {
+		p.lifecycle.Run(fn, p.asyncRunner)
+	}
+}
 func (p turnRuntimePort) MarkSessionThreadLive(sessionKey, threadID string) {
-	markSessionThreadLive(p.app, sessionKey, threadID)
+	p.liveThreads.MarkSessionThreadLive(sessionKey, threadID)
+}
+
+type liveThreadMarker struct {
+	tracker      *frontendruntime.LiveThreads
+	state        planmode.SessionStateProvider
+	announcement announcement.Query
+	refreshes    *frontendruntime.CoalescedRefresh
+}
+
+func (p liveThreadMarker) MarkSessionThreadLive(sessionKey, threadID string) {
+	if strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
+		return
+	}
+	if p.tracker != nil {
+		p.tracker.Mark(sessionKey, threadID)
+	}
+	if p.state == nil {
+		return
+	}
+	sess := p.state.Session(sessionKey)
+	if sess == nil {
+		return
+	}
+	chatID := strings.TrimSpace(sess.ChatID)
+	if chatID == "" {
+		_, _, chatID, _, _ = identity.ParseSessionKey(sess.Key)
+	}
+	if p.announcement.GroupSession(sess, chatID) && p.refreshes != nil {
+		p.refreshes.Schedule(chatID)
+	}
 }
 
 type turnContinuationPort struct {
@@ -64,13 +110,16 @@ func (p turnDiagnosticsPort) LogSessionState(event, sessionKey string, sess *con
 }
 
 func TurnPorts(app *App, turnPresentation *appturnstream.Service) applicationturn.Dependencies {
+	owner := app.runtimeOwner
 	return applicationturn.Dependencies{
 		State: app.State(), Bindings: app.bindings.TurnMetadata,
 		Replies: app.bindings.Continuation, Streams: turnPresentation,
 		Reactions: app.bindings.PendingQueue, Cards: newOutboundCardService(app),
 		Queue: app.bindings.Submissions, Retry: app.bindings.AutoRetry,
 		Cleanup: app.bindings.SubmissionCleanup,
-		Runtime: turnRuntimePort{app: app}, RunSessionAsync: func(sessionKey string, fn func()) {
+		Runtime: turnRuntimePort{lifecycle: &owner.Lifecycle, asyncRunner: app.asyncRunner, liveThreads: liveThreadMarker{
+			tracker: owner.LiveThreads, state: app.State(), announcement: app.bindings.AnnouncementQuery, refreshes: owner.Announcements,
+		}}, RunSessionAsync: func(sessionKey string, fn func()) {
 			if fn == nil {
 				return
 			}

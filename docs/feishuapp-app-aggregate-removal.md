@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 452 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 451 |
 | 收 `*App` 的顶层函数 | 281 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **40** |
+| **持有 `*App` 字段的结构体** | **39** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 18。
@@ -65,7 +65,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 工厂数 | 结构体 | 方法数 | helper 数 |
 |---|---|---|---|
-| 2 | `turnRuntimePort` | 3 | 2 |
 | 1 | `bindingService` | 40 | 20 |
 | 1 | `menuActionService` | 19 | 15 |
 | 1 | `backendUpgradeService` | 15 | 4 |
@@ -77,8 +76,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `feishuEventRouter` | 4 | 1 |
 | 1 | `turnDeliveryPort` | 3 | 1 |
 
-`cardRenderer`、`outboundCardService` 和 `turnStreamOutboundCardAdapter` 已不再持有
-`*App`，不属于这份图。当前工厂按直接依赖总数排序：
+`cardRenderer`、`outboundCardService`、`turnStreamOutboundCardAdapter` 和 `turnRuntimePort`
+已不再持有 `*App`，不属于这份图。当前工厂按直接依赖总数排序：
 
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
@@ -393,6 +392,13 @@ owners，同时去掉 adapter 对 `App` 的字段依赖。生产 `*App` 引用�
 持有 App 字段的结构体预算由 41 降至 40，收 `*App` 的函数预算保持 281。同批在
 `ClaudeRuntimePorts` 中把 14 个已就绪的 owner binding 从回调体提升为构造期快照，
 保持配置及 runtime 选择的动态读取；lazy binding-read 预算由 32 降至 18。
+
+步骤 46 将 `turnRuntimePort` 从 App 转为 frontend lifecycle、async runner 与
+`liveThreadMarker`。marker 显式持有 live-thread tracker、scoped session state、announcement
+query 和 refresh coalescer，保留 thread 标记、group chat 识别与公告刷新行为。对照 SM-04，
+仅改变 `MarkSessionThreadLive` 的 adapter 依赖，不更改 turn/item 通知顺序及 completed 终态。
+生产 `*App` 引用预算由 452 降至 451，持有 App 字段的结构体由 40 降至 39，收 `*App` 的
+函数预算保持 281；lazy binding-read 预算保持 18。
 
 ## 方法
 

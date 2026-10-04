@@ -69,11 +69,14 @@ func (p goalAnchorPresenter) SendContinuationAnchor(ctx context.Context, chatID 
 }
 
 func GoalContinuationPorts(a *App) goalapp.Dependencies {
+	owner := a.runtimeOwner
 	return goalapp.Dependencies{
 		Context: a.Context, Repository: a.State(), Tracker: a.bindings.Goals,
 		Presenter: goalAnchorPresenter{outbound: goalOutbound{frontend: identity.FrontendID(a.FrontendID()), runner: newEffectRunner(a.runtimeOwner)}},
-		Bindings:  a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
-		Streams: a.bindings.TurnPresentation, Live: turnRuntimePort{app: a},
+		Bindings:  owner.TurnBindings, Replies: a.bindings.Continuation,
+		Streams: a.bindings.TurnPresentation, Live: turnRuntimePort{lifecycle: &owner.Lifecycle, asyncRunner: a.asyncRunner, liveThreads: liveThreadMarker{
+			tracker: owner.LiveThreads, state: a.State(), announcement: a.bindings.AnnouncementQuery, refreshes: owner.Announcements,
+		}},
 		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
 		BelongsToFrontend:  func(key string) bool { return a.configView().sessionBelongsToFrontend(key) },
 	}
