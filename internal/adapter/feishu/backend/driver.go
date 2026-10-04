@@ -99,7 +99,7 @@ type ConversationPermissionCommandRequest struct {
 }
 
 type ConversationPermissionRenderDeps struct {
-	Permissions    PermissionDependencies
+	Permissions    interface{ Config() *config.Config }
 	Session        func(sessionKey string) *conversation.Session
 	FormatMenuBody func(action, body string) string
 }

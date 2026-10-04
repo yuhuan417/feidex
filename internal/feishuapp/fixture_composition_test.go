@@ -223,7 +223,16 @@ func prepareTestApp(a *App) *App {
 	})
 	a.bindings.ClaudeSupport = BuildClaudeSupport(a)
 	a.bindings.ThreadSettings = threadsettings.Service{Repository: a.State()}
-	a.bindings.PermissionSettings = threadsettings.PermissionService{Settings: a.bindings.ThreadSettings, Source: configadapter.ThreadPermissionRepository{Source: a, Scope: a.State()}, Runtime: PermissionRuntime(a), Tasks: PermissionTasks(a), Failure: PermissionFailure(a), Context: a.Context}
+	permissionBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	permissionMenuRenderer := ClaudePermissionMenuRenderer(a.Config(), permissionBackend, a.State().Session)
+	a.bindings.PermissionSettings = threadsettings.PermissionService{
+		Settings: a.bindings.ThreadSettings,
+		Source:   configadapter.ThreadPermissionRepository{Source: a, Scope: a.State()},
+		Runtime:  PermissionRuntime(permissionBackend, a.runtimeOwner.ClaudeCore),
+		Tasks:    PermissionTasks(&a.runtimeOwner.Lifecycle, a.runtimeOwner.SessionActors, a.AsyncRunner()),
+		Failure:  PermissionFailure(permissionMenuRenderer, a.FrontendID(), *a.runtimeOwner.EffectRunner),
+		Context:  a.Context,
+	}
 	a.bindings.ServiceTier = BuildServiceTier(
 		a.bindings.ThreadSettings, a.Context, identity.FrontendID(a.FrontendID()),
 		*a.runtimeOwner.EffectRunner, SessionKeyBuilder(a.FrontendID()),
