@@ -133,6 +133,15 @@ func LiveBotOpenID(client FeishuClient) func() string {
 	return func() string { return currentLiveBotOpenID(client) }
 }
 
+func BotDisplayName(client FeishuClient) func() string {
+	return func() string { return currentBotDisplayName(client) }
+}
+
+func EnsureGroupPrimary(ctx context.Context, initializer approuting.InitializationService, frontendID string, client FeishuClient, chatType, chatID string) error {
+	_, err := initializeGroupPrimary(ctx, initializer, frontendID, client, chatType, chatID)
+	return err
+}
+
 func currentBotName(client FeishuClient) string {
 	if client == nil {
 		return ""

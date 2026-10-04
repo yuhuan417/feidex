@@ -26,7 +26,7 @@ func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *s
 	if binding == nil {
 		binding = s.scope.Binding(sessionKey)
 	}
-	backend := s.app.configView().configuredBackend()
+	backend := s.deps.ConfiguredBackend()
 	lines := []string{
 		"配置当前 Bot 在本群的模型相关设置。",
 		"",
@@ -46,18 +46,18 @@ func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *s
 		buttons = append(buttons, feishu.Button{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}})
 	}
 	buttons = append(buttons, feishu.Button{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}})
-	return s.renderer.SimpleStatusCard("模型配置", "blue", menuCardBody("menu.group.model", strings.Join(lines, "\n")), buttons)
+	return s.renderer("模型配置", "blue", menuCardBody("menu.group.model", strings.Join(lines, "\n")), buttons)
 }
 
 func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
 	if binding == nil {
 		binding = s.scope.Binding(sessionKey)
 	}
-	switch s.app.configView().configuredBackend() {
+	switch s.deps.ConfiguredBackend() {
 	case domainbackend.BackendCodex:
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		result, err := s.app.bindings.ModelCommands.FetchModelList(ctx)
+		result, err := s.deps.ModelCommands.FetchModelList(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -66,15 +66,15 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 		return s.renderBindingClaudeModelConfigCard(sessionKey, binding), nil
 	default:
 		body := strings.Join([]string{
-			"backend: `" + textutil.FirstNonEmpty(s.app.configView().configuredBackend(), "unset") + "`",
-			unsupportedGroupModelBackendMessage(s.app.configView().configuredBackend()),
+			"backend: `" + textutil.FirstNonEmpty(s.deps.ConfiguredBackend(), "unset") + "`",
+			unsupportedGroupModelBackendMessage(s.deps.ConfiguredBackend()),
 		}, "\n")
-		return s.renderer.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
+		return s.renderer("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
 	}
 }
 
 func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, binding *state.AgentBinding, result catalog.ModelListResult) map[string]any {
-	cfg := configReadCopy(s.app.cfg, s.app.ConfigMu())
+	cfg := configReadCopy(s.deps.Config, s.deps.ConfigMu)
 	if binding == nil {
 		binding = &state.AgentBinding{}
 	}
@@ -102,7 +102,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	modelSource := "跟随 Bot 默认"
 	if modelOverride == "" {
 		// 显示实际生效的 Bot 默认值
-		botDefault := appmodelconfig.ConfiguredGlobalModel(s.app.cfg)
+		botDefault := appmodelconfig.ConfiguredGlobalModel(s.deps.Config)
 		if botDefault != "" {
 			modelSource = "跟随 Bot 默认 (`" + botDefault + "`)"
 		} else {
@@ -115,7 +115,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	effortSource := "跟随模型或 Bot 默认"
 	if effortOverride == "" {
 		// 显示实际生效的值
-		botEffort := appmodelconfig.ConfiguredGlobalReasoningEffort(s.app.cfg)
+		botEffort := appmodelconfig.ConfiguredGlobalReasoningEffort(s.deps.Config)
 		if botEffort != "" {
 			effortSource = "跟随 Bot 默认 (`" + botEffort + "`)"
 		} else if selectedModel != nil && selectedModel.DefaultReasoningEffort != "" {
@@ -128,8 +128,8 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 	}
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
-	sess := s.app.State().Session(sessionKey)
-	settings := s.app.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
+	sess := s.deps.State.Session(sessionKey)
+	settings := s.deps.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
 	planModelDisplay := renderAuxModelSummary(binding.PlanModelOverride, settings.PlanModel, modelName)
 	reviewModelDisplay := renderAuxModelSummary(binding.ReviewModelOverride, settings.ReviewModel, modelName)
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, modelName)
@@ -219,12 +219,12 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		Type:  "default",
 		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app.bindings.ModelSnapshots, s.app.State(), s.app.configView(), sessionKey)})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.modelConfigStatus(sessionKey)})
 	return card
 }
 
 func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, binding *state.AgentBinding) map[string]any {
-	cfg := configReadCopy(s.app.cfg, s.app.ConfigMu())
+	cfg := configReadCopy(s.deps.Config, s.deps.ConfigMu)
 	if binding == nil {
 		binding = &state.AgentBinding{}
 	}
@@ -253,8 +253,8 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	}
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
-	sess := s.app.State().Session(sessionKey)
-	settings := s.app.bindings.ModelSnapshots.Desired(domainbackend.BackendClaude, sess)
+	sess := s.deps.State.Session(sessionKey)
+	settings := s.deps.ModelSnapshots.Desired(domainbackend.BackendClaude, sess)
 	smallModelDisplay := renderAuxModelSummary(binding.SmallModelOverride, settings.SmallModel, "Claude 内置 haiku")
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, currentModel)
 
@@ -326,18 +326,18 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		Type:  "default",
 		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app.bindings.ModelSnapshots, s.app.State(), s.app.configView(), sessionKey)})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.modelConfigStatus(sessionKey)})
 	return card
 }
 
 func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
-	cfg := configReadCopy(s.app.cfg, s.app.ConfigMu())
+	cfg := configReadCopy(s.deps.Config, s.deps.ConfigMu)
 	if binding == nil {
 		binding = s.scope.Binding(sessionKey)
 	}
 	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model_auxiliary", "当前群内覆盖。未设置时跟随 Bot 默认；可随时保存，待对应会话边界生效。")})
-	switch s.app.configView().configuredBackend() {
+	switch s.deps.ConfiguredBackend() {
 	case domainbackend.BackendClaude:
 		small, subagent := "", ""
 		if binding != nil {
@@ -354,7 +354,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 	default:
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		result, err := s.app.bindings.ModelCommands.FetchModelList(ctx)
+		result, err := s.deps.ModelCommands.FetchModelList(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -402,21 +402,21 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey}, effortOptions, textutil.FirstNonEmpty(subagentEffort, appmodelconfig.DefaultOptionValue)))
 	}
 	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app.bindings.ModelSnapshots, s.app.State(), s.app.configView(), sessionKey)})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.modelConfigStatus(sessionKey)})
 	return card, nil
 }
 
 func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardAction, sessionKey, role, value string) (*callback.CardActionTriggerResponse, error) {
-	if err := ensureSessionModelConfigWritable(s.app.bindings.FrontendQuery, sessionKey); err != nil {
+	if err := ensureSessionModelConfigWritable(s.deps.FrontendQuery, sessionKey); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)
 	msg := commandMessageFromAction(s.scope, action, sessionKey, "/model")
-	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
+	_, err := s.deps.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
-	result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
+	result, err := s.deps.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
 	updated := result.Binding
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
@@ -441,12 +441,12 @@ func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, ses
 	if value == "" {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请输入或选择 model id"}}, nil
 	}
-	service := s.app.bindings.ModelCommands
+	service := s.deps.ModelCommands
 	if err := service.UpdateClaudeModelOptionsConfig(value, add); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	msg := commandMessageFromAction(s.scope, action, sessionKey, "/model")
-	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.deps.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -469,16 +469,16 @@ func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, arg
 	if !strings.EqualFold(strings.TrimSpace(args[0]), "add") && !strings.EqualFold(strings.TrimSpace(args[0]), "remove") && !strings.EqualFold(strings.TrimSpace(args[0]), "delete") && !strings.EqualFold(strings.TrimSpace(args[0]), "rm") {
 		return fmt.Errorf("usage: /model option add|remove MODEL_ID")
 	}
-	service := s.app.bindings.ModelCommands
+	service := s.deps.ModelCommands
 	if err := service.UpdateClaudeModelOptionsConfig(value, strings.EqualFold(strings.TrimSpace(args[0]), "add")); err != nil {
 		return err
 	}
-	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.deps.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return err
 	}
-	card := s.renderBindingModelConfigOrMenuCard(s.app.configView().makeSessionKey(msg), binding)
-	_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
+	card := s.renderBindingModelConfigOrMenuCard(s.deps.MakeSessionKey(msg), binding)
+	_, err = s.deps.replyCardWithID(context.Background(), msg.MessageID, card, false)
 	return err
 }
 
@@ -509,7 +509,7 @@ func (s bindingService) renderBindingFastCard(sessionKey string, binding *state.
 		{Text: fastLabel, Type: fastType, Value: map[string]any{"action": "service_tier.set", "session_key": sessionKey, "service_tier": appservicetiercmd.ServiceTierFast}},
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}},
 	}
-	return s.renderer.SimpleStatusCard("响应速度", "blue", menuCardBody("menu.fast", body), buttons)
+	return s.renderer("响应速度", "blue", menuCardBody("menu.fast", body), buttons)
 }
 
 func bindingServiceTierOverride(binding *state.AgentBinding) string {

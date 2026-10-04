@@ -136,7 +136,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Forms = &interaction.FormService{Repository: a.State()}
 	a.bindings.WorkspaceWorkflow = &workspaceapp.Workflow{Forms: a.bindings.Forms, Planning: a.bindings.WorkspacePlanning, Creation: a.bindings.WorkspaceCreation}
 	a.bindings.WorkspacePresentation = NewWorkspacePresentation(a)
-	a.bindings.BindingCommands = BuildBindingCommands(a)
 	platform, releases, artifacts, launcher := UpgradeWorkflowPorts(a.Config(), a.ConfigMu(), a.runtimeOwner)
 	a.bindings.UpgradeWorkflow = &upgrade.Service{Forms: a.bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 
@@ -413,13 +412,15 @@ func prepareTestApp(a *App) *App {
 		ContinueClaude:            a.bindings.Continuation.ContinueClaudeSessionWithText,
 	})}
 	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
-	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+	bindingScope := NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID())
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, bindingScope)
 	a.bindings.Upgrades = BuildUpgrades(a, a.bindings.WorkspaceConfiguration)
 	actors, replayRunner := BindingReplayPorts(a.sessionActorRuntime(), a.runtimeOwner)
 	a.bindings.BindingReplay = runtime.BindingReplay{Service: a.bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(&a.runtimeOwner.Lifecycle, a.asyncRunner, actors, a.runtimeOwner.LiveThreads, a.bindings.BindingReplay), Conversations: a.bindings.Conversations, Context: a.Context}
 	a.bindings.WorkspaceWorkflow.Effects = a.bindings.WorkspaceEffects
 	a.bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(a.FrontendID()), Repository: a.State(), Creation: a.bindings.WorkspaceCreation, Planning: a.bindings.WorkspacePlanning, Effects: a.bindings.WorkspaceEffects}
+	a.bindings.BindingCommands = BuildBindingCommands(bindingCommandInputsForTest(a, bindingScope))
 	a.bindings.Notifications = frontendapp.Notifications{Repository: a.State(), Sender: NotificationSender(a.feishu, a.FrontendID(), *a.runtimeOwner.EffectRunner), Context: a.Context}
 	a.bindings.ConversationRecovery = conversation.NewRecovery(ConversationRecoveryPorts(
 		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),
@@ -533,4 +534,34 @@ func testSelectedBackendOwner(owner *runtime.FrontendOwner, backend string) *run
 	}
 	owner.SetBackend(backend)
 	return owner
+}
+
+func bindingCommandInputsForTest(a *App, scope BindingScope) BindingCommandInputs {
+	client := a.feishu
+	return BindingCommandInputs{
+		Scope: scope, Config: a.Config(), ConfigMu: a.ConfigMu(), State: a.State(), FrontendID: a.FrontendID(),
+		ConfiguredBackend: ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
+		MakeSessionKey:    SessionKeyBuilder(a.FrontendID()), Context: a.Context, Effects: newEffectRunner(a.runtimeOwner),
+		RunAsync: func(fn func()) { a.runtimeOwner.Lifecycle.Run(fn, a.asyncRunner) },
+		RefreshGroupStatus: func(chatID string) {
+			if a.runtimeOwner.Announcements != nil {
+				a.runtimeOwner.Announcements.Schedule(chatID)
+			}
+		},
+		CurrentBotDisplayName: BotDisplayName(client), CurrentLiveBotOpenID: LiveBotOpenID(client),
+		InitializeGroupPrimary: func(ctx context.Context, chatType, chatID string) error {
+			return EnsureGroupPrimary(ctx, a.bindings.PrimaryInitialization, a.FrontendID(), client, chatType, chatID)
+		},
+		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+			if client == nil {
+				return nil
+			}
+			return client.SimpleStatusCard(title, color, body, buttons)
+		},
+		BackendConfiguration: a.bindings.BackendConfiguration, Forms: a.bindings.Forms, FrontendQuery: a.bindings.FrontendQuery,
+		GroupWorkspaces: a.bindings.GroupWorkspaces, ModelCommands: a.bindings.ModelCommands, ModelSnapshots: a.bindings.ModelSnapshots,
+		Primary: a.bindings.Primary, RoutingConfiguration: a.bindings.RoutingConfiguration, ScopedRoutingConfiguration: a.bindings.ScopedRoutingConfiguration,
+		ServiceTier: a.bindings.ServiceTier, WorkspaceConfiguration: a.bindings.WorkspaceConfiguration,
+		WorkspaceManagement: a.bindings.WorkspaceManagement, WorkspacePresentation: a.bindings.WorkspacePresentation, WorkspaceWorkflow: a.bindings.WorkspaceWorkflow,
+	}
 }

@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 227 |
-| 收 `*App` 的顶层函数 | 96 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 225 |
+| 收 `*App` 的顶层函数 | 95 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
-| **持有 `*App` 字段的结构体** | **2** |
+| **持有 `*App` 字段的结构体** | **1** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 0。`*App`
@@ -825,6 +825,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 165 将 plan/content card title helpers 改为接收 frontend state provider 与 config-enabled 标志；调用方使用已持有的 scoped state。nil App 时 config-enabled 仍为 false，title adapter 的空配置行为不变。生产 `*App` 引用由 230 降至 227，收 `*App` 的顶层函数由 99 降至 96，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
 
 步骤 166 将 workspace management 的 binding session scope 改为显式 `BindingScope` 输入。composition 从 frontend state、session-key normalizer、Primary owner 和 frontend ID 构造 scope，并在 `WorkspaceManagement` 后构造 `BindingCommands`；workspace service 不再反向读取 `BindingCommands.scope`。这清除 BindingCommands/WorkspaceManagement 的构造反向边，为后续注入 BindingCommands 所需 owners 留出 DAG 顺序。命令、卡片 callback 和 session 推断行为不变；`*App` 引用预算保持 227、收 `*App` 的顶层函数保持 96、App-bearing 结构体保持 2、App-bearing `*Ports` 工厂保持 1，lazy binding-read 保持 0。
+
+步骤 167 将 `bindingService` 改为接收 `BindingCommandInputs`：config/state/session scope、routing/model/workspace owners、Feishu card renderer、effect runner、异步 lifecycle admission 与 group-primary callbacks 均由 composition 显式提供。`bindingService` 不再持有 App；workspace manager 的反向构造边已拆，因此 binding owner 在依赖就绪后构造。群绑定、model 菜单和 clone/worktree 回调仍委托相同的 application/runtime owners，异步任务仍经过 frontend lifecycle admission。生产 `*App` 引用由 227 降至 225，收 `*App` 的顶层函数由 96 降至 95，App-bearing 结构体由 2 降至 1，App-bearing `*Ports` 工厂保持 1，lazy binding-read 保持 0。
 
 ## 方法
 

@@ -18,24 +18,17 @@ import (
 )
 
 type bindingService struct {
-	app      *App
+	deps     BindingCommandInputs
 	scope    bindingSessionScope
-	renderer bindingCardRenderer
+	renderer func(title, color, body string, buttons []feishu.Button) map[string]any
 }
 
-// bindingCardRenderer is the presentation capability used by group binding
-// commands. Keeping it on the service makes card construction an explicit
-// consumer-owned port instead of reaching through the host App for Feishu.
 type bindingCardRenderer interface {
 	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
 }
 
-func BuildBindingCommands(a *App) bindingService {
-	var renderer bindingCardRenderer
-	if a != nil {
-		renderer = a.feishu
-	}
-	return bindingService{app: a, scope: bindingSessionScope{state: a.State(), normalizeSessionKey: a.configView().normalizeSessionKey, primary: a.bindings.Primary, frontendID: a.FrontendID()}, renderer: renderer}
+func BuildBindingCommands(inputs BindingCommandInputs) bindingService {
+	return bindingService{deps: inputs, scope: inputs.Scope.scope, renderer: inputs.SimpleStatusCard}
 }
 
 func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage, args []string) error {
@@ -45,15 +38,15 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 	if strings.TrimSpace(msg.ChatType) != "group" {
 		return fmt.Errorf("该工作区配置只能在群聊中使用；私聊仍用于配置当前 Bot 的默认能力")
 	}
-	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.deps.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return err
 	}
 	if len(args) == 0 || strings.EqualFold(args[0], "status") {
-		card := s.renderBindingStatusCard(s.app.configView().makeSessionKey(msg), binding)
-		return replyCardEffect(s.app, msg, card)
+		card := s.renderBindingStatusCard(s.deps.MakeSessionKey(msg), binding)
+		return s.deps.replyCard(msg, card)
 	}
-	if err := ensureSessionModelConfigWritable(s.app.bindings.FrontendQuery, s.app.configView().makeSessionKey(msg)); err != nil && (strings.EqualFold(strings.TrimSpace(args[0]), "model") || strings.EqualFold(strings.TrimSpace(args[0]), "effort") || strings.EqualFold(strings.TrimSpace(args[0]), "plan") || strings.EqualFold(strings.TrimSpace(args[0]), "plan_effort") || strings.EqualFold(strings.TrimSpace(args[0]), "review") || strings.EqualFold(strings.TrimSpace(args[0]), "subagent") || strings.EqualFold(strings.TrimSpace(args[0]), "small")) {
+	if err := ensureSessionModelConfigWritable(s.deps.FrontendQuery, s.deps.MakeSessionKey(msg)); err != nil && (strings.EqualFold(strings.TrimSpace(args[0]), "model") || strings.EqualFold(strings.TrimSpace(args[0]), "effort") || strings.EqualFold(strings.TrimSpace(args[0]), "plan") || strings.EqualFold(strings.TrimSpace(args[0]), "plan_effort") || strings.EqualFold(strings.TrimSpace(args[0]), "review") || strings.EqualFold(strings.TrimSpace(args[0]), "subagent") || strings.EqualFold(strings.TrimSpace(args[0]), "small")) {
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
@@ -75,7 +68,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		}
 		workspaceID := strings.TrimSpace(args[1])
 		cwd := strings.TrimSpace(strings.Join(args[2:], " "))
-		result, err := s.app.bindings.GroupWorkspaces.New(binding, workspaceID, workspaceID, cwd)
+		result, err := s.deps.GroupWorkspaces.New(binding, workspaceID, workspaceID, cwd)
 		if err != nil {
 			return err
 		}
@@ -88,7 +81,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		if len(args) < 2 {
 			return fmt.Errorf("usage: /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]")
 		}
-		result, err := s.app.bindings.GroupWorkspaces.Clone(s.app.Context(), binding, args[1:])
+		result, err := s.deps.GroupWorkspaces.Clone(s.deps.Context(), binding, args[1:])
 		if err != nil {
 			return err
 		}
@@ -104,7 +97,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model set MODEL_ID|default")
 		}
 		value := clearableArg(args[1])
-		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, value)
+		result, err := s.deps.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Model, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -115,7 +108,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, value)
+		result, err := s.deps.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Effort, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -127,7 +120,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		}
 		value := clearableArg(args[1])
 		role := strings.ToLower(strings.TrimSpace(args[0]))
-		_, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
+		_, err := s.deps.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.Setting(role), value)
 		if err != nil {
 			return err
 		}
@@ -137,7 +130,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model subagent effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.SubagentEffort, value)
+		result, err := s.deps.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.SubagentEffort, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -148,7 +141,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 			return fmt.Errorf("usage: /model plan effort EFFORT|default")
 		}
 		value := clearableArg(args[1])
-		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.PlanEffort, value)
+		result, err := s.deps.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.PlanEffort, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -168,7 +161,7 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 				return fmt.Errorf("unsupported service tier %q", args[1])
 			}
 		}
-		result, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, value)
+		result, err := s.deps.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, routing.ServiceTier, value)
 		updated := result.Binding
 		if err != nil {
 			return err
@@ -194,13 +187,13 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 	if strings.TrimSpace(msg.ChatType) != "group" {
 		return fmt.Errorf("/primary 只能在群聊中使用")
 	}
-	_, initErr := initializeGroupPrimary(context.Background(), s.app.bindings.PrimaryInitialization, s.app.FrontendID(), s.app.feishu, msg.ChatType, msg.ChatID)
+	initErr := s.deps.InitializeGroupPrimary(context.Background(), msg.ChatType, msg.ChatID)
 	if len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status") {
-		body := "当前 Bot primary: `" + onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID)) + "`"
-		if self := currentBotDisplayName(s.app.feishu); self != "" {
+		body := "当前 Bot primary: `" + onOffLabel(groupPrimaryEnabled(s.deps.Primary, s.deps.FrontendID, msg.ChatType, msg.ChatID)) + "`"
+		if self := s.deps.CurrentBotDisplayName(); self != "" {
 			body += "\n当前 Bot: `" + self + "`"
 		}
-		if initErr != nil && !groupPrimaryHasState(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID) {
+		if initErr != nil && !groupPrimaryHasState(s.deps.Primary, s.deps.FrontendID, msg.ChatType, msg.ChatID) {
 			body += "\n\n自动读取群机器人数量失败: `" + initErr.Error() + "`"
 		}
 		return s.replyBindingUpdated(msg, body)
@@ -209,7 +202,7 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 		return fmt.Errorf("usage: /primary on")
 	}
 	assignment, ok := groupPrimaryAssignmentForCommand(msg)
-	if !ok || strings.TrimSpace(currentLiveBotOpenID(s.app.feishu)) != assignment.TargetBotOpenID {
+	if !ok || strings.TrimSpace(s.deps.CurrentLiveBotOpenID()) != assignment.TargetBotOpenID {
 		return fmt.Errorf("usage: /primary on（群内需要明确 @目标 Bot）")
 	}
 	return s.setPrimaryForMessage(msg)
@@ -219,20 +212,20 @@ func (s bindingService) setPrimaryForMessage(msg *feishu.InboundMessage) error {
 	if msg == nil {
 		return nil
 	}
-	currentOpenID := currentLiveBotOpenID(s.app.feishu)
+	currentOpenID := s.deps.CurrentLiveBotOpenID()
 	if currentOpenID == "" {
 		return fmt.Errorf("bot open_id is required to set group primary")
 	}
-	updated, err := writeGroupPrimaryState(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID, true, msg)
+	updated, err := writeGroupPrimaryState(s.deps.Primary, s.deps.FrontendID, msg.ChatType, msg.ChatID, true, msg)
 	if err != nil {
 		return err
 	}
 	if updated == nil {
-		updated = lookupGroupPrimary(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID)
+		updated = lookupGroupPrimary(s.deps.Primary, s.deps.FrontendID, msg.ChatType, msg.ChatID)
 	}
-	body := "已更新 primary: `" + onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID)) + "`"
+	body := "已更新 primary: `" + onOffLabel(groupPrimaryEnabled(s.deps.Primary, s.deps.FrontendID, msg.ChatType, msg.ChatID)) + "`"
 	if updated != nil {
-		scheduleGroupAnnouncementStatusRefresh(s.app.runtimeOwner.Announcements, updated.ChatID)
+		s.deps.RefreshGroupStatus(updated.ChatID)
 	}
 	return s.replyBindingUpdated(msg, body)
 }
@@ -242,7 +235,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 		return nil, nil
 	}
 	msg := commandMessageFromAction(s.scope, action, sessionKey, "/workspace use")
-	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
+	binding, err := s.deps.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
@@ -252,7 +245,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已设置当前工作区 " + updated.WorkspaceID},
-		Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(s.deps.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -260,7 +253,7 @@ func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
 	if !groupBindingSessionScopeActive(s.scope, sessionKey) {
 		return fmt.Errorf("解除 workspace 绑定只能在群聊中使用")
 	}
-	return s.app.bindings.GroupWorkspaces.Unbind(sessionKey, s.scope.Binding(sessionKey))
+	return s.deps.GroupWorkspaces.Unbind(sessionKey, s.scope.Binding(sessionKey))
 }
 
 func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -269,7 +262,7 @@ func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已解除本群绑定，请重新选择工作区"},
-		Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)),
+		Card:  rawCard(s.deps.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)),
 	}, nil
 }
 
@@ -278,7 +271,7 @@ func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding
 		return fmt.Errorf("usage: /workspace %s VALUE|default", setting)
 	}
 	value := clearableArg(args[1])
-	_, err := s.app.bindings.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, setting, value)
+	_, err := s.deps.ScopedRoutingConfiguration.Set(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, setting, value)
 	if err != nil {
 		return err
 	}
@@ -286,7 +279,7 @@ func (s bindingService) updateSimpleOverride(msg *feishu.InboundMessage, binding
 }
 
 func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, workspaceID string) (*state.AgentBinding, error) {
-	return s.app.bindings.GroupWorkspaces.Select(binding, workspaceID)
+	return s.deps.GroupWorkspaces.Select(binding, workspaceID)
 }
 
 func bindingWorkspaceForSessionKey(cfg *config.Config, scope bindingSessionScope, sessionKey string) *config.Workspace {
@@ -301,23 +294,30 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 	if msg == nil {
 		return nil
 	}
-	card := s.renderBindingStatusCard(s.app.configView().makeSessionKey(msg), agentBindingForChat(s.app.State(), msg.ChatType, msg.ChatID))
+	card := s.renderBindingStatusCard(s.deps.MakeSessionKey(msg), agentBindingForChat(s.deps.State, msg.ChatType, msg.ChatID))
 	if strings.TrimSpace(body) != "" {
-		card = s.renderer.SimpleStatusCard("当前 Bot 群内配置", "green", strings.TrimSpace(body), nil)
+		card = s.renderer("当前 Bot 群内配置", "green", strings.TrimSpace(body), nil)
 	}
-	return replyCardEffect(s.app, msg, card)
+	return s.deps.replyCard(msg, card)
+}
+
+func (s bindingService) modelConfigStatus(sessionKey string) string {
+	view := frontendConfigView{
+		cfg: s.deps.Config, mu: s.deps.ConfigMu, backend: s.deps.ConfiguredBackend(), frontendID: s.deps.FrontendID,
+	}
+	return modelConfigStatus(s.deps.ModelSnapshots, s.deps.State, view, sessionKey)
 }
 
 func (s bindingService) renderBindingStatusCard(sessionKey string, binding *state.AgentBinding) map[string]any {
 	chatType, chatID, _, _ := currentBotMenuContext(s.scope, sessionKey)
-	primaryLabel := onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), chatType, chatID))
+	primaryLabel := onOffLabel(groupPrimaryEnabled(s.deps.Primary, s.deps.FrontendID, chatType, chatID))
 	if binding == nil {
 		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，也可以用 `@Bot /workspace new worktree` 基于当前 Git 仓库创建隔离 worktree，或用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
-		return s.renderer.SimpleStatusCard("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
+		return s.renderer("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
 	}
 	statusLine := "状态: `工作区未配置`"
 	workspaceLine := "workspace: `(未配置)`"
-	if ws := config.FindWorkspace(s.app.cfg, binding.WorkspaceID); ws != nil {
+	if ws := config.FindWorkspace(s.deps.Config, binding.WorkspaceID); ws != nil {
 		statusLine = "状态: `工作区已配置`"
 		workspaceLine = "workspace: `" + ws.ID + "`\ncwd: `" + ws.Cwd + "`"
 	} else if strings.TrimSpace(binding.WorkspaceID) != "" {
@@ -325,11 +325,11 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		workspaceLine = "workspace: `" + binding.WorkspaceID + "` (配置不存在)"
 	}
 	lines := []string{
-		"frontend: `" + textutil.FirstNonEmpty(s.app.FrontendID(), "default") + "`",
-		"backend: `" + textutil.FirstNonEmpty(s.app.configView().configuredBackend(), "unset") + "`",
+		"frontend: `" + textutil.FirstNonEmpty(s.deps.FrontendID, "default") + "`",
+		"backend: `" + textutil.FirstNonEmpty(s.deps.ConfiguredBackend(), "unset") + "`",
 		"chat: `" + binding.ChatType + "/" + binding.ChatID + "`",
 		statusLine,
-		"primary: `" + onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), binding.ChatType, binding.ChatID)) + "`",
+		"primary: `" + onOffLabel(groupPrimaryEnabled(s.deps.Primary, s.deps.FrontendID, binding.ChatType, binding.ChatID)) + "`",
 		workspaceLine,
 		"model override: " + renderOptionalBacktick(binding.ModelOverride),
 		"effort override: " + renderOptionalBacktick(binding.ReasoningEffortOverride),
@@ -347,13 +347,13 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		preview := pendingBindingMessagePreview(binding.PendingMessage)
 		lines = append(lines, "\n已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
 	}
-	if !groupPrimaryHasState(s.app.bindings.Primary, s.app.FrontendID(), binding.ChatType, binding.ChatID) {
+	if !groupPrimaryHasState(s.deps.Primary, s.deps.FrontendID, binding.ChatType, binding.ChatID) {
 		lines = append(lines, "\n注意: 还没有完成本群 primary 判断；如果未 `@` 消息没有响应，请使用 `@Bot /primary on` 显式设置当前 Bot 为 primary。")
-	} else if !groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), binding.ChatType, binding.ChatID) {
+	} else if !groupPrimaryEnabled(s.deps.Primary, s.deps.FrontendID, binding.ChatType, binding.ChatID) {
 		lines = append(lines, "\n当前 Bot 不是本群 primary；未 `@` 的普通群消息不会由它处理。使用 `@Bot /primary on` 可切换。")
 	}
 	buttons := []feishu.Button{}
-	if config.FindWorkspace(s.app.cfg, "default") != nil {
+	if config.FindWorkspace(s.deps.Config, "default") != nil {
 		buttons = append(buttons, feishu.Button{Text: "使用 default", Type: "default", Value: map[string]any{"action": "workspace.use.existing", "session_key": sessionKey, "workspace_id": "default"}})
 	}
 	buttons = append(buttons, feishu.Button{Text: "选择已有", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}})
@@ -362,7 +362,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 	if binding.Status != state.AgentBindingStatusActive.String() || strings.TrimSpace(binding.WorkspaceID) == "" {
 		color = "orange"
 	}
-	return s.renderer.SimpleStatusCard("工作区管理", color, menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
+	return s.renderer("工作区管理", color, menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
 }
 
 func currentBotMenuContext(scope bindingSessionScope, sessionKey string) (chatType, chatID, rootMessageID, userID string) {
