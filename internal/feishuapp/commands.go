@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	appfeatures "feidex/internal/application/features"
+	"feidex/internal/application/submission"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
@@ -35,7 +36,7 @@ func HandleInboundCommand(a *App, msg *feishu.InboundMessage, raw string) error 
 		}
 	}
 	if !commandHandlesLocallyForBackend(spec, backend, fields) {
-		return enqueuePassthroughCommand(a, msg, raw)
+		return enqueuePassthroughCommand(a.bindings.Submissions, a.configView().makeSessionKey(msg), msg, raw)
 	}
 	if spec.HandleRaw != nil {
 		return spec.HandleRaw(a, msg, raw, fields[1:])
@@ -51,8 +52,8 @@ func commandAllowedWithoutBackend(msg *feishu.InboundMessage, name string) bool 
 	return appfeatures.CommandAllowedWithoutBackend(chatType, name)
 }
 
-func enqueuePassthroughCommand(a *App, msg *feishu.InboundMessage, raw string) error {
-	if a == nil || msg == nil {
+func enqueuePassthroughCommand(submissions *submission.SubmissionQueueService, sessionKey string, msg *feishu.InboundMessage, raw string) error {
+	if submissions == nil || msg == nil {
 		return nil
 	}
 	raw = strings.TrimSpace(raw)
@@ -61,7 +62,7 @@ func enqueuePassthroughCommand(a *App, msg *feishu.InboundMessage, raw string) e
 	}
 	cloned := *msg
 	cloned.Text = raw
-	return enqueueSubmission(a, &cloned)
+	return enqueueSubmissionWithSessionKey(submissions, &cloned, sessionKey, false)
 }
 
 func isLocalCommandForBackend(backend, raw string) bool {

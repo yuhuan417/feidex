@@ -13,7 +13,7 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 	if app == nil {
 		return appbackend.ActionService{}
 	}
-	state, feishuClient := app.State(), app.feishu
+	state, feishuClient, submissions := app.State(), app.feishu, app.bindings.Submissions
 	return appbackend.NewActionService(appbackend.ActionDeps{
 		Backend:    func() string { return app.configView().configuredBackend() },
 		SessionKey: func(msg *feishu.InboundMessage) string { return app.configView().makeSessionKey(msg) },
@@ -51,7 +51,7 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 				return enqueueSubmission(app, msg)
 			},
 			EnqueuePassthroughCommand: func(msg *feishu.InboundMessage, rawCommand string) error {
-				return enqueuePassthroughCommand(app, msg, rawCommand)
+				return enqueuePassthroughCommand(submissions, app.configView().makeSessionKey(msg), msg, rawCommand)
 			},
 			ReplyText: func(ctx context.Context, msgID, text string, inThread bool) error {
 				return newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)).ReplyText(ctx, msgID, text, inThread)
