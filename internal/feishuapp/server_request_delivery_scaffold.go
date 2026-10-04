@@ -2,10 +2,13 @@ package feishuapp
 
 import (
 	"context"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
 	applicationinteraction "feidex/internal/application/interaction"
+	"feidex/internal/domain/identity"
 	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/runtime"
 	"fmt"
 	"strings"
 	"time"
@@ -99,41 +102,60 @@ func deliverPendingCardWithAnchor(a *App, anchor pendingCardAnchor, card map[str
 		Request:      interaction.PendingRequest{ID: requestKey, RequestIDRaw: strings.TrimSpace(delivery.requestIDStored), Backend: normalizeRuntimeBackend(delivery.backend), Kind: strings.TrimSpace(delivery.kind), SessionKey: strings.TrimSpace(delivery.sessionKey), ThreadID: strings.TrimSpace(delivery.threadID), TurnID: strings.TrimSpace(delivery.turnID), ItemID: strings.TrimSpace(delivery.itemID), OwnerUserID: strings.TrimSpace(delivery.ownerUserID), PayloadJSON: delivery.payloadJSON},
 		SubmissionID: anchor.submissionID, WaitingStatus: waitingStatus, NonBlocking: delivery.nonBlocking, TTL: ttl,
 	}
-	return a.bindings.InteractionDelivery.Open(a.Context(), input, pendingCardPresenter{app: a, anchor: anchor, card: card, reuseMessageID: delivery.reuseMessageID})
+	return a.bindings.InteractionDelivery.Open(a.Context(), input, pendingCardPresenter{
+		frontend: identity.FrontendID(a.FrontendID()), deduper: a.runtimeOwner.EffectDeduper,
+		turns: a.bindings.TurnPresentation, runner: *a.runtimeOwner.EffectRunner,
+		anchor: anchor, card: card, reuseMessageID: delivery.reuseMessageID,
+	})
 }
 
 type pendingCardPresenter struct {
-	app            *App
+	frontend identity.FrontendID
+	deduper  runtime.EffectDeduper
+	turns    interface {
+		TakeReasoningOnlyWorkingMessageID(string) string
+		DiscardWorkingCard(string)
+	}
+	runner         runtime.EffectRunner
 	anchor         pendingCardAnchor
 	card           map[string]any
 	reuseMessageID string
 }
 
 func (p pendingCardPresenter) DeliverInteraction(ctx context.Context, input applicationinteraction.DeliveryInput) (string, error) {
-	a := p.app
 	reuse := strings.TrimSpace(p.reuseMessageID)
 	if reuse == "" {
-		reuse = a.bindings.TurnPresentation.TakeReasoningOnlyWorkingMessageID(input.Request.TurnID)
+		reuse = p.turns.TakeReasoningOnlyWorkingMessageID(input.Request.TurnID)
 	}
-	key := application.StableEffectKey("interaction-card", a.FrontendID(), input.Request.ID)
-	messageID, err := a.runtimeOwner.EffectDeduper.Do(ctx, key, func() (any, error) {
+	key := application.StableEffectKey("interaction-card", string(p.frontend), input.Request.ID)
+	messageID, err := p.deduper.Do(ctx, key, func() (any, error) {
 		if reuse != "" {
-			if err := patchCardEffect(ctx, a, reuse, p.card); err == nil {
+			effect := application.PatchCard{
+				Frontend: p.frontend, MessageID: reuse, View: feishuoutbound.Card(p.card),
+				IdempotencyKey: cardEffectKey("patch-card", string(p.frontend), reuse, p.card),
+			}
+			if err := p.runner.Run(ctx, []application.Effect{effect}); err == nil {
 				return reuse, nil
 			}
 		}
 		if parent := strings.TrimSpace(p.anchor.triggerMessageID); parent != "" {
-			id, err := replyCardWithIDEffect(ctx, a, parent, p.card, p.anchor.replyInThread)
+			id, err := p.runner.RunSendCard(ctx, application.SendCard{
+				Frontend: p.frontend, ReplyMessageID: parent,
+				View: feishuoutbound.Card(p.card), InThread: p.anchor.replyInThread,
+			})
 			if err == nil && strings.TrimSpace(id) != "" {
 				return id, nil
 			}
 		}
-		return sendCardWithIDEffect(ctx, a, p.anchor.chatID, p.card)
+		return p.runner.RunSendCard(ctx, application.SendCard{
+			Frontend: p.frontend, Chat: identity.ChatRef{ID: p.anchor.chatID},
+			View: feishuoutbound.Card(p.card),
+		})
 	})
 	if err != nil {
 		return "", err
 	}
-	a.bindings.TurnPresentation.DiscardWorkingCard(input.Request.TurnID)
+	p.turns.DiscardWorkingCard(input.Request.TurnID)
 	id, _ := messageID.(string)
 	return id, nil
 }

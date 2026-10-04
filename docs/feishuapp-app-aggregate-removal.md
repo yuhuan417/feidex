@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 495 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 494 |
 | 收 `*App` 的顶层函数 | 301 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **63** |
+| **持有 `*App` 字段的结构体** | **62** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -66,7 +66,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 工厂数 | 结构体 | 方法数 | helper 数 |
 |---|---|---|---|
 | 3 | `outboundCardService` | 7 | 12 |
-| 3 | `pendingCardPresenter` | 1 | 3 |
 | 3 | `sqLiveThreadAdapter` | 3 | 3 |
 | 2 | `menuActionService` | 21 | 15 |
 | 2 | `planModeOutbound` | 4 | 4 |
@@ -269,6 +268,12 @@ composition 注入 context、现成的 `ThreadSettings` owner 和 session-key bu
 文本仍经同一 effect runner 使用原 message anchor 和 thread 标志发送。生产 `*App` 引用预算
 由 497 降至 495，app-bearing 函数数降至 301，持有 App 字段的结构体降至 63；不涉及
 Codex turn 或 pending request 状态。
+
+步骤 28 将 `pendingCardPresenter` 改为显式持有 frontend identity、deduper、turn-stream
+service 和 effect runner。交互卡仍先尝试复用 reasoning-only 工作卡，再回复到原触发消息，
+最后发送到 session chat；pending 状态写入、resolved 边界与 message-link 持久化仍由原
+`InteractionDelivery` service 完成。`*App` 引用预算由 495 降至 494，持有 App 字段的结构体
+降至 62。对照 SM-09/10/11/22/23/26，未改 request reply/resolved 顺序和 turn 生命周期。
 
 ## 方法
 
