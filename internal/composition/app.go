@@ -132,7 +132,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BindingCommands = feishuapp.BuildBindingCommands(frontend)
 	bindings.BackendUpgrades = feishuapp.BuildBackendUpgrades(frontend)
 	bindings.UpgradePresentation = feishuapp.BuildUpgradePresentation(frontend)
-	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend)
+	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner)
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 	bindings.Upgrades = feishuapp.BuildUpgrades(frontend)
 

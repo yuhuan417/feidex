@@ -118,7 +118,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BindingCommands = BuildBindingCommands(a)
 	a.bindings.BackendUpgrades = BuildBackendUpgrades(a)
 	a.bindings.UpgradePresentation = BuildUpgradePresentation(a)
-	platform, releases, artifacts, launcher := UpgradeWorkflowPorts(a)
+	platform, releases, artifacts, launcher := UpgradeWorkflowPorts(a.Config(), a.ConfigMu(), a.runtimeOwner)
 	a.bindings.UpgradeWorkflow = &upgrade.Service{Forms: a.bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 	a.bindings.Upgrades = BuildUpgrades(a)
 
