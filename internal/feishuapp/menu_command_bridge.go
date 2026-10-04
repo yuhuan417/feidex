@@ -73,7 +73,7 @@ func commandMessageFromAction(a *App, action *feishu.CardAction, sessionKey, raw
 		msg.UserID = textutil.FirstNonEmpty(msg.UserID, strings.TrimSpace(sess.OwnerUserID))
 	}
 	if msg.ChatType == "" || msg.ChatID == "" {
-		inferredChatType, inferredChatID := sessionKeyChatForApp(a, sessionKey)
+		inferredChatType, inferredChatID := a.bindings.BindingCommands.scope.chat(sessionKey)
 		msg.ChatType = textutil.FirstNonEmpty(msg.ChatType, inferredChatType)
 		msg.ChatID = textutil.FirstNonEmpty(msg.ChatID, inferredChatID)
 	}

@@ -309,7 +309,7 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 }
 
 func (s bindingService) renderBindingStatusCard(sessionKey string, binding *state.AgentBinding) map[string]any {
-	chatType, chatID, _, _ := currentBotMenuContext(s.app, sessionKey)
+	chatType, chatID, _, _ := currentBotMenuContext(s.scope, sessionKey)
 	primaryLabel := onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), chatType, chatID))
 	if binding == nil {
 		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，也可以用 `@Bot /workspace new worktree` 基于当前 Git 仓库创建隔离 worktree，或用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
@@ -365,10 +365,10 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 	return s.renderer.SimpleStatusCard("工作区管理", color, menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
 }
 
-func currentBotMenuContext(a *App, sessionKey string) (chatType, chatID, rootMessageID, userID string) {
+func currentBotMenuContext(scope bindingSessionScope, sessionKey string) (chatType, chatID, rootMessageID, userID string) {
 	chatType, chatID, rootMessageID, userID = parseSessionKeyMeta(sessionKey)
 	if chatType == "" || chatID == "" {
-		inferredChatType, inferredChatID := sessionKeyChatForApp(a, sessionKey)
+		inferredChatType, inferredChatID := scope.chat(sessionKey)
 		chatType = textutil.FirstNonEmpty(chatType, inferredChatType)
 		chatID = textutil.FirstNonEmpty(chatID, inferredChatID)
 	}

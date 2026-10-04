@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 260 |
-| 收 `*App` 的顶层函数 | 127 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 257 |
+| 收 `*App` 的顶层函数 | 124 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **3** |
 
@@ -788,6 +788,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 146 将 `backendUpgradeService` 改为显式持有 session-key/reply policy、effect runner、frontend lifecycle、backend maintenance services/runners、maintenance state、presentation、forms 与 Codex upgrade owners；CardAction adapter 通过命令-completion port 继续调用原异步 command dispatcher。composition 移到 maintenance owners 都就绪后创建该 service。对照状态机审计的 frontend lifecycle admission、context cancellation 与维护流程要求：异步取消刷新仍由同一 lifecycle admission 和 20 秒 operation timeout 执行，restart/upgrade runner 调用顺序不变。生产 `*App` 引用预算由 263 降至 261，收 `*App` 的顶层函数由 129 降至 127，App-bearing 结构体由 4 降至 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0；`backendUpgradeService` 的 App-bearing 依赖闭包归零。
 
 步骤 147 将 `groupBindingSessionScopeActive` 从 `*App` 参数改为已构造的 `bindingSessionScope`，命令、workspace callback 与 help renderer 复用 `BindingCommands` 持有的 state、session-key normalizer、primary service 和 frontend identity。session metadata 回退、group binding 检查与 primary lookup 失败时的非群判定保持不变。生产 `*App` 引用预算由 261 降至 260，depmap 顶层 App-taking 函数计数保持 127，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
+
+步骤 148 删除重复的 `sessionKeyChatForApp(*App)`，并让 p2p 判断、workspace thread menu、群配置状态卡和 command bridge 直接复用已构造的 `bindingSessionScope`。session metadata、规范化 session key、存储 session fallback、binding/primary 推断以及有效 group session key 查询保持原顺序和结果。生产 `*App` 引用预算由 260 降至 257，收 `*App` 的顶层函数由 127 降至 124，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
 
 ## 方法
 

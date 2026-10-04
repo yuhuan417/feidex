@@ -34,29 +34,6 @@ func sessionKeyChat(sessionKey string) (chatType, chatID string) {
 	return chatType, chatID
 }
 
-func sessionKeyChatForApp(a *App, sessionKey string) (chatType, chatID string) {
-	sessionKey = strings.TrimSpace(sessionKey)
-	chatType, chatID = sessionKeyChat(sessionKey)
-	if a != nil {
-		candidateKeys := []string{sessionKey, a.configView().normalizeSessionKey(sessionKey)}
-		for _, key := range candidateKeys {
-			if key == "" {
-				continue
-			}
-			if sess := a.State().Session(key); sess != nil {
-				chatType = textutil.FirstNonEmpty(chatType, strings.TrimSpace(sess.ChatType))
-				chatID = textutil.FirstNonEmpty(chatID, strings.TrimSpace(sess.ChatID))
-			}
-		}
-		if strings.TrimSpace(chatType) == "" && strings.TrimSpace(chatID) != "" {
-			if agentBindingForChat(a.State(), "group", chatID) != nil || lookupGroupPrimary(a.bindings.Primary, a.FrontendID(), "group", chatID) != nil {
-				chatType = "group"
-			}
-		}
-	}
-	return strings.TrimSpace(chatType), strings.TrimSpace(chatID)
-}
-
 type bindingSessionScope struct {
 	state               *appstate.Store
 	normalizeSessionKey func(string) string
@@ -105,8 +82,8 @@ func groupBindingSessionScopeActive(scope bindingSessionScope, sessionKey string
 	return chatType == "group" && strings.TrimSpace(chatID) != ""
 }
 
-func p2pSessionScopeActive(a *App, sessionKey string) bool {
-	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
+func p2pSessionScopeActive(scope bindingSessionScope, sessionKey string) bool {
+	chatType, chatID := scope.chat(sessionKey)
 	return strings.TrimSpace(chatID) != "" && strings.EqualFold(strings.TrimSpace(chatType), "p2p")
 }
 
@@ -116,15 +93,10 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 		return sessionKey
 	}
 	sessionKey = a.configView().normalizeSessionKey(sessionKey)
-	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
+	scope := a.bindings.BindingCommands.scope
+	chatType, chatID := scope.chat(sessionKey)
 	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return sessionKey
-	}
-	scope := bindingSessionScope{
-		state:               a.State(),
-		normalizeSessionKey: a.configView().normalizeSessionKey,
-		primary:             a.bindings.Primary,
-		frontendID:          a.FrontendID(),
 	}
 	binding := scope.Binding(sessionKey)
 	bindingID := ""

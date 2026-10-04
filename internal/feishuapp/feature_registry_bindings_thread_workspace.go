@@ -196,7 +196,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "该项是 bot frontend 默认配置，请私聊该 bot 使用"}}, nil
 				}
 			}
-			if p2pSessionScopeActive(s.app, sessionKey) {
+			if p2pSessionScopeActive(s.app.bindings.BindingCommands.scope, sessionKey) {
 				switch actionName {
 				case "model.aux_config.select_plan_model", "model.aux_config.select_plan_effort", "model.aux_config.select_review_model", "model.aux_config.select_subagent_model", "model.aux_config.select_subagent_effort", "model.aux_config.select_small_model", "model.plan_config.select_model", "model.plan_config.select_effort":
 					role := map[string]string{
@@ -340,7 +340,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					return svc.completeBindingServiceTierSet(action, sessionKey, actionStringValue(action, "service_tier"))
 				}
 			}
-			if p2pSessionScopeActive(s.app, sessionKey) && actionName == "service_tier.set" {
+			if p2pSessionScopeActive(s.app.bindings.BindingCommands.scope, sessionKey) && actionName == "service_tier.set" {
 				return completeBotProfileServiceTierSet(s.app, action, actionStringValue(action, "service_tier"))
 			}
 			switch actionName {
