@@ -255,8 +255,6 @@ func prepareTestApp(a *App) *App {
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Driver: a.BackendDriver(), ModelCommands: a.bindings.ModelCommands,
 	})
 	a.bindings.BackendActions = BuildBackendActions(a)
-	backendSwitch := backendselection.NewService(BackendSwitchPorts(a))
-	a.bindings.BackendSwitch = &backendSwitch
 	a.bindings.ServerRequests = BuildServerRequests(a)
 	a.bindings.Skills = compositionkit.NewSkillService(SkillUseCasePorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner.PendingSkills, a.FrontendID(), a.runtimeOwner))
 	a.bindings.SkillCommands = BuildSkillCommands(a)
@@ -375,6 +373,12 @@ func prepareTestApp(a *App) *App {
 	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a, func() {
 		a.bindings.MaintenanceCommands.CleanupExpiredAttachments()
 	}, a.bindings.ConversationRecovery.Restore))
+	backendSwitch := backendselection.NewService(BackendSwitchPorts(BackendSwitchPortInputs{
+		RuntimeDeps: a.BackendRuntimeDeps(), Transition: &a.runtimeOwner.BackendTransition,
+		FrontendQuery: a.bindings.FrontendQuery, StartupRecovery: a.bindings.StartupRecovery,
+		Announcements: a.runtimeOwner.Announcements, AnnouncementQuery: a.bindings.AnnouncementQuery,
+	}))
+	a.bindings.BackendSwitch = &backendSwitch
 	a.bindings.BackendSelection = BuildBackendSelection(a)
 	inboundService.Deps = InboundPorts(a, forwardService.Start)
 	a.bindings.Inbound = inboundService

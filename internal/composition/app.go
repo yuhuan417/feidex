@@ -267,8 +267,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		WorkspaceSelection: bindings.WorkspaceSelection, Driver: frontend.BackendDriver(), ModelCommands: bindings.ModelCommands,
 	})
 	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
-	backendSwitch := backendselection.NewService(feishuapp.BackendSwitchPorts(frontend))
-	bindings.BackendSwitch = &backendSwitch
 	bindings.ServerRequests = feishuapp.BuildServerRequests(frontend)
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(frontend)
@@ -393,6 +391,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend, func() {
 		bindings.MaintenanceCommands.CleanupExpiredAttachments()
 	}, bindings.ConversationRecovery.Restore))
+	backendSwitch := backendselection.NewService(feishuapp.BackendSwitchPorts(feishuapp.BackendSwitchPortInputs{
+		RuntimeDeps: frontend.BackendRuntimeDeps(), Transition: &scope.RuntimeOwner.BackendTransition,
+		FrontendQuery: bindings.FrontendQuery, StartupRecovery: bindings.StartupRecovery,
+		Announcements: scope.RuntimeOwner.Announcements, AnnouncementQuery: bindings.AnnouncementQuery,
+	}))
+	bindings.BackendSwitch = &backendSwitch
 	bindings.BackendSelection = feishuapp.BuildBackendSelection(frontend)
 	inboundService.Deps = feishuapp.InboundPorts(frontend, forwardService.Start)
 	bindings.Inbound = inboundService

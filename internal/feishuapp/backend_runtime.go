@@ -118,19 +118,19 @@ func buildBackendRuntimeHandle(deps BackendRuntimeDeps, target string) (*backend
 	return backend.BuildRuntime(backendRuntimeContextForApp(deps)), nil
 }
 
-func startPreparedBackendRuntime(a *App, ctx context.Context, handle *backendruntime.BackendHandle) error {
-	if a == nil || handle == nil {
+func startPreparedBackendRuntime(deps BackendRuntimeDeps, ctx context.Context, handle *backendruntime.BackendHandle) error {
+	if handle == nil {
 		return nil
 	}
 	backend := backendruntime.BackendForKind(handle.Backend)
 	if backend == nil {
 		return nil
 	}
-	return backend.StartRuntime(ctx, backendRuntimeContextForApp(a.BackendRuntimeDeps()), handle)
+	return backend.StartRuntime(ctx, backendRuntimeContextForApp(deps), handle)
 }
 
-func prepareBackendRuntime(a *App, ctx context.Context, target string) (*backendruntime.BackendHandle, error) {
-	handle, err := buildBackendRuntimeHandle(a.BackendRuntimeDeps(), target)
+func prepareBackendRuntime(deps BackendRuntimeDeps, ctx context.Context, target string) (*backendruntime.BackendHandle, error) {
+	handle, err := buildBackendRuntimeHandle(deps, target)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func prepareBackendRuntime(a *App, ctx context.Context, target string) (*backend
 	}
 	startCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if err := startPreparedBackendRuntime(a, startCtx, handle); err != nil {
+	if err := startPreparedBackendRuntime(deps, startCtx, handle); err != nil {
 		_ = handle.Close()
 		return nil, err
 	}

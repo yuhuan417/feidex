@@ -4,12 +4,17 @@ import (
 	"context"
 	backendruntime "feidex/internal/runtime"
 	"os/exec"
+	"sync"
 
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/backend"
+	"feidex/internal/application/announcement"
 	"feidex/internal/application/backendselection"
 	"feidex/internal/application/frontend"
+	"feidex/internal/config"
 	"feidex/internal/feishu"
+	"feidex/internal/runtime/maintenance"
+	"feidex/internal/state"
 )
 
 // backendLookPath is testable indirection for exec.LookPath.
@@ -30,13 +35,13 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 		UseCase: app.bindings.BackendSwitch,
 		Runtime: backend.SelectionRuntimeDeps{
 			ListAvailableBackends: func() []backend.AvailableBackend {
-				return availableBackendsForApp(app)
+				return availableBackendsForApp(app.BackendRuntimeDeps())
 			},
 			PrepareRuntime: func(ctx context.Context, target string) (*backend.BackendRuntimeHandle, error) {
-				return prepareRuntimeForApp(app, ctx, target)
+				return prepareRuntimeForApp(app.BackendRuntimeDeps(), ctx, target)
 			},
 			SnapshotRuntime: func() *backend.BackendRuntimeHandle {
-				return snapshotRuntimeForApp(app)
+				return snapshotRuntimeForApp(app.BackendRuntimeDeps())
 			},
 			RecoverState: func() {
 				recoverFrontendRuntimeState(startupRecovery)
@@ -46,7 +51,7 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 				return frontendIdleBlockedReason(frontendQuery)
 			},
 			RuntimeReady: func(target string) bool {
-				return backendRuntimeReadyForApp(app, target)
+				return backendRuntimeReadyForApp(app.BackendRuntimeDeps(), target)
 			},
 		},
 		Render: backend.SelectionRenderDeps{
@@ -81,41 +86,83 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 }
 
 type backendSelectionRuntime struct {
-	app           *App
+	runtimeDeps   BackendRuntimeDeps
 	frontendQuery frontend.Query
+	recoverState  func()
 }
 
 func (r backendSelectionRuntime) AvailableBackends() []backendselection.AvailableBackend {
-	return availableBackendsForApp(r.app)
+	return availableBackendsForApp(r.runtimeDeps)
 }
 func (r backendSelectionRuntime) Ready(target string) bool {
-	return backendRuntimeReadyForApp(r.app, target)
+	return backendRuntimeReadyForApp(r.runtimeDeps, target)
 }
 func (r backendSelectionRuntime) IdleBlockedReason() string {
 	return frontendIdleBlockedReason(r.frontendQuery)
 }
 func (r backendSelectionRuntime) Prepare(ctx context.Context, target string) (*backendselection.RuntimeHandle, error) {
-	return prepareRuntimeForApp(r.app, ctx, target)
+	return prepareRuntimeForApp(r.runtimeDeps, ctx, target)
 }
 func (r backendSelectionRuntime) Snapshot() *backendselection.RuntimeHandle {
-	return snapshotRuntimeForApp(r.app)
+	return snapshotRuntimeForApp(r.runtimeDeps)
 }
 func (r backendSelectionRuntime) Recover() {
-	recoverFrontendRuntimeState(r.app.bindings.StartupRecovery)
-	scheduleAllGroupAnnouncementStatusRefreshes(r.app.runtimeOwner.Announcements, r.app.bindings.AnnouncementQuery)
+	if r.recoverState != nil {
+		r.recoverState()
+	}
 }
 
-func BackendSwitchPorts(a *App) backendselection.Dependencies {
-	return backendselection.Dependencies{Repository: configadapter.BackendSelectionRepository{Source: a, Configured: func() string { return a.configView().configuredBackend() }}, Transition: &a.runtimeOwner.BackendTransition, Runtime: backendSelectionRuntime{app: a, frontendQuery: a.bindings.FrontendQuery}}
+type BackendSwitchPortInputs struct {
+	RuntimeDeps       BackendRuntimeDeps
+	Transition        *backendruntime.BackendTransition
+	FrontendQuery     frontend.Query
+	StartupRecovery   maintenance.StartupRecovery
+	Announcements     *backendruntime.CoalescedRefresh
+	AnnouncementQuery announcement.Query
 }
 
-func availableBackendsForApp(app *App) []backend.AvailableBackend {
-	if app == nil || app.cfg == nil {
+type backendSelectionSource struct{ deps BackendRuntimeDeps }
+
+func (s backendSelectionSource) Config() *config.Config   { return s.deps.cfg }
+func (s backendSelectionSource) ConfigMu() *sync.RWMutex  { return s.deps.view.mu }
+func (s backendSelectionSource) ConfigPath() string       { return s.deps.cfgPath }
+func (s backendSelectionSource) FrontendConfigIndex() int { return s.deps.view.frontendConfigIndex }
+func (s backendSelectionSource) FrontendID() string       { return s.deps.frontendID }
+func (s backendSelectionSource) Backend() string {
+	if s.deps.runtime.owner == nil {
+		return ""
+	}
+	return s.deps.runtime.owner.Backend()
+}
+func (s backendSelectionSource) Store() *state.Store { return s.deps.store }
+
+func BackendSwitchPorts(inputs BackendSwitchPortInputs) backendselection.Dependencies {
+	deps := inputs.RuntimeDeps
+	return backendselection.Dependencies{
+		Repository: configadapter.BackendSelectionRepository{
+			Source: backendSelectionSource{deps: deps},
+			Configured: func() string {
+				return deps.currentBackend().view.configuredBackend()
+			},
+		},
+		Transition: inputs.Transition,
+		Runtime: backendSelectionRuntime{
+			runtimeDeps: deps, frontendQuery: inputs.FrontendQuery,
+			recoverState: func() {
+				recoverFrontendRuntimeState(inputs.StartupRecovery)
+				scheduleAllGroupAnnouncementStatusRefreshes(inputs.Announcements, inputs.AnnouncementQuery)
+			},
+		},
+	}
+}
+
+func availableBackendsForApp(deps BackendRuntimeDeps) []backend.AvailableBackend {
+	if deps.cfg == nil {
 		return nil
 	}
 	out := make([]backend.AvailableBackend, 0, 2)
 	for _, runtime := range backendruntime.Backends() {
-		command := runtime.ConfiguredCommand(backendRuntimeContextForApp(app.BackendRuntimeDeps()))
+		command := runtime.ConfiguredCommand(backendRuntimeContextForApp(deps.currentBackend()))
 		if command == "" {
 			continue
 		}
@@ -132,34 +179,35 @@ func availableBackendsForApp(app *App) []backend.AvailableBackend {
 	return out
 }
 
-func prepareRuntimeForApp(app *App, ctx context.Context, target string) (*backend.BackendRuntimeHandle, error) {
-	h, err := prepareBackendRuntime(app, ctx, target)
+func prepareRuntimeForApp(deps BackendRuntimeDeps, ctx context.Context, target string) (*backend.BackendRuntimeHandle, error) {
+	h, err := prepareBackendRuntime(deps, ctx, target)
 	if err != nil {
 		return nil, err
 	}
 	return &backend.BackendRuntimeHandle{
 		Close:   h.Close,
-		Install: func() { installBackendRuntime(app.BackendRuntimeDeps(), h) },
+		Install: func() { installBackendRuntime(deps, h) },
 	}, nil
 }
 
-func snapshotRuntimeForApp(app *App) *backend.BackendRuntimeHandle {
-	if app == nil {
+func snapshotRuntimeForApp(deps BackendRuntimeDeps) *backend.BackendRuntimeHandle {
+	if deps.runtime.owner == nil {
 		return nil
 	}
-	h := currentBackendRuntimeHandle(app.configView().configuredBackend(), app.runtimeView())
+	current := deps.currentBackend()
+	h := currentBackendRuntimeHandle(current.view.configuredBackend(), current.runtime)
 	if h == nil {
 		return nil
 	}
 	return &backend.BackendRuntimeHandle{
 		Close:   h.Close,
-		Install: func() { installBackendRuntime(app.BackendRuntimeDeps(), h) },
+		Install: func() { installBackendRuntime(deps, h) },
 	}
 }
 
-func backendRuntimeReadyForApp(app *App, target string) bool {
+func backendRuntimeReadyForApp(deps BackendRuntimeDeps, target string) bool {
 	if runtime := backendruntime.BackendForKind(target); runtime != nil {
-		return runtime.RuntimeReady(backendRuntimeContextForApp(app.BackendRuntimeDeps()))
+		return runtime.RuntimeReady(backendRuntimeContextForApp(deps.currentBackend()))
 	}
 	return false
 }

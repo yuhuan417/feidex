@@ -26,6 +26,7 @@ import (
 type BackendRuntimeDeps struct {
 	view       frontendConfigView
 	cfg        *config.Config
+	cfgPath    string
 	frontendID string
 	runtime    runtimeView
 
@@ -55,6 +56,7 @@ func (a *App) BackendRuntimeDeps() BackendRuntimeDeps {
 	d := BackendRuntimeDeps{
 		view:       a.configView(),
 		cfg:        a.cfg,
+		cfgPath:    a.cfgPath,
 		frontendID: a.frontendID,
 		runtime:    a.runtimeView(),
 		contextFn:  a.Context,
