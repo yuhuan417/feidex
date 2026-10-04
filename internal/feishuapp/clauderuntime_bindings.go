@@ -48,6 +48,14 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	runtimeDeps := app.BackendRuntimeDeps()
 	contextFn := app.runtimeOwner.Lifecycle.Context
 	cards := newOutboundCardService(app)
+	outputSegments := claudeOutputSegmentDelivery{
+		delivery: cards.replyChunks,
+		findSubmission: func(threadID, turnID string) (string, *domainsubmission.Submission) {
+			return findSubmissionByTurn(submissionLookup, threadID, turnID)
+		},
+		markStreamFinal: turnPresentation.MarkStreamFinal,
+		turnFinalFooter: turnMetadata.TurnFinalFooterLines,
+	}
 	quietCards := quietWorkingCardExecutor{
 		renderer: cards.replyChunks.renderer, state: cards.replyChunks.state, outbound: cards.replyChunks.outbound,
 		links: cards.links, turns: turnPresentation, ready: cards.replyChunks.ready,
@@ -113,10 +121,10 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				quietCards.ExecuteQuietWorkingCardOp(ctx, sub, op)
 			},
 			UpdateOutputSegment: func(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
-				return updateClaudeOutputSegmentWithReuse(app, ctx, threadID, turnID, body, reuseMessageID)
+				return outputSegments.Update(ctx, threadID, turnID, body, reuseMessageID)
 			},
 			FinalizeOutputSegment: func(ctx context.Context, threadID, turnID, body string) bool {
-				return finalizeClaudeOutputSegment(app, ctx, threadID, turnID, body)
+				return outputSegments.Finalize(ctx, threadID, turnID, body)
 			},
 			SendFinalMessages: func(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
 				return sendFinalMessagesWithFooterAndReuse(app, ctx, sub, text, footerLines, inThread, reuseMessageIDs)

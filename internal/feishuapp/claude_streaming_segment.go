@@ -2,30 +2,36 @@ package feishuapp
 
 import (
 	"context"
-	appdelivery "feidex/internal/adapter/feishu/delivery"
-	"feidex/internal/adapter/feishu/quietmode"
 	"strings"
 	"time"
+
+	appdelivery "feidex/internal/adapter/feishu/delivery"
+	"feidex/internal/adapter/feishu/quietmode"
+	domainsubmission "feidex/internal/domain/submission"
 )
 
-func updateClaudeOutputSegmentWithReuse(a *App, ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
-	return deliverClaudeOutputSegment(a, ctx, threadID, turnID, body, false, reuseMessageID)
+type claudeOutputSegmentDelivery struct {
+	delivery        replyChunkDelivery
+	findSubmission  func(string, string) (string, *domainsubmission.Submission)
+	markStreamFinal func(string)
+	turnFinalFooter func(string, time.Time) []string
 }
 
-func finalizeClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, body string) bool {
-	_, ok := deliverClaudeOutputSegment(a, ctx, threadID, turnID, body, true, "")
+func (d claudeOutputSegmentDelivery) Update(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
+	return d.deliver(ctx, threadID, turnID, body, false, reuseMessageID)
+}
+
+func (d claudeOutputSegmentDelivery) Finalize(ctx context.Context, threadID, turnID, body string) bool {
+	_, ok := d.deliver(ctx, threadID, turnID, body, true, "")
 	return ok
 }
 
-func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
-	if a == nil {
-		return nil, false
-	}
+func (d claudeOutputSegmentDelivery) deliver(ctx context.Context, threadID, turnID, body string, final bool, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return nil, false
 	}
-	_, sub := findSubmissionByTurn(a.bindings.SubmissionLookup, threadID, turnID)
+	_, sub := d.findSubmission(threadID, turnID)
 	if sub == nil {
 		return nil, false
 	}
@@ -33,50 +39,35 @@ func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, b
 	if final {
 		kind = "final_message"
 	}
-	if quietmode.Enabled(a.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(a.configView().feishuConfig()), kind) {
+	feishuConfig := d.delivery.config.feishuConfig()
+	if quietmode.Enabled(feishuConfig) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig), kind) {
 		return nil, true
 	}
-
+	inThread := replyInThreadForSubmission(sub)
 	if final {
-		results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, body, a.bindings.TurnMetadata.TurnFinalFooterLines(turnID, time.Now()), replyInThreadForSubmission(sub), nil)
+		title, color, _, _ := outboundMessageCardMeta(kind, sub.WorkspaceID)
+		results := d.delivery.SendWithReuseIDs(ctx, sub, title, color, appdelivery.BuildReplyCardChunks(body, true, d.turnFinalFooter(turnID, time.Now())), inThread, true, nil)
 		if len(results) == 0 {
 			return nil, false
 		}
-		a.bindings.TurnPresentation.MarkStreamFinal(turnID)
+		d.markStreamFinal(turnID)
 		return results, true
 	}
 
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind, sub.WorkspaceID)
 	if !replyClass {
-		ids := sendReplyMessagesWithReuse(a, ctx, sub, body, replyInThreadForSubmission(sub), kind, reuseMessageID)
+		ids := d.delivery.SendMessagesWithReuse(ctx, sub, body, inThread, kind, reuseMessageID)
 		if len(ids) == 0 {
 			return nil, false
 		}
 		return []appdelivery.SentReplyChunk{{MessageID: ids[0], Body: body, Title: title, ShowHeader: showHeader}}, true
 	}
-	results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil,
-		a.configView(), newMessageLinkRecorder(a.configView(), a.runtimeOwner, a.bindings.Continuation),
-		newLocalFileLinkPatcher(a.Config(), a.State(), a.feishu, &a.runtimeOwner.Lifecycle, a.asyncRunner, a.bindings.FinalCardPatch, newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil),
-	).SendWithReuseIDs(
-		ctx,
-		sub,
-		title,
-		color,
-		appdelivery.BuildReplyCardChunks(body, showHeader, nil),
-		replyInThreadForSubmission(sub),
-		false,
-		func() []string {
-			if strings.TrimSpace(reuseMessageID) == "" {
-				return nil
-			}
-			return []string{strings.TrimSpace(reuseMessageID)}
-		}(),
-	)
+	results := d.delivery.SendWithReuse(ctx, sub, title, color, appdelivery.BuildReplyCardChunks(body, showHeader, nil), inThread, false, reuseMessageID)
 	if len(results) == 0 {
 		return nil, false
 	}
 	for _, result := range results {
-		recordMessageLink(a, result.MessageID, kind, sub, "")
+		d.delivery.links.Record(result.MessageID, kind, anchorForSubmission(sub), "")
 	}
 	return results, true
 }

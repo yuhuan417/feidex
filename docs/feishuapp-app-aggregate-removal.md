@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 391 |
-| 收 `*App` 的顶层函数 | 236 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 388 |
+| 收 `*App` 的顶层函数 | 233 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **24** |
 
@@ -605,6 +605,14 @@ owner 构造的 `quietWorkingCardExecutor`；执行仍先成功 patch/reply，�
 降至 391，收 `*App` 的函数由 237 降至 236；`ClaudeRuntimePorts` direct/helper/structs 维持 5/6/0，App-bearing
 工厂数与结构体数保持 12、24，lazy binding-read 预算保持 12。该步骤只调整 Feishu delivery adapter 装配，不改变
 SM-04 的 turn/item 事件、最终消息复用或 terminal 语义。
+
+步骤 83 将 Claude output-segment update/finalize 从三个 `*App` helper 收进显式
+`claudeOutputSegmentDelivery` owner，并复用 `newOutboundCardService` 已构造的 reply chunk delivery、submission
+lookup、turn-final footer 与 stream-final marker。quiet-mode gate、chunk/reuse、message-link 记录，以及成功投递后
+才标记 stream final 的顺序保持不变；final 继续直接使用 `SendWithReuseIDs`，不触发 final-card patch 注册等额外
+副作用。对照 SM-04：仅改变 Feishu delivery adapter 的依赖传递，不改变 turn/item/terminal 状态机。生产 `*App`
+引用由 391 降至 388，收 `*App` 的函数由 236 降至 233；`ClaudeRuntimePorts` direct/helper/structs 由 5/6/0
+降至 5/4/0，App-bearing 工厂与结构体数保持 12、24，lazy binding-read 预算保持 12。
 
 ## 方法
 
