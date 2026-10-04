@@ -235,7 +235,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	controls := conversation.NewControls(feishuapp.ConversationControlPorts(frontend))
 	bindings.ConversationControls = &controls
 	bindings.ThreadMenu = feishuapp.BuildThreadMenu(frontend)
-	planSource, planCatalog, planWorkspaces := feishuapp.PlanPorts(frontend)
+	planSource, planCatalog, planWorkspaces := feishuapp.PlanPorts(frontend.Config(), frontend.ConfigMu(), bindings.ModelSnapshots, scope.RuntimeOwner)
 	*bindings.Plan = planapp.Service{Forms: bindings.Forms, Delivery: bindings.InteractionDelivery, Repository: frontend.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: frontend.Context}, Conversations: bindings.Conversations, Workspaces: planWorkspaces, Queue: bindings.Submissions}
 	bindings.ReviewCommands = feishuapp.BuildReviewCommands(frontend)
 	bindings.MCP, err = feishuapp.BuildMCP(frontend)

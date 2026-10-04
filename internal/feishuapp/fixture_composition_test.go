@@ -214,7 +214,7 @@ func prepareTestApp(a *App) *App {
 	controls := conversation.NewControls(ConversationControlPorts(a))
 	a.bindings.ConversationControls = &controls
 	a.bindings.ThreadMenu = BuildThreadMenu(a)
-	planSource, planCatalog, planWorkspaces := PlanPorts(a)
+	planSource, planCatalog, planWorkspaces := PlanPorts(a.Config(), a.ConfigMu(), a.bindings.ModelSnapshots, a.runtimeOwner)
 	*a.bindings.Plan = planapp.Service{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Repository: a.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: a.Context}, Conversations: a.bindings.Conversations, Workspaces: planWorkspaces, Queue: a.bindings.Submissions}
 	a.bindings.ReviewCommands = BuildReviewCommands(a)
 	dispatcher := newInputDispatcher(a)

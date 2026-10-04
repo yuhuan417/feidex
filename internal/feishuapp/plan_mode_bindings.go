@@ -3,15 +3,18 @@ package feishuapp
 import (
 	"context"
 	"feidex/internal/adapter/feishu/planmode"
+	modelconfigapp "feidex/internal/application/modelconfig"
 	planapp "feidex/internal/application/plan"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"
+	"sync"
 
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -190,17 +193,29 @@ func (r planModeCardRenderer) SimpleStatusCard(title, color, body string, button
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
-type planSettingsSource struct{ app *App }
+type planSettingsSource struct {
+	view      frontendConfigView
+	snapshots modelconfigapp.SnapshotService
+}
 
 func (s planSettingsSource) Values(sess *conversation.Session) planapp.SettingsValues {
-	settings := s.app.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
-	return planapp.SettingsValues{Experimental: s.app.cfg != nil && s.app.cfg.Codex.ExperimentalAPI, Model: settings.Model, Effort: settings.Effort, PlanModel: settings.PlanModel, PlanEffort: settings.PlanEffort}
+	settings := s.snapshots.Desired(domainbackend.BackendCodex, sess)
+	if s.view.mu != nil {
+		s.view.mu.RLock()
+		defer s.view.mu.RUnlock()
+	}
+	return planapp.SettingsValues{Experimental: s.view.cfg != nil && s.view.cfg.Codex.ExperimentalAPI, Model: settings.Model, Effort: settings.Effort, PlanModel: settings.PlanModel, PlanEffort: settings.PlanEffort}
 }
 
 type planWorkspaces struct{ view frontendConfigView }
 
 func (w planWorkspaces) Get(id string) *config.Workspace { return config.FindWorkspace(w.view.cfg, id) }
 func (w planWorkspaces) DefaultID() string               { return w.view.defaultWorkspaceID() }
-func PlanPorts(a *App) (planapp.SettingsSource, func() (planapp.Catalog, error), planapp.Workspaces) {
-	return planSettingsSource{app: a}, func() (planapp.Catalog, error) { return requireCodexGateway(a) }, planWorkspaces{view: a.configView()}
+
+// PlanPorts captures the configuration and runtime owners, while settings and
+// the active backend client remain live reads through those owners.
+func PlanPorts(cfg *config.Config, mu *sync.RWMutex, snapshots modelconfigapp.SnapshotService, owner *frontendruntime.FrontendOwner) (planapp.SettingsSource, func() (planapp.Catalog, error), planapp.Workspaces) {
+	view := frontendConfigView{cfg: cfg, mu: mu}
+	runtime := runtimeView{owner: owner}
+	return planSettingsSource{view: view, snapshots: snapshots}, func() (planapp.Catalog, error) { return runtime.requireCodexGateway() }, planWorkspaces{view: view}
 }

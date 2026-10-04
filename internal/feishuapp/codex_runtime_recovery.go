@@ -87,6 +87,5 @@ func beginCodexAutoThreadRecoveryScope(codexrecovery appcodexruntime.RecoverySer
 }
 
 func requireCodexGateway(a *App) (codexadapter.Gateway, error) {
-	client, err := a.runtimeView().requireCodexClient()
-	return codexadapter.Gateway{Client: client}, err
+	return a.runtimeView().requireCodexGateway()
 }

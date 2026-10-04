@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"fmt"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	frontendruntime "feidex/internal/runtime"
 )
 
@@ -47,6 +48,11 @@ func (v runtimeView) requireCodexClient() (CodexClient, error) {
 		return nil, fmt.Errorf("codex client not initialized")
 	}
 	return client, nil
+}
+
+func (v runtimeView) requireCodexGateway() (codexadapter.Gateway, error) {
+	client, err := v.requireCodexClient()
+	return codexadapter.Gateway{Client: client}, err
 }
 
 func (v runtimeView) currentClaudeCore() ClaudeCore {

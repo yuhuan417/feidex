@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 523 |
-| 收 `*App` 的顶层函数 | 319 |
-| `*Ports` 工厂 | 25 |
-| **持有 `*App` 字段的结构体** | **71** |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 520 |
+| 收 `*App` 的顶层函数 | 317 |
+| 收 `*App` 的 `*Ports` 工厂 | 24 |
+| **持有 `*App` 字段的结构体** | **70** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 38。
@@ -71,7 +71,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `cardActionService` |
 | 1 | `claudeTurnStreamPort` |
 | 1 | `conversationRuntimeControl` |
-| 1 | `planSettingsSource` |
 
 以及「已经只剩 helper、没有结构体依赖」的 7 个工厂：
 
@@ -100,7 +99,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | 自身成员 | 传递 helper | 结构体 |
 |---|---|---|---|---|
-| 3 | `PlanPorts` | 1 | 1 | 1 |
 | 3 | `CardActionPorts` | 2 | 0 | 1 |
 | 5 | `BackendMaintenancePorts` | 2 | 1 | 2 |
 | 5 | `ClaudeMaintenancePorts` | 4 | 1 | 0 |
@@ -149,9 +147,15 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 4 | `BackendFailurePorts` | 9 处 `a.bindings.X` 改为函数开头的局部变量（快照式） |
 | 5 | `buildBackendConfigurationService` | 删掉死代码权限链后，`ModelCommands` 改为构造期读取 |
 | 6 | 18 个"只用一个成员"的 helper | 单成员函数改收那个成员（store、tracker、lookup、query、service、client），不再收聚合 |
+| 7 | `PlanPorts` / `planSettingsSource` | 显式接收配置、配置锁、模型快照服务和 runtime owner；返回对象不再持有 `App`，生产 composition 与测试 fixture 使用同一组输入 |
 
 前两个是 29 个里仅有的**立即求值、不捕获**的工厂。步骤 3-5 走的是同一
 条路：值在调用时已经就绪，惰性读取纯属写法惯性。
+
+步骤 7 保留动态配置读取与当前 frontend 的 Codex client 查询，不把构造期 client
+冻结进 catalog。`plan_ports_test.go` 覆盖配置更新、session 模型覆盖、workspace 更新、
+client 替换与移除。对照 SM-04/05：Plan 配置仍在本地 turn 启动时捕获，steer 仍沿用
+原 turn；本次只改变依赖传递方式。惰性读取预算保持 38。
 
 ## 方法
 
