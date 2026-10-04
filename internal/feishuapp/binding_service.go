@@ -19,6 +19,7 @@ import (
 
 type bindingService struct {
 	app      *App
+	scope    bindingSessionScope
 	renderer bindingCardRenderer
 }
 
@@ -34,7 +35,7 @@ func BuildBindingCommands(a *App) bindingService {
 	if a != nil {
 		renderer = a.feishu
 	}
-	return bindingService{app: a, renderer: renderer}
+	return bindingService{app: a, scope: bindingSessionScope{state: a.State(), normalizeSessionKey: a.configView().normalizeSessionKey, primary: a.bindings.Primary, frontendID: a.FrontendID()}, renderer: renderer}
 }
 
 func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage, args []string) error {
@@ -259,7 +260,7 @@ func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
 	if !groupBindingSessionScopeActive(s.app, sessionKey) {
 		return fmt.Errorf("解除 workspace 绑定只能在群聊中使用")
 	}
-	return s.app.bindings.GroupWorkspaces.Unbind(sessionKey, bindingForSessionKey(s.app, sessionKey))
+	return s.app.bindings.GroupWorkspaces.Unbind(sessionKey, s.scope.Binding(sessionKey))
 }
 
 func (s bindingService) completeBindingWorkspaceUnbind(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -288,12 +289,12 @@ func (s bindingService) activateBindingWorkspace(binding *state.AgentBinding, wo
 	return s.app.bindings.GroupWorkspaces.Select(binding, workspaceID)
 }
 
-func bindingWorkspaceForSessionKey(a *App, sessionKey string) *config.Workspace {
-	binding := bindingForSessionKey(a, sessionKey)
+func bindingWorkspaceForSessionKey(cfg *config.Config, scope bindingSessionScope, sessionKey string) *config.Workspace {
+	binding := scope.Binding(sessionKey)
 	if binding == nil || strings.TrimSpace(binding.WorkspaceID) == "" {
 		return nil
 	}
-	return config.FindWorkspace(a.cfg, binding.WorkspaceID)
+	return config.FindWorkspace(cfg, binding.WorkspaceID)
 }
 
 func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body string) error {

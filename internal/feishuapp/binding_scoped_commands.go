@@ -1,6 +1,7 @@
 package feishuapp
 
 import (
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	applicationrouting "feidex/internal/application/routing"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/routing"
@@ -56,12 +57,47 @@ func sessionKeyChatForApp(a *App, sessionKey string) (chatType, chatID string) {
 	return strings.TrimSpace(chatType), strings.TrimSpace(chatID)
 }
 
-func bindingForSessionKey(a *App, sessionKey string) *state.AgentBinding {
-	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
+type bindingSessionScope struct {
+	state               *appstate.Store
+	normalizeSessionKey func(string) string
+	primary             applicationrouting.Service
+	frontendID          string
+}
+
+func (s bindingSessionScope) chat(sessionKey string) (chatType, chatID string) {
+	sessionKey = strings.TrimSpace(sessionKey)
+	chatType, chatID = sessionKeyChat(sessionKey)
+	if s.state != nil {
+		candidateKeys := []string{sessionKey}
+		if s.normalizeSessionKey != nil {
+			candidateKeys = append(candidateKeys, s.normalizeSessionKey(sessionKey))
+		}
+		for _, key := range candidateKeys {
+			if key == "" {
+				continue
+			}
+			if sess := s.state.Session(key); sess != nil {
+				chatType = textutil.FirstNonEmpty(chatType, strings.TrimSpace(sess.ChatType))
+				chatID = textutil.FirstNonEmpty(chatID, strings.TrimSpace(sess.ChatID))
+			}
+		}
+		if strings.TrimSpace(chatType) == "" && strings.TrimSpace(chatID) != "" {
+			if agentBindingForChat(s.state, "group", chatID) != nil {
+				chatType = "group"
+			} else if primary, err := s.primary.Lookup(s.frontendID, "group", chatID); err == nil && primary != nil {
+				chatType = "group"
+			}
+		}
+	}
+	return strings.TrimSpace(chatType), strings.TrimSpace(chatID)
+}
+
+func (s bindingSessionScope) Binding(sessionKey string) *state.AgentBinding {
+	chatType, chatID := s.chat(sessionKey)
 	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return nil
 	}
-	return agentBindingForChat(a.State(), chatType, chatID)
+	return agentBindingForChat(s.state, chatType, chatID)
 }
 
 func groupBindingSessionScopeActive(a *App, sessionKey string) bool {
@@ -84,7 +120,13 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return sessionKey
 	}
-	binding := bindingForSessionKey(a, sessionKey)
+	scope := bindingSessionScope{
+		state:               a.State(),
+		normalizeSessionKey: a.configView().normalizeSessionKey,
+		primary:             a.bindings.Primary,
+		frontendID:          a.FrontendID(),
+	}
+	binding := scope.Binding(sessionKey)
 	bindingID := ""
 	if binding != nil {
 		bindingID = strings.TrimSpace(binding.ID)
@@ -149,7 +191,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 			if fieldName == "permission" {
 				fieldName = "permissions"
 			}
-			card, err := s.renderBindingWorkspaceSettingCard(sessionKey, bindingForSessionKey(s.app, sessionKey), fieldName)
+			card, err := s.renderBindingWorkspaceSettingCard(sessionKey, s.scope.Binding(sessionKey), fieldName)
 			if err != nil {
 				return err
 			}
@@ -176,7 +218,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 
 func (s bindingService) beginBindingWorkspaceClone(msg *feishu.InboundMessage, sessionKey string) error {
 	mgmt := s.app.bindings.WorkspaceManagement
-	ws := bindingWorkspaceForSessionKey(s.app, sessionKey)
+	ws := bindingWorkspaceForSessionKey(s.app.cfg, s.scope, sessionKey)
 	rootPath := mgmt.Deps.Planning.DefaultWorkspaceCloneRoot(ws)
 	parentDir := strings.TrimSpace(mgmt.Deps.Planning.DefaultWorkspaceCloneParent(ws))
 	payload := appworkspacecmd.ClonePayload{

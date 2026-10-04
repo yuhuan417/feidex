@@ -51,7 +51,7 @@ func (s bindingService) completeBindingWorkspaceSettingMenu(action *feishu.CardA
 func (s bindingService) renderBindingWorkspaceSettingCard(sessionKey string, binding *state.AgentBinding, fieldName string) (map[string]any, error) {
 	fieldName = normalizeBindingWorkspaceSettingName(fieldName)
 	if binding == nil {
-		binding = bindingForSessionKey(s.app, sessionKey)
+		binding = s.scope.Binding(sessionKey)
 	}
 	if binding == nil {
 		return nil, fmt.Errorf("当前群内工作区配置未初始化")

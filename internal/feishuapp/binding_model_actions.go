@@ -24,7 +24,7 @@ import (
 
 func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *state.AgentBinding) map[string]any {
 	if binding == nil {
-		binding = bindingForSessionKey(s.app, sessionKey)
+		binding = s.scope.Binding(sessionKey)
 	}
 	backend := s.app.configView().configuredBackend()
 	lines := []string{
@@ -51,7 +51,7 @@ func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *s
 
 func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
 	if binding == nil {
-		binding = bindingForSessionKey(s.app, sessionKey)
+		binding = s.scope.Binding(sessionKey)
 	}
 	switch s.app.configView().configuredBackend() {
 	case domainbackend.BackendCodex:
@@ -333,7 +333,7 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
 	cfg := configReadCopy(s.app.cfg, s.app.ConfigMu())
 	if binding == nil {
-		binding = bindingForSessionKey(s.app, sessionKey)
+		binding = s.scope.Binding(sessionKey)
 	}
 	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model_auxiliary", "当前群内覆盖。未设置时跟随 Bot 默认；可随时保存，待对应会话边界生效。")})
@@ -484,7 +484,7 @@ func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, arg
 
 func (s bindingService) renderBindingFastCard(sessionKey string, binding *state.AgentBinding) map[string]any {
 	if binding == nil {
-		binding = bindingForSessionKey(s.app, sessionKey)
+		binding = s.scope.Binding(sessionKey)
 	}
 	current := bindingServiceTierOverride(binding)
 	body := strings.Join([]string{

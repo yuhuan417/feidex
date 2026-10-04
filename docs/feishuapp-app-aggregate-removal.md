@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 346 |
-| 收 `*App` 的顶层函数 | 219 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 344 |
+| 收 `*App` 的顶层函数 | 217 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
 | **持有 `*App` 字段的结构体** | **17** |
 
@@ -731,6 +731,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 111 将 debug usage、runtime state 与 workspace adapters 从持有整个 `*App` 改为持有 turn-binding tracker、tracker-backed usage renderer/backend supplier、workspace config service 和 picker renderer，并删除因此无用的聚合 helper。该改动不改变 debug/usage 查询或卡片渲染行为；生产 `*App` 引用预算由 354 降至 349，App-bearing 结构体由 21 降至 17，lazy binding-read 预算保持 0。
 
 步骤 112 将 Debug、Usage 与 FileSharePorts 的 service 工厂改为接收已构造的 debug dependencies 和 runtime owners；App 适配只留在依赖装配入口。download session actor 继续在 frontend lifecycle admission 后执行；生产 `*App` 引用预算由 349 降至 346，收 `*App` 的顶层函数由 221 降至 219，收 `*App` 的 `*Ports` 工厂由 11 降至 10，lazy binding-read 预算保持 0。
+
+步骤 113 将 group binding session 查找与 workspace 解析改为使用 `bindingSessionScope` 的 scoped state、normalizer、primary lookup 和 frontend ID，不再把 `*App` 传入 binding lookup helper。group chat type 的 fallback 仍先查 agent binding，再查 primary 状态；生产 `*App` 引用预算由 346 降至 344，收 `*App` 的顶层函数由 219 降至 217，lazy binding-read 预算保持 0。
 
 ## 方法
 
