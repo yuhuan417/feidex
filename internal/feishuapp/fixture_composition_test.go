@@ -308,7 +308,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.WorkspaceWorkflow.Effects = a.bindings.WorkspaceEffects
 	a.bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(a.FrontendID()), Repository: a.State(), Creation: a.bindings.WorkspaceCreation, Planning: a.bindings.WorkspacePlanning, Effects: a.bindings.WorkspaceEffects}
 	a.bindings.ConversationQuery = conversation.Query{Repository: a.State()}
-	a.bindings.Notifications = frontendapp.Notifications{Repository: a.State(), Sender: NotificationSender(a), Context: a.Context}
+	a.bindings.Notifications = frontendapp.Notifications{Repository: a.State(), Sender: NotificationSender(a.feishu, a.FrontendID(), *a.runtimeOwner.EffectRunner), Context: a.Context}
 	a.bindings.ConversationRecovery = conversation.NewRecovery(ConversationRecoveryPorts(
 		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),
 		a.bindings.Conversations, a.runtimeOwner, a.bindings.CodexRecovery, a.bindings.ConversationConfiguration,

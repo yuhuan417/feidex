@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 432 |
-| 收 `*App` 的顶层函数 | 271 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 429 |
+| 收 `*App` 的顶层函数 | 269 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **30** |
+| **持有 `*App` 字段的结构体** | **29** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -490,6 +490,11 @@ frontend identity 与 effect runner；失效卡标题仍按原 session state 添
 构造完成后创建该 presentation owner；升级确认仍调用对应 backend 的原 `Prepare` service，卡片
 渲染和 pending request 行为不变。生产 `*App` 引用预算由 434 降至 432，收 `*App` 的函数由
 272 降至 271，持有 App 字段的结构体由 31 降至 30；lazy binding-read 预算保持 13。
+
+步骤 63 将 `notificationSender` 改为显式持有 Feishu notification client、frontend ID 与
+effect runner。投递使用 Notifications 调用方提供的 lifecycle context 并保留原 5 秒 timeout；
+空目标/内容仍跳过，加急失败仍只记录警告。生产 `*App` 引用预算由 432 降至 429，收 `*App` 的
+函数由 271 降至 269，持有 App 字段的结构体由 30 降至 29；lazy binding-read 预算保持 13。
 
 ## 方法
 

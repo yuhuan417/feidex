@@ -328,7 +328,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.WorkspaceWorkflow.Effects = bindings.WorkspaceEffects
 	bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: frontend.State(), Creation: bindings.WorkspaceCreation, Planning: bindings.WorkspacePlanning, Effects: bindings.WorkspaceEffects}
 	bindings.ConversationQuery = conversation.Query{Repository: frontend.State()}
-	bindings.Notifications = frontendapp.Notifications{Repository: frontend.State(), Sender: feishuapp.NotificationSender(frontend), Context: frontend.Context}
+	bindings.Notifications = frontendapp.Notifications{Repository: frontend.State(), Sender: feishuapp.NotificationSender(frontend.Feishu(), frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner), Context: frontend.Context}
 	bindings.ConversationRecovery = conversation.NewRecovery(feishuapp.ConversationRecoveryPorts(
 		frontend.Config(), frontend.ConfigMu(), frontend.FrontendConfigIndex(), frontend.State(),
 		bindings.Conversations, scope.RuntimeOwner, bindings.CodexRecovery, bindings.ConversationConfiguration,

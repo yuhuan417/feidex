@@ -424,7 +424,7 @@ func notifyFeishuAppConfigHeal(a *App, color, title, body string) {
 	}
 	sent := false
 	for _, target := range feishuAppConfigHealTargets(a) {
-		if err := sendFrontendCardNotification(a, target, note); err != nil {
+		if err := a.bindings.Notifications.Sender.DeliverNotification(a.Context(), target.ChatID, target.UserID, note); err != nil {
 			slog.Warn("feishu app config heal: notify failed",
 				"frontend_id", strings.TrimSpace(a.frontendID),
 				"chat_id", target.ChatID,

@@ -1,9 +1,12 @@
 package feishuapp
 
 import (
-	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/application"
 	frontendapp "feidex/internal/application/frontend"
+	"feidex/internal/domain/identity"
 	"feidex/internal/domain/routing"
+	"feidex/internal/runtime"
 
 	"context"
 	"log/slog"
@@ -28,18 +31,26 @@ func flushPendingFrontendCardNotifications(a *App, msg *feishu.InboundMessage) {
 	a.bindings.Notifications.Flush(msg.ChatID, msg.UserID)
 }
 
-type notificationSender struct{ app *App }
-
-func NotificationSender(a *App) frontendapp.NotificationSender { return notificationSender{app: a} }
-func (p notificationSender) DeliverNotification(_ context.Context, chatID, userID string, note routing.FrontendCardNotification) error {
-	return sendFrontendCardNotification(p.app, appfeishuwrap.NotifyTarget{ChatID: chatID, UserID: userID}, note)
+type notificationCardClient interface {
+	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
+	UrgentApp(context.Context, string, string) error
 }
 
-func sendFrontendCardNotification(a *App, target appfeishuwrap.NotifyTarget, note state.FrontendCardNotification) error {
-	if a == nil || a.feishu == nil {
+type notificationSender struct {
+	frontend identity.FrontendID
+	client   notificationCardClient
+	runner   runtime.EffectRunner
+}
+
+func NotificationSender(client notificationCardClient, frontend string, runner runtime.EffectRunner) frontendapp.NotificationSender {
+	return notificationSender{frontend: identity.FrontendID(frontend), client: client, runner: runner}
+}
+
+func (p notificationSender) DeliverNotification(ctx context.Context, chatID, userID string, note routing.FrontendCardNotification) error {
+	if p.client == nil {
 		return nil
 	}
-	chatID := strings.TrimSpace(target.ChatID)
+	chatID = strings.TrimSpace(chatID)
 	if chatID == "" {
 		return nil
 	}
@@ -52,14 +63,20 @@ func sendFrontendCardNotification(a *App, target appfeishuwrap.NotifyTarget, not
 	if color == "" {
 		color = "blue"
 	}
-	ctx, cancel := context.WithTimeout(a.Context(), 5*time.Second)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	sentMessageID, err := sendCardWithIDEffect(ctx, a, chatID, a.feishu.SimpleStatusCard(title, color, body, nil))
+	card := p.client.SimpleStatusCard(title, color, body, nil)
+	sentMessageID, err := p.runner.RunSendCard(ctx, application.SendCard{
+		Frontend: p.frontend, Chat: identity.ChatRef{ID: chatID}, View: feishuoutbound.Card(card),
+	})
 	if err != nil {
 		return err
 	}
-	if userID := strings.TrimSpace(target.UserID); userID != "" && strings.TrimSpace(sentMessageID) != "" {
-		if urgentErr := a.feishu.UrgentApp(ctx, sentMessageID, userID); urgentErr != nil {
+	if userID := strings.TrimSpace(userID); userID != "" && strings.TrimSpace(sentMessageID) != "" {
+		if urgentErr := p.client.UrgentApp(ctx, sentMessageID, userID); urgentErr != nil {
 			slog.Warn("frontend card notification urgent_app failed",
 				"message_id", sentMessageID,
 				"user_id", userID,
