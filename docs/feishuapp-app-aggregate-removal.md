@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 451 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 450 |
 | 收 `*App` 的顶层函数 | 281 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **39** |
+| **持有 `*App` 字段的结构体** | **38** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 18。
@@ -399,6 +399,12 @@ query 和 refresh coalescer，保留 thread 标记、group chat 识别与公告�
 仅改变 `MarkSessionThreadLive` 的 adapter 依赖，不更改 turn/item 通知顺序及 completed 终态。
 生产 `*App` 引用预算由 452 降至 451，持有 App 字段的结构体由 40 降至 39，收 `*App` 的
 函数预算保持 281；lazy binding-read 预算保持 18。
+
+步骤 47 将 `turnStreamQuietCardExecutorAdapter` 改为 App-free 的
+`quietWorkingCardExecutor`，并与 stream outbound owner 共用 renderer、scoped state、effect
+outbound 和 message-link recorder。reply/patch 失败仍不提交 quiet-card render，成功 reply
+仍先记录链接再提交 turn-stream 状态。生产 `*App` 引用预算由 451 降至 450，持有 App 字段的
+结构体由 39 降至 38，收 `*App` 的函数预算保持 281；lazy binding-read 预算保持 18。
 
 ## 方法
 

@@ -32,12 +32,6 @@ func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, t
 	return a.compact.CompleteStandaloneCompactItem(threadID, turnID, item.MergedRaw())
 }
 
-type turnStreamQuietCardExecutorAdapter struct{ app *App }
-
-func (a turnStreamQuietCardExecutorAdapter) ExecuteQuietWorkingCardOp(ctx context.Context, sub *domainsubmission.Submission, op turn.QuietWorkingCardOp) {
-	executeQuietWorkingCardOp(a.app, ctx, sub, op)
-}
-
 type claudeTurnStreamPort struct{ app *App }
 
 func (p claudeTurnStreamPort) NoteTurnItemStarted(threadID, turnID string, item turnitem.ProtocolItem) {
@@ -63,10 +57,15 @@ func (p claudeTurnStreamPort) MarkTurnStreamFinal(turnID string) {
 }
 
 func TurnPresentationPorts(a *App, turns *appturn.Service) appturnstream.Dependencies {
+	cards := newOutboundCardService(a)
 	return appturnstream.Dependencies{
 		Context: a.Context,
 		Tracker: a.bindings.TurnStreams, Finder: a.bindings.SubmissionLookup, Lifecycle: turns, Runtime: turnItemsPort{tracker: a.bindings.TurnItems},
-		Outbound: turnStreamOutboundCardAdapter{cards: newOutboundCardService(a), compact: a.bindings.Compaction}, Quiet: turnStreamQuietCardExecutorAdapter{app: a},
+		Outbound: turnStreamOutboundCardAdapter{cards: cards, compact: a.bindings.Compaction},
+		Quiet: quietWorkingCardExecutor{
+			renderer: cards.replyChunks.renderer, state: cards.replyChunks.state, outbound: cards.replyChunks.outbound,
+			links: cards.links, turns: a.bindings.TurnPresentation, ready: cards.replyChunks.ready,
+		},
 		SendStartedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
 			maybeSendSubmissionStartedNotice(a, ctx, sub)
 		},
