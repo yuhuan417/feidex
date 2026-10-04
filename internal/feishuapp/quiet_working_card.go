@@ -44,20 +44,6 @@ func (e quietWorkingCardExecutor) ExecuteQuietWorkingCardOp(ctx context.Context,
 	commitQuietWorkingCardRender(e.turns, op.TurnID, op.MessageID, op.Body)
 }
 
-func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *domainsubmission.Submission, op turn.QuietWorkingCardOp) {
-	if a == nil {
-		return
-	}
-	state := a.State()
-	owner := a.runtimeOwner
-	outbound := newEffectOutbound(a.FrontendID(), newEffectRunner(owner))
-	quietWorkingCardExecutor{
-		renderer: newCardRenderer(a.Config()), state: state, outbound: outbound,
-		links: newMessageLinkRecorder(a.configView(), owner, a.bindings.Continuation),
-		turns: a.bindings.TurnPresentation, ready: a.feishu != nil,
-	}.ExecuteQuietWorkingCardOp(ctx, sub, op)
-}
-
 func commitQuietWorkingCardRender(turnpresentation *turnstream.Service, turnID, messageID, body string) {
 	turnpresentation.CommitStreamQuietRender(turnID, messageID, body)
 }

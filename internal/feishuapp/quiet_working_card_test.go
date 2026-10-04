@@ -348,9 +348,16 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForTerminalCard(t *testing.
 func TestExecuteQuietWorkingCardOp(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	configView := a.configView()
+	outbound := newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner))
+	executor := quietWorkingCardExecutor{
+		renderer: newCardRenderer(a.Config()), state: a.State(), outbound: outbound,
+		links: newMessageLinkRecorder(configView, a.runtimeOwner, a.bindings.Continuation),
+		turns: a.bindings.TurnPresentation, ready: a.feishu != nil,
+	}
 
 	a.bindings.TurnPresentation.Tracker().Streams["turn-1"] = &turnStream{TurnID: "turn-1", QuietWorking: &turn.QuietWorkingCard{}}
-	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
+	executor.ExecuteQuietWorkingCardOp(context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID: "turn-1",
 		Body:   "Read `quiet_mode.go`",
 	})
@@ -362,7 +369,7 @@ func TestExecuteQuietWorkingCardOp(t *testing.T) {
 	}
 
 	a.bindings.TurnPresentation.Tracker().Streams["turn-1"].QuietWorking = &turn.QuietWorkingCard{MessageID: "reply-card-id", RenderedBody: "before"}
-	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
+	executor.ExecuteQuietWorkingCardOp(context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "Update `quiet_mode.go`",
@@ -376,7 +383,7 @@ func TestExecuteQuietWorkingCardOp(t *testing.T) {
 
 	ff.patchCardErr = errors.New("boom")
 	a.bindings.TurnPresentation.Tracker().Streams["turn-1"].QuietWorking = &turn.QuietWorkingCard{MessageID: "reply-card-id", RenderedBody: "stable"}
-	executeQuietWorkingCardOp(a, context.Background(), sub, turn.QuietWorkingCardOp{
+	executor.ExecuteQuietWorkingCardOp(context.Background(), sub, turn.QuietWorkingCardOp{
 		TurnID:    "turn-1",
 		MessageID: "reply-card-id",
 		Body:      "after error",

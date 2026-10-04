@@ -47,6 +47,11 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	sessionActors := app.runtimeOwner.SessionActors
 	runtimeDeps := app.BackendRuntimeDeps()
 	contextFn := app.runtimeOwner.Lifecycle.Context
+	cards := newOutboundCardService(app)
+	quietCards := quietWorkingCardExecutor{
+		renderer: cards.replyChunks.renderer, state: cards.replyChunks.state, outbound: cards.replyChunks.outbound,
+		links: cards.links, turns: turnPresentation, ready: cards.replyChunks.ready,
+	}
 	return appclauderuntime.Deps{
 		Context: contextFn,
 		Cfg:     cfg,
@@ -105,7 +110,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 		},
 		Delivery: appclauderuntime.DeliveryDeps{
 			ExecuteQuietWorkingCardOp: func(ctx context.Context, sub *domainsubmission.Submission, op appturn.QuietWorkingCardOp) {
-				executeQuietWorkingCardOp(app, ctx, sub, op)
+				quietCards.ExecuteQuietWorkingCardOp(ctx, sub, op)
 			},
 			UpdateOutputSegment: func(ctx context.Context, threadID, turnID, body, reuseMessageID string) ([]appdelivery.SentReplyChunk, bool) {
 				return updateClaudeOutputSegmentWithReuse(app, ctx, threadID, turnID, body, reuseMessageID)

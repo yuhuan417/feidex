@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 392 |
-| 收 `*App` 的顶层函数 | 237 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 391 |
+| 收 `*App` 的顶层函数 | 236 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **24** |
 
@@ -598,6 +598,13 @@ steer completion 与 backend failure 的状态 owner 和执行顺序不变。对
 turn terminal 识别或 session 状态收口。生产 `*App` 引用由 393 降至 392，收 `*App` 的函数由 238 降至 237；
 App-bearing 结构体与 `*Ports` 工厂数保持 24、12，lazy binding-read 预算保持 12。`claude_core_test.go` 中
 现有 ready binding 用例覆盖 thread binding 保留 root turn binding 的行为。
+
+步骤 82 移除 `executeQuietWorkingCardOp(*App, ...)` helper。Claude runtime ports 直接使用由现有 outbound card
+owner 构造的 `quietWorkingCardExecutor`；执行仍先成功 patch/reply，再 commit turn-stream quiet render state，失败
+时不推进该状态。原 executor 测试改为显式构造 renderer/state/outbound/link/turn owners。生产 `*App` 引用由 392
+降至 391，收 `*App` 的函数由 237 降至 236；`ClaudeRuntimePorts` direct/helper/structs 维持 5/6/0，App-bearing
+工厂数与结构体数保持 12、24，lazy binding-read 预算保持 12。该步骤只调整 Feishu delivery adapter 装配，不改变
+SM-04 的 turn/item 事件、最终消息复用或 terminal 语义。
 
 ## 方法
 
