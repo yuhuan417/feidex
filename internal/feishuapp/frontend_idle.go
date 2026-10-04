@@ -6,12 +6,12 @@ import (
 	frontendruntime "feidex/internal/runtime"
 )
 
-func frontendIsIdle(a *App) bool { return frontendIdleBlockedReason(a) == "" }
-func frontendIdleBlockedReason(a *App) string {
-	return frontendIdleBlockedReasonWithMessageTrafficAllowance(a, 0)
+func frontendIsIdle(query frontend.Query) bool { return frontendIdleBlockedReason(query) == "" }
+func frontendIdleBlockedReason(query frontend.Query) string {
+	return frontendIdleBlockedReasonWithMessageTrafficAllowance(query, 0)
 }
-func frontendIdleBlockedReasonIgnoringCurrentMessage(a *App) string {
-	return frontendIdleBlockedReasonWithMessageTrafficAllowance(a, 1)
+func frontendIdleBlockedReasonIgnoringCurrentMessage(query frontend.Query) string {
+	return frontendIdleBlockedReasonWithMessageTrafficAllowance(query, 1)
 }
 
 func frontendActivity(frontendquery frontend.Query, includeSessions bool) frontend.Activity {
@@ -24,9 +24,9 @@ func FrontendFacts(owner *frontendruntime.FrontendOwner, maintenanceService back
 	}
 }
 
-func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowance int) string {
-	if a == nil {
+func frontendIdleBlockedReasonWithMessageTrafficAllowance(query frontend.Query, allowance int) string {
+	if query.Repository == nil {
 		return "app not initialized"
 	}
-	return frontendActivity(a.bindings.FrontendQuery, true).IdleBlockedReason(allowance)
+	return frontendActivity(query, true).IdleBlockedReason(allowance)
 }

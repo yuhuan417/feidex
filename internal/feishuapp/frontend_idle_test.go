@@ -3,6 +3,7 @@ package feishuapp
 import (
 	appbackend "feidex/internal/adapter/feishu/backend"
 	appautoretry "feidex/internal/application/autoretry"
+	"feidex/internal/application/frontend"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 
@@ -220,14 +221,14 @@ func TestFrontendIdleState(t *testing.T) {
 				tt.seed(t, a, store)
 			}
 			recomposeTestApp(a)
-			got := frontendIdleBlockedReason(a)
+			got := frontendIdleBlockedReason(a.bindings.FrontendQuery)
 			if got != tt.want {
 				t.Fatalf("frontendIdleBlockedReason() = %q, want %q", got, tt.want)
 			}
 			if got := a.bindings.BackendSelection.BackendSwitchBlockedReason(); got != tt.want {
 				t.Fatalf("backendSwitchBlockedReason() = %q, want %q", got, tt.want)
 			}
-			if got := frontendIsIdle(a); got != tt.wantIdle {
+			if got := frontendIsIdle(a.bindings.FrontendQuery); got != tt.wantIdle {
 				t.Fatalf("frontendIsIdle() = %v, want %v", got, tt.wantIdle)
 			}
 		})
@@ -235,11 +236,11 @@ func TestFrontendIdleState(t *testing.T) {
 }
 
 func TestFrontendIdleStateNilApp(t *testing.T) {
-	var a *App
-	if got := frontendIdleBlockedReason(a); got != "app not initialized" {
+	var query frontend.Query
+	if got := frontendIdleBlockedReason(query); got != "app not initialized" {
 		t.Fatalf("frontendIdleBlockedReason(nil) = %q", got)
 	}
-	if frontendIsIdle(a) {
+	if frontendIsIdle(query) {
 		t.Fatal("frontendIsIdle(nil) = true, want false")
 	}
 }
@@ -256,15 +257,15 @@ func TestFrontendIdleIgnoringCurrentMessage(t *testing.T) {
 	})
 	a.runtimeOwner.
 		BeginMessageTraffic()
-	if got := frontendIdleBlockedReason(a); got != "当前仍有消息处理中" {
+	if got := frontendIdleBlockedReason(a.bindings.FrontendQuery); got != "当前仍有消息处理中" {
 		t.Fatalf("frontendIdleBlockedReason() = %q, want message traffic block", got)
 	}
-	if got := frontendIdleBlockedReasonIgnoringCurrentMessage(a); got != "" {
+	if got := frontendIdleBlockedReasonIgnoringCurrentMessage(a.bindings.FrontendQuery); got != "" {
 		t.Fatalf("frontendIdleBlockedReasonIgnoringCurrentMessage() = %q, want idle", got)
 	}
 	a.runtimeOwner.
 		BeginMessageTraffic()
-	if got := frontendIdleBlockedReasonIgnoringCurrentMessage(a); got != "当前仍有消息处理中" {
+	if got := frontendIdleBlockedReasonIgnoringCurrentMessage(a.bindings.FrontendQuery); got != "当前仍有消息处理中" {
 		t.Fatalf("frontendIdleBlockedReasonIgnoringCurrentMessage() with concurrent traffic = %q, want message traffic block", got)
 	}
 }

@@ -1265,7 +1265,7 @@ func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
 	}{
 		{name: "root", title: cardHeaderTitle(t, renderCommandMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderCommandMenuCard(a, sessionKey))},
 		{name: "tools", title: cardHeaderTitle(t, renderToolsMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderToolsMenuCard(a, sessionKey))},
-		{name: "status", title: cardHeaderTitle(t, renderStatusCard(a, sessionKey)), body: cardMarkdownContent(t, renderStatusCard(a, sessionKey))},
+		{name: "status", title: cardHeaderTitle(t, renderStatusCard(a.State(), a.feishu, a.configView().configuredBackend(), a.bindings.BackendConfiguration.StatusCardBody(a.State().Session(sessionKey)), sessionKey)), body: cardMarkdownContent(t, renderStatusCard(a.State(), a.feishu, a.configView().configuredBackend(), a.bindings.BackendConfiguration.StatusCardBody(a.State().Session(sessionKey)), sessionKey))},
 		{name: "interrupt", title: cardHeaderTitle(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。")), body: cardMarkdownContent(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。"))},
 		{name: "compact", title: cardHeaderTitle(t, renderCompactPreparingCard(a.State(), sessionKey)), body: cardMarkdownContent(t, renderCompactPreparingCard(a.State(), sessionKey))},
 	}

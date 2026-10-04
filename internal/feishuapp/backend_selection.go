@@ -8,6 +8,7 @@ import (
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/backend"
 	"feidex/internal/application/backendselection"
+	"feidex/internal/application/frontend"
 	"feidex/internal/feishu"
 )
 
@@ -22,6 +23,7 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 	announcementQuery := app.bindings.AnnouncementQuery
 	startupRecovery := app.bindings.StartupRecovery
 	autoRetry := app.bindings.AutoRetry
+	frontendQuery := app.bindings.FrontendQuery
 
 	return backend.NewSelectionService(backend.SelectionDeps{
 		Source:  app,
@@ -41,7 +43,7 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 				scheduleAllGroupAnnouncementStatusRefreshes(announcementRefresh, announcementQuery)
 			},
 			IdleBlockedReason: func() string {
-				return frontendIdleBlockedReason(app)
+				return frontendIdleBlockedReason(frontendQuery)
 			},
 			RuntimeReady: func(target string) bool {
 				return backendRuntimeReadyForApp(app, target)
@@ -78,7 +80,10 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 	})
 }
 
-type backendSelectionRuntime struct{ app *App }
+type backendSelectionRuntime struct {
+	app           *App
+	frontendQuery frontend.Query
+}
 
 func (r backendSelectionRuntime) AvailableBackends() []backendselection.AvailableBackend {
 	return availableBackendsForApp(r.app)
@@ -86,7 +91,9 @@ func (r backendSelectionRuntime) AvailableBackends() []backendselection.Availabl
 func (r backendSelectionRuntime) Ready(target string) bool {
 	return backendRuntimeReadyForApp(r.app, target)
 }
-func (r backendSelectionRuntime) IdleBlockedReason() string { return frontendIdleBlockedReason(r.app) }
+func (r backendSelectionRuntime) IdleBlockedReason() string {
+	return frontendIdleBlockedReason(r.frontendQuery)
+}
 func (r backendSelectionRuntime) Prepare(ctx context.Context, target string) (*backendselection.RuntimeHandle, error) {
 	return prepareRuntimeForApp(r.app, ctx, target)
 }
@@ -99,7 +106,7 @@ func (r backendSelectionRuntime) Recover() {
 }
 
 func BackendSwitchPorts(a *App) backendselection.Dependencies {
-	return backendselection.Dependencies{Repository: configadapter.BackendSelectionRepository{Source: a, Configured: func() string { return a.configView().configuredBackend() }}, Transition: &a.runtimeOwner.BackendTransition, Runtime: backendSelectionRuntime{app: a}}
+	return backendselection.Dependencies{Repository: configadapter.BackendSelectionRepository{Source: a, Configured: func() string { return a.configView().configuredBackend() }}, Transition: &a.runtimeOwner.BackendTransition, Runtime: backendSelectionRuntime{app: a, frontendQuery: a.bindings.FrontendQuery}}
 }
 
 func availableBackendsForApp(app *App) []backend.AvailableBackend {
