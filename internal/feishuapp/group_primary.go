@@ -51,7 +51,7 @@ func handleBotGroupAdded(a *App, event *feishu.BotGroupEvent) {
 	if chatID == "" {
 		return
 	}
-	if _, err := ensureGroupPrimaryInitialized(a.Context(), a, "group", chatID); err != nil {
+	if _, err := initializeGroupPrimary(a.Context(), a.bindings.PrimaryInitialization, a.FrontendID(), a.feishu, "group", chatID); err != nil {
 		slog.Warn("group primary auto init failed after bot added",
 			"frontend_id", strings.TrimSpace(a.FrontendID()),
 			"chat_id", chatID,
@@ -64,27 +64,24 @@ func handleBotGroupAdded(a *App, event *feishu.BotGroupEvent) {
 	scheduleGroupAnnouncementStatusRefresh(a.runtimeOwner.Announcements, chatID)
 }
 
-func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID string) (*state.GroupPrimary, error) {
+func initializeGroupPrimary(ctx context.Context, initializer approuting.InitializationService, frontendID string, client FeishuClient, chatType, chatID string) (*state.GroupPrimary, error) {
 	chatType = strings.ToLower(strings.TrimSpace(chatType))
 	chatID = strings.TrimSpace(chatID)
-	if a == nil || chatType != "group" || chatID == "" {
+	if chatType != "group" || chatID == "" {
 		return nil, nil
 	}
-	if a.feishu == nil {
+	if client == nil {
 		return nil, fmt.Errorf("feishu client not initialized")
 	}
-	result, err := a.bindings.PrimaryInitialization.Ensure(ctx, a.FrontendID(), chatType, chatID)
+	result, err := initializer.Ensure(ctx, frontendID, chatType, chatID)
 	if err != nil || result == nil {
 		return nil, err
 	}
 	return &state.GroupPrimary{FrontendID: result.FrontendID, ChatID: result.ChatID, ChatType: result.ChatType, Enabled: result.Enabled, LastAssignmentMessageID: result.LastAssignmentMessageID, LastAssignmentCreatedAt: result.LastAssignmentCreatedAt}, nil
 }
 
-func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
-	if a == nil || a.Store() == nil {
-		return nil
-	}
-	primary, err := a.bindings.Primary.Lookup(a.FrontendID(), chatType, chatID)
+func lookupGroupPrimary(service approuting.Service, frontendID, chatType, chatID string) *state.GroupPrimary {
+	primary, err := service.Lookup(frontendID, chatType, chatID)
 	if err != nil || primary == nil {
 		return nil
 	}
@@ -99,19 +96,13 @@ func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
 	}
 }
 
-func hasGroupPrimaryState(a *App, chatType, chatID string) bool {
-	if a == nil || a.Store() == nil {
-		return false
-	}
-	hasState, err := a.bindings.Primary.HasState(a.FrontendID(), chatType, chatID)
+func groupPrimaryHasState(service approuting.Service, frontendID, chatType, chatID string) bool {
+	hasState, err := service.HasState(frontendID, chatType, chatID)
 	return err == nil && hasState
 }
 
-func isGroupPrimary(a *App, chatType, chatID string) bool {
-	if a == nil || a.Store() == nil {
-		return false
-	}
-	enabled, err := a.bindings.Primary.IsPrimary(a.FrontendID(), chatType, chatID)
+func groupPrimaryEnabled(service approuting.Service, frontendID, chatType, chatID string) bool {
+	enabled, err := service.IsPrimary(frontendID, chatType, chatID)
 	return err == nil && enabled
 }
 
@@ -160,41 +151,34 @@ func currentBotDisplayName(client FeishuClient) string {
 	return currentBotOpenID(client)
 }
 
-func setGroupPrimaryState(a *App, chatType, chatID string, enabled bool, assignment *feishu.InboundMessage) (*state.GroupPrimary, error) {
-	if a == nil {
-		return nil, fmt.Errorf("app not initialized")
-	}
+func writeGroupPrimaryState(service approuting.Service, frontendID, chatType, chatID string, enabled bool, assignment *feishu.InboundMessage) (*state.GroupPrimary, error) {
 	chatType = strings.ToLower(strings.TrimSpace(chatType))
 	chatID = strings.TrimSpace(chatID)
 	if chatType != "group" || chatID == "" {
 		return nil, fmt.Errorf("group chat is required")
 	}
 	input := approuting.ChangePrimary{
-		Frontend: identity.FrontendID(a.FrontendID()),
+		Frontend: identity.FrontendID(frontendID),
 		Chat:     identity.ChatRef{Type: identity.ChatType(chatType), ID: chatID},
 		Enabled:  enabled,
 	}
 	if assignment != nil {
 		input.Assignment = &domainrouting.AssignmentStamp{MessageID: assignment.MessageID, CreatedAt: assignment.CreatedAt}
 	}
-	if _, err := a.bindings.Primary.SetPrimary(input); err != nil {
+	if _, err := service.SetPrimary(input); err != nil {
 		return nil, err
 	}
-	updated := groupPrimaryForChat(a, chatType, chatID)
+	updated := lookupGroupPrimary(service, frontendID, chatType, chatID)
 	if updated == nil {
 		return nil, fmt.Errorf("group primary state for %s/%s not found after update", chatType, chatID)
 	}
 	slog.Info("group primary state written",
-		"frontend_id", strings.TrimSpace(a.FrontendID()),
+		"frontend_id", strings.TrimSpace(frontendID),
 		"chat_id", chatID,
 		"primary_enabled", updated.Enabled,
 		"assignment_message_id", strings.TrimSpace(updated.LastAssignmentMessageID),
 	)
 	return updated, nil
-}
-
-func setGroupPrimary(a *App, chatType, chatID string, enabled bool) (*state.GroupPrimary, error) {
-	return setGroupPrimaryState(a, chatType, chatID, enabled, nil)
 }
 
 func syncGroupPrimaryAssignment(primary approuting.Service, frontendID string, client FeishuClient, msg *feishu.InboundMessage) (bool, error) {

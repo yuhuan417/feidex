@@ -2,10 +2,41 @@ package feishuapp
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"feidex/internal/feishu"
+	"feidex/internal/state"
 )
+
+func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID string) (*state.GroupPrimary, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return initializeGroupPrimary(ctx, a.bindings.PrimaryInitialization, a.FrontendID(), a.feishu, chatType, chatID)
+}
+
+func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
+	if a == nil || a.Store() == nil {
+		return nil
+	}
+	return lookupGroupPrimary(a.bindings.Primary, a.FrontendID(), chatType, chatID)
+}
+
+func isGroupPrimary(a *App, chatType, chatID string) bool {
+	return a != nil && a.Store() != nil && groupPrimaryEnabled(a.bindings.Primary, a.FrontendID(), chatType, chatID)
+}
+
+func setGroupPrimaryState(a *App, chatType, chatID string, enabled bool, assignment *feishu.InboundMessage) (*state.GroupPrimary, error) {
+	if a == nil {
+		return nil, fmt.Errorf("app not initialized")
+	}
+	return writeGroupPrimaryState(a.bindings.Primary, a.FrontendID(), chatType, chatID, enabled, assignment)
+}
+
+func setGroupPrimary(a *App, chatType, chatID string, enabled bool) (*state.GroupPrimary, error) {
+	return setGroupPrimaryState(a, chatType, chatID, enabled, nil)
+}
 
 func TestGroupPrimaryStateIsIndependentPerFrontend(t *testing.T) {
 	a, ffA, _ := newTestApp(t)

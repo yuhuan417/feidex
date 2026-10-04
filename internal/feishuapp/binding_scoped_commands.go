@@ -49,7 +49,7 @@ func sessionKeyChatForApp(a *App, sessionKey string) (chatType, chatID string) {
 			}
 		}
 		if strings.TrimSpace(chatType) == "" && strings.TrimSpace(chatID) != "" {
-			if agentBindingForChat(a.State(), "group", chatID) != nil || groupPrimaryForChat(a, "group", chatID) != nil {
+			if agentBindingForChat(a.State(), "group", chatID) != nil || lookupGroupPrimary(a.bindings.Primary, a.FrontendID(), "group", chatID) != nil {
 				chatType = "group"
 			}
 		}

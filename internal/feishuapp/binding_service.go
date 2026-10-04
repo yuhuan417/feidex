@@ -194,13 +194,13 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 	if strings.TrimSpace(msg.ChatType) != "group" {
 		return fmt.Errorf("/primary 只能在群聊中使用")
 	}
-	_, initErr := ensureGroupPrimaryInitialized(context.Background(), s.app, msg.ChatType, msg.ChatID)
+	_, initErr := initializeGroupPrimary(context.Background(), s.app.bindings.PrimaryInitialization, s.app.FrontendID(), s.app.feishu, msg.ChatType, msg.ChatID)
 	if len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status") {
-		body := "当前 Bot primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
+		body := "当前 Bot primary: `" + onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID)) + "`"
 		if self := currentBotDisplayName(s.app.feishu); self != "" {
 			body += "\n当前 Bot: `" + self + "`"
 		}
-		if initErr != nil && !hasGroupPrimaryState(s.app, msg.ChatType, msg.ChatID) {
+		if initErr != nil && !groupPrimaryHasState(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID) {
 			body += "\n\n自动读取群机器人数量失败: `" + initErr.Error() + "`"
 		}
 		return s.replyBindingUpdated(msg, body)
@@ -223,14 +223,14 @@ func (s bindingService) setPrimaryForMessage(msg *feishu.InboundMessage) error {
 	if currentOpenID == "" {
 		return fmt.Errorf("bot open_id is required to set group primary")
 	}
-	updated, err := setGroupPrimaryState(s.app, msg.ChatType, msg.ChatID, true, msg)
+	updated, err := writeGroupPrimaryState(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID, true, msg)
 	if err != nil {
 		return err
 	}
 	if updated == nil {
-		updated = groupPrimaryForChat(s.app, msg.ChatType, msg.ChatID)
+		updated = lookupGroupPrimary(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID)
 	}
-	body := "已更新 primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
+	body := "已更新 primary: `" + onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), msg.ChatType, msg.ChatID)) + "`"
 	if updated != nil {
 		scheduleGroupAnnouncementStatusRefresh(s.app.runtimeOwner.Announcements, updated.ChatID)
 	}
@@ -310,7 +310,7 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 
 func (s bindingService) renderBindingStatusCard(sessionKey string, binding *state.AgentBinding) map[string]any {
 	chatType, chatID, _, _ := currentBotMenuContext(s.app, sessionKey)
-	primaryLabel := onOffLabel(isGroupPrimary(s.app, chatType, chatID))
+	primaryLabel := onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), chatType, chatID))
 	if binding == nil {
 		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，也可以用 `@Bot /workspace new worktree` 基于当前 Git 仓库创建隔离 worktree，或用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
 		return s.renderer.SimpleStatusCard("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
@@ -329,7 +329,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		"backend: `" + textutil.FirstNonEmpty(s.app.configView().configuredBackend(), "unset") + "`",
 		"chat: `" + binding.ChatType + "/" + binding.ChatID + "`",
 		statusLine,
-		"primary: `" + onOffLabel(isGroupPrimary(s.app, binding.ChatType, binding.ChatID)) + "`",
+		"primary: `" + onOffLabel(groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), binding.ChatType, binding.ChatID)) + "`",
 		workspaceLine,
 		"model override: " + renderOptionalBacktick(binding.ModelOverride),
 		"effort override: " + renderOptionalBacktick(binding.ReasoningEffortOverride),
@@ -347,9 +347,9 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		preview := pendingBindingMessagePreview(binding.PendingMessage)
 		lines = append(lines, "\n已暂存原消息，配置工作区后会继续处理: `"+preview+"`")
 	}
-	if !hasGroupPrimaryState(s.app, binding.ChatType, binding.ChatID) {
+	if !groupPrimaryHasState(s.app.bindings.Primary, s.app.FrontendID(), binding.ChatType, binding.ChatID) {
 		lines = append(lines, "\n注意: 还没有完成本群 primary 判断；如果未 `@` 消息没有响应，请使用 `@Bot /primary on` 显式设置当前 Bot 为 primary。")
-	} else if !isGroupPrimary(s.app, binding.ChatType, binding.ChatID) {
+	} else if !groupPrimaryEnabled(s.app.bindings.Primary, s.app.FrontendID(), binding.ChatType, binding.ChatID) {
 		lines = append(lines, "\n当前 Bot 不是本群 primary；未 `@` 的普通群消息不会由它处理。使用 `@Bot /primary on` 可切换。")
 	}
 	buttons := []feishu.Button{}
