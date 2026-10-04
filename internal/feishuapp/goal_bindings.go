@@ -85,12 +85,13 @@ func GoalContinuationPorts(a *App) goalapp.Dependencies {
 }
 
 func completeMenuGoalAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	commands := *a.bindings.GoalCommands
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return a.bindings.GoalCommands.CompleteMenuGoal(action, sessionKey)
+		return commands.CompleteMenuGoal(action, sessionKey)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
 	runAsync(a, func() {
-		resp, err := a.bindings.GoalCommands.CompleteMenuGoal(action, sessionKey)
+		resp, err := commands.CompleteMenuGoal(action, sessionKey)
 		completeGoalAsyncResult(a, action, sessionKey, messageID, resp, err, "goal menu patch failed")
 	})
 	return &callback.CardActionTriggerResponse{
@@ -104,12 +105,13 @@ func completeGoalRenderedActionAsync(
 	sessionKey, toastText string,
 	run func(goalcmd.Service) (*callback.CardActionTriggerResponse, error),
 ) (*callback.CardActionTriggerResponse, error) {
+	commands := *a.bindings.GoalCommands
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return run(*a.bindings.GoalCommands)
+		return run(commands)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
 	runAsync(a, func() {
-		resp, err := run(*a.bindings.GoalCommands)
+		resp, err := run(commands)
 		completeGoalAsyncResult(a, action, sessionKey, messageID, resp, err, "goal action patch failed")
 	})
 	return &callback.CardActionTriggerResponse{

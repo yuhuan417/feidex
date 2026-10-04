@@ -6,13 +6,15 @@ import (
 	"strings"
 
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
+	"feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
 
-func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
+func BuildUpgrades(app *App, workspaceConfiguration *workspacecmd.ConfigService) appupgradecmd.UpgradeService {
 	outboundFrontend := app.FrontendID()
 	runtimeOwner := app.runtimeOwner
+	workspacePresentation := app.bindings.WorkspacePresentation
 
 	deps := appupgradecmd.UpgradeServiceDeps{
 		CurrentVersion: func() string { return currentVersion() },
@@ -35,7 +37,7 @@ func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 			return app.State()
 		},
 		CurrentWorkspaceFunc: func(msg *feishu.InboundMessage) (string, *config.Workspace) {
-			sessionKey, _, ws := currentWorkspaceForMessage(app.bindings.WorkspaceConfiguration, msg)
+			sessionKey, _, ws := currentWorkspaceForMessage(workspaceConfiguration, msg)
 			return sessionKey, ws
 		},
 		WorkspaceForSessionFunc: func(sessionKey string) *config.Workspace {
@@ -46,7 +48,7 @@ func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 			return config.FindWorkspace(app.cfg, wsID)
 		},
 		RenderPathPickerCardFunc: func(requestID string, payload appupgradecmd.PathPickerPayload) (map[string]any, error) {
-			return app.bindings.WorkspacePresentation.RenderPathPickerCard(requestID, payload)
+			return workspacePresentation.RenderPathPickerCard(requestID, payload)
 		},
 		DataDirFunc: func() string {
 			return app.cfg.DataDir

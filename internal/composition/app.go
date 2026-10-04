@@ -155,7 +155,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BackendUpgrades = feishuapp.BuildBackendUpgrades(frontend)
 	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner)
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
-	bindings.Upgrades = feishuapp.BuildUpgrades(frontend)
 
 	bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(
 		scope.RuntimeOwner.MaintenanceTrackers,
@@ -365,6 +364,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// bindings exist.
 	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend, bindings.WorkspacePresentation, bindings.Conversations)
 	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend, bindings.WorkspacePresentation, bindings.Conversations)
+	bindings.Upgrades = feishuapp.BuildUpgrades(frontend, bindings.WorkspaceConfiguration)
 	actors, replayRunner := feishuapp.BindingReplayPorts(scope.RuntimeOwner.SessionActors, scope.RuntimeOwner)
 	bindings.BindingReplay = runtime.BindingReplay{Service: bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: bindings.WorkspaceCreation.Lifecycle, Runtime: feishuapp.WorkspaceEffectRuntime(&scope.RuntimeOwner.Lifecycle, frontend.AsyncRunner(), scope.RuntimeOwner.SessionActors, scope.RuntimeOwner.LiveThreads, bindings.BindingReplay), Conversations: bindings.Conversations, Context: frontend.Context}

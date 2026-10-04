@@ -137,7 +137,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BackendUpgrades = BuildBackendUpgrades(a)
 	platform, releases, artifacts, launcher := UpgradeWorkflowPorts(a.Config(), a.ConfigMu(), a.runtimeOwner)
 	a.bindings.UpgradeWorkflow = &upgrade.Service{Forms: a.bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
-	a.bindings.Upgrades = BuildUpgrades(a)
 
 	a.bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(
 		a.runtimeOwner.MaintenanceTrackers,
@@ -347,6 +346,7 @@ func prepareTestApp(a *App) *App {
 	})}
 	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
 	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
+	a.bindings.Upgrades = BuildUpgrades(a, a.bindings.WorkspaceConfiguration)
 	actors, replayRunner := BindingReplayPorts(a.sessionActorRuntime(), a.runtimeOwner)
 	a.bindings.BindingReplay = runtime.BindingReplay{Service: a.bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(&a.runtimeOwner.Lifecycle, a.asyncRunner, actors, a.runtimeOwner.LiveThreads, a.bindings.BindingReplay), Conversations: a.bindings.Conversations, Context: a.Context}

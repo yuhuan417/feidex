@@ -34,7 +34,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | **持有 `*App` 字段的结构体** | **21** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 7。`*App`
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 3。`*App`
 引用与 lazy binding-read 都只允许单向下降；即使某一步只改善其中一项，也不能让另一项回升。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
@@ -690,6 +690,16 @@ queue，仍需在 effect 执行时读取该 queue；保留这处真实的晚绑�
 
 步骤 96 `mcpDependenciesForApp` 在 `BuildMCP` 时捕获已初始化的 `TurnItems` tracker；MCP callback 每次仍从该
 tracker 查询最新 started-item 状态，只移除对 App bindings 字段的惰性查找。lazy binding-read 预算由 8 降至 7，
+`*App` 引用预算不变。
+
+步骤 97 将 `BuildUpgrades` 移到 `WorkspaceConfiguration` 构造之后，并显式接收该 config service；同时在 factory
+调用时捕获已就绪的 workspace presentation。CurrentWorkspace 与 path-picker callback 不再从 App bindings 延迟读取；
+upgrade/workspace 选择仍委托原 services，production 与 test fixture 构造顺序一致。lazy binding-read 预算由 7 降至 5，
+`*App` 引用预算不变。
+
+步骤 98 Goal card action 收到请求时已在 composition 完成之后；`completeMenuGoalAsync` 与
+`completeGoalRenderedActionAsync` 在提交 async work 前复制已就绪的 `GoalCommands` service，closure 捕获该 service
+值而不是延迟读取 `App.bindings`。卡片响应、toast 和异步 patch 流程不变；lazy binding-read 预算由 5 降至 3，
 `*App` 引用预算不变。
 
 ## 方法
