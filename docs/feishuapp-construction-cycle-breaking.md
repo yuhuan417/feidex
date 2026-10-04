@@ -21,7 +21,7 @@
 判定方法：把 composition 里每条 `bindings.X = ...` 赋值语句作为节点，语句里
 调用的 `feishuapp.*` 函数所读取的其他 binding 作为出边，求强连通分量。
 
-**有 3 个真环**（其余是排序问题）：
+早期图中有 3 个真环（其余是排序问题）：
 
 ```
 环 1:  Submissions ↔ TurnPresentation ↔ Turns
@@ -77,7 +77,7 @@
 | | 数量 | 环 |
 |---|---|---|
 | **构造期环（只算 eager）** | **0** | —— |
-| 含惰性读取的环 | 1 | recovery 组：`CodexRecovery ↔ CodexUpgrade ↔ ConversationRecovery ↔ MaintenanceCommands ↔ StartupRecovery` |
+| 含惰性读取的环 | 1 | `CodexRecovery ↔ ConversationRecovery ↔ MaintenanceCommands ↔ StartupRecovery` |
 
 （写作时的 1 个 eager 环 `Plan ↔ Submissions ↔ TurnPresentation ↔ Turns` 已由
 `db4a1c2` 拆掉。）
@@ -117,6 +117,8 @@ Turns            eager→[Submissions, TurnPresentation]
 ## 环 1：turn / submission / turnstream
 
 ### 边（方法级）
+
+下表记录 turn、submission 与 turnstream 的方法级依赖。
 
 | 从 | 到 | 调用点 | 要什么 |
 |---|---|---|---|
@@ -201,7 +203,10 @@ turnstart    →  EnsureStreamLocked(tracker)  （直接操作 tracker）
 
 ## 环 2：recovery / upgrade 五个服务
 
-### 边（方法级）
+### 改造前的边（方法级）
+
+下表记录最初定位的五服务环。CodexUpgrade 与 CodexRecovery 之间的
+`App`/`Bindings` 读取已在步骤 12 移除，当前 binding 图见下方实测结果。
 
 | 从 | 到 | 调用点 | 要什么 |
 |---|---|---|---|
@@ -302,9 +307,11 @@ nil。这也解释了为什么 `SubmissionPorts` 那处能改、而 `BuildUpgrad
 
 **待处理**：
 
-- `BuildUpgrades ← WorkspacePresentation`、`CodexUpgradePorts ← CodexRecovery`
-  —— 值确实在后面，需要先拆掉它俩的依赖（后者是环 2 注入的残留，正解是抽出
-  共享的恢复状态载体）
+- `BuildUpgrades ← WorkspacePresentation` —— 值确实在后面，需要先对齐两个构造入口
+- `CodexUpgradePorts ← CodexRecovery` 已解决：composition 先构造 recovery 并将它
+  显式传给 upgrade ports，再通过局部 upgrade service 回调完成恢复启动和 smoke
+  test 连接。ports 不捕获 `App` 或 `Bindings`，runtime snapshot 中的 transport
+  handler 也持有已构造的 recovery service。
 - `ClaudeRuntimePorts`（14 处）—— 它由 `bindings.ClaudeFactory` 在运行时调用，
   惰性是真的；要去掉只能把工厂改成"组合期先建 ports、调用时只补 cfg"
 - 其余 20 处散在 16 个函数里，多为 1-3 处
@@ -318,8 +325,8 @@ builder 改成构造期参数后，这条边变成了正向的显式依赖。
 
 | 测试 | 起始值 | 当前 | 目标 |
 |---|---|---|---|
-| `TestFeishuAppAggregateDoesNotGrow` | 541 | 514 | 0 |
-| `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **37** | **0** |
+| `TestFeishuAppAggregateDoesNotGrow` | 541 | 512 | 0 |
+| `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **36** | **0** |
 
 ### 分析口径的第三次修正：语句级图必须闭包到 wrapper 的实现
 

@@ -142,15 +142,20 @@ func prepareTestApp(a *App) *App {
 	a.bindings.AutoRetry = AutoRetryView(a)
 	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(a, a.bindings.AutoRetry))
 	a.bindings.FrontendQuery = frontendapp.Query{Repository: a.State(), Facts: FrontendFacts(a), Retrying: a.bindings.AutoRetry.HasBlockingAutoRetry}
-	a.bindings.CodexUpgrade = codexruntime.NewUpgradeService(CodexUpgradePorts(a, func(ctx context.Context) error {
-		return a.bindings.CodexUpgrade.CodexSmokeTest(ctx)
-	}))
+	var codexUpgrade codexruntime.UpgradeService
 	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(a,
 		func(ctx context.Context) (codexruntime.CodexClient, error) {
-			return a.bindings.CodexUpgrade.StartVerifiedCodexClient(ctx)
+			return codexUpgrade.StartVerifiedCodexClient(ctx)
 		},
 		func() { a.bindings.StartupRecovery.RecoverFrontendRuntimeState() },
 	))
+	codexUpgrade = codexruntime.NewUpgradeService(CodexUpgradePorts(
+		a.Config(), a.ConfigMu(), a.FrontendID(), a.FrontendConfigIndex(),
+		a.runtimeOwner, a.BackendRuntimeDeps(), a.bindings.CodexRecovery,
+		func() { _ = a.bindings.StartupRecovery.RecoverFrontendRuntimeState() },
+		func(ctx context.Context) error { return codexUpgrade.CodexSmokeTest(ctx) },
+	))
+	a.bindings.CodexUpgrade = codexUpgrade
 	smoke, active, current, create := ClaudeMaintenancePorts(a.Config(), a.ConfigMu(), a.Context, a.runtimeOwner, a.FrontendConfigIndex(), a.bindings.ClaudeFactory)
 	a.bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	a.bindings.History = BuildHistory(a)

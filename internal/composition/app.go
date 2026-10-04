@@ -160,15 +160,20 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.AutoRetry = feishuapp.AutoRetryView(frontend)
 	bindings.AutoRetry.Engine = retry.NewEngine(feishuapp.AutoRetryPorts(frontend, bindings.AutoRetry))
 	bindings.FrontendQuery = frontendapp.Query{Repository: frontend.State(), Facts: feishuapp.FrontendFacts(frontend), Retrying: bindings.AutoRetry.HasBlockingAutoRetry}
-	bindings.CodexUpgrade = codexruntime.NewUpgradeService(feishuapp.CodexUpgradePorts(frontend, func(ctx context.Context) error {
-		return bindings.CodexUpgrade.CodexSmokeTest(ctx)
-	}))
+	var codexUpgrade codexruntime.UpgradeService
 	bindings.CodexRecovery = codexruntime.NewRecoveryService(feishuapp.CodexRecoveryPorts(frontend,
 		func(ctx context.Context) (codexruntime.CodexClient, error) {
-			return bindings.CodexUpgrade.StartVerifiedCodexClient(ctx)
+			return codexUpgrade.StartVerifiedCodexClient(ctx)
 		},
 		func() { bindings.StartupRecovery.RecoverFrontendRuntimeState() },
 	))
+	codexUpgrade = codexruntime.NewUpgradeService(feishuapp.CodexUpgradePorts(
+		frontend.Config(), frontend.ConfigMu(), frontend.FrontendID(), frontend.FrontendConfigIndex(),
+		scope.RuntimeOwner, frontend.BackendRuntimeDeps(), bindings.CodexRecovery,
+		func() { _ = bindings.StartupRecovery.RecoverFrontendRuntimeState() },
+		func(ctx context.Context) error { return codexUpgrade.CodexSmokeTest(ctx) },
+	))
+	bindings.CodexUpgrade = codexUpgrade
 	smoke, active, current, create := feishuapp.ClaudeMaintenancePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, scope.RuntimeOwner, frontend.FrontendConfigIndex(), bindings.ClaudeFactory)
 	bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	bindings.History = feishuapp.BuildHistory(frontend)

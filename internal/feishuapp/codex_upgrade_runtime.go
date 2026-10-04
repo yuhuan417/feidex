@@ -4,45 +4,79 @@ import (
 	appbackend "feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/upgraderender"
 	"feidex/internal/application/backendmaintenance"
+	"feidex/internal/config"
 	domainbackend "feidex/internal/domain/backend"
 
 	"context"
+	"sync"
 
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	appcodexruntime "feidex/internal/runtime/codex"
 )
 
-// newCodexUpgradeService builds a codexruntime.UpgradeService with
-// all callbacks wired to *App dependencies.
-// CodexUpgradePorts takes its own smoke test as a value: the port is built
-// before the service it belongs to exists.
-func CodexUpgradePorts(a *App, codexSmokeTest func(context.Context) error) appcodexruntime.UpgradeDependencies {
-	// Read once at construction so the dependency is visible.
-	startupRecovery := a.bindings.StartupRecovery
+// CodexUpgradePorts builds upgrade dependencies from frontend-owned values.
+// The runtime snapshot includes the already constructed Codex recovery service
+// used by newly created clients' transport handlers.
+func CodexUpgradePorts(
+	cfg *config.Config,
+	configMu *sync.RWMutex,
+	frontendID string,
+	frontendConfigIndex int,
+	runtimeOwner *frontendruntime.FrontendOwner,
+	backendRuntime BackendRuntimeDeps,
+	codexRecovery appcodexruntime.RecoveryService,
+	recoverFrontendRuntimeState func(),
+	codexSmokeTest func(context.Context) error,
+) appcodexruntime.UpgradeDependencies {
+	configSnapshot := func() config.CodexConfig {
+		if cfg == nil {
+			return config.CodexConfig{}
+		}
+		if configMu != nil {
+			configMu.RLock()
+			defer configMu.RUnlock()
+		}
+		return cfg.Codex
+	}
+	backendIsActive := func() bool {
+		backend := ""
+		if runtimeOwner != nil {
+			backend = runtimeOwner.Backend()
+		}
+		view := frontendConfigView{
+			cfg: cfg, mu: configMu, backend: backend,
+			frontendID: frontendID, frontendConfigIndex: frontendConfigIndex,
+		}
+		return view.configuredBackend() == domainbackend.BackendCodex
+	}
 
 	return appcodexruntime.UpgradeDependencies{
 		CreateClient: func() appcodexruntime.CodexClient {
-			return newCodexClient(a.cfg.Codex)
+			return newCodexClient(configSnapshot())
 		},
 		ConfigureClient: func(client appcodexruntime.CodexClient) {
-			configureCodexClientRuntime(a.BackendRuntimeDeps(), client)
+			runtimeDeps := backendRuntime
+			if runtimeOwner != nil {
+				runtimeDeps.view.backend = runtimeOwner.Backend()
+			}
+			configureCodexClientRuntime(runtimeDeps, client)
 		},
 		ClientExperimentalAPI: func() bool {
-			return a.cfg.Codex.ExperimentalAPI
+			return configSnapshot().ExperimentalAPI
 		},
-		IsBackendActive: func() bool {
-			return a.configView().configuredBackend() == domainbackend.BackendCodex
-		},
-		SmokeTest: codexSmokeTest,
+		IsBackendActive: backendIsActive,
+		SmokeTest:       codexSmokeTest,
 		CurrentClient: func() appcodexruntime.CodexClient {
-			return a.runtimeView().currentCodexClient()
+			if runtimeOwner == nil {
+				return nil
+			}
+			return (runtimeView{owner: runtimeOwner}).currentCodexClient()
 		},
 		ReplaceClient: func(next appcodexruntime.CodexClient) appcodexruntime.CodexClient {
-			return replaceCodexClient(a.bindings.CodexRecovery, next)
+			return replaceCodexClient(codexRecovery, next)
 		},
-		RecoverFrontendRuntimeState: func() {
-			recoverFrontendRuntimeState(startupRecovery)
-		},
+		RecoverFrontendRuntimeState: recoverFrontendRuntimeState,
 	}
 }
 

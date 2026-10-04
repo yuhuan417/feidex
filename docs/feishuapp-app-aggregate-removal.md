@@ -28,13 +28,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 514 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 512 |
 | 收 `*App` 的顶层函数 | 312 |
 | 收 `*App` 的 `*Ports` 工厂 | 20 |
 | **持有 `*App` 字段的结构体** | **70** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 37。
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 36。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
 如果调用点本身在闭包里，惰性读取预算会**上涨**——读取从 `f` 的函数体（不算惰性）
@@ -147,6 +147,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 9 | `ContinuationPorts` / `resolveInboundAttachments` | 显式接收配置、配置锁、context、scoped store、runtime owner、submission queue、frontend 身份与 Feishu client；状态方法值和附件下载不再捕获 `App` |
 | 10 | `ClaudeMaintenancePorts` | 显式接收配置、配置锁、context、runtime owner、frontend 配置索引与 Claude core factory；运行时选择与配置仍动态读取 |
 | 11 | `ConversationRecoveryPorts` | 显式接收 scoped repository、conversation service、配置视图、runtime owner、Codex recovery 与 conversation configuration；恢复 endpoint 仍捕获当前 client 并校验其有效性 |
+| 12 | `CodexUpgradePorts` | 显式接收配置、配置锁、frontend 身份、runtime owner、runtime dependency snapshot、Codex recovery 与 startup recovery；配置和 backend 仍动态读取 |
 
 前两个是 29 个里仅有的**立即求值、不捕获**的工厂。步骤 3-5 走的是同一
 条路：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -181,6 +182,15 @@ workspace workdir 选择；active/current/create 继续查询 runtime owner，cr
 Codex `thread/resume` gateway。对照 SM-03：启动恢复仍由现有 Conversation Recovery
 用例按原顺序执行 resume、失败后的 fresh start 与状态绑定；本次仅显式化 owner 注入。
 惰性读取预算保持 37。
+
+步骤 12 先构造 Codex recovery，再构造 upgrade ports，并把已就绪的 recovery
+service 放入 `BackendRuntimeDeps`。恢复入口与 smoke test 使用 composition 局部的
+upgrade service 值完成回调连接；ports 本身不再读取 `App` 或 `Bindings`。配置读取
+在配置锁下取快照，backend、当前 client 和 recovery state 仍按 frontend owner 动态
+读取。`codex_upgrade_ports_test.go` 覆盖配置更新、backend 切换、client 替换、
+transport handler 注入和 startup recovery 回调。对照 SM-03：没有改变 startup
+recovery 中的 thread resume、失败后的 fresh start 或状态绑定顺序；惰性读取预算由
+37 降至 36。
 
 ## 方法
 
