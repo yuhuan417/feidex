@@ -212,6 +212,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 	turnStarter := a.bindings.TurnStarter
 	review := a.bindings.Review
 	conversationConfiguration := a.bindings.ConversationConfiguration
+	starts := a.runtimeOwner.SubmissionStarts
 	return appsubmission.Dependencies{
 		PlanConfirmation: plan,
 		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
@@ -267,10 +268,10 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			runAsync(a, func() { a.sessionActorRuntime().Run("session:"+strings.TrimSpace(sessionKey), fn) })
 		},
 		TryBeginStart: func(sessionKey string) bool {
-			return submissionStartTracker(a).TryBegin(sessionKey)
+			return starts.TryBegin(sessionKey)
 		},
 		FinishStart: func(sessionKey string) bool {
-			return submissionStartTracker(a).Finish(sessionKey)
+			return starts.Finish(sessionKey)
 		},
 		LogSessionState: func(event, sessionKey string, sess *conversation.Session) {
 			logSessionState(event, sessionKey, sess)

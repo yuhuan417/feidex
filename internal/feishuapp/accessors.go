@@ -118,13 +118,6 @@ func (a *App) BackendRuntime() frontendruntime.BackendFacade {
 	return backendRuntime(a)
 }
 
-func submissionStartTracker(a *App) *frontendruntime.SubmissionStarts {
-	if a == nil {
-		return nil
-	}
-	return a.runtimeOwner.SubmissionStarts
-}
-
 func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {
 	if a == nil {
 		return nil

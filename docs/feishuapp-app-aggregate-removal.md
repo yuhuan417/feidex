@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 446 |
-| 收 `*App` 的顶层函数 | 281 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 445 |
+| 收 `*App` 的顶层函数 | 280 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **34** |
 
@@ -441,6 +441,12 @@ owner。每次调用从 owner 刷新当前 backend，再构造 facade 和 backen
 service 填充前构造；调用时读取已就绪 owner，不冻结零值。生产 `*App`
 引用预算由 447 降至 446，持有 App 字段的结构体由 35 降至 34，收 `*App` 的函数预算保持 281；
 lazy binding-read 预算保持 13。
+
+步骤 54 将 `SubmissionPorts` 的 start guard 改为在构造期捕获
+`runtimeOwner.SubmissionStarts`，两个回调直接使用该 tracker，并删除只为读取此 tracker 存在的
+`submissionStartTracker(*App)`。序列化范围和 TryBegin/Finish 配对不变；生产 `*App` 引用预算由
+446 降至 445，收 `*App` 的函数由 281 降至 280，持有 App 字段的结构体预算保持 34；lazy
+binding-read 预算保持 13。
 
 ## 方法
 
