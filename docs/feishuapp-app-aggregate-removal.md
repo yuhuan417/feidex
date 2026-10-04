@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 494 |
-| 收 `*App` 的顶层函数 | 301 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 493 |
+| 收 `*App` 的顶层函数 | 300 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **62** |
 
@@ -274,6 +274,10 @@ service 和 effect runner。交互卡仍先尝试复用 reasoning-only 工作卡
 最后发送到 session chat；pending 状态写入、resolved 边界与 message-link 持久化仍由原
 `InteractionDelivery` service 完成。`*App` 引用预算由 495 降至 494，持有 App 字段的结构体
 降至 62。对照 SM-09/10/11/22/23/26，未改 request reply/resolved 顺序和 turn 生命周期。
+
+步骤 29 将 `anchorForSubmission` 改为仅从 submission 投影 pending-card anchor，去掉未使用的
+`*App` 参数，并同步 pending delivery 与 message-link 调用点。投影字段和回复策略均不变；
+`*App` 引用预算由 494 降至 493，app-bearing 函数数由 301 降至 300。
 
 ## 方法
 

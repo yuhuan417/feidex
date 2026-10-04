@@ -47,7 +47,7 @@ type pendingCardAnchor struct {
 	replyInThread    bool
 }
 
-func anchorForSubmission(a *App, sub *domainsubmission.Submission) pendingCardAnchor {
+func anchorForSubmission(sub *domainsubmission.Submission) pendingCardAnchor {
 	if sub == nil {
 		return pendingCardAnchor{}
 	}
@@ -67,7 +67,7 @@ func deliverPendingCard(a *App, sub *domainsubmission.Submission, card map[strin
 	if sub == nil {
 		return fmt.Errorf("pending card delivery unavailable")
 	}
-	return deliverPendingCardWithAnchor(a, anchorForSubmission(a, sub), card, delivery)
+	return deliverPendingCardWithAnchor(a, anchorForSubmission(sub), card, delivery)
 }
 
 // deliverDetachedPendingCard delivers a card for a request that outlived its

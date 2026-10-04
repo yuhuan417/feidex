@@ -12,7 +12,7 @@ func recordMessageLink(a *App, messageID, kind string, sub *domainsubmission.Sub
 	if sub == nil {
 		return
 	}
-	recordMessageLinkForAnchor(a, messageID, kind, anchorForSubmission(a, sub), requestID)
+	recordMessageLinkForAnchor(a, messageID, kind, anchorForSubmission(sub), requestID)
 }
 
 // recordMessageLinkForAnchor records the link for an already resolved anchor,
