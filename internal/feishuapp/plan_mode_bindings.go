@@ -138,6 +138,9 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 	if a == nil {
 		return planmode.Dependencies{}
 	}
+	modelSnapshots := a.bindings.ModelSnapshots
+	submissions := a.bindings.Submissions
+	conversations := a.bindings.Conversations
 	return planmode.Dependencies{
 		UseCase:                a.bindings.Plan,
 		ConfigProvider:         a,
@@ -150,7 +153,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		ReplyInThreadEnabledFn: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
 		SessionHasActiveWorkFn: sessionHasActiveWork,
 		EffectivePlanSettingsFn: func(sess *conversation.Session) (string, string) {
-			settings := a.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
+			settings := modelSnapshots.Desired(domainbackend.BackendCodex, sess)
 			return settings.PlanModel, settings.PlanEffort
 		},
 		ActionStringValueFn:          actionStringValue,
@@ -159,9 +162,9 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		SendLocalTurnFollowupCardFn: func(ctx context.Context, parent string, card map[string]any, reply bool, sub *domainsubmission.Submission, kind string) (string, error) {
 			return sendLocalTurnFollowupCard(ctx, a, parent, card, reply, sub, kind)
 		},
-		StartNextSubmissionFn: func(key string) error { return startNextSubmission(a.bindings.Submissions, key) },
+		StartNextSubmissionFn: func(key string) error { return startNextSubmission(submissions, key) },
 		StartWorkspaceThreadFn: func(key string, sess *conversation.Session, ws *config.Workspace) (*conversation.ThreadBinding, error) {
-			return a.bindings.Conversations.StartWorkspaceThread(key, sess, ws)
+			return conversations.StartWorkspaceThread(key, sess, ws)
 		},
 	}
 }

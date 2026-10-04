@@ -34,7 +34,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | **持有 `*App` 字段的结构体** | **37** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 18。
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 15。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
 如果调用点本身在闭包里，惰性读取预算会**上涨**——读取从 `f` 的函数体（不算惰性）
@@ -410,6 +410,11 @@ outbound 和 message-link recorder。reply/patch 失败仍不提交 quiet-card r
 不改变 started/in-flight/completed item 顺序或 stream final 标记。生产 `*App` 引用预算由
 450 降至 449，持有 App 字段的结构体由 38 降至 37，收 `*App` 的函数预算保持 281；lazy
 binding-read 预算保持 18。
+
+步骤 49 将 `newPlanModeAppAdapter` 闭包中的 ModelSnapshots、Submissions 与 Conversations
+改为构造期局部快照。三个 owner 在 adapter 组装时已就绪，计划设置仍通过原 snapshot service
+读取，workspace thread 启动与下一 submission 行为不变。lazy binding-read 预算由 18 降至
+15；`*App` 引用预算保持 449。
 
 ## 方法
 
