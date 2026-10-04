@@ -34,12 +34,18 @@ func modelConfigStatus(a *App, sessionKey string) string {
 	return modelsettings.RenderStatus(view)
 }
 
-func modelConfigReadCopy(a *App) *config.Config {
-	a.ConfigMu().RLock()
-	defer a.ConfigMu().RUnlock()
-	return config.Clone(a.cfg)
+func configReadCopy(cfg *config.Config, mu *sync.RWMutex) *config.Config {
+	if mu != nil {
+		mu.RLock()
+		defer mu.RUnlock()
+	}
+	return config.Clone(cfg)
 }
 
-func CodexServiceName(a *App) func() string {
-	return func() string { return modelConfigReadCopy(a).Codex.ServiceName }
+func modelConfigReadCopy(a *App) *config.Config {
+	return configReadCopy(a.cfg, a.ConfigMu())
+}
+
+func CodexServiceName(cfg *config.Config, mu *sync.RWMutex) func() string {
+	return func() string { return configReadCopy(cfg, mu).Codex.ServiceName }
 }
