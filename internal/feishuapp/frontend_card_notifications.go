@@ -24,13 +24,6 @@ func queueFrontendCardNotification(a *App, note state.FrontendCardNotification) 
 	a.bindings.Notifications.Queue(note)
 }
 
-func flushPendingFrontendCardNotifications(a *App, msg *feishu.InboundMessage) {
-	if a == nil || a.feishu == nil || a.store == nil || msg == nil {
-		return
-	}
-	a.bindings.Notifications.Flush(msg.ChatID, msg.UserID)
-}
-
 type notificationCardClient interface {
 	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
 	UrgentApp(context.Context, string, string) error

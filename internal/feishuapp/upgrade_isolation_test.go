@@ -103,8 +103,8 @@ func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *te
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-local-path", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := handleCommand(a, msg, "/upgrade path dist/feidex linux amd64"); err != nil {
-		t.Fatalf("handleCommand(/upgrade path ...) with nil codex and no session state error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/upgrade path dist/feidex linux amd64"); err != nil {
+		t.Fatalf("HandleInboundCommand(/upgrade path ...) with nil codex and no session state error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))

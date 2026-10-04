@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 284 |
-| 收 `*App` 的顶层函数 | 164 |
-| 收 `*App` 的 `*Ports` 工厂 | 9 |
-| **持有 `*App` 字段的结构体** | **5** |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 281 |
+| 收 `*App` 的顶层函数 | 147 |
+| 收 `*App` 的 `*Ports` 工厂 | 8 |
+| **持有 `*App` 字段的结构体** | **4** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 0。`*App`
@@ -70,7 +70,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `bindingService` | 39 | 7 |
 | 1 | `menuActionService` | 19 | 12 |
 | 1 | `backendUpgradeService` | 15 | 4 |
-| 1 | `inboundCommands` | 2 | 1 |
 | 1 | `cardActionService` | 0 | 0 |
 
 `cardRenderer`、`outboundCardService`、`turnStreamOutboundCardAdapter` 和 `turnRuntimePort`
@@ -78,16 +77,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | `a.X` | bindings | helpers | structs |
 |---|---|---|---|---|---|
-| 27 | `InboundPorts` | 12 | 13 | 1 | 1 |
 | 20 | `ClaudeRuntimePorts` | 5 | 14 | 1 | 0 |
 | 16 | `TurnPorts` | 4 | 9 | 3 | 0 |
 | 13 | `BackendFailurePorts` | 3 | 7 | 3 | 0 |
-| 11 | `StartupRecoveryPorts` | 6 | 2 | 3 | 0 |
-| 10 | `CodexRecoveryPorts` | 5 | 1 | 4 | 0 |
-| 10 | `FileSharePorts` | 3 | 0 | 2 | 5 |
+| 10 | `CodexRecoveryPorts` | 7 | 1 | 2 | 0 |
 | 10 | `TurnPresentationPorts` | 3 | 5 | 2 | 0 |
-| 8 | `ReviewPorts` | 1 | 2 | 2 | 3 |
-| 3 | `BackendSwitchPorts` | 2 | 0 | 0 | 1 |
+| 9 | `StartupRecoveryPorts` | 7 | 1 | 1 | 0 |
+| 8 | `ReviewPorts` | 3 | 4 | 1 | 0 |
 | 1 | `CardActionPorts` | 0 | 0 | 0 | 1 |
 
 ## 已完成的骨架
@@ -772,6 +768,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 132 将 backend runtime install 改为接收 `BackendRuntimeDeps`，并把 scoped state view 纳入该能力包；runtime backend、Codex recovery client、Claude core 与 scoped state 的更新仍按原顺序执行。生产 `*App` 引用预算由 294 降至 292，收 `*App` 的顶层函数由 174 降至 172，lazy binding-read 预算保持 0。
 
 步骤 133 将 application backend-switch ports 及 available/prepare/snapshot/ready runtime helpers 改为接收 `BackendRuntimeDeps`、frontend query、transition、startup recovery 与 announcement owners；prepare/snapshot 的 Install 闭包也仅捕获 runtime deps。配置 repository 使用显式的 frontend-scoped source adapter，切换状态迁移、idle gate 与 recovery 顺序不变。生产 `*App` 引用预算由 292 降至 284，收 `*App` 的顶层函数由 172 降至 164，App-bearing 结构体由 6 降至 5，App-bearing `*Ports` 工厂由 10 降至 9，lazy binding-read 预算保持 0。
+
+步骤 134 将 `InboundPorts` 改为接收 frontend identity/context/session-key、routing/request/submission services、backend/runtime suppliers、effect runner 与明确的回调；`inboundCommands` 只持有 backend supplier 和命令 handler，不再持有 `*App`。group pending gate 继续使用同一 session key、lifecycle context 和 effect runner，workspace/plan 文本回复、附件解析、backend admission、通知刷新与 merge-forward 预取路径不变。原 `handleCommand` 入口改为导出 `HandleInboundCommand`，测试调用同步迁移；命令语义未变，并删除已无调用方的通知刷新 helper。本步对照 SM-09/10/11/22/23/26：不改变 server request reply/resolved、pending input 或 submission 排队状态边界。生产 `*App` 引用预算由 284 降至 281，AST 中直接收 `*App` 的函数为 147，App-bearing 结构体由 5 降至 4，App-bearing `*Ports` 工厂由 9 降至 8，lazy binding-read 预算保持 0。
 
 ## 方法
 

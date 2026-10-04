@@ -86,7 +86,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 		t.Fatalf("create submission: %v", err)
 	}
 
-	err = handleCommand(a, &feishu.InboundMessage{
+	err = HandleInboundCommand(a, &feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",
@@ -117,9 +117,9 @@ func TestHandleCommandBlockedWhileBackendSwitching(t *testing.T) {
 		UserID:    "user-1",
 		Text:      "/quiet",
 	}
-	err := handleCommand(a, msg, "/quiet")
+	err := HandleInboundCommand(a, msg, "/quiet")
 	if err == nil || !strings.Contains(err.Error(), "当前正在切换到 Codex backend") {
-		t.Fatalf("handleCommand() error = %v, want backend switch block", err)
+		t.Fatalf("HandleInboundCommand() error = %v, want backend switch block", err)
 	}
 }
 
@@ -141,14 +141,14 @@ func TestHandleCommandWorkspaceUseRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	err := handleCommand(a, &feishu.InboundMessage{
+	err := HandleInboundCommand(a, &feishu.InboundMessage{
 		MessageID: "m-1",
 		ChatID:    "chat",
 		ChatType:  "p2p",
 		UserID:    "user",
 	}, "/workspace use alt")
 	if err == nil || !strings.Contains(err.Error(), "当前任务仍在运行") {
-		t.Fatalf("handleCommand(/workspace use alt) error = %v, want running-turn block", err)
+		t.Fatalf("HandleInboundCommand(/workspace use alt) error = %v, want running-turn block", err)
 	}
 
 	sess := a.store.GetSession(sessionKey)
@@ -202,13 +202,13 @@ func TestHandleCommandWorkspaceUseClearsIdleThreadLineage(t *testing.T) {
 		return nil
 	}
 
-	if err := handleCommand(a, &feishu.InboundMessage{
+	if err := HandleInboundCommand(a, &feishu.InboundMessage{
 		MessageID: "m-1",
 		ChatID:    "chat",
 		ChatType:  "p2p",
 		UserID:    "user",
 	}, "/workspace use alt"); err != nil {
-		t.Fatalf("handleCommand(/workspace use alt) error = %v", err)
+		t.Fatalf("HandleInboundCommand(/workspace use alt) error = %v", err)
 	}
 
 	sess := a.store.GetSession(sessionKey)
@@ -329,8 +329,8 @@ func TestIsLocalCommand(t *testing.T) {
 func TestHandleCommandWorkspaceCloneWithoutURLOpensForm(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "msg-clone", ChatID: "chat-clone", ChatType: "p2p", UserID: "user-1"}
-	if err := handleCommand(a, msg, "/workspace clone"); err != nil {
-		t.Fatalf("handleCommand(/workspace clone) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/workspace clone"); err != nil {
+		t.Fatalf("HandleInboundCommand(/workspace clone) error = %v", err)
 	}
 	cards := ff.replyCardsSnapshot()
 	if len(cards) != 1 {
@@ -469,8 +469,8 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 				UserID:    "user",
 				Text:      raw,
 			}
-			if err := handleCommand(a, msg, raw); err != nil {
-				t.Fatalf("handleCommand(%q) error = %v", raw, err)
+			if err := HandleInboundCommand(a, msg, raw); err != nil {
+				t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 			}
 			if len(claude.startTurnCalls) != 1 {
 				t.Fatalf("Claude startTurn calls = %#v, want 1", claude.startTurnCalls)
@@ -499,7 +499,7 @@ func TestHandleCommandWorkspacePermissionsIsLocalOnCodex(t *testing.T) {
 		UserID:    "user",
 		Text:      "/workspace permissions inherit",
 	}
-	err := handleCommand(a, msg, msg.Text)
+	err := HandleInboundCommand(a, msg, msg.Text)
 	if err == nil {
 		t.Fatal("expected /workspace permissions to be handled locally on Codex")
 	}
@@ -667,8 +667,8 @@ func TestHandleCommandCompactPassthroughsToClaude(t *testing.T) {
 		UserID:    "user",
 		Text:      "/compact",
 	}
-	if err := handleCommand(a, msg, "/compact"); err != nil {
-		t.Fatalf("handleCommand(/compact) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/compact"); err != nil {
+		t.Fatalf("HandleInboundCommand(/compact) error = %v", err)
 	}
 	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "/compact") {
 		t.Fatalf("Claude startTurn calls = %#v", claude.startTurnCalls)
@@ -798,8 +798,8 @@ func TestClaudeNewCommandsBindSessionAfterFirstInput(t *testing.T) {
 			}
 			markSessionThreadLive(a, sessionKey, "claude-old")
 			msg := &feishu.InboundMessage{MessageID: "msg-new", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-			if err := handleCommand(a, msg, raw); err != nil {
-				t.Fatalf("handleCommand(%q): %v", raw, err)
+			if err := HandleInboundCommand(a, msg, raw); err != nil {
+				t.Fatalf("HandleInboundCommand(%q): %v", raw, err)
 			}
 			if claude.resetCalls != 1 || len(claude.ensureCalls) != 1 || claude.ensureCalls[0].resumeID != "" {
 				t.Fatalf("new session calls: reset=%d ensure=%+v", claude.resetCalls, claude.ensureCalls)
@@ -847,7 +847,7 @@ func TestCodexNewRejectsEmptyThreadID(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	fc.callHook = func(_ context.Context, _ string, _ any, _ any) error { return nil }
 	msg := &feishu.InboundMessage{MessageID: "msg-new", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := handleCommand(a, msg, "/new"); err == nil || !strings.Contains(err.Error(), "empty thread id") {
+	if err := HandleInboundCommand(a, msg, "/new"); err == nil || !strings.Contains(err.Error(), "empty thread id") {
 		t.Fatalf("/new error = %v, want empty thread id", err)
 	}
 }
@@ -879,8 +879,8 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			}
 
 			msg := &feishu.InboundMessage{MessageID: "m-claude-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-			if err := handleCommand(a, msg, raw); err != nil {
-				t.Fatalf("handleCommand(%q) error = %v", raw, err)
+			if err := HandleInboundCommand(a, msg, raw); err != nil {
+				t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 			}
 			if len(claude.forkCalls) != 1 {
 				t.Fatalf("ForkSession calls = %#v, want 1", claude.forkCalls)
@@ -928,8 +928,8 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	markSessionThreadLive(a, sessionKey, "claude-parent")
 
 	msg := &feishu.InboundMessage{MessageID: "m-claude-fork-pending", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := handleCommand(a, msg, "/fork"); err != nil {
-		t.Fatalf("handleCommand(/fork) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/fork"); err != nil {
+		t.Fatalf("HandleInboundCommand(/fork) error = %v", err)
 	}
 	if len(claude.forkCalls) != 1 {
 		t.Fatalf("ForkSession calls = %#v, want 1", claude.forkCalls)

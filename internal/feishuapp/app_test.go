@@ -2069,8 +2069,8 @@ func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-path", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := handleCommand(a, msg, "/upgrade path dist/feidex linux amd64"); err != nil {
-		t.Fatalf("handleCommand(/upgrade path ...) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/upgrade path dist/feidex linux amd64"); err != nil {
+		t.Fatalf("HandleInboundCommand(/upgrade path ...) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count = %d, want 1", len(ff.replyCards))
@@ -3342,11 +3342,11 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		"/workspace sandbox",
 		"/workspace policy",
 	} {
-		if err := handleCommand(a, msg, raw); err != nil && raw != "/threads" {
-			t.Fatalf("handleCommand(%q) error = %v", raw, err)
+		if err := HandleInboundCommand(a, msg, raw); err != nil && raw != "/threads" {
+			t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 		}
 	}
-	if err := handleCommand(a, msg, "/unknown"); err == nil {
+	if err := HandleInboundCommand(a, msg, "/unknown"); err == nil {
 		t.Fatal("expected unknown command to fail")
 	}
 	if len(ff.replyCards) == 0 {

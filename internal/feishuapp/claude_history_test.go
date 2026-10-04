@@ -49,8 +49,8 @@ func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := handleCommand(a, msg, "/history"); err != nil {
-		t.Fatalf("handleCommand(/history) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/history"); err != nil {
+		t.Fatalf("HandleInboundCommand(/history) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after /history = %d, want 1", len(ff.replyCards))
@@ -75,8 +75,8 @@ func TestHandleCommandHistoryClaudeUsesLocalTranscript(t *testing.T) {
 		t.Fatalf("history option label = %q, want latest Claude turn", label)
 	}
 
-	if err := handleCommand(a, msg, "/history detail 1"); err != nil {
-		t.Fatalf("handleCommand(/history detail 1) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/history detail 1"); err != nil {
+		t.Fatalf("HandleInboundCommand(/history detail 1) error = %v", err)
 	}
 	if len(ff.replyCards) != 2 {
 		t.Fatalf("reply card count after /history detail = %d, want 2", len(ff.replyCards))

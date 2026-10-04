@@ -165,15 +165,15 @@ func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a.bindings.Maintenance.BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := handleCommand(a, msg, "/status"); err != nil {
-		t.Fatalf("handleCommand(/status) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/status"); err != nil {
+		t.Fatalf("HandleInboundCommand(/status) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
 	if len(replyCards) != 1 {
 		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(replyCards))
 	}
-	if err := handleCommand(a, msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Codex 正在维护中") {
-		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
+	if err := HandleInboundCommand(a, msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Codex 正在维护中") {
+		t.Fatalf("HandleInboundCommand(/quiet) error = %v, want maintenance block", err)
 	}
 
 	router := newFeishuEventRouterForTest(a)
@@ -861,15 +861,15 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a.bindings.Maintenance.BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := handleCommand(a, msg, "/status"); err != nil {
-		t.Fatalf("handleCommand(/status) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/status"); err != nil {
+		t.Fatalf("HandleInboundCommand(/status) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
 	if len(replyCards) != 1 {
 		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(replyCards))
 	}
-	if err := handleCommand(a, msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
-		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
+	if err := HandleInboundCommand(a, msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
+		t.Fatalf("HandleInboundCommand(/quiet) error = %v, want maintenance block", err)
 	}
 
 	router := newFeishuEventRouterForTest(a)

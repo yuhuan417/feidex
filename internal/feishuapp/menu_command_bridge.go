@@ -90,10 +90,10 @@ func runCommandFromCardAction(a *App, action *feishu.CardAction, sessionKey, raw
 	msg := commandMessageFromAction(a, action, sessionKey, rawCommand)
 	if capture, ok := a.feishu.(appfeishuwrap.CommandCaptureFeishuClient); ok {
 		return capture.CaptureCommandOutput(strings.TrimSpace(action.MessageID), func() error {
-			return handleCommand(a, msg, rawCommand)
+			return HandleInboundCommand(a, msg, rawCommand)
 		})
 	}
-	return "", nil, handleCommand(a, msg, rawCommand)
+	return "", nil, HandleInboundCommand(a, msg, rawCommand)
 }
 
 func completeMenuCommand(a *App, action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {

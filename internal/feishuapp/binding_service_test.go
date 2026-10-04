@@ -65,8 +65,8 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 		} else {
 			msg.MentionedOpenIDs = nil
 		}
-		if err := handleCommand(a, msg, raw); err != nil {
-			t.Fatalf("handleCommand(%q) error = %v", raw, err)
+		if err := HandleInboundCommand(a, msg, raw); err != nil {
+			t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 		}
 	}
 	binding = agentBindingForChat(a.State(), "group", "chat-issue-9")
@@ -1091,7 +1091,7 @@ func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-bind-cmd", MessageID: "msg-bind-cmd", UserID: "user-1"}
 	msg.Text = "/workspace use default"
-	if err := handleCommand(a, msg, msg.Text); err != nil {
+	if err := HandleInboundCommand(a, msg, msg.Text); err != nil {
 		t.Fatalf("/workspace use default error = %v", err)
 	}
 	commands := []string{
@@ -1108,8 +1108,8 @@ func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 	for _, raw := range commands {
 		msg.Text = raw
 		msg.MessageID = strings.ReplaceAll(strings.TrimPrefix(raw, "/"), " ", "-")
-		if err := handleCommand(a, msg, raw); err != nil {
-			t.Fatalf("handleCommand(%q) error = %v", raw, err)
+		if err := HandleInboundCommand(a, msg, raw); err != nil {
+			t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 		}
 	}
 	binding := agentBindingForChat(a.State(), "group", "chat-bind-cmd")
@@ -1138,7 +1138,7 @@ func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.
 	a.cfg.Feishu.Backend = ""
 
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-no-backend", MessageID: "msg-workspace", UserID: "user-1", Text: "/workspace"}
-	if err := handleCommand(a, msg, msg.Text); err != nil {
+	if err := HandleInboundCommand(a, msg, msg.Text); err != nil {
 		t.Fatalf("group /workspace without backend error = %v", err)
 	}
 	binding := agentBindingForChat(a.State(), "group", "chat-no-backend")
@@ -1158,7 +1158,7 @@ func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.
 	}
 
 	p2pMsg := &feishu.InboundMessage{ChatType: "p2p", ChatID: "p2p-no-backend", MessageID: "msg-p2p", UserID: "user-1", Text: "/workspace"}
-	if err := handleCommand(a, p2pMsg, p2pMsg.Text); err != nil {
+	if err := HandleInboundCommand(a, p2pMsg, p2pMsg.Text); err != nil {
 		t.Fatalf("p2p /workspace without backend error = %v", err)
 	}
 	cards = ff.replyCardsSnapshot()

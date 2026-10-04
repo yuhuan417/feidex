@@ -67,8 +67,8 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, "session-list-1", "List Session", "continue work", time.Unix(100, 0))
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := handleCommand(a, msg, "/session"); err != nil {
-		t.Fatalf("handleCommand(/session) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/session"); err != nil {
+		t.Fatalf("HandleInboundCommand(/session) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected Claude session list card to be sent")
@@ -164,8 +164,8 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := handleCommand(a, msg, "/session resume session-resume-1"); err != nil {
-		t.Fatalf("handleCommand(/session resume) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/session resume session-resume-1"); err != nil {
+		t.Fatalf("HandleInboundCommand(/session resume) error = %v", err)
 	}
 	if len(claude.ensureCalls) != 1 {
 		t.Fatalf("Claude EnsureSession calls = %#v, want 1", claude.ensureCalls)
@@ -211,8 +211,8 @@ func TestHandleCommandSessionNewClaudeBindsDeferredSessionID(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := handleCommand(a, msg, "/session new"); err != nil {
-		t.Fatalf("handleCommand(/session new) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/session new"); err != nil {
+		t.Fatalf("HandleInboundCommand(/session new) error = %v", err)
 	}
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil {

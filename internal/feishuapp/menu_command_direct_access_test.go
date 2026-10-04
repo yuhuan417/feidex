@@ -391,8 +391,8 @@ func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 	a.runtimeOwner.BeginMessageTraffic()
 	defer a.runtimeOwner.EndMessageTraffic()
 
-	if err := handleCommand(a, msg, msg.Text); err != nil {
-		t.Fatalf("handleCommand(/model set raw Claude model) error = %v", err)
+	if err := HandleInboundCommand(a, msg, msg.Text); err != nil {
+		t.Fatalf("HandleInboundCommand(/model set raw Claude model) error = %v", err)
 	}
 	if got := a.cfg.Claude.Model; got != "deepseek-v4-pro" {
 		t.Fatalf("Claude model = %q, want deepseek-v4-pro", got)
@@ -419,8 +419,8 @@ func TestCommandModelDirectSetClaudeModelRejectsConcurrentMessageTraffic(t *test
 	defer a.runtimeOwner.
 		EndMessageTraffic()
 
-	if err := handleCommand(a, msg, msg.Text); err != nil {
-		t.Fatalf("handleCommand(/model set raw Claude model) error = %v", err)
+	if err := HandleInboundCommand(a, msg, msg.Text); err != nil {
+		t.Fatalf("HandleInboundCommand(/model set raw Claude model) error = %v", err)
 	}
 	if got := a.cfg.Claude.Model; got == "deepseek-v4-pro" {
 		t.Fatalf("Claude model changed despite concurrent traffic: %q", got)

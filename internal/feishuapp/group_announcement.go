@@ -37,6 +37,10 @@ func scheduleGroupAnnouncementStatusRefresh(refresh *runtime.CoalescedRefresh, c
 	refresh.Schedule(chatID)
 }
 
+func ScheduleGroupAnnouncementStatusRefresh(refresh *runtime.CoalescedRefresh, chatID string) {
+	scheduleGroupAnnouncementStatusRefresh(refresh, chatID)
+}
+
 type GroupAnnouncementRefreshDependencies struct {
 	FrontendID          string
 	Feishu              FeishuClient

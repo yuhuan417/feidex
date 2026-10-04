@@ -6,10 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"feidex/internal/adapter/feishu/claudesupport"
 	"feidex/internal/application"
 	"feidex/internal/application/inbound"
+	appinteraction "feidex/internal/application/interaction"
 	approuting "feidex/internal/application/routing"
 	"feidex/internal/application/submission"
+	"feidex/internal/config"
 	"feidex/internal/domain/interaction"
 	domainrouting "feidex/internal/domain/routing"
 	domainsubmission "feidex/internal/domain/submission"
@@ -101,7 +104,7 @@ type pendingGroupMessageGate struct {
 	primary       approuting.Service
 	frontendID    string
 	storeReady    bool
-	config        frontendConfigView
+	sessionKey    func(*application.InboundMessage) string
 	context       func() context.Context
 	runner        backendruntime.EffectRunner
 	workspaceMenu func(string) map[string]any
@@ -116,7 +119,7 @@ func (p pendingGroupMessageGate) Handle(msg *application.InboundMessage) (bool, 
 	if p.storeReady {
 		primary, _ = p.primary.IsPrimary(p.frontendID, msg.ChatType, msg.ChatID)
 	}
-	sessionKey := p.config.makeSessionKey(msg)
+	sessionKey := p.sessionKey(msg)
 	result, err := p.pending.Gate(msg, sessionKey, primary, time.Now().Unix())
 	if err != nil || !result.Handled {
 		return result.Handled, err
@@ -125,17 +128,20 @@ func (p pendingGroupMessageGate) Handle(msg *application.InboundMessage) (bool, 
 		return false, err
 	}
 	card := p.workspaceMenu(sessionKey)
-	_, err = p.outbound.ReplyCard(p.context(), msg.MessageID, card, p.config.replyInThreadEnabled())
+	_, err = p.outbound.ReplyCard(p.context(), msg.MessageID, card, false)
 	return true, err
 }
 
-type inboundCommands struct{ app *App }
+type inboundCommands struct {
+	backend func() string
+	handle  func(*application.InboundMessage, string) error
+}
 
 func (p inboundCommands) IsLocalCommand(msg *application.InboundMessage, text string) bool {
-	return isLocalCommandForMessage(p.app.configView().configuredBackend(), msg, text)
+	return isLocalCommandForMessage(p.backend(), msg, text)
 }
 func (p inboundCommands) HandleCommand(msg *application.InboundMessage, text string) error {
-	return handleCommand(p.app, msg, text)
+	return p.handle(msg, text)
 }
 
 type inboundBackend struct {
@@ -157,48 +163,72 @@ func (p inboundBackend) CheckMaintenance() error {
 	return nil
 }
 
-// InboundPorts takes the forward prefetch entry point as a value rather
-// than reaching for a.bindings.ForwardInputs.
-func InboundPorts(a *App, prefetchForward func(*application.InboundMessage)) inbound.Dependencies {
-	announcementRefresh := a.runtimeOwner.Announcements
-	configuredBackend := ConfiguredBackendBuilder(a.cfg, a.ConfigMu(), a.runtimeOwner.Backend, a.frontendID, a.frontendConfigIndex)
-	runtimeDeps := a.BackendRuntimeDeps()
-	frontendID := a.FrontendID()
-	runner := *a.runtimeOwner.EffectRunner
-	configView := a.configView()
-	interactionLifecycle := a.bindings.InteractionLifecycle
-	workspaceManagement := a.bindings.WorkspaceManagement
-	claudeSupport := a.bindings.ClaudeSupport
+type InboundPortInputs struct {
+	FrontendID            string
+	Context               func() context.Context
+	SessionKey            func(*application.InboundMessage) string
+	Feishu                FeishuClient
+	Primary               approuting.Service
+	PrimaryInitialization approuting.InitializationService
+	GroupMessages         approuting.GroupMessages
+	Requests              inbound.Requests
+	InteractionLifecycle  appinteraction.LifecycleService
+	CompleteWorkspaceText func(*application.InboundMessage, *interaction.PendingRequest) error
+	ClaudeSupport         *claudesupport.Service
+	Continuation          inbound.Continuation
+	PendingQueue          *submission.PendingQueueService
+	Config                *config.Config
+	BindingPending        approuting.PendingService
+	StoreReady            bool
+	StateReady            bool
+	GateContext           func() context.Context
+	Effects               backendruntime.EffectRunner
+	WorkspaceMenu         func(string) map[string]any
+	LocalBackend          func() string
+	HandleCommand         func(*application.InboundMessage, string) error
+	SelectBackend         func(*application.InboundMessage, string) error
+	BlockedReason         func() string
+	RuntimeDeps           BackendRuntimeDeps
+	Queue                 inbound.SubmissionQueue
+	RefreshGroup          func(string, string)
+	FlushNotifications    func(*application.InboundMessage)
+	PrefetchForward       func(*application.InboundMessage)
+}
+
+// InboundPorts assembles the inbound adapters from already-composed frontend
+// services. Keeping the inputs explicit prevents this graph from retaining
+// the frontend aggregate through its command adapter.
+func InboundPorts(inputs InboundPortInputs) inbound.Dependencies {
 	return inbound.Dependencies{
-		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return a.configView().makeSessionKey(msg) },
-		Routing: inboundRouting{frontendID: a.FrontendID(), feishu: a.feishu, primary: a.bindings.Primary, primaryInitialization: a.bindings.PrimaryInitialization, groupMessages: a.bindings.GroupMessages}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{
+		FrontendID: inputs.FrontendID, Context: inputs.Context, SessionKey: inputs.SessionKey,
+		Routing: inboundRouting{
+			frontendID: inputs.FrontendID, feishu: inputs.Feishu, primary: inputs.Primary,
+			primaryInitialization: inputs.PrimaryInitialization, groupMessages: inputs.GroupMessages,
+		}, Requests: inputs.Requests, RootInputs: inboundRootInputs{
 			pendingTextRequest: func(key, userID string) *interaction.PendingRequest {
-				return rootPendingTextRequest(interactionLifecycle, key, userID)
+				return rootPendingTextRequest(inputs.InteractionLifecycle, key, userID)
 			},
-			completeWorkspaceNewText: workspaceManagement.CompleteWorkspaceNewText,
+			completeWorkspaceNewText: inputs.CompleteWorkspaceText,
 			completePlanModeText: func(msg *application.InboundMessage, pending *interaction.PendingRequest) error {
-				return completeClaudePlanModeText(claudeSupport, msg, pending)
+				return completeClaudePlanModeText(inputs.ClaudeSupport, msg, pending)
 			},
 		},
-		Continuation: a.bindings.Continuation, Pending: inboundPending{PendingQueueService: a.bindings.PendingQueue, attachments: func(msg *application.InboundMessage, workspaceID, key string) ([]domainsubmission.SubmissionAttachment, error) {
-			return resolveInboundAttachments(a.cfg, a.Context, a.feishu, msg, workspaceID, key)
+		Continuation: inputs.Continuation, Pending: inboundPending{PendingQueueService: inputs.PendingQueue, attachments: func(msg *application.InboundMessage, workspaceID, key string) ([]domainsubmission.SubmissionAttachment, error) {
+			return resolveInboundAttachments(inputs.Config, inputs.Context, inputs.Feishu, msg, workspaceID, key)
 		}},
 		Bindings: inboundBindings{
 			gate: pendingGroupMessageGate{
-				pending: a.bindings.BindingPending, primary: a.bindings.Primary, frontendID: frontendID, storeReady: a.Store() != nil,
-				config: configView, context: a.runtimeOwner.Lifecycle.Context, runner: runner,
-				workspaceMenu: a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
-				outbound:      newEffectOutbound(frontendID, runner),
+				pending: inputs.BindingPending, primary: inputs.Primary, frontendID: inputs.FrontendID,
+				storeReady: inputs.StoreReady, sessionKey: inputs.SessionKey, context: inputs.GateContext,
+				runner: inputs.Effects, workspaceMenu: inputs.WorkspaceMenu,
+				outbound: newEffectOutbound(inputs.FrontendID, inputs.Effects),
 			},
-			pending: a.bindings.BindingPending, stateReady: a.State() != nil,
-		}, Commands: inboundCommands{app: a}, Backend: inboundBackend{
-			configured: configuredBackend, selectBackend: a.bindings.BackendSelection.ReplyBackendSelectionCard,
-			blockedReason: a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
-			runtimeDeps:   runtimeDeps,
-		}, Queue: a.bindings.Submissions,
-		RefreshGroup:       func(chatID, reason string) { scheduleGroupAnnouncementStatusRefresh(announcementRefresh, chatID) },
-		FlushNotifications: func(msg *application.InboundMessage) { flushPendingFrontendCardNotifications(a, msg) },
-		PrefetchForward:    prefetchForward,
+			pending: inputs.BindingPending, stateReady: inputs.StateReady,
+		}, Commands: inboundCommands{backend: inputs.LocalBackend, handle: inputs.HandleCommand}, Backend: inboundBackend{
+			configured: inputs.LocalBackend, selectBackend: inputs.SelectBackend,
+			blockedReason: inputs.BlockedReason, runtimeDeps: inputs.RuntimeDeps,
+		}, Queue: inputs.Queue, RefreshGroup: inputs.RefreshGroup,
+		FlushNotifications: inputs.FlushNotifications, PrefetchForward: inputs.PrefetchForward,
 	}
 }
 

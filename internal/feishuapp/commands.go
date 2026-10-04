@@ -12,7 +12,7 @@ import (
 	"feidex/internal/feishu"
 )
 
-func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
+func HandleInboundCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 	raw = strings.TrimSpace(raw)
 	fields := strings.Fields(raw)
 	if len(fields) == 0 {

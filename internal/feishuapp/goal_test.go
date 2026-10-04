@@ -115,8 +115,8 @@ func TestCommandGoalStatusAndSetUseCodexGoalRPC(t *testing.T) {
 		return nil
 	}
 
-	if err := handleCommand(a, msg, "/goal"); err != nil {
-		t.Fatalf("handleCommand(/goal) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/goal"); err != nil {
+		t.Fatalf("HandleInboundCommand(/goal) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("replyCards after /goal = %d, want 1", len(ff.replyCards))
@@ -129,8 +129,8 @@ func TestCommandGoalStatusAndSetUseCodexGoalRPC(t *testing.T) {
 	setParams = nil
 	currentGet = nil
 	objective := "--tokens 98.5K improve benchmark coverage"
-	if err := handleCommand(a, msg, "/goal "+objective); err != nil {
-		t.Fatalf("handleCommand(/goal objective) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/goal "+objective); err != nil {
+		t.Fatalf("HandleInboundCommand(/goal objective) error = %v", err)
 	}
 	if !reflect.DeepEqual(calls, []string{"thread/goal/get", "thread/goal/set"}) {
 		t.Fatalf("goal set calls = %#v", calls)
@@ -198,8 +198,8 @@ func TestCommandGoalWithoutCurrentGoalRendersCreateForm(t *testing.T) {
 		return nil
 	}
 
-	if err := handleCommand(a, msg, "/goal"); err != nil {
-		t.Fatalf("handleCommand(/goal no current goal) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/goal"); err != nil {
+		t.Fatalf("HandleInboundCommand(/goal no current goal) error = %v", err)
 	}
 	if !reflect.DeepEqual(calls, []string{"thread/goal/get"}) {
 		t.Fatalf("/goal no current goal calls = %#v", calls)
@@ -293,8 +293,8 @@ func TestCommandGoalControlsValidateAndCallExpectedMethods(t *testing.T) {
 	}
 
 	for _, raw := range []string{"/goal pause", "/goal resume", "/goal clear"} {
-		if err := handleCommand(a, msg, raw); err != nil {
-			t.Fatalf("handleCommand(%q) error = %v", raw, err)
+		if err := HandleInboundCommand(a, msg, raw); err != nil {
+			t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 		}
 	}
 	if !reflect.DeepEqual(calls, []string{"thread/goal/set", "thread/goal/set", "thread/goal/clear"}) {
@@ -308,7 +308,7 @@ func TestCommandGoalControlsValidateAndCallExpectedMethods(t *testing.T) {
 	}
 
 	calls = nil
-	err := handleCommand(a, msg, "/goal "+strings.Repeat("x", goalcmd.MaxObjectiveRunes+1))
+	err := HandleInboundCommand(a, msg, "/goal "+strings.Repeat("x", goalcmd.MaxObjectiveRunes+1))
 	if err == nil || !strings.Contains(err.Error(), "too long") {
 		t.Fatalf("overlong /goal error = %v, want too long", err)
 	}
@@ -333,8 +333,8 @@ func TestCommandGoalExistingUnfinishedGoalRequiresConfirmation(t *testing.T) {
 		return nil
 	}
 
-	if err := handleCommand(a, msg, "/goal ship the new workflow"); err != nil {
-		t.Fatalf("handleCommand(/goal replace) error = %v", err)
+	if err := HandleInboundCommand(a, msg, "/goal ship the new workflow"); err != nil {
+		t.Fatalf("HandleInboundCommand(/goal replace) error = %v", err)
 	}
 	if !reflect.DeepEqual(calls, []string{"thread/goal/get"}) {
 		t.Fatalf("replacement calls = %#v", calls)

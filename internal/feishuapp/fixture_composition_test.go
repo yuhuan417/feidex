@@ -380,7 +380,34 @@ func prepareTestApp(a *App) *App {
 	}))
 	a.bindings.BackendSwitch = &backendSwitch
 	a.bindings.BackendSelection = BuildBackendSelection(a)
-	inboundService.Deps = InboundPorts(a, forwardService.Start)
+	inboundBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	inboundSessionKey := SessionKeyBuilder(a.FrontendID())
+	inboundService.Deps = InboundPorts(InboundPortInputs{
+		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: inboundSessionKey,
+		Feishu: a.Feishu(), Primary: a.bindings.Primary, PrimaryInitialization: a.bindings.PrimaryInitialization,
+		GroupMessages: a.bindings.GroupMessages, Requests: a.bindings.ServerRequests,
+		InteractionLifecycle:  a.bindings.InteractionLifecycle,
+		CompleteWorkspaceText: a.bindings.WorkspaceManagement.CompleteWorkspaceNewText,
+		ClaudeSupport:         a.bindings.ClaudeSupport, Continuation: a.bindings.Continuation,
+		PendingQueue: a.bindings.PendingQueue, Config: a.Config(), BindingPending: a.bindings.BindingPending,
+		StoreReady: a.Store() != nil, StateReady: a.State() != nil,
+		GateContext: a.runtimeOwner.Lifecycle.Context, Effects: *a.runtimeOwner.EffectRunner,
+		WorkspaceMenu: a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
+		LocalBackend:  inboundBackend,
+		HandleCommand: func(msg *application.InboundMessage, text string) error {
+			return HandleInboundCommand(a, msg, text)
+		},
+		SelectBackend: a.bindings.BackendSelection.ReplyBackendSelectionCard,
+		BlockedReason: a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
+		RuntimeDeps:   a.BackendRuntimeDeps(), Queue: a.bindings.Submissions,
+		RefreshGroup: func(chatID, _ string) { scheduleGroupAnnouncementStatusRefresh(a.runtimeOwner.Announcements, chatID) },
+		FlushNotifications: func(msg *application.InboundMessage) {
+			if msg != nil && a.Feishu() != nil && a.Store() != nil {
+				a.bindings.Notifications.Flush(msg.ChatID, msg.UserID)
+			}
+		},
+		PrefetchForward: forwardService.Start,
+	})
 	a.bindings.Inbound = inboundService
 	controls := conversation.NewControls(ConversationControlPorts(ConversationControlInputs{
 		Repository: a.State(), Config: a.Config(), ConfigMu: a.ConfigMu(),

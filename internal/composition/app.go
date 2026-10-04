@@ -398,7 +398,41 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}))
 	bindings.BackendSwitch = &backendSwitch
 	bindings.BackendSelection = feishuapp.BuildBackendSelection(frontend)
-	inboundService.Deps = feishuapp.InboundPorts(frontend, forwardService.Start)
+	inboundFrontendID := frontend.FrontendID()
+	inboundRunner := *scope.RuntimeOwner.EffectRunner
+	inboundBackend := feishuapp.ConfiguredBackendBuilder(
+		frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend,
+		inboundFrontendID, frontend.FrontendConfigIndex(),
+	)
+	inboundSessionKey := feishuapp.SessionKeyBuilder(inboundFrontendID)
+	inboundService.Deps = feishuapp.InboundPorts(feishuapp.InboundPortInputs{
+		FrontendID: inboundFrontendID, Context: frontend.Context, SessionKey: inboundSessionKey,
+		Feishu: frontend.Feishu(), Primary: bindings.Primary, PrimaryInitialization: bindings.PrimaryInitialization,
+		GroupMessages: bindings.GroupMessages, Requests: bindings.ServerRequests,
+		InteractionLifecycle:  bindings.InteractionLifecycle,
+		CompleteWorkspaceText: bindings.WorkspaceManagement.CompleteWorkspaceNewText,
+		ClaudeSupport:         bindings.ClaudeSupport, Continuation: bindings.Continuation,
+		PendingQueue: bindings.PendingQueue, Config: frontend.Config(), BindingPending: bindings.BindingPending,
+		StoreReady: frontend.Store() != nil, StateReady: frontend.State() != nil,
+		GateContext: scope.RuntimeOwner.Lifecycle.Context, Effects: inboundRunner,
+		WorkspaceMenu: bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
+		LocalBackend:  inboundBackend,
+		HandleCommand: func(msg *application.InboundMessage, text string) error {
+			return feishuapp.HandleInboundCommand(frontend, msg, text)
+		},
+		SelectBackend: bindings.BackendSelection.ReplyBackendSelectionCard,
+		BlockedReason: scope.RuntimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
+		RuntimeDeps:   frontend.BackendRuntimeDeps(), Queue: bindings.Submissions,
+		RefreshGroup: func(chatID, _ string) {
+			feishuapp.ScheduleGroupAnnouncementStatusRefresh(scope.RuntimeOwner.Announcements, chatID)
+		},
+		FlushNotifications: func(msg *application.InboundMessage) {
+			if msg != nil && frontend.Feishu() != nil && frontend.Store() != nil {
+				bindings.Notifications.Flush(msg.ChatID, msg.UserID)
+			}
+		},
+		PrefetchForward: forwardService.Start,
+	})
 	bindings.Inbound = inboundService
 	controls := conversation.NewControls(feishuapp.ConversationControlPorts(feishuapp.ConversationControlInputs{
 		Repository: frontend.State(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
