@@ -61,7 +61,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 			includeLatest = true
 			prepareUpgrade = true
 		case "restart":
-			return s.app.bindings.BackendUpgrades.startClaudeRestartFromMessage(msg)
+			return s.startClaudeRestartFromMessage(msg)
 		default:
 			return errors.New(claudeUpgradeCommandUsage)
 		}
@@ -69,7 +69,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 	sessionKey := s.app.configView().makeSessionKey(msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	view, err := s.app.bindings.BackendUpgrades.loadClaudeUpgradeView(ctx, includeLatest)
+	view, err := s.loadClaudeUpgradeView(ctx, includeLatest)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 			includeLatest = true
 			prepareUpgrade = true
 		case "restart":
-			return s.app.bindings.BackendUpgrades.startCodexRestartFromMessage(msg)
+			return s.startCodexRestartFromMessage(msg)
 		default:
 			return errors.New(codexUpgradeCommandUsage)
 		}
@@ -129,7 +129,7 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 	sessionKey := s.app.configView().makeSessionKey(msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	view, err := s.app.bindings.BackendUpgrades.loadCodexUpgradeView(ctx, includeLatest)
+	view, err := s.loadCodexUpgradeView(ctx, includeLatest)
 	if err != nil {
 		return err
 	}

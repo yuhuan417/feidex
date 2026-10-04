@@ -24,28 +24,6 @@ func patchMaintenanceCard(ctx context.Context, frontendID string, runner fronten
 	}
 }
 
-func completeMaintenanceAsyncAction(a *App,
-	action *feishu.CardAction,
-	rawCommand string,
-	toastText string,
-	preparingCard func(sessionKey string) map[string]any,
-	failureCard func(sessionKey, errText string) map[string]any,
-	patchWarnMsg string,
-) (*callback.CardActionTriggerResponse, error) {
-	sessionKey := actionSessionKey(action)
-	return completeAsyncCommandAction(a,
-		action,
-		sessionKey,
-		rawCommand,
-		"menu.group.system",
-		toastText,
-		preparingCard(sessionKey),
-		nil,
-		failureCard,
-		patchWarnMsg,
-	)
-}
-
 func completeMaintenanceRestartRun[S any](
 	action *feishu.CardAction,
 	begin func() (S, error),
