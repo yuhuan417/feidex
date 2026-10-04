@@ -49,9 +49,9 @@ func AutoRetryView(a *App) retryview.Service {
 	return view
 }
 
-func AutoRetryPorts(a *App, view retryview.Service) retry.Dependencies {
+func AutoRetryPorts(a *App, view retryview.Service, liveThreads retry.LiveThreads) retry.Dependencies {
 	return retry.Dependencies{
-		Context: a.Context, Tracker: a.AutoRetries(), Repository: a.State(), Live: sqLiveThreadAdapter{app: a},
+		Context: a.Context, Tracker: a.AutoRetries(), Repository: a.State(), Live: liveThreads,
 		Enabled:     func() bool { return view.Settings().Enabled },
 		SaveEnabled: a.bindings.RuntimeSettings.SetAutoRetry,
 		Recovering: func() bool {

@@ -109,6 +109,10 @@ func prepareTestApp(a *App) *App {
 		record, _ := a.bindings.Primary.Lookup(a.FrontendID(), "group", chatID)
 		return record != nil
 	}}
+	if a.runtimeOwner.Announcements == nil {
+		a.runtimeOwner.Announcements = runtime.NewCoalescedRefresh(&a.runtimeOwner.Lifecycle, 2*time.Second, 15*time.Second, GroupAnnouncementRefresh(a))
+	}
+	liveThreads := SubmissionLiveThreads(a.runtimeOwner.LiveThreads, a.State().Session, a.bindings.AnnouncementQuery, a.runtimeOwner.Announcements.Schedule)
 	a.bindings.PrimaryInitialization = routing.InitializationService{Repository: primaryRepository, BotCount: func(ctx context.Context, chatID string) (int, error) { return a.feishu.GetGroupBotCount(ctx, chatID) }, LiveBotOpenID: func() string { return currentLiveBotOpenID(a) }}
 	a.bindings.TurnMetadata = turnmeta.Service{Tracker: a.runtimeOwner.TurnBindings}
 	a.bindings.ItemContext = approval.ItemContext{Items: a.bindings.TurnItems, Started: func(threadID, turnID string) { a.bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
@@ -138,7 +142,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.MaintenanceCommands = BuildMaintenanceCommands(a)
 	a.bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: a.State(), Runtime: a.runtimeOwner.TurnBindings, Items: a.bindings.TurnItems}
 	a.bindings.AutoRetry = AutoRetryView(a)
-	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(a, a.bindings.AutoRetry))
+	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(a, a.bindings.AutoRetry, liveThreads))
 	a.bindings.FrontendQuery = frontendapp.Query{Repository: a.State(), Facts: FrontendFacts(a), Retrying: a.bindings.AutoRetry.HasBlockingAutoRetry}
 	var codexUpgrade codexruntime.UpgradeService
 	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(a,
@@ -249,7 +253,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.InteractionDelivery = &interaction.DeliveryService{Repository: a.State()}
 	review := reviewapp.NewService(ReviewPorts(a))
 	a.bindings.Review = &review
-	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(a, a.bindings.Plan, a.bindings.TurnPresentation))
+	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(a, a.bindings.Plan, a.bindings.TurnPresentation, liveThreads))
 	*a.bindings.Turns = turn.NewService(TurnPorts(a, a.bindings.TurnPresentation))
 	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(a, a.bindings.Turns))
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}
@@ -284,7 +288,7 @@ func prepareTestApp(a *App) *App {
 	inboundService.Deps = InboundPorts(a, forwardService.Start)
 	a.bindings.Inbound = inboundService
 	a.bindings.ForwardInputs = forwardService
-	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(a)}
+	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(a, liveThreads)}
 	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
 	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(a), Conversations: a.bindings.Conversations, Context: a.Context}
@@ -318,9 +322,6 @@ func prepareTestApp(a *App) *App {
 	))
 	dispatcher := newInputDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher
-	if a.runtimeOwner.Announcements == nil {
-		a.runtimeOwner.Announcements = runtime.NewCoalescedRefresh(&a.runtimeOwner.Lifecycle, 2*time.Second, 15*time.Second, GroupAnnouncementRefresh(a))
-	}
 	if a.runtimeOwner.MCP == nil {
 		mcp, err := BuildMCP(a)
 		if err != nil {

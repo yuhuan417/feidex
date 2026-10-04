@@ -19,8 +19,8 @@ import (
 	"sync"
 )
 
-func ConversationPorts(a *App) conversation.Dependencies {
-	s := conversation.Dependencies{Context: a.Context, Backend: func() string { return a.configView().configuredBackend() }, Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a.runtimeOwner), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context}, Live: sqLiveThreadAdapter{app: a}}
+func ConversationPorts(a *App, liveThreads conversation.LiveThreads) conversation.Dependencies {
+	s := conversation.Dependencies{Context: a.Context, Backend: func() string { return a.configView().configuredBackend() }, Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a.runtimeOwner), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context}, Live: liveThreads}
 	s.ModelSettings = a.bindings.ModelSnapshots
 	s.Operations = a.State()
 	s.ThreadBinding = conversation.ThreadBindingDependencies{

@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 486 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 485 |
 | 收 `*App` 的顶层函数 | 294 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **61** |
+| **持有 `*App` 字段的结构体** | **60** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -294,6 +294,12 @@ app-bearing 函数数由 298 降至 296。
 composition 和 fixture 传入已持有的 transport/runtime owner，ForwardService 的超时、排队、
 失败与 shutdown admission 行为不变。生产 `*App` 引用预算由 489 降至 486，app-bearing
 函数数由 296 降至 294，持有 App 字段的结构体由 62 降至 61。
+
+步骤 33 将 `sqLiveThreadAdapter` 改为持有 runtime tracker、session lookup、announcement
+group query 和 refresh scheduler；构造处从 composition 显式传入这些 owner，announcement
+coalescer 的创建相应提前到 SubmissionPorts 之前。session/thread 校验、tracker 标记/清理和
+群 session live 时的公告刷新均保留。对照 SM-04，未更改 turn 启动/started/completed 顺序；
+`*App` 引用预算由 486 降至 485，持有 App 字段的结构体由 61 降至 60。
 
 ## 方法
 

@@ -4,10 +4,13 @@ import (
 	"feidex/internal/adapter/feishu/planmode"
 	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application/announcement"
 	conversationapp "feidex/internal/application/conversation"
 	appplan "feidex/internal/application/plan"
+	"feidex/internal/domain/identity"
 	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
+	frontendruntime "feidex/internal/runtime"
 	runtimemaintenance "feidex/internal/runtime/maintenance"
 	"sync"
 
@@ -25,16 +28,43 @@ import (
 	"feidex/internal/state"
 )
 
-type sqLiveThreadAdapter struct{ app *App }
+type sqLiveThreadAdapter struct {
+	tracker      *frontendruntime.LiveThreads
+	session      func(string) *conversation.Session
+	groupQuery   announcement.Query
+	refreshGroup func(string)
+}
 
 func (a sqLiveThreadAdapter) MarkSessionThreadLive(sessionKey, threadID string) {
-	markSessionThreadLive(a.app, sessionKey, threadID)
+	if strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
+		return
+	}
+	a.tracker.Mark(sessionKey, threadID)
+	if sess := a.session(sessionKey); sess != nil {
+		chatID := strings.TrimSpace(sess.ChatID)
+		if chatID == "" {
+			_, _, chatID, _, _ = identity.ParseSessionKey(sess.Key)
+		}
+		if sessionMatchesGroupChat(a.groupQuery, sess, chatID) {
+			a.refreshGroup(chatID)
+		}
+	}
 }
 func (a sqLiveThreadAdapter) SessionHasLiveThread(sessionKey, threadID string) bool {
-	return sessionHasLiveThread(a.app, sessionKey, threadID)
+	if strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
+		return false
+	}
+	return a.tracker.Has(sessionKey, threadID)
 }
 func (a sqLiveThreadAdapter) ClearSessionLiveThread(sessionKey string) {
-	clearSessionLiveThread(a.app, sessionKey)
+	if strings.TrimSpace(sessionKey) == "" {
+		return
+	}
+	a.tracker.Clear(sessionKey)
+}
+
+func SubmissionLiveThreads(tracker *frontendruntime.LiveThreads, session func(string) *conversation.Session, groupQuery announcement.Query, refreshGroup func(string)) appsubmission.QueueLiveThreadProvider {
+	return sqLiveThreadAdapter{tracker: tracker, session: session, groupQuery: groupQuery, refreshGroup: refreshGroup}
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +187,7 @@ func (a claudeClientAdapter) CanRetryFreshSession(sessionKey string) bool {
 	return true
 }
 
-func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstream.Service) appsubmission.Dependencies {
+func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstream.Service, liveThreads appsubmission.QueueLiveThreadProvider) appsubmission.Dependencies {
 	// Read the sibling services once, at construction time, so the dependency
 	// is visible instead of hidden in the closures below.
 	pendingQueue := a.bindings.PendingQueue
@@ -175,7 +205,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 		AppState:           a.State(),
 		SkillResolver:      a.bindings.Skills,
 		AttachmentResolver: sqAttachmentResolverFullAdapter{app: a},
-		LiveThread:         sqLiveThreadAdapter{app: a},
+		LiveThread:         liveThreads,
 		PendingQueue:       a.bindings.Continuation,
 		RuntimeState:       a.runtimeOwner.TurnBindings,
 		Items:              a.bindings.TurnItems,

@@ -124,6 +124,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		record, _ := bindings.Primary.Lookup(frontend.FrontendID(), "group", chatID)
 		return record != nil
 	}}
+	scope.RuntimeOwner.Announcements = runtime.NewCoalescedRefresh(&scope.RuntimeOwner.Lifecycle, 2*time.Second, 15*time.Second, feishuapp.GroupAnnouncementRefresh(frontend))
+	liveThreads := feishuapp.SubmissionLiveThreads(scope.RuntimeOwner.LiveThreads, frontend.State().Session, bindings.AnnouncementQuery, scope.RuntimeOwner.Announcements.Schedule)
 	bindings.PrimaryInitialization = routing.InitializationService{Repository: primaryRepository, BotCount: frontend.Feishu().GetGroupBotCount, LiveBotOpenID: feishuapp.LiveBotOpenID(frontend)}
 	bindings.TurnMetadata = turnmeta.Service{Tracker: scope.RuntimeOwner.TurnBindings}
 	bindings.ItemContext = approval.ItemContext{Items: bindings.TurnItems, Started: func(threadID, turnID string) { bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
@@ -156,7 +158,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.MaintenanceCommands = feishuapp.BuildMaintenanceCommands(frontend)
 	bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings, Items: bindings.TurnItems}
 	bindings.AutoRetry = feishuapp.AutoRetryView(frontend)
-	bindings.AutoRetry.Engine = retry.NewEngine(feishuapp.AutoRetryPorts(frontend, bindings.AutoRetry))
+	bindings.AutoRetry.Engine = retry.NewEngine(feishuapp.AutoRetryPorts(frontend, bindings.AutoRetry, liveThreads))
 	bindings.FrontendQuery = frontendapp.Query{Repository: frontend.State(), Facts: feishuapp.FrontendFacts(frontend), Retrying: bindings.AutoRetry.HasBlockingAutoRetry}
 	var codexUpgrade codexruntime.UpgradeService
 	bindings.CodexRecovery = codexruntime.NewRecoveryService(feishuapp.CodexRecoveryPorts(frontend,
@@ -265,7 +267,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.InteractionDelivery = &interaction.DeliveryService{Repository: frontend.State()}
 	review := reviewapp.NewService(feishuapp.ReviewPorts(frontend))
 	bindings.Review = &review
-	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(frontend, bindings.Plan, bindings.TurnPresentation))
+	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(frontend, bindings.Plan, bindings.TurnPresentation, liveThreads))
 	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(frontend, bindings.TurnPresentation))
 	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend, bindings.Turns))
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
@@ -303,7 +305,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	inboundService.Deps = feishuapp.InboundPorts(frontend, forwardService.Start)
 	bindings.Inbound = inboundService
 	bindings.ForwardInputs = forwardService
-	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(frontend)}
+	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(frontend, liveThreads)}
 	// The workspace command services read the workspace card presentation and
 	// the conversation service at construction, so they are built once those
 	// bindings exist.
@@ -331,7 +333,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		return nil, err
 	}
 	scope.RuntimeOwner.MCP = runtime.NewResource(bindings.MCP)
-	scope.RuntimeOwner.Announcements = runtime.NewCoalescedRefresh(&scope.RuntimeOwner.Lifecycle, 2*time.Second, 15*time.Second, feishuapp.GroupAnnouncementRefresh(frontend))
 	cardActionFrontendID := frontend.FrontendID()
 	normalizeCardActionSessionKey := func(key string) string {
 		return identity.CanonicalSessionKey(cardActionFrontendID, key)
