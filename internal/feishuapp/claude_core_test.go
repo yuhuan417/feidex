@@ -1280,7 +1280,7 @@ func TestCompleteClaudePlanModeTextPreservesOriginalPlanBody(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	if err := newPendingInputService(a).completeClaudePlanModeText(&feishu.InboundMessage{Text: "退出plan"}, pending); err != nil {
+	if err := completeClaudePlanModeText(a.bindings.ClaudeSupport, &feishu.InboundMessage{Text: "退出plan"}, pending); err != nil {
 		t.Fatalf("completeClaudePlanModeText() error = %v", err)
 	}
 	if len(claude.planCalls) != 1 || claude.planCalls[0].requestID != "plan-1" || claude.planCalls[0].feedback != "退出plan" {

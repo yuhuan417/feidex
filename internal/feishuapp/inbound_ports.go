@@ -55,13 +55,27 @@ func (p inboundRouting) DropsGroupMessage(msg *application.InboundMessage) bool 
 	return routerDropsGroupMessage(p.groupMessages, msg)
 }
 
-type inboundRootInputs struct{ app *App }
+type inboundRootInputs struct {
+	pendingTextRequest       func(string, string) *interaction.PendingRequest
+	completeWorkspaceNewText func(*application.InboundMessage, *interaction.PendingRequest) error
+	completePlanModeText     func(*application.InboundMessage, *interaction.PendingRequest) error
+}
 
 func (p inboundRootInputs) PendingTextRequest(key, userID string) *interaction.PendingRequest {
-	return rootPendingTextRequest(p.app.bindings.InteractionLifecycle, key, userID)
+	return p.pendingTextRequest(key, userID)
 }
 func (p inboundRootInputs) HandlePendingTextResponse(msg *application.InboundMessage, pending *interaction.PendingRequest) error {
-	return handleRootPendingTextResponse(p.app, msg, pending)
+	if msg == nil || pending == nil {
+		return nil
+	}
+	switch pending.Kind {
+	case "workspace_new":
+		return p.completeWorkspaceNewText(msg, pending)
+	case "claude_exit_plan_mode":
+		return p.completePlanModeText(msg, pending)
+	default:
+		return nil
+	}
 }
 
 type inboundPending struct {
@@ -152,9 +166,20 @@ func InboundPorts(a *App, prefetchForward func(*application.InboundMessage)) inb
 	frontendID := a.FrontendID()
 	runner := *a.runtimeOwner.EffectRunner
 	configView := a.configView()
+	interactionLifecycle := a.bindings.InteractionLifecycle
+	workspaceManagement := a.bindings.WorkspaceManagement
+	claudeSupport := a.bindings.ClaudeSupport
 	return inbound.Dependencies{
 		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return a.configView().makeSessionKey(msg) },
-		Routing: inboundRouting{frontendID: a.FrontendID(), feishu: a.feishu, primary: a.bindings.Primary, primaryInitialization: a.bindings.PrimaryInitialization, groupMessages: a.bindings.GroupMessages}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{app: a},
+		Routing: inboundRouting{frontendID: a.FrontendID(), feishu: a.feishu, primary: a.bindings.Primary, primaryInitialization: a.bindings.PrimaryInitialization, groupMessages: a.bindings.GroupMessages}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{
+			pendingTextRequest: func(key, userID string) *interaction.PendingRequest {
+				return rootPendingTextRequest(interactionLifecycle, key, userID)
+			},
+			completeWorkspaceNewText: workspaceManagement.CompleteWorkspaceNewText,
+			completePlanModeText: func(msg *application.InboundMessage, pending *interaction.PendingRequest) error {
+				return completeClaudePlanModeText(claudeSupport, msg, pending)
+			},
+		},
 		Continuation: a.bindings.Continuation, Pending: inboundPending{PendingQueueService: a.bindings.PendingQueue, attachments: func(msg *application.InboundMessage, workspaceID, key string) ([]domainsubmission.SubmissionAttachment, error) {
 			return resolveInboundAttachments(a.cfg, a.Context, a.feishu, msg, workspaceID, key)
 		}},

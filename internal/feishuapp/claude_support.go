@@ -124,7 +124,7 @@ func sendClaudePlanModeCard(claudesupportDep *claudesupport.Service, requestID, 
 	return claudesupportDep.SendPlanModeCard(sub, requestID, sessionKey, threadID, turnID, body)
 }
 
-func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
+func completeClaudePlanModeText(claudesupportDep *claudesupport.Service, msg *feishu.InboundMessage, pending *state.PendingRequest) error {
 	if msg == nil || pending == nil {
 		return nil
 	}
@@ -132,7 +132,7 @@ func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessa
 	if feedback == "" {
 		return fmt.Errorf("反馈不能为空")
 	}
-	return s.app.bindings.ClaudeSupport.CompletePlanModeText(feedback, pending)
+	return claudesupportDep.CompletePlanModeText(feedback, pending)
 }
 
 func completePlanApprove(claudesupportDep *claudesupport.Service, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

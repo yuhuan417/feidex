@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 381 |
-| 收 `*App` 的顶层函数 | 227 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 377 |
+| 收 `*App` 的顶层函数 | 226 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
-| **持有 `*App` 字段的结构体** | **23** |
+| **持有 `*App` 字段的结构体** | **21** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 12。`*App`
@@ -79,7 +79,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | `a.X` | bindings | helpers | structs |
 |---|---|---|---|---|---|
-| 26 | `InboundPorts` | 12 | 10 | 1 | 3 |
+| 27 | `InboundPorts` | 12 | 13 | 1 | 1 |
 | 20 | `ClaudeRuntimePorts` | 5 | 14 | 1 | 0 |
 | 16 | `TurnPorts` | 4 | 9 | 3 | 0 |
 | 13 | `BackendFailurePorts` | 3 | 7 | 3 | 0 |
@@ -644,6 +644,13 @@ group/chat-id gate、primary 查询失败时按非 primary 处理、pending effe
 discard 失败日志和空 state 快速返回。生产 `*App` 引用由 383 降至 381，收 `*App` 的函数由 228 降至 227，
 App-bearing 结构体由 24 降至 23；InboundPorts 的 `a.X`/bindings/helpers/structs 实际依赖为 12/10/1/3，
 惰性读取预算保持 12。该步只调整 inbound adapter 的依赖传递，不改变 Codex thread/turn 状态机。
+
+步骤 88 将 `inboundRootInputs` 从持有 `*App` 改为窄回调，并将 plan-mode text completion 改为直接接收
+Claude support service；因此移除只服务该 inbound 分支的 App-bearing `pendingInputService` 和
+`handleRootPendingTextResponse(*App, ...)`。workspace-new 与 Claude plan feedback 的 kind dispatch、空输入校验及
+后续 application service 调用保持不变。生产 `*App` 引用由 381 降至 377，收 `*App` 的函数由 227 降至 226，
+App-bearing 结构体由 23 降至 21；InboundPorts 的 `a.X`/bindings/helpers/structs 为 12/13/1/1，lazy binding-read
+预算仍为 12。
 
 ## 方法
 

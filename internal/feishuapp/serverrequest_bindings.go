@@ -200,22 +200,6 @@ func rootPendingTextRequest(interactionlifecycle interaction.LifecycleService, s
 	return interactionlifecycle.LatestTextRequest(sessionKey, userID, "workspace_new", "claude_exit_plan_mode")
 }
 
-// handleRootPendingTextResponse dispatches a text reply for root-owned pending kinds.
-func handleRootPendingTextResponse(a *App, msg *feishu.InboundMessage, pending *state.PendingRequest) error {
-	if msg == nil || pending == nil {
-		return nil
-	}
-	svc := newPendingInputService(a)
-	switch pending.Kind {
-	case "workspace_new":
-		return a.bindings.WorkspaceManagement.CompleteWorkspaceNewText(msg, pending)
-	case "claude_exit_plan_mode":
-		return svc.completeClaudePlanModeText(msg, pending)
-	default:
-		return nil
-	}
-}
-
 // claudeReplyClientShim adapts ClaudeCore to serverrequest.ClaudeReplyClient.
 type claudeReplyClientShim struct {
 	claude ClaudeCore
