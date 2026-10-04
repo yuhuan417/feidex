@@ -19,8 +19,7 @@ func shouldDeliverTurnItemPayloadInQuiet(mode config.QuietMode, payload turnitem
 	return quietmode.ShouldDeliverTurnItemPayload(mode, payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)
 }
 
-func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
-	mode := quietmode.Mode(a.configView().feishuConfig())
+func renderQuietModeMenuCard(mode config.QuietMode, sessionKey, title string, renderer bindingCardRenderer) map[string]any {
 	lines := []string{
 		"当前模式: `" + quietmode.StatusText(mode) + "`",
 		"",
@@ -57,7 +56,7 @@ func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
 			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
 		})
 	}
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "Quiet Mode"), "blue", menuCardBody("menu.quiet", strings.Join(lines, "\n")), buttons)
+	return renderer.SimpleStatusCard(title, "blue", menuCardBody("menu.quiet", strings.Join(lines, "\n")), buttons)
 }
 
 func updateQuietMode(settings runtimeconfig.Service, mode config.QuietMode) error {
@@ -79,7 +78,8 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 		if msg == nil {
 			return nil
 		}
-		card := renderQuietModeMenuCard(a, a.configView().makeSessionKey(msg))
+		sessionKey := a.configView().makeSessionKey(msg)
+		card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a, sessionKey, "Quiet Mode"), a.feishu)
 		return replyCardEffect(a, msg, card)
 	}
 	arg := strings.TrimSpace(args[0])
@@ -89,7 +89,8 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			if msg == nil {
 				return nil
 			}
-			card := renderQuietModeMenuCard(a, a.configView().makeSessionKey(msg))
+			sessionKey := a.configView().makeSessionKey(msg)
+			card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a, sessionKey, "Quiet Mode"), a.feishu)
 			return replyCardEffect(a, msg, card)
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))

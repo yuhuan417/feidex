@@ -103,9 +103,13 @@ func (s cardActionService) completeQuietSet(action *feishu.CardAction, mode conf
 	if err := updateQuietMode(s.app.bindings.RuntimeSettings, mode); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
+	configView := s.app.configView()
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 模式为 " + quietmode.StatusText(mode)},
-		Card:  rawCard(renderQuietModeMenuCard(s.app, sessionKey)),
+		Card: rawCard(renderQuietModeMenuCard(
+			quietmode.Mode(configView.feishuConfig()), sessionKey,
+			planModeTitleForSession(s.app, sessionKey, "Quiet Mode"), s.app.feishu,
+		)),
 	}, nil
 }
 

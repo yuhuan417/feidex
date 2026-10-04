@@ -11,6 +11,13 @@ import (
 	"testing"
 )
 
+func renderQuietModeMenuCardForTest(a *App, sessionKey string) map[string]any {
+	return renderQuietModeMenuCard(
+		quietmode.Mode(a.configView().feishuConfig()), sessionKey,
+		planModeTitleForSession(a, sessionKey, "Quiet Mode"), a.feishu,
+	)
+}
+
 func TestShouldDeliverTurnKindInQuiet(t *testing.T) {
 	tests := []struct {
 		mode    config.QuietMode

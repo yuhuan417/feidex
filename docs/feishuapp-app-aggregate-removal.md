@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 240 |
-| 收 `*App` 的顶层函数 | 108 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 239 |
+| 收 `*App` 的顶层函数 | 107 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **2** |
 
@@ -813,6 +813,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 159 将 `commandMessageFromAction` 的状态和会话推断依赖改为显式 `bindingSessionScope`，绑定命令复用 service 已持有的 scope，workspace/review/backend action adapters 在构造时捕获 scope 值。session key 解析、state 回退和 group session 推断顺序不变。生产 `*App` 引用由 242 降至 241，App-taking 顶层函数由 110 降至 109，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
 
 步骤 160 将 `updateQuietMode(*App, ...)` 改为接收 `runtimeconfig.Service`，command/card handler 和测试均从现有 RuntimeSettings owner 调用。quiet mode 规范化、持久化及错误返回保持不变。生产 `*App` 引用由 241 降至 240，App-taking 顶层函数由 109 降至 108，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
+
+步骤 161 将 `renderQuietModeMenuCard(*App, ...)` 改为接收 quiet mode、最终标题和 card renderer。命令与 callback 在调用处用现有 config/plan/Feishu owners 组装这些输入，选中态、按钮及返回导航保持不变。生产 `*App` 引用由 240 降至 239，App-taking 顶层函数由 108 降至 107，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
 
 ## 方法
 

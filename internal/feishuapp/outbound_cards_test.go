@@ -68,7 +68,7 @@ func TestPlanModeSessionCardsPrefixWorkspaceAndPlan(t *testing.T) {
 		{name: "root", card: renderCommandMenuCard(a, sessionKey)},
 		{name: "tools", card: renderToolsMenuCard(a, sessionKey)},
 		{name: "status", card: renderStatusCard(a.State(), a.feishu, a.configView().configuredBackend(), a.bindings.BackendConfiguration.StatusCardBody(a.State().Session(sessionKey)), sessionKey)},
-		{name: "quiet", card: renderQuietModeMenuCard(a, sessionKey)},
+		{name: "quiet", card: renderQuietModeMenuCardForTest(a, sessionKey)},
 		{name: "interrupt", card: renderInterruptPreparingCard(a.State(), a.feishu, sessionKey, "menu.tools")},
 		{name: "compact", card: renderCompactPreparingCard(a.State(), sessionKey)},
 		{name: "help", card: renderHelpCard(a, sessionKey)},
