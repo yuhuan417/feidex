@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 372 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 370 |
 | 收 `*App` 的顶层函数 | 224 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **21** |
@@ -669,6 +669,11 @@ gateway 查询改为调用点直接使用 runtime view。client 替换、移除�
 Plan/Review/ModelConfig/Turn 测试覆盖；对照 SM-03/04，仅改变 gateway accessor 的依赖传递，thread/turn 请求
 顺序不变。生产 `*App` 引用由 373 降至 372，收 `*App` 的函数由 222 降至 221，App-bearing 结构体保持 21；
 lazy binding-read 预算仍为 12。
+
+步骤 92 将 `recoveryState` 与 `replyCodexError` 从接收 `*App` 改为接收 `runtimeView`，由 recovery 和
+server-request composition 显式传入 runtime client owner。recovery state 仍 frontend-scoped，错误回复仍发给
+当前 Codex client；对照 SM-09/10/22/23，不改变 pending request 的 reply/resolved 边界。生产 `*App` 引用由
+372 降至 370，收 `*App` 的函数由 221 降至 219，App-bearing 结构体保持 21；lazy binding-read 预算仍为 12。
 
 ## 方法
 

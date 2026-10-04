@@ -118,7 +118,7 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 			return apputil.PrependAttentionMentionMarkdown(text, userID)
 		},
 		ReplyCodexError: func(requestID json.RawMessage, code int, message string) {
-			replyCodexError(a, requestID, code, message)
+			replyCodexError(a.runtimeView(), requestID, code, message)
 		},
 		RawCard: rawCard,
 

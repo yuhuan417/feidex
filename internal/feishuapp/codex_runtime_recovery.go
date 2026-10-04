@@ -11,11 +11,11 @@ import (
 )
 
 // recoveryState belongs to one frontend; clients and recovery exclusion never cross runtimes.
-func recoveryState(a *App) *appcodexruntime.RecoveryState {
-	if a == nil {
+func recoveryState(view runtimeView) *appcodexruntime.RecoveryState {
+	owner := view.ensureRuntimeOwner()
+	if owner == nil {
 		return nil
 	}
-	owner := a.runtimeView().ensureRuntimeOwner()
 	return owner.CodexRecovery
 }
 
@@ -26,7 +26,7 @@ func CodexRecoveryPorts(a *App,
 	recoverFrontend func(),
 ) appcodexruntime.RecoveryDependencies {
 	return appcodexruntime.RecoveryDependencies{
-		State:     recoveryState(a),
+		State:     recoveryState(a.runtimeView()),
 		Context:   a.Context,
 		RunAsync:  func(fn func()) { runAsync(a, fn) },
 		ClearLive: func() { resetLiveThreadState(a) },
@@ -75,8 +75,8 @@ func replaceCodexClient(codexrecovery appcodexruntime.RecoveryService, next Code
 	return codexrecovery.ReplaceClient(next)
 }
 
-func replyCodexError(a *App, requestID json.RawMessage, code int, message string) {
-	if client := a.runtimeView().currentCodexClient(); client != nil {
+func replyCodexError(view runtimeView, requestID json.RawMessage, code int, message string) {
+	if client := view.currentCodexClient(); client != nil {
 		_ = client.ReplyError(requestID, code, message)
 	}
 }
