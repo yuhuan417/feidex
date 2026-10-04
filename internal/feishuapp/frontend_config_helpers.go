@@ -112,8 +112,12 @@ func (v frontendConfigView) normalizeSessionKey(sessionKey string) string {
 }
 
 func (v frontendConfigView) sessionBelongsToFrontend(sessionKey string) bool {
-	frontendID, _, _, _, _ := identity.ParseSessionKey(sessionKey)
-	return strings.TrimSpace(frontendID) == strings.TrimSpace(v.frontendID)
+	return sessionBelongsToFrontend(v.frontendID, sessionKey)
+}
+
+func sessionBelongsToFrontend(frontendID, sessionKey string) bool {
+	sessionFrontendID, _, _, _, _ := identity.ParseSessionKey(sessionKey)
+	return strings.TrimSpace(sessionFrontendID) == strings.TrimSpace(frontendID)
 }
 
 func (v frontendConfigView) makeSessionKey(msg *feishu.InboundMessage) string {

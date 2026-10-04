@@ -133,7 +133,10 @@ func prepareTestApp(a *App) *App {
 	a.bindings.UpgradeWorkflow = &upgrade.Service{Forms: a.bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 	a.bindings.Upgrades = BuildUpgrades(a)
 
-	a.bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(a.runtimeOwner.MaintenanceTrackers, MaintenanceRepository(a))
+	a.bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(
+		a.runtimeOwner.MaintenanceTrackers,
+		MaintenanceRepository(a.State(), a.FrontendID()),
+	)
 	a.bindings.StartupState = conversation.StartupState{Repository: a.State(), DefaultWorkspaceID: func() string { return a.WorkspaceSelection().ResolveSession(nil) }}
 	a.bindings.UpgradePoller = upgrade.Poller{Repository: a.State(), Units: upgradeunits.Units{}}
 	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a, func() {

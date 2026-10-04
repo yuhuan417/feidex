@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 443 |
-| 收 `*App` 的顶层函数 | 279 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 441 |
+| 收 `*App` 的顶层函数 | 278 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **33** |
+| **持有 `*App` 字段的结构体** | **32** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -452,6 +452,12 @@ binding-read 预算保持 13。
 与 config mutex；production composition 和 test fixture 注入同一组窄 owner。只在 Claude defaults
 发布时读取当前 Claude core 并更新其配置，Codex 发布仍不触碰 Claude。`*App` 引用预算由 445 降至
 443，收 `*App` 的函数由 280 降至 279，持有 App 字段的结构体由 34 降至 33；lazy binding-read
+预算保持 13。
+
+步骤 56 将 `maintenanceRepository` 从持有 `*App` 改为显式依赖 scoped state 与 frontend ID。
+Sessions 仍按 session key 中的 frontend ID 过滤，PendingRequests 仍从同一 scoped state 读取；
+frontend 判断抽成纯 helper 供 config view 与 repository 共用。生产 `*App` 引用预算由 443 降至
+441，收 `*App` 的函数由 279 降至 278，持有 App 字段的结构体由 33 降至 32；lazy binding-read
 预算保持 13。
 
 ## 方法

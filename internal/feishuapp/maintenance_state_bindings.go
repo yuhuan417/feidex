@@ -1,25 +1,29 @@
 package feishuapp
 
 import (
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/backendmaintenance"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/state"
 )
 
-type maintenanceRepository struct{ app *App }
+type maintenanceRepository struct {
+	store      *appstate.Store
+	frontendID string
+}
 
 func (r maintenanceRepository) Sessions() []*conversation.Session {
 	var result []*conversation.Session
-	for _, sess := range r.app.State().Sessions() {
-		if sess != nil && r.app.configView().sessionBelongsToFrontend(sess.Key) {
+	for _, sess := range r.store.Sessions() {
+		if sess != nil && sessionBelongsToFrontend(r.frontendID, sess.Key) {
 			result = append(result, sess)
 		}
 	}
 	return result
 }
 func (r maintenanceRepository) PendingRequests() []*state.PendingRequest {
-	return r.app.State().PendingRequests()
+	return r.store.PendingRequests()
 }
-func MaintenanceRepository(a *App) backendmaintenance.MaintenanceRepository {
-	return maintenanceRepository{app: a}
+func MaintenanceRepository(store *appstate.Store, frontendID string) backendmaintenance.MaintenanceRepository {
+	return maintenanceRepository{store: store, frontendID: frontendID}
 }

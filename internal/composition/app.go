@@ -153,7 +153,10 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 	bindings.Upgrades = feishuapp.BuildUpgrades(frontend)
 
-	bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(scope.RuntimeOwner.MaintenanceTrackers, feishuapp.MaintenanceRepository(frontend))
+	bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(
+		scope.RuntimeOwner.MaintenanceTrackers,
+		feishuapp.MaintenanceRepository(frontend.State(), frontend.FrontendID()),
+	)
 	bindings.StartupState = conversation.StartupState{Repository: frontend.State(), DefaultWorkspaceID: func() string { return frontend.WorkspaceSelection().ResolveSession(nil) }}
 	bindings.UpgradePoller = upgrade.Poller{Repository: frontend.State(), Units: upgradeunits.Units{}}
 	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend, func() {
