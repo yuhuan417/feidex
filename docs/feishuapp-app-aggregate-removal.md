@@ -28,9 +28,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 404 |
-| 收 `*App` 的顶层函数 | 247 |
-| 收 `*App` 的 `*Ports` 工厂 | 16 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 401 |
+| 收 `*App` 的顶层函数 | 245 |
+| 收 `*App` 的 `*Ports` 工厂 | 15 |
 | **持有 `*App` 字段的结构体** | **26** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -540,6 +540,12 @@ store、snapshot service、frontend config identity 和动态 backend supplier�
 原始/规范化 key 与 session metadata 的 fallback；group metadata 不会被误判为 p2p。生产 `*App` 引用由
 405 降至 404，收 `*App` 的函数由 248 降至 247，持有 App 字段的结构体预算保持 26；lazy binding-read
 预算保持 13。
+
+步骤 72 将 `ConversationControlPorts` 改为接收具名 inputs，`conversationRuntimeControl` 改为持有
+`BackendRuntimeDeps` 与 conversation service；runtime helper 每次按 owner 当前 backend 选择 facade，
+interrupt 仍只在 Codex error 后做完成状态对账。fixture 与 production composition 同步使用同一依赖形状。
+生产 `*App` 引用由 404 降至 401，收 `*App` 的函数由 247 降至 245，App-bearing `*Ports` 工厂由 16
+降至 15，持有 App 字段的结构体由 26 降至 25；lazy binding-read 预算保持 13。
 
 ## 方法
 

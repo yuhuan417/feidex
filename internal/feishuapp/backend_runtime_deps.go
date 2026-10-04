@@ -77,3 +77,10 @@ func (a *App) BackendRuntimeDeps() BackendRuntimeDeps {
 	}
 	return d
 }
+
+func (d BackendRuntimeDeps) currentBackend() BackendRuntimeDeps {
+	if d.runtime.owner != nil {
+		d.view.backend = d.runtime.owner.Backend()
+	}
+	return d
+}

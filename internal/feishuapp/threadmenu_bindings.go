@@ -49,7 +49,7 @@ func (a threadMenuConversationBackendAdapter) RenderThreadsCard(sessionKey strin
 	return renderThreadsCard(a.app, sessionKey, includeAll)
 }
 func (a threadMenuConversationBackendAdapter) InterruptActiveTurn(ctx context.Context, sessionKey string, sess *conversation.Session) error {
-	return interruptConversation(a.app, ctx, sessionKey, sess)
+	return interruptConversation(a.app.bindings.Conversations, a.app.BackendRuntimeDeps(), ctx, sessionKey, sess)
 }
 func (a threadMenuConversationBackendAdapter) ContinueActiveTurn(sessionKey string, text string) error {
 	return a.app.bindings.Conversations.ContinueActiveTurn(sessionKey, text)

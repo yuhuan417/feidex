@@ -68,10 +68,11 @@ func renderConversationUsage(a *App, sess *domain.Session) string {
 	}
 	return a.bindings.Usage.RenderCodexUsageBody(sess)
 }
-func interruptConversation(a *App, ctx context.Context, key string, sess *domain.Session) error {
-	err := a.bindings.Conversations.InterruptActiveTurn(ctx, key, sess)
-	if err != nil && sess != nil && a.configView().configuredBackend() == domainbackend.BackendCodex {
-		updated := reconcileCompletedCodexTurn(a.bindings.TurnReconciliation, sess.Key, sess)
+func interruptConversation(conversations *conversation.Service, deps BackendRuntimeDeps, ctx context.Context, key string, sess *domain.Session) error {
+	err := conversations.InterruptActiveTurn(ctx, key, sess)
+	deps = deps.currentBackend()
+	if err != nil && sess != nil && deps.view.configuredBackend() == domainbackend.BackendCodex && deps.turnReconciliation != nil {
+		updated := reconcileCompletedCodexTurn(*deps.turnReconciliation, sess.Key, sess)
 		if updated == nil || updated.ActiveTurnID != sess.ActiveTurnID {
 			return nil
 		}

@@ -320,7 +320,13 @@ func prepareTestApp(a *App) *App {
 		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),
 		a.bindings.Conversations, a.runtimeOwner, a.bindings.CodexRecovery, a.bindings.ConversationConfiguration,
 	))
-	controls := conversation.NewControls(ConversationControlPorts(a))
+	controls := conversation.NewControls(ConversationControlPorts(ConversationControlInputs{
+		Repository: a.State(), Config: a.Config(), ConfigMu: a.ConfigMu(),
+		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(),
+		Conversations: a.bindings.Conversations, Pending: a.bindings.PendingQueue,
+		RetryTracker: a.runtimeOwner.AutoRetries, AutoRetry: a.bindings.AutoRetry,
+		Runtime: a.BackendRuntimeDeps(), Context: a.Context,
+	}))
 	a.bindings.ConversationControls = &controls
 	a.bindings.ThreadMenu = BuildThreadMenu(a)
 	planSource, planCatalog, planWorkspaces := PlanPorts(a.Config(), a.ConfigMu(), a.bindings.ModelSnapshots, a.runtimeOwner)

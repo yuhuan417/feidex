@@ -337,7 +337,13 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		frontend.Config(), frontend.ConfigMu(), frontend.FrontendConfigIndex(), frontend.State(),
 		bindings.Conversations, scope.RuntimeOwner, bindings.CodexRecovery, bindings.ConversationConfiguration,
 	))
-	controls := conversation.NewControls(feishuapp.ConversationControlPorts(frontend))
+	controls := conversation.NewControls(feishuapp.ConversationControlPorts(feishuapp.ConversationControlInputs{
+		Repository: frontend.State(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
+		FrontendID: frontend.FrontendID(), FrontendConfigIndex: frontend.FrontendConfigIndex(),
+		Conversations: bindings.Conversations, Pending: bindings.PendingQueue,
+		RetryTracker: scope.RuntimeOwner.AutoRetries, AutoRetry: bindings.AutoRetry,
+		Runtime: frontend.BackendRuntimeDeps(), Context: frontend.Context,
+	}))
 	bindings.ConversationControls = &controls
 	bindings.ThreadMenu = feishuapp.BuildThreadMenu(frontend)
 	planSource, planCatalog, planWorkspaces := feishuapp.PlanPorts(frontend.Config(), frontend.ConfigMu(), bindings.ModelSnapshots, scope.RuntimeOwner)
