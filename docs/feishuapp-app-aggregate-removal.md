@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 377 |
-| 收 `*App` 的顶层函数 | 226 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 375 |
+| 收 `*App` 的顶层函数 | 224 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **21** |
 
@@ -651,6 +651,12 @@ Claude support service；因此移除只服务该 inbound 分支的 App-bearing 
 后续 application service 调用保持不变。生产 `*App` 引用由 381 降至 377，收 `*App` 的函数由 227 降至 226，
 App-bearing 结构体由 23 降至 21；InboundPorts 的 `a.X`/bindings/helpers/structs 为 12/13/1/1，lazy binding-read
 预算仍为 12。
+
+步骤 89 删除重复的 `sendEmptyFinalCardWithReuse(*App, ...)` 与 `sendEmptyFinalCard(*App, ...)`，改由现有
+`replyChunkDelivery.SendEmptyFinalCardWithReuse` 统一处理空 final card；Feishu App method 和测试调用点直接转到
+该 owner。quiet-mode、attention mention、footer、reuse patch、message-link 及卡片/文本/chat fallback 均由原
+delivery owner 覆盖，删除的实现与 owner 行为一致。生产 `*App` 引用由 377 降至 375，收 `*App` 的函数由 226
+降至 224，App-bearing 结构体保持 21；工厂依赖表未增加，lazy binding-read 预算仍为 12。
 
 ## 方法
 

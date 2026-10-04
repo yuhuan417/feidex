@@ -251,6 +251,10 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 		current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 		return ok && current == promoted && !codexRuntimeRecovering(a.bindings.CodexRecovery)
 	})
+	waitForTestCondition(t, "failed codex client to close", func() bool {
+		_, closed := fc.statusSnapshot()
+		return closed
+	})
 
 	if _, closed := fc.statusSnapshot(); !closed {
 		t.Fatal("failed codex client should be closed after recovery")

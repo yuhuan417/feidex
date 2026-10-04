@@ -26,7 +26,7 @@ func (a *App) TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID s
 }
 
 func (a *App) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
-	return sendEmptyFinalCardWithReuse(a, ctx, sub, footerLines, reuseMessageID)
+	return newOutboundCardService(a).replyChunks.SendEmptyFinalCardWithReuse(ctx, sub, footerLines, reuseMessageID)
 }
 
 func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, reuseMessageID string) []string {

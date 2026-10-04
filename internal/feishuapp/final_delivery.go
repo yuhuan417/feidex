@@ -16,50 +16,6 @@ func sendFinalMessages(a *App, ctx context.Context, sub *domainsubmission.Submis
 	return sendFinalMessagesWithFooter(a, ctx, sub, text, nil, inThread)
 }
 
-func sendEmptyFinalCard(a *App, ctx context.Context, sub *domainsubmission.Submission, footerLines []string) string {
-	return sendEmptyFinalCardWithReuse(a, ctx, sub, footerLines, "")
-}
-
-func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
-	if a == nil || a.feishu == nil || sub == nil {
-		return ""
-	}
-	if quietmode.Enabled(a.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(a.configView().feishuConfig()), "final_message") {
-		return ""
-	}
-	triggerMessageID := strings.TrimSpace(sub.TriggerMessageID)
-	inThread := replyInThreadForSubmission(sub)
-	fallbackText := appendFooterText(apputil.PrependAttentionMentionMarkdown("任务已结束。", turnStopAttentionUserID(a.State(), sub, sub.TurnID)), footerLines)
-	body := apputil.PrependAttentionMentionMarkdown("", turnStopAttentionUserID(a.State(), sub, sub.TurnID))
-	title, color, _, showHeader := outboundMessageCardMeta("final_message", sub.WorkspaceID)
-	card := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a.State(), sub, title), color, showHeader, body, nil, true)
-	appendReplyCardFooter(card, footerLines)
-	if strings.TrimSpace(reuseMessageID) != "" {
-		if err := patchCardEffect(ctx, a, reuseMessageID, card); err == nil {
-			recordMessageLink(a, reuseMessageID, "final_message", sub, "")
-			return reuseMessageID
-		}
-	}
-	if triggerMessageID != "" {
-		id, err := replyCardWithIDEffect(ctx, a, triggerMessageID, card, inThread)
-		if err == nil && strings.TrimSpace(id) != "" {
-			recordMessageLink(a, id, "final_message", sub, "")
-			return id
-		}
-		id, err = replyTextWithIDEffect(ctx, a, triggerMessageID, fallbackText, inThread)
-		if err == nil && strings.TrimSpace(id) != "" {
-			recordMessageLink(a, id, "final_message", sub, "")
-			return id
-		}
-	}
-	if chatID := strings.TrimSpace(sub.ChatID); chatID != "" {
-		if err := sendTextEffect(ctx, a, chatID, fallbackText); err == nil {
-			return ""
-		}
-	}
-	return ""
-}
-
 func (d replyChunkDelivery) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
 	if !d.ready || sub == nil {
 		return ""

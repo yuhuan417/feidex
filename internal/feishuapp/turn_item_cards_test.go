@@ -56,11 +56,11 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	}
 
 	ff.replyCardErr = nil
-	if got := sendEmptyFinalCard(a, context.Background(), sub, []string{" line-1 ", "", "line-2 "}); got == "" {
-		t.Fatal("sendEmptyFinalCard() should return message id")
+	if got := newOutboundCardService(a).replyChunks.SendEmptyFinalCardWithReuse(context.Background(), sub, []string{" line-1 ", "", "line-2 "}, ""); got == "" {
+		t.Fatal("SendEmptyFinalCardWithReuse() should return message id")
 	}
 	if body := cardMarkdownContent(t, ff.replyCards[len(ff.replyCards)-1]); !strings.Contains(body, "line-1\nline-2") {
-		t.Fatalf("sendEmptyFinalCard() body = %q", body)
+		t.Fatalf("SendEmptyFinalCardWithReuse() body = %q", body)
 	}
 
 	before := len(ff.replyCards)
