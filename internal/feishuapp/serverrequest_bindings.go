@@ -69,7 +69,7 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 
 		// Backend adapter factory
 		AdapterForPending: func(pending *state.PendingRequest) serverrequest.BackendAdapter {
-			backend := pendingBackend(a, pending)
+			backend := pendingBackend(a.configView(), pending)
 			switch normalizeRuntimeBackend(backend) {
 			case domainbackend.BackendCodex:
 				client := a.runtimeView().currentCodexClient()

@@ -107,7 +107,7 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 		if text == "" || a == nil || a.feishu == nil {
 			return
 		}
-		if replyErr := newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)).ReplyText(context.Background(), messageID, text, planActionReplyInThread(a, sessionKey)); replyErr != nil {
+		if replyErr := newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)).ReplyText(context.Background(), messageID, text, actionReplyInThreadForSession(a.State().Session, sessionKey, a.configView().replyInThreadEnabled())); replyErr != nil {
 			slog.Warn("plan async text reply failed",
 				"session_key", sessionKey,
 				"message_id", messageID,
@@ -118,16 +118,6 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "正在处理 plan mode"},
 	}, nil
-}
-
-func planActionReplyInThread(a *App, sessionKey string) bool {
-	if a == nil || strings.TrimSpace(sessionKey) == "" {
-		return false
-	}
-	if sess := a.State().Session(sessionKey); sess != nil {
-		return a.configView().replyInThreadEnabled()
-	}
-	return false
 }
 
 func clearCodexPlanModeForSession(a *App, sessionKey string) (bool, error) {

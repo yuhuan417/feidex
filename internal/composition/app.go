@@ -95,7 +95,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Interactions: &interaction.Service{}, BackendEvents: &backendevents.Service{}, Plan: &planapp.Service{},
 	}
 	bindings.GoalManagement = &goal.Management{Tracker: bindings.Goals, Context: frontend.Context, Gateway: func() (goal.Gateway, error) {
-		return feishuapp.RequireCodexGoalGateway(frontend)
+		return feishuapp.RequireCodexGoalGateway(frontend.Codex())
 	}}
 	frontend.AttachBindings(bindings)
 	feishuapp.AttachEffectRunner(frontend, feishuapp.NewEffectRunner(frontend))

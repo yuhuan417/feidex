@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 319 |
-| 收 `*App` 的顶层函数 | 191 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 315 |
+| 收 `*App` 的顶层函数 | 187 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
 | **持有 `*App` 字段的结构体** | **17** |
 
@@ -747,6 +747,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 119 将共享 approval card renderer 改为显式接收 scoped session state 与 Feishu card renderer；Claude support 和 server-request adapter 在组合边界传入已持有的值。workspace/plan 标题投影、attention mention、颜色、正文和按钮保持不变。生产 `*App` 引用预算由 323 降至 322，收 `*App` 的顶层函数由 196 降至 194，lazy binding-read 预算保持 0。
 
 步骤 120 将 interrupt preparing/result/failed card renderer 改为显式接收 scoped session state 与 Feishu card renderer；backend action composition 捕获构造期 state/client。workspace/plan 标题、parent action 返回按钮、重试按钮和提示正文不变。生产 `*App` 引用预算由 322 降至 319，收 `*App` 的顶层函数由 194 降至 191，lazy binding-read 预算保持 0。
+
+步骤 121 将 pending backend fallback 改为接收 `frontendConfigView`，Codex goal gateway accessor 改为接收当前 Codex client，并把 Goal/Plan 重复的异步回复线程判断合并为 state lookup + config boolean helper。pending request 中明确记录的 backend 仍优先于当前 frontend 配置；未初始化 Codex client 的错误文本不变。对照 SM-25，gateway 获取依赖改变，不改变 goal 请求、通知或 continuation turn 处理。生产 `*App` 引用预算由 319 降至 315，收 `*App` 的顶层函数由 191 降至 187，lazy binding-read 预算保持 0。
 
 ## 方法
 

@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/adapter/feishu/goalcmd"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/adapter/feishu/planmode"
@@ -12,6 +13,7 @@ import (
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -62,8 +64,15 @@ func goalTrackerForApp(tracker *goalapp.Tracker) *goalapp.Tracker {
 	return tracker
 }
 
-func RequireCodexGoalGateway(a *App) (goalapp.Gateway, error) {
-	return a.runtimeView().requireCodexGateway()
+func actionReplyInThreadForSession(session func(string) *conversation.Session, sessionKey string, enabled bool) bool {
+	return enabled && strings.TrimSpace(sessionKey) != "" && session != nil && session(sessionKey) != nil
+}
+
+func RequireCodexGoalGateway(client CodexClient) (goalapp.Gateway, error) {
+	if client == nil {
+		return nil, fmt.Errorf("codex client not initialized")
+	}
+	return codexadapter.Gateway{Client: client}, nil
 }
 
 func GoalCommandSessionKey(frontendID string, msg *feishu.InboundMessage) string {
@@ -134,21 +143,11 @@ func completeGoalAsyncResult(a *App, action *feishu.CardAction, sessionKey, mess
 	if text == "" || a.feishu == nil {
 		return
 	}
-	if replyErr := newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)).ReplyText(context.Background(), messageID, text, goalActionReplyInThread(a, sessionKey)); replyErr != nil {
+	if replyErr := newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)).ReplyText(context.Background(), messageID, text, actionReplyInThreadForSession(a.State().Session, sessionKey, a.configView().replyInThreadEnabled())); replyErr != nil {
 		slog.Warn("goal async text reply failed",
 			"session_key", sessionKey,
 			"message_id", messageID,
 			"error", replyErr,
 		)
 	}
-}
-
-func goalActionReplyInThread(a *App, sessionKey string) bool {
-	if a == nil || strings.TrimSpace(sessionKey) == "" {
-		return false
-	}
-	if sess := a.State().Session(sessionKey); sess != nil {
-		return a.configView().replyInThreadEnabled()
-	}
-	return false
 }

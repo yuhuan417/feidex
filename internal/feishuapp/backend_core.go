@@ -30,14 +30,12 @@ func configuredSessionInflightMode(backend func() string) sessionInflightMode {
 	return sessionInflightModeForBackend(backend())
 }
 
-func pendingBackend(a *App, pending *state.PendingRequest) string {
+func pendingBackend(view frontendConfigView, pending *state.PendingRequest) string {
 	if pending != nil && strings.TrimSpace(pending.Backend) != "" {
 		return normalizeRuntimeBackend(pending.Backend)
 	}
-	if a != nil {
-		if backend := a.configView().configuredBackend(); backend != "" {
-			return backend
-		}
+	if backend := view.configuredBackend(); backend != "" {
+		return backend
 	}
 	return ""
 }
