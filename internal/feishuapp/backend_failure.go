@@ -143,7 +143,7 @@ func BackendFailurePorts(a *App) backendfailure.FailureDeps {
 				return apputil.PrependAttentionMentionMarkdown(text, userID)
 			},
 			TurnStopAttentionUserID: func(sub *domainsubmission.Submission, turnID string) string {
-				return turnStopAttentionUserID(a, sub, turnID)
+				return turnStopAttentionUserID(a.State(), sub, turnID)
 			},
 		},
 		Async: backendfailure.FailureAsyncDeps{

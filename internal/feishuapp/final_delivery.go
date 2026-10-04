@@ -29,8 +29,8 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *domainsubmiss
 	}
 	triggerMessageID := strings.TrimSpace(sub.TriggerMessageID)
 	inThread := replyInThreadForSubmission(a, sub)
-	fallbackText := appendFooterText(apputil.PrependAttentionMentionMarkdown("任务已结束。", turnStopAttentionUserID(a, sub, sub.TurnID)), footerLines)
-	body := apputil.PrependAttentionMentionMarkdown("", turnStopAttentionUserID(a, sub, sub.TurnID))
+	fallbackText := appendFooterText(apputil.PrependAttentionMentionMarkdown("任务已结束。", turnStopAttentionUserID(a.State(), sub, sub.TurnID)), footerLines)
+	body := apputil.PrependAttentionMentionMarkdown("", turnStopAttentionUserID(a.State(), sub, sub.TurnID))
 	title, color, _, showHeader := outboundMessageCardMeta("final_message", sub.WorkspaceID)
 	card := cardRendererForApp(a).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a, sub, title), color, showHeader, body, nil, true)
 	appendReplyCardFooter(card, footerLines)

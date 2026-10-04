@@ -48,7 +48,7 @@ func sessionKeyChatForApp(a *App, sessionKey string) (chatType, chatID string) {
 			}
 		}
 		if strings.TrimSpace(chatType) == "" && strings.TrimSpace(chatID) != "" {
-			if agentBindingForChat(a, "group", chatID) != nil || groupPrimaryForChat(a, "group", chatID) != nil {
+			if agentBindingForChat(a.State(), "group", chatID) != nil || groupPrimaryForChat(a, "group", chatID) != nil {
 				chatType = "group"
 			}
 		}
@@ -61,7 +61,7 @@ func bindingForSessionKey(a *App, sessionKey string) *state.AgentBinding {
 	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return nil
 	}
-	return agentBindingForChat(a, chatType, chatID)
+	return agentBindingForChat(a.State(), chatType, chatID)
 }
 
 func groupBindingSessionScopeActive(a *App, sessionKey string) bool {

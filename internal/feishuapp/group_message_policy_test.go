@@ -347,7 +347,7 @@ func TestGroupWorkspaceCloneWithoutURLInNewGroupDoesNotUseDefaultWorkspace(t *te
 		MentionedSelf: true,
 	})
 
-	binding := agentBindingForChat(a, "group", "chat-new-clone")
+	binding := agentBindingForChat(a.State(), "group", "chat-new-clone")
 	if binding == nil || strings.TrimSpace(binding.WorkspaceID) != "" || binding.Status != state.AgentBindingStatusPending.String() {
 		t.Fatalf("new group binding = %+v, want pending with empty workspace", binding)
 	}
@@ -424,7 +424,7 @@ func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
 	if filepath.Dir(gotTargetDir) == defaultParent {
 		t.Fatalf("clone target parent leaked default workspace parent %q", defaultParent)
 	}
-	binding := agentBindingForChat(a, "group", "chat-new-clone-url")
+	binding := agentBindingForChat(a.State(), "group", "chat-new-clone-url")
 	if binding == nil || binding.WorkspaceID != "repo" || binding.Status != state.AgentBindingStatusActive.String() {
 		t.Fatalf("binding after clone = %+v, want active repo", binding)
 	}

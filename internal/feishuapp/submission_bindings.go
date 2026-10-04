@@ -262,7 +262,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			return claudeClientAdapter{claude: a.runtimeView().currentClaudeCore()}
 		},
 		AgentBinding: func(chatType, chatID string) *state.AgentBinding {
-			return agentBindingForChat(a, chatType, chatID)
+			return agentBindingForChat(a.State(), chatType, chatID)
 		},
 		AgentBindingByID: func(id string) *state.AgentBinding {
 			return a.State().AgentBinding(id)

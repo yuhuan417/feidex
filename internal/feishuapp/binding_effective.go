@@ -8,7 +8,7 @@ import (
 )
 
 func effectiveBindingClaudePermissionMode(a *App, sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
-	return conversation.ResolveSettings(sess, agentBindingForSession(a, sess), effectiveBotProfile(a.State()), ws, cfg.PermissionMode).ClaudePermissionMode
+	return conversation.ResolveSettings(sess, agentBindingForSession(a.State(), sess), effectiveBotProfile(a.State()), ws, cfg.PermissionMode).ClaudePermissionMode
 }
 
 func bindingModelOverride(binding *state.AgentBinding) string {

@@ -1,6 +1,7 @@
 package feishuapp
 
 import (
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
@@ -37,7 +38,7 @@ func resolveThreadWorkspaceID(sess *conversation.Session, fallback string) strin
 }
 
 func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conversation.Session, bindOnlyCurrentRoot bool) string {
-	if binding := agentBindingForSession(a, sess); binding != nil {
+	if binding := agentBindingForSession(a.State(), sess); binding != nil {
 		if bindOnlyCurrentRoot {
 			if workspaceID := strings.TrimSpace(sess.ActiveThreadWorkspaceID); workspaceID != "" {
 				return workspaceID
@@ -64,22 +65,22 @@ func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conv
 	)
 }
 
-func agentBindingForSession(a *App, sess *conversation.Session) *state.AgentBinding {
-	if a == nil || sess == nil {
+func agentBindingForSession(store *appstate.Store, sess *conversation.Session) *state.AgentBinding {
+	if store == nil || sess == nil {
 		return nil
 	}
 	bindingID := strings.TrimSpace(sess.BindingID)
 	if bindingID == "" {
 		return nil
 	}
-	return a.State().AgentBinding(bindingID)
+	return store.AgentBinding(bindingID)
 }
 
-func agentBindingForChat(a *App, chatType, chatID string) *state.AgentBinding {
-	if a == nil {
+func agentBindingForChat(store *appstate.Store, chatType, chatID string) *state.AgentBinding {
+	if store == nil {
 		return nil
 	}
-	bindings := a.State().AgentBindingsForChat(chatType, chatID)
+	bindings := store.AgentBindingsForChat(chatType, chatID)
 	for _, binding := range bindings {
 		if binding == nil {
 			continue

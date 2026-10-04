@@ -300,7 +300,7 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 	if msg == nil {
 		return nil
 	}
-	card := s.renderBindingStatusCard(s.app.configView().makeSessionKey(msg), agentBindingForChat(s.app, msg.ChatType, msg.ChatID))
+	card := s.renderBindingStatusCard(s.app.configView().makeSessionKey(msg), agentBindingForChat(s.app.State(), msg.ChatType, msg.ChatID))
 	if strings.TrimSpace(body) != "" {
 		card = s.renderer.SimpleStatusCard("当前 Bot 群内配置", "green", strings.TrimSpace(body), nil)
 	}

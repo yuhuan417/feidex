@@ -2732,7 +2732,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 		}
 	}
 
-	if _, err := a.bindings.BindingCommands.activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "alt"); err != nil {
+	if _, err := a.bindings.BindingCommands.activateBindingWorkspace(agentBindingForChat(a.State(), "group", "chat-1"), "alt"); err != nil {
 		t.Fatalf("activateBindingWorkspace(group -> alt) error = %v", err)
 	}
 
@@ -2755,7 +2755,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 	if rootBSessionKey != rootASessionKey {
 		t.Fatalf("root-b session key = %q, want shared group session %q", rootBSessionKey, rootASessionKey)
 	}
-	if _, err := a.bindings.BindingCommands.activateBindingWorkspace(agentBindingForChat(a, "group", "chat-1"), "default"); err != nil {
+	if _, err := a.bindings.BindingCommands.activateBindingWorkspace(agentBindingForChat(a.State(), "group", "chat-1"), "default"); err != nil {
 		t.Fatalf("activateBindingWorkspace(group -> default) error = %v", err)
 	}
 

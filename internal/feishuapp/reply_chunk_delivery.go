@@ -25,7 +25,7 @@ func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *domainsubmis
 	}
 	if strings.Contains(strings.TrimSpace(title), "最终答复") && len(chunks) > 0 {
 		copied := append([]appdelivery.ReplyCardChunk(nil), chunks...)
-		copied[0].Body = apputil.PrependAttentionMentionMarkdown(copied[0].Body, turnStopAttentionUserID(a, sub, sub.TurnID))
+		copied[0].Body = apputil.PrependAttentionMentionMarkdown(copied[0].Body, turnStopAttentionUserID(a.State(), sub, sub.TurnID))
 		chunks = copied
 	}
 	chunks = fitReplyCardChunks(a, ctx, sub, title, color, chunks, enablePreview)

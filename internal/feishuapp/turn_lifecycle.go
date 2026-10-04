@@ -48,7 +48,7 @@ func (p turnContinuationPort) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey
 type turnDeliveryPort struct{ app *App }
 
 func (p turnDeliveryPort) TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID string) string {
-	return turnStopAttentionUserID(p.app, sub, turnID)
+	return turnStopAttentionUserID(p.app.State(), sub, turnID)
 }
 func (p turnDeliveryPort) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
 	return sendEmptyFinalCardWithReuse(p.app, ctx, sub, footerLines, reuseMessageID)

@@ -22,7 +22,7 @@ func (a *App) MarkSessionThreadLive(sessionKey, threadID string) {
 }
 
 func (a *App) TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID string) string {
-	return turnStopAttentionUserID(a, sub, turnID)
+	return turnStopAttentionUserID(a.State(), sub, turnID)
 }
 
 func (a *App) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
