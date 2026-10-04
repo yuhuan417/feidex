@@ -42,18 +42,18 @@ func rewriteLocalFileLinksText(a *App, ctx context.Context, sub *domainsubmissio
 	return rewritten
 }
 
-func prepareReplyCardMarkdown(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, enablePreview bool) string {
+func prepareReplyCardMarkdown(cfg *config.Config, ctx context.Context, sub *domainsubmission.Submission, text string, enablePreview bool) string {
 	text = strings.TrimSpace(text)
 	if enablePreview {
 		text = applinkutil.LinkifyInlineCodeURLs(text)
 		if sub != nil {
-			if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
+			if ws := config.FindWorkspace(cfg, sub.WorkspaceID); ws != nil {
 				text = attachments.NeutralizeLocalMarkdownLinks(text, ws.Cwd)
 			}
 		}
 		return applinkutil.NormalizeCardMarkdown(text)
 	}
-	return cardRendererForApp(a).prepareCardMarkdown(sub, text)
+	return newCardRenderer(cfg).prepareCardMarkdown(sub, text)
 }
 
 func scheduleLocalFileLinkPatch(a *App, sub *domainsubmission.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {

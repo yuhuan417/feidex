@@ -89,7 +89,7 @@ func TestPrepareReplyCardMarkdownKeepsPreviewLinksWithLineNumbers(t *testing.T) 
 	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
-	body := prepareReplyCardMarkdown(a, nil, sub, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)", true)
+	body := prepareReplyCardMarkdown(a.cfg, nil, sub, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)", true)
 	if !strings.Contains(body, "[internal/app/outbound_cards.go:117](https://drive.example/file-1)") {
 		t.Fatalf("prepareReplyCardMarkdown(preview link) = %q, want preview link preserved", body)
 	}
@@ -104,7 +104,7 @@ func TestPrepareReplyCardMarkdownLinkifiesInlineCodeURLsImmediatelyForPreview(t 
 	a := prepareTestApp(&App{cfg: cfg})
 	sub := &domainsubmission.Submission{WorkspaceID: "default"}
 
-	body := prepareReplyCardMarkdown(a, nil, sub, "卡片链接：`https://github.com/yuhuan417/feidex`", true)
+	body := prepareReplyCardMarkdown(a.cfg, nil, sub, "卡片链接：`https://github.com/yuhuan417/feidex`", true)
 	if !strings.Contains(body, "[https://github.com/yuhuan417/feidex](https://github.com/yuhuan417/feidex)") {
 		t.Fatalf("prepareReplyCardMarkdown(inline-code url) = %q, want markdown link", body)
 	}

@@ -6,28 +6,36 @@ import (
 	"strings"
 
 	appcards "feidex/internal/adapter/feishu/cards"
+	"feidex/internal/config"
 
 	applinkutil "feidex/internal/adapter/feishu/linkutil"
 	"feidex/internal/feishu"
 )
 
+// cardRenderer needs only the config to resolve workspace paths for the
+// markdown it renders.
 type cardRenderer struct {
-	app *App
+	cfg *config.Config
 }
 
 func cardRendererForApp(a *App) cardRenderer {
-	return cardRenderer{app: a}
+	if a == nil {
+		return cardRenderer{}
+	}
+	return cardRenderer{cfg: a.cfg}
 }
+
+func newCardRenderer(cfg *config.Config) cardRenderer { return cardRenderer{cfg: cfg} }
 
 func (r cardRenderer) prepareCardMarkdown(sub *domainsubmission.Submission, text string) string {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
 	}
-	if sub == nil || r.app == nil {
+	if sub == nil || r.cfg == nil {
 		return applinkutil.NormalizeCardMarkdown(text)
 	}
-	return prepareSubmissionCardMarkdown(r.app.cfg, sub, text)
+	return prepareSubmissionCardMarkdown(r.cfg, sub, text)
 }
 
 func (r cardRenderer) renderReplyMarkdownCard(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
@@ -40,14 +48,14 @@ func (r cardRenderer) renderReplyMarkdownCardWithOptions(ctx context.Context, su
 
 func (r cardRenderer) renderReplyMarkdownCardWithHeaderOptions(ctx context.Context, sub *domainsubmission.Submission, title, color string, showHeader bool, body string, buttons []feishu.Button, enablePreview bool) map[string]any {
 	card := appcards.NewMarkdownBodyCardWithHeader(title, color, showHeader)
-	if r.app == nil {
+	if r.cfg == nil {
 		if content := applinkutil.NormalizeCardMarkdown(body); content != "" {
 			appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 				"tag":     "markdown",
 				"content": content,
 			})
 		}
-	} else if content := prepareReplyCardMarkdown(r.app, ctx, sub, body, enablePreview); content != "" {
+	} else if content := prepareReplyCardMarkdown(r.cfg, ctx, sub, body, enablePreview); content != "" {
 		appcards.AppendMarkdownBodyCardElement(card, map[string]any{
 			"tag":     "markdown",
 			"content": content,

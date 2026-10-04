@@ -44,6 +44,30 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 结构体方法 --调用--> 收 *App 的 helper
 ```
 
+### 修正：扇入数的是"碰过它的工厂"，不是"转换它能解放的工厂"
+
+`cardRenderer` 被 6 个工厂依赖，按扇入是最高杠杆点。转换之后——6 个工厂
+的依赖里它确实都消失了，**但没有一个工厂自由**，因为它们各自还依赖 2-7 个
+别的结构体。工厂只有在**全部**结构体依赖都转换后才会自由。
+
+正确的排序指标是「**哪些结构体是某个工厂的最后一个阻塞点**」：
+
+| 解放工厂数 | 结构体 |
+|---|---|
+| **2** | `sqLiveThreadAdapter` |
+| 1 | `backendInteractionPresenter` |
+| 1 | `backendSelectionRuntime` |
+| 1 | `cardActionService` |
+| 1 | `claudeTurnStreamPort` |
+| 1 | `conversationRuntimeControl` |
+| 1 | `planSettingsSource` |
+
+以及「已经只剩 helper、没有结构体依赖」的 7 个工厂：
+
+`CodexUpgradePorts`(0 helper)、`ConversationRecoveryPorts`(0)、
+`ClaudeMaintenancePorts`(1)、`CompactionPorts`(1)、`ContinuationPorts`(1)、
+`StartupRecoveryPorts`(3)、`CodexRecoveryPorts`(6)。
+
 ### 第一优先：按结构体扇入施工
 
 结构体（而不是工厂）才是依赖单元。扇入最高的：
