@@ -35,7 +35,7 @@ func (s outboundCardService) sendPlanCardWithReuse(ctx context.Context, sub *dom
 }
 
 func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
-	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+	if !s.replyChunks.ready || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
 	if strings.TrimSpace(payload.SummaryText) == "" && strings.TrimSpace(payload.DetailText) == "" {
@@ -44,7 +44,8 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	if payload.Title == "" || payload.Color == "" {
 		payload.Title, payload.Color = turnitem.TurnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
 	}
-	if quietmode.Enabled(s.app.configView().feishuConfig()) && !shouldDeliverTurnItemPayloadInQuiet(quietmode.Mode(s.app.configView().feishuConfig()), payload) {
+	feishuConfig := s.replyChunks.config.feishuConfig()
+	if quietmode.Enabled(feishuConfig) && !shouldDeliverTurnItemPayloadInQuiet(quietmode.Mode(feishuConfig), payload) {
 		return ""
 	}
 	if payload.ItemType == "user_input" && payload.UserInput != nil {
@@ -53,18 +54,20 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	kind := turnitem.TurnItemEventKind(payload.ItemType)
 	footerLines := []string(nil)
 	if payload.IsFinalAnswer {
-		footerLines = s.app.bindings.TurnMetadata.TurnFinalFooterLines(sub.TurnID, time.Now())
+		if s.turnFinalFooterLines != nil {
+			footerLines = s.turnFinalFooterLines(sub.TurnID, time.Now())
+		}
 	}
 	if turnitem.IsReplyTurnItem(payload.ItemType) {
 		body := turnitem.ReplyTurnItemCardBody(payload)
 		if body == "" {
 			body = payload.DetailText
 		}
-		title := contentCardTitleForSubmission(s.app.State(), sub, turnitem.ReplyTurnItemCardTitle(payload))
+		title := contentCardTitleForSubmission(s.replyChunks.state, sub, turnitem.ReplyTurnItemCardTitle(payload))
 		color := payload.Color
 		if !payload.IsFinalAnswer {
 			title, color, _, _ = outboundMessageCardMeta("turn_output", sub.WorkspaceID)
-			title = contentCardTitleForSubmission(s.app.State(), sub, title)
+			title = contentCardTitleForSubmission(s.replyChunks.state, sub, title)
 		}
 		results := s.replyChunks.SendWithReuse(
 			ctx,
@@ -126,7 +129,7 @@ func (s outboundCardService) ReplaceTurnEventCardWithReuse(ctx context.Context, 
 }
 
 func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
-	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+	if !s.replyChunks.ready || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
 	body = strings.TrimSpace(body)
@@ -134,7 +137,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 		return ""
 	}
 	if strings.TrimSpace(reuseMessageID) != "" {
-		card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, title), color, "", body, nil)
+		card := s.replyChunks.renderer.renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.replyChunks.state, sub, title), color, "", body, nil)
 		if err := s.replyChunks.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
 			s.links.Record(reuseMessageID, kind, anchorForSubmission(sub), itemID)
 			return reuseMessageID
@@ -144,17 +147,18 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 }
 
 func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color, body, kind, itemID, reuseMessageID string) string {
-	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+	if !s.replyChunks.ready || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
-	if quietmode.Enabled(s.app.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(s.app.configView().feishuConfig()), kind) {
+	feishuConfig := s.replyChunks.config.feishuConfig()
+	if quietmode.Enabled(feishuConfig) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig), kind) {
 		return ""
 	}
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return ""
 	}
-	card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, title), color, "", body, nil)
+	card := s.replyChunks.renderer.renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.replyChunks.state, sub, title), color, "", body, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := s.replyChunks.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
 			s.links.Record(reuseMessageID, kind, anchorForSubmission(sub), itemID)
@@ -172,10 +176,10 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 
 func (s outboundCardService) renderTurnItemCard(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, enablePreview bool) map[string]any {
 	if turnitem.IsReplyTurnItem(payload.ItemType) {
-		return newCardRenderer(s.app.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(s.app.State(), sub, turnitem.ReplyTurnItemCardTitle(payload)), payload.Color, payload.IsFinalAnswer, turnitem.ReplyTurnItemCardBody(payload), nil, enablePreview)
+		return s.replyChunks.renderer.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(s.replyChunks.state, sub, turnitem.ReplyTurnItemCardTitle(payload)), payload.Color, payload.IsFinalAnswer, turnitem.ReplyTurnItemCardBody(payload), nil, enablePreview)
 	}
 	meta, body := turnitem.CompactTurnItemCardContent(payload)
-	return newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, payload.Title), payload.Color, meta, body, nil)
+	return s.replyChunks.renderer.renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.replyChunks.state, sub, payload.Title), payload.Color, meta, body, nil)
 }
 
 // SendTerminalCard executes the turn use case's semantic terminal effect.

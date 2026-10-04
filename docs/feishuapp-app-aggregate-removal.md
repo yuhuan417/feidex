@@ -381,6 +381,12 @@ app-bearing 函数数由 282 降至 281，持有 App 字段的结构体预算保
 454 个 `*App` 引用、281 个 app-bearing 函数和 42 个持有 App 字段的结构体；depmap 中
 `outboundCardService` 的 App helper 依赖降为 0。
 
+步骤 44 移除 `outboundCardService.app`。服务现在从 `replyChunkDelivery` 读取 scoped
+state、动态 frontend 配置、renderer 与 transport readiness；final-footer 查询通过构造时
+注入的 `TurnFinalFooterLines` 函数提供。卡片发送、quiet-mode、标题投影、pending input 和
+fallback 行为保持不变。该 owner 不再是持有 `*App` 字段的结构体，生产 `*App` 引用预算由
+454 降至 453，持有 App 字段的结构体由 42 降至 41，收 `*App` 的函数预算保持 281。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

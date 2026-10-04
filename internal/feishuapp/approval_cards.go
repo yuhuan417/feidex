@@ -1,13 +1,17 @@
 package feishuapp
 
-import "feidex/internal/domain/identity"
+import (
+	"time"
+
+	"feidex/internal/domain/identity"
+)
 
 type outboundCardService struct {
-	app         *App
-	replyChunks replyChunkDelivery
-	asyncInput  asyncUserInputCardSender
-	links       messageLinkRecorder
-	localFiles  localFileLinkPatcher
+	replyChunks          replyChunkDelivery
+	asyncInput           asyncUserInputCardSender
+	links                messageLinkRecorder
+	localFiles           localFileLinkPatcher
+	turnFinalFooterLines func(string, time.Time) []string
 }
 
 func newOutboundCardService(app *App) outboundCardService {
@@ -23,7 +27,7 @@ func newOutboundCardService(app *App) outboundCardService {
 	view := app.configView()
 	links := newMessageLinkRecorder(view, app.runtimeOwner, app.bindings.Continuation)
 	localFiles := newLocalFileLinkPatcher(app.Config(), app.State(), app.feishu, &app.runtimeOwner.Lifecycle, app.asyncRunner, app.bindings.FinalCardPatch, outbound, app.feishu != nil)
-	return outboundCardService{app: app, asyncInput: asyncUserInputCardSender{pending: app.State(), delivery: pendingDelivery}, replyChunks: newReplyChunkDelivery(
+	return outboundCardService{asyncInput: asyncUserInputCardSender{pending: app.State(), delivery: pendingDelivery}, replyChunks: newReplyChunkDelivery(
 		newCardRenderer(app.Config()), app.State(), outbound, app.feishu != nil, view, links, localFiles,
-	), links: links, localFiles: localFiles}
+	), links: links, localFiles: localFiles, turnFinalFooterLines: app.bindings.TurnMetadata.TurnFinalFooterLines}
 }
