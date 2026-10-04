@@ -198,6 +198,25 @@ func (f *fakeClaudeCore) UpdateConfig(cfg config.ClaudeConfig) {
 	f.updatedConfigs = append(f.updatedConfigs, cfg)
 }
 
+func TestModelDefaultsPublisherUsesInjectedOwners(t *testing.T) {
+	owner := appruntime.NewFrontendOwner()
+	core := &fakeClaudeCore{}
+	owner.SetClaudeCore(core)
+	cfg := config.Default()
+	cfg.Claude.Model = "published-model"
+	publisher := ModelDefaultsPublisher(owner, cfg, &sync.RWMutex{})
+
+	publisher.PublishDefaults(domainbackend.BackendCodex)
+	if len(core.updatedConfigs) != 0 {
+		t.Fatalf("Codex publish updated Claude config: %+v", core.updatedConfigs)
+	}
+
+	publisher.PublishDefaults(domainbackend.BackendClaude)
+	if len(core.updatedConfigs) != 1 || core.updatedConfigs[0].Model != "published-model" {
+		t.Fatalf("published configs = %+v, want configured Claude model", core.updatedConfigs)
+	}
+}
+
 func (f *fakeClaudeCore) StartTurn(_ context.Context, sessionKey, threadID, turnID, prompt string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

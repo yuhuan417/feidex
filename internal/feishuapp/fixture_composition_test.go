@@ -212,7 +212,11 @@ func prepareTestApp(a *App) *App {
 	)
 	a.bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: ModelSnapshotRepository(a)}
 	a.bindings.ModelSettings = modelconfig.SettingsService{Repository: a.State(), Admission: ModelWriteAdmission(a), Frontend: identity.FrontendID(a.FrontendID())}
-	a.bindings.ModelDefaults = modelconfig.DefaultsService{Repository: configadapter.ModelDefaultsRepository{Source: a, Scope: a.State()}, Admission: ModelWriteAdmission(a), Frontend: a.FrontendID(), Publisher: ModelDefaultsPublisher(a)}
+	a.bindings.ModelDefaults = modelconfig.DefaultsService{
+		Repository: configadapter.ModelDefaultsRepository{Source: a, Scope: a.State()},
+		Admission:  ModelWriteAdmission(a), Frontend: a.FrontendID(),
+		Publisher: ModelDefaultsPublisher(a.runtimeOwner, a.Config(), a.ConfigMu()),
+	}
 	a.bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: a}}
 	a.bindings.ConversationConfiguration = conversation.Configuration{Models: a.bindings.ModelSnapshots, ServiceName: CodexServiceName(a)}
 	a.bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(a.FrontendID()), Effects: newEffectRunner(a.runtimeOwner), Collaboration: a.bindings.Plan}

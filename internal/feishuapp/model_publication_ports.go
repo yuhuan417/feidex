@@ -1,19 +1,30 @@
 package feishuapp
 
-type modelDefaultsPublisher struct{ app *App }
+import (
+	"sync"
 
-func ModelDefaultsPublisher(a *App) interface{ PublishDefaults(string) } {
-	return modelDefaultsPublisher{app: a}
+	"feidex/internal/config"
+	frontendruntime "feidex/internal/runtime"
+)
+
+type modelDefaultsPublisher struct {
+	runtimeOwner *frontendruntime.FrontendOwner
+	cfg          *config.Config
+	configMu     *sync.RWMutex
+}
+
+func ModelDefaultsPublisher(owner *frontendruntime.FrontendOwner, cfg *config.Config, configMu *sync.RWMutex) interface{ PublishDefaults(string) } {
+	return modelDefaultsPublisher{runtimeOwner: owner, cfg: cfg, configMu: configMu}
 }
 
 func (p modelDefaultsPublisher) PublishDefaults(backend string) {
 	if backend != "claude" {
 		return
 	}
-	if core := p.app.runtimeView().currentClaudeCore(); core != nil {
-		p.app.ConfigMu().RLock()
-		cfg := p.app.Config().Claude
-		p.app.ConfigMu().RUnlock()
+	if core := (runtimeView{owner: p.runtimeOwner}).currentClaudeCore(); core != nil {
+		p.configMu.RLock()
+		cfg := p.cfg.Claude
+		p.configMu.RUnlock()
 		core.UpdateConfig(cfg)
 	}
 }
