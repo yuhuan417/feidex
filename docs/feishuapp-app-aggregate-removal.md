@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 491 |
-| 收 `*App` 的顶层函数 | 298 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 489 |
+| 收 `*App` 的顶层函数 | 296 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **62** |
 
@@ -283,6 +283,11 @@ service 和 effect runner。交互卡仍先尝试复用 reasoning-only 工作卡
 在调用点直接使用 backend-aware 或普通菜单 body renderer。两个包装原本没有读取 `App` 或
 session key，菜单文案、backend 选择与 action breadcrumb 均不变。生产 `*App` 引用预算由
 493 降至 491，app-bearing 函数数由 300 降至 298。
+
+步骤 31 将 `canonicalSessionKeyForApp` 改为只接收 session key 的纯转换函数，并移除
+`sessionKeysEqual` 中未使用的 App 参数；server-request 的 session 匹配改为直接调用纯比较。
+规范化及 auxiliary session-key 保留规则不变。生产 `*App` 引用预算由 491 降至 489，
+app-bearing 函数数由 298 降至 296。
 
 ## 方法
 

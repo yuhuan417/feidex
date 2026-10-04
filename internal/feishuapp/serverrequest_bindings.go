@@ -47,7 +47,7 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 		Submission:      func(id string) *domainsubmission.Submission { return a.State().Submission(id) },
 		Session:         func(key string) *conversation.Session { return a.State().Session(key) },
 		SessionKeysEqual: func(left, right string) bool {
-			return sessionKeysEqual(a, left, right)
+			return sessionKeysEqual(left, right)
 		},
 
 		// Feishu

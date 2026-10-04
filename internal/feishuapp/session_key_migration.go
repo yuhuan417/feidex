@@ -31,25 +31,22 @@ func canonicalizeStoredSessionKeys(a *App) error {
 	})
 }
 
-func sessionKeysEqual(a *App, left, right string) bool {
+func sessionKeysEqual(left, right string) bool {
 	left = strings.TrimSpace(left)
 	right = strings.TrimSpace(right)
 	if left == right {
 		return true
 	}
-	return canonicalSessionKeyForApp(a, left, "", "") == canonicalSessionKeyForApp(a, right, "", "")
+	return canonicalStoredSessionKey(left) == canonicalStoredSessionKey(right)
 }
 
-func canonicalSessionKeyForApp(a *App, key, chatType, chatID string) string {
+func canonicalStoredSessionKey(key string) string {
 	key = strings.TrimSpace(key)
 	if isAuxiliarySessionKey(key) {
 		return key
 	}
-	chatID = strings.TrimSpace(chatID)
 	parsedFrontendID, _, parsedChatID, _, _ := identity.ParseSessionKey(key)
-	if chatID == "" {
-		chatID = strings.TrimSpace(parsedChatID)
-	}
+	chatID := strings.TrimSpace(parsedChatID)
 	if chatID == "" {
 		return key
 	}
