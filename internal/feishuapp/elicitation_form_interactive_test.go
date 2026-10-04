@@ -13,7 +13,7 @@ func TestMcpElicitationInteractiveFormSubmitAndToggle(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{
+	onMcpElicitationRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{
 		ID: json.RawMessage(`"elicit-form-1"`),
 		Params: json.RawMessage(`{
 			"mode":"form",
@@ -118,7 +118,7 @@ func TestMcpElicitationDecisionCardQuickAnswer(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{
+	onMcpElicitationRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{
 		ID: json.RawMessage(`"elicit-quick-1"`),
 		Params: json.RawMessage(`{
 			"mode":"form",
@@ -154,7 +154,7 @@ func TestMcpElicitationConfirmCardDirectActions(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{
+	onMcpElicitationRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{
 		ID: json.RawMessage(`"elicit-confirm-1"`),
 		Params: json.RawMessage(`{
 			"mode":"form",

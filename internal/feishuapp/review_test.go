@@ -332,7 +332,7 @@ func TestReviewTurnStartedNotificationDoesNotOverrideResponseTurnID(t *testing.T
 	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, nil); err != nil {
 		t.Fatalf("commandReview() error = %v", err)
 	}
-	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"persisted-turn-b"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"persisted-turn-b"}}`))
 
 	sess := a.store.GetSession(sessionKey)
 	if sess == nil || sess.ActiveTurnID != "review-turn-a" {

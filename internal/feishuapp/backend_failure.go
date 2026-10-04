@@ -25,40 +25,37 @@ type codexMCPAware interface {
 	SetMCPServerPublication(name, url, bearerTokenEnvVar, bearerToken string)
 }
 
-func configureCodexClientRuntime(a *App, client CodexClient) {
+func configureCodexClientRuntime(d BackendRuntimeDeps, client CodexClient) {
 	if client == nil {
 		return
 	}
 	client.SetHandlers(
-		func(method string, params json.RawMessage) { handleNotification(a, method, params) },
-		func(req codexrpc.RequestEnvelope) { handleServerRequest(a, req) },
+		func(method string, params json.RawMessage) { handleNotification(d, method, params) },
+		func(req codexrpc.RequestEnvelope) { handleServerRequest(d, req) },
 	)
 	if aware, ok := client.(codexErrorAware); ok {
 		aware.SetErrorHandler(func(err error) {
-			a.handleCodexTransportError(client, err)
+			handleCodexTransportError(d, client, err)
 		})
 	}
-	publishMCPToCodexClient(a, client)
+	publishMCPToCodexClient(d, client)
 }
 
-func publishMCPToCodexClient(a *App, client CodexClient) {
+func publishMCPToCodexClient(d BackendRuntimeDeps, client CodexClient) {
 	aware, ok := client.(codexMCPAware)
 	if !ok {
 		return
 	}
-	pub := currentMCPPublication(a)
+	pub := currentMCPPublicationFor(d.runtime.ensureRuntimeOwner(), d.mcp)
 	aware.SetMCPServerPublication(mcpbridge.ServerID, pub.URL, mcpbridge.BearerEnvName, pub.Token)
 }
 
-func (a *App) handleCodexTransportError(client CodexClient, err error) {
-	if a == nil {
-		return
-	}
+func handleCodexTransportError(d BackendRuntimeDeps, client CodexClient, err error) {
 	slog.Error("codex backend transport failed",
-		"frontend_id", a.frontendID,
+		"frontend_id", d.frontendID,
 		"error", err,
 	)
-	a.bindings.CodexRecovery.HandleTransportFailure(client, err)
+	d.codexRecovery.HandleTransportFailure(client, err)
 }
 
 func failClaudeSessionActiveWork(backendfailureDep *backendfailure.BackendFailureService, sessionKey, threadID string, err error) {

@@ -90,7 +90,7 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 	}
 	queuedSubID := sess.Queue[0]
 
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	a.waitAsync()
 

@@ -20,7 +20,7 @@ func CodexUpgradePorts(a *App) appcodexruntime.UpgradeDependencies {
 			return newCodexClient(a.cfg.Codex)
 		},
 		ConfigureClient: func(client appcodexruntime.CodexClient) {
-			configureCodexClientRuntime(a, client)
+			configureCodexClientRuntime(a.BackendRuntimeDeps(), client)
 		},
 		ClientExperimentalAPI: func() bool {
 			return a.cfg.Codex.ExperimentalAPI

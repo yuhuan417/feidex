@@ -17,9 +17,9 @@ func TestHandleNotificationAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"agent-1","type":"agent_message","text":"done"}}`))
-	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-2"}}`))
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"agent-1","type":"agent_message","text":"done"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-2"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"failed"}}`))
 
 	if len(ff.replyCards) == 0 && len(ff.replyTextWithIDs) == 0 {
 		t.Fatal("expected completed/failed notifications to deliver output")
@@ -32,11 +32,11 @@ func TestHandleNotificationMCPToolProgressUpdatesWorkingCard(t *testing.T) {
 	workspace := a.cfg.Workspaces[0].Cwd
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"mcp-1","type":"mcpToolCall","server":"feidex-send","tool":"feishu_send_im_file","status":"inProgress","arguments":{"path":"`+filepath.Join(workspace, "artifact.txt")+`"}}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/started", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"mcp-1","type":"mcpToolCall","server":"feidex-send","tool":"feishu_send_im_file","status":"inProgress","arguments":{"path":"`+filepath.Join(workspace, "artifact.txt")+`"}}}`))
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("replyCards after mcp start = %d, want 1", len(ff.replyCards))
 	}
-	handleNotification(a, "item/mcpToolCall/progress", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"mcp-1","message":"uploading artifact"}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/mcpToolCall/progress", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"mcp-1","message":"uploading artifact"}`))
 	if len(ff.patchedCards) != 1 {
 		t.Fatalf("patchedCards after mcp progress = %d, want 1", len(ff.patchedCards))
 	}
@@ -49,11 +49,11 @@ func TestHandleServerRequestRoutesKnownMethods(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Method: "item/commandExecution/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"pwd"}`)})
-	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-1"`), Method: "item/fileChange/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","files":["main.go"]}`)})
-	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Method: "item/permissions/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","permissions":{"mode":"read"}}`)})
-	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Method: "item/tool/requestUserInput", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"Pick","options":[{"label":"A"}]}]}`)})
-	handleServerRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Method: "mcpServer/elicitation/request", Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"open","url":"https://example.test"}`)})
+	handleServerRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"cmd-1"`), Method: "item/commandExecution/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-1","command":"pwd"}`)})
+	handleServerRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"file-1"`), Method: "item/fileChange/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-2","files":["main.go"]}`)})
+	handleServerRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"perm-1"`), Method: "item/permissions/requestApproval", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-3","permissions":{"mode":"read"}}`)})
+	handleServerRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"input-1"`), Method: "item/tool/requestUserInput", Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"item-4","questions":[{"id":"q1","question":"Pick","options":[{"label":"A"}]}]}`)})
+	handleServerRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"elicit-1"`), Method: "mcpServer/elicitation/request", Params: json.RawMessage(`{"mode":"url","threadId":"thread-1","turnId":"turn-1","serverName":"srv","message":"open","url":"https://example.test"}`)})
 
 	if len(ff.replyCards) < 5 {
 		t.Fatalf("expected routed server requests to reply with cards, got %d", len(ff.replyCards))
@@ -95,11 +95,11 @@ func TestStandaloneCompactItemLifecycleTracksSessionState(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
 	if sess := a.store.GetSession("sess-compact"); sess == nil || sess.ActiveTurnID != "turn-compact" || sess.Status != sessionStatusCompacting {
 		t.Fatalf("session after item/started = %+v", sess)
 	}
-	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
 	sess := a.store.GetSession("sess-compact")
 	if sess == nil || sess.ActiveTurnID != "" || sess.Status != "idle" {
 		t.Fatalf("session after item/completed = %+v", sess)
@@ -129,9 +129,9 @@ func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 		if method != "thread/compact/start" {
 			return nil
 		}
-		handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
-		handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
-		handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"completed"}}`))
+		handleNotification(a.BackendRuntimeDeps(), "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+		handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
+		handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"completed"}}`))
 		return nil
 	}
 
@@ -161,9 +161,9 @@ func TestStandaloneCompactSuccessIgnoresLaterFailedCompletion(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	handleNotification(a, "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
-	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"failed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/started", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","item":{"id":"item-compact","type":"contextCompaction"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","itemId":"item-compact","item":{"id":"item-compact","type":"contextCompaction","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-compact","turn":{"id":"turn-compact","status":"failed"}}`))
 
 	if len(ff.sentTexts) != 1 || !strings.Contains(ff.sentTexts[0], "压缩完成") {
 		t.Fatalf("compact notifications should only report success once, got %#v", ff.sentTexts)
@@ -184,7 +184,7 @@ func TestStandaloneCompactErrorReportsRealMessage(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	handleNotification(a, "error", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","error":{"message":"context window not eligible"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "error", json.RawMessage(`{"threadId":"thread-compact","turnId":"turn-compact","error":{"message":"context window not eligible"}}`))
 
 	sess := a.store.GetSession("sess-compact")
 	if sess == nil || sess.Status != "idle" || sess.ActiveTurnID != "" {
@@ -208,10 +208,10 @@ func TestNotificationHelperWrappers(t *testing.T) {
 	}
 
 	fc.replyErrors = nil
-	onFileApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-file"`), Params: json.RawMessage(`{`)})
-	onPermissionsApproval(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-perm"`), Params: json.RawMessage(`{`)})
-	onToolUserInput(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-input"`), Params: json.RawMessage(`{`)})
-	onMcpElicitationRequest(a, codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-json"`), Params: json.RawMessage(`{`)})
+	onFileApproval(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-file"`), Params: json.RawMessage(`{`)})
+	onPermissionsApproval(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-perm"`), Params: json.RawMessage(`{`)})
+	onToolUserInput(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-input"`), Params: json.RawMessage(`{`)})
+	onMcpElicitationRequest(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"bad-json"`), Params: json.RawMessage(`{`)})
 	if len(fc.replyErrors) < 4 {
 		t.Fatalf("expected invalid request params to reply with errors, got %+v", fc.replyErrors)
 	}

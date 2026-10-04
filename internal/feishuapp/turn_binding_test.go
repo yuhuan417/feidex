@@ -183,7 +183,7 @@ func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	markSessionThreadLive(a, "sess-1", "thread-1")
 
-	dispatchCodexNotification(a, "error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"upstream rejected","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":501}},"additionalDetails":"Not Implemented"}}`))
+	dispatchCodexNotification(a.BackendRuntimeDeps(), "error", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","error":{"message":"upstream rejected","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":501}},"additionalDetails":"Not Implemented"}}`))
 	if len(ff.replyCards) != 0 {
 		t.Fatal("error notification must not start retry before completion")
 	}

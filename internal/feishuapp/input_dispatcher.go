@@ -54,52 +54,52 @@ func newInputDispatcher(a *App) application.Dispatcher {
 		},
 	})
 }
-func dispatchInput(a *App, input application.Input) (application.Result, error) {
-	dispatcher := *a.runtimeOwner.Dispatcher
+func dispatchInput(d BackendRuntimeDeps, input application.Input) (application.Result, error) {
+	dispatcher := d.dispatcher
 	var result application.Result
 	var err error
-	if a == nil {
+	if d.sessionActors == nil {
 		result, err = dispatcher.Dispatch(context.Background(), input)
 	} else {
-		a.sessionActorRuntime().Run(application.SessionActorKey(input), func() {
-			result, err = dispatcher.Dispatch(a.Context(), input)
+		d.sessionActors.Run(application.SessionActorKey(input), func() {
+			result, err = dispatcher.Dispatch(d.contextFn(), input)
 		})
 	}
 	if err != nil {
 		return result, err
 	}
-	return result, newEffectRunner(a.runtimeOwner).Run(a.Context(), result.Effects)
+	return result, newEffectRunner(d.runtime.ensureRuntimeOwner()).Run(d.contextFn(), result.Effects)
 }
 
-func dispatchBackendEvent(a *App, event application.BackendEvent) {
-	if _, err := dispatchInput(a, application.BackendEventReceived{
-		Frontend:   identity.FrontendID(a.FrontendID()),
-		SessionKey: identity.SessionKey(sessionKeyForBackendEvent(a, event)),
+func dispatchBackendEvent(d BackendRuntimeDeps, event application.BackendEvent) {
+	if _, err := dispatchInput(d, application.BackendEventReceived{
+		Frontend:   identity.FrontendID(d.frontendID),
+		SessionKey: identity.SessionKey(sessionKeyForBackendEvent(d, event)),
 		Event:      event,
 	}); err != nil {
 		slog.Error("backend event dispatch failed", "kind", event.Kind, "error", err)
 	}
 }
 
-func sessionKeyForBackendEvent(a *App, event application.BackendEvent) string {
+func sessionKeyForBackendEvent(d BackendRuntimeDeps, event application.BackendEvent) string {
 	threadID := strings.TrimSpace(event.ThreadID)
-	if a == nil || threadID == "" {
+	if threadID == "" {
 		return ""
 	}
-	return a.bindings.ConversationQuery.SessionForBackendThread(threadID)
+	return d.conversationQuery.SessionForBackendThread(threadID)
 }
-func dispatchCodexNotification(a *App, method string, params json.RawMessage) {
+func dispatchCodexNotification(d BackendRuntimeDeps, method string, params json.RawMessage) {
 	event, handled, err := codex.DecodeNotification(method, params)
 	if err != nil {
 		slog.Warn("invalid backend notification", "method", method, "error", err)
 		return
 	}
 	if handled {
-		dispatchBackendEvent(a, event)
+		dispatchBackendEvent(d, event)
 	}
 }
-func dispatchCodexRequest(a *App, req codexrpc.RequestEnvelope) {
-	dispatchBackendEvent(a, codex.DecodeRequest(req))
+func dispatchCodexRequest(d BackendRuntimeDeps, req codexrpc.RequestEnvelope) {
+	dispatchBackendEvent(d, codex.DecodeRequest(req))
 }
 
 func newEffectRunner(runtimeowner *appruntime.FrontendOwner) appruntime.EffectRunner {
@@ -187,7 +187,7 @@ func dispatchCardAction(a *App, action *feishu.CardAction) (*callback.CardAction
 	if action == nil {
 		return newCardActionService(a).dispatch(nil)
 	}
-	result, err := dispatchInput(a, application.CardActionReceived{Frontend: identity.FrontendID(a.FrontendID()), Action: toApplicationCardAction(action)})
+	result, err := dispatchInput(a.BackendRuntimeDeps(), application.CardActionReceived{Frontend: identity.FrontendID(a.FrontendID()), Action: toApplicationCardAction(action)})
 	if err != nil {
 		return nil, err
 	}

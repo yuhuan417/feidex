@@ -126,19 +126,19 @@ func runAsync(a *App, fn func()) bool {
 
 func (a *App) HandleFeishuMessage(msg *feishu.InboundMessage) {
 	if msg != nil {
-		_, _ = dispatchInput(a, application.MessageReceived{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{Type: identity.ChatType(msg.ChatType), ID: msg.ChatID}, Message: *msg})
+		_, _ = dispatchInput(a.BackendRuntimeDeps(), application.MessageReceived{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{Type: identity.ChatType(msg.ChatType), ID: msg.ChatID}, Message: *msg})
 	}
 }
 
 func (a *App) HandleFeishuRecall(recall *feishu.MessageRecall) {
 	if recall != nil {
-		_, _ = dispatchInput(a, application.MessageRecalled{Frontend: identity.FrontendID(a.FrontendID()), MessageID: recall.MessageID, ChatID: recall.ChatID})
+		_, _ = dispatchInput(a.BackendRuntimeDeps(), application.MessageRecalled{Frontend: identity.FrontendID(a.FrontendID()), MessageID: recall.MessageID, ChatID: recall.ChatID})
 	}
 }
 
 func (a *App) HandleFeishuReaction(reaction *feishu.MessageReaction) {
 	if reaction != nil {
-		_, _ = dispatchInput(a, application.MessageReacted{Frontend: identity.FrontendID(a.FrontendID()), MessageID: reaction.MessageID, ChatID: reaction.ChatID, UserID: reaction.UserID, EmojiType: reaction.EmojiType})
+		_, _ = dispatchInput(a.BackendRuntimeDeps(), application.MessageReacted{Frontend: identity.FrontendID(a.FrontendID()), MessageID: reaction.MessageID, ChatID: reaction.ChatID, UserID: reaction.UserID, EmojiType: reaction.EmojiType})
 	}
 }
 

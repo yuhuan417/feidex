@@ -63,7 +63,7 @@ func AutoRetryPorts(a *App, view retryview.Service) retry.Dependencies {
 		Starter:            func() retry.SubmissionStarter { return a.bindings.Submissions },
 		DispatchTimer: func(key string, seq uint64) {
 			runAsync(a, func() {
-				_, _ = dispatchInput(a, application.RetryTimerFired{Frontend: identity.FrontendID(a.FrontendID()), SessionKey: identity.SessionKey(key), Sequence: seq})
+				_, _ = dispatchInput(a.BackendRuntimeDeps(), application.RetryTimerFired{Frontend: identity.FrontendID(a.FrontendID()), SessionKey: identity.SessionKey(key), Sequence: seq})
 			})
 		},
 		Presenter: view,

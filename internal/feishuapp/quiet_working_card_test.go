@@ -189,7 +189,7 @@ func TestQuietModeReusesReasoningOnlyWorkingCardForApprovalButNotFinal(t *testin
 		t.Fatalf("reply card count after reasoning = %d, want 1", len(ff.replyCards))
 	}
 
-	onCommandApproval(a, codexrpc.RequestEnvelope{
+	onCommandApproval(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"cmd-1"`),
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"cmd-1","command":"lark-cli calendar events create"}`),
 	})
@@ -249,7 +249,7 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForApproval(t *testing.T) {
 		t.Fatalf("reply card count after command working card = %d, want 1", len(ff.replyCards))
 	}
 
-	onCommandApproval(a, codexrpc.RequestEnvelope{
+	onCommandApproval(a.BackendRuntimeDeps(), codexrpc.RequestEnvelope{
 		ID:     json.RawMessage(`"cmd-approval"`),
 		Params: json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"cmd-approval","command":"pwd"}`),
 	})

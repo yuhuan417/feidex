@@ -17,8 +17,8 @@ func TestCodexPlanModeExitPromptAfterPlanItemCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	seedPlanExitActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"1. edit files\n2. run tests"}}`))
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"1. edit files\n2. run tests"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	pending := codexPlanModeExitPendingRequest(a, "sess-1")
 	if pending == nil {
@@ -57,9 +57,9 @@ func TestCodexPlanModeExitPromptReusesLivePlanCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	seedPlanExitActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	handleNotification(a, "turn/plan/updated", json.RawMessage(`{"turnId":"turn-1","plan":[{"step":"draft checklist","status":"completed"}]}`))
-	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"1. edit files\n2. run tests"}}`))
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/plan/updated", json.RawMessage(`{"turnId":"turn-1","plan":[{"step":"draft checklist","status":"completed"}]}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"1. edit files\n2. run tests"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count = %d, want 1 live plan card", len(ff.replyCards))
@@ -106,8 +106,8 @@ func TestCodexPlanModeExitIgnoresChecklistOnlyPlanUpdates(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	seedPlanExitActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	handleNotification(a, "turn/plan/updated", json.RawMessage(`{"turnId":"turn-1","plan":[{"step":"draft","status":"completed"}]}`))
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/plan/updated", json.RawMessage(`{"turnId":"turn-1","plan":[{"step":"draft","status":"completed"}]}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	if pending := codexPlanModeExitPendingRequest(a, "sess-1"); pending != nil {
 		t.Fatalf("checklist-only turn created plan exit pending = %+v", pending)
@@ -133,9 +133,9 @@ func TestCodexPlanModeExitDoesNotDeferWhenOtherPendingExists(t *testing.T) {
 		t.Fatalf("SavePending() error = %v", err)
 	}
 
-	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"implement x"}}`))
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
-	handleNotification(a, "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"cmd-1"}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"implement x"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "serverRequest/resolved", json.RawMessage(`{"threadId":"thread-1","requestId":"cmd-1"}`))
 
 	if pending := codexPlanModeExitPendingRequest(a, "sess-1"); pending != nil {
 		t.Fatalf("plan exit should not be deferred after other pending resolves: %+v", pending)
@@ -164,8 +164,8 @@ func TestCodexPlanModeExitStayKeepsOriginalPromptCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	seedPlanExitActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"1. edit files\n2. run tests"}}`))
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"1. edit files\n2. run tests"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	pending := codexPlanModeExitPendingRequest(a, "sess-1")
 	if pending == nil {
@@ -228,8 +228,8 @@ func TestCodexPlanModeExitImplementCurrentFollowupReplySteersActiveTurn(t *testi
 	seedPlanExitActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 	markSessionThreadLive(a, "sess-1", "thread-1")
 
-	handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"1. edit files\n2. run tests"}}`))
-	handleNotification(a, "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","itemId":"plan-1","item":{"id":"plan-1","type":"plan","text":"1. edit files\n2. run tests"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/completed", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-1","status":"completed"}}`))
 
 	pending := codexPlanModeExitPendingRequest(a, "sess-1")
 	if pending == nil {

@@ -31,7 +31,7 @@ func seedAsyncUserInput(t *testing.T, a *App) (*domainsubmission.Submission, *st
 		t.Fatal(err)
 	}
 	a.bindings.TurnPresentation.NoteTurnStarted(sessionKey, sub)
-	handleNotification(a, "item/completed", json.RawMessage(asyncQuestionNotification))
+	handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(asyncQuestionNotification))
 	pending := a.store.PendingByID("async_user_input:turn-1:ask-1")
 	if pending == nil {
 		t.Fatal("async question did not create a local pending form")
@@ -73,10 +73,10 @@ func TestAsyncUserInputStaysSeparateFromFinalInEveryQuietMode(t *testing.T) {
 				}
 			}
 			// Replayed completion must not send a second question card.
-			handleNotification(a, "item/completed", json.RawMessage(asyncQuestionNotification))
+			handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(asyncQuestionNotification))
 			// A later question in the same turn has its own form and survives too.
-			handleNotification(a, "item/completed", json.RawMessage(strings.ReplaceAll(asyncQuestionNotification, "ask-1", "ask-2")))
-			handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"final-1","type":"agentMessage","phase":"final_answer","text":"Finished the work."}}`))
+			handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(strings.ReplaceAll(asyncQuestionNotification, "ask-1", "ask-2")))
+			handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"final-1","type":"agentMessage","phase":"final_answer","text":"Finished the work."}}`))
 			finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 			a.waitAsync()
 			if len(ff.replyCards) != 3 || len(ff.patchedCards) != 0 {
@@ -101,12 +101,12 @@ func TestAsyncUserInputQuietWorkingCardBoundaries(t *testing.T) {
 				item = map[string]any{"id": "work-1", "type": "commandExecution", "command": "ls", "status": "completed"}
 			}
 			a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", "work-1", turnitem.NewProtocolItemWithID("work-1", item))
-			handleNotification(a, "item/completed", json.RawMessage(asyncQuestionNotification))
+			handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(asyncQuestionNotification))
 			questionPatches := len(ff.patchedCards)
 			if substantive && questionPatches != 0 || !substantive && questionPatches != 1 {
 				t.Fatalf("question reused working card incorrectly: substantive=%t, patches=%d", substantive, questionPatches)
 			}
-			handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"final-1","type":"agentMessage","phase":"final_answer","text":"Done"}}`))
+			handleNotification(a.BackendRuntimeDeps(), "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"final-1","type":"agentMessage","phase":"final_answer","text":"Done"}}`))
 			if len(ff.patchedCards) != questionPatches {
 				t.Fatal("final answer patched the question or substantive working card")
 			}

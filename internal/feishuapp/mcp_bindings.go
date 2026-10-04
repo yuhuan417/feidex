@@ -5,6 +5,7 @@ import (
 	"feidex/internal/adapter/feishu/mcpbridge"
 	"feidex/internal/adapter/feishu/turnitem"
 	domainsubmission "feidex/internal/domain/submission"
+	frontendruntime "feidex/internal/runtime"
 	"net/http"
 	"strings"
 )
@@ -23,7 +24,7 @@ func startMCPService(a *App, ctx context.Context) error {
 	if err := a.runtimeOwner.MCP.Start(ctx); err != nil {
 		return err
 	}
-	publishMCPToCodexClient(a, a.runtimeView().currentCodexClient())
+	publishMCPToCodexClient(a.BackendRuntimeDeps(), a.runtimeView().currentCodexClient())
 	return nil
 }
 
@@ -31,10 +32,15 @@ func currentMCPPublication(a *App) mcpbridge.Publication {
 	if a == nil {
 		return mcpbridge.Publication{}
 	}
-	if !a.runtimeOwner.MCP.Started() || a.bindings.MCP == nil {
+	return currentMCPPublicationFor(a.runtimeOwner, a.bindings.MCP)
+}
+
+// currentMCPPublicationFor needs only the runtime owner and the MCP service.
+func currentMCPPublicationFor(owner *frontendruntime.FrontendOwner, mcp *feidexMCPService) mcpbridge.Publication {
+	if owner == nil || owner.MCP == nil || !owner.MCP.Started() || mcp == nil {
 		return mcpbridge.Publication{}
 	}
-	return a.bindings.MCP.Publication()
+	return mcp.Publication()
 }
 
 func BuildMCP(a *App) (*feidexMCPService, error) {

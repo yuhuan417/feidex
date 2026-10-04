@@ -338,7 +338,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	empty := prepareTestApp(&App{store: a.store, feishu: ff, runtimeOwner: testOwnerWithCodex(fc)})
 	empty.ServerRequestService().SendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
 	empty.ServerRequestService().SendUserInputCard(json.RawMessage(`"missing-input"`), pendingforms.ToolUserInputPayload{})
-	handleServerRequest(empty, codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})
+	handleServerRequest(empty.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})
 	if len(fc.replyErrors) < 3 {
 		t.Fatalf("replyErrors = %+v, want errors for missing session/input/unknown method", fc.replyErrors)
 	}

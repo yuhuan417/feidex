@@ -7,41 +7,41 @@ import (
 	"feidex/internal/codexrpc"
 )
 
-func handleNotification(a *App, method string, params json.RawMessage) {
-	dispatchCodexNotification(a, method, params)
+func handleNotification(d BackendRuntimeDeps, method string, params json.RawMessage) {
+	dispatchCodexNotification(d, method, params)
 }
 
 func onTurnStartedNotification(turns *turn.Service, threadID, turnID string) {
 	turns.OnTurnStartedNotification(threadID, turnID)
 }
 
-func handleServerRequest(a *App, req codexrpc.RequestEnvelope) {
-	dispatchCodexRequest(a, req)
+func handleServerRequest(d BackendRuntimeDeps, req codexrpc.RequestEnvelope) {
+	dispatchCodexRequest(d, req)
 }
 
-func onCommandApproval(a *App, req codexrpc.RequestEnvelope) {
+func onCommandApproval(d BackendRuntimeDeps, req codexrpc.RequestEnvelope) {
 	req.Method = "item/commandExecution/requestApproval"
-	dispatchCodexRequest(a, req)
+	dispatchCodexRequest(d, req)
 }
 
-func onFileApproval(a *App, req codexrpc.RequestEnvelope) {
+func onFileApproval(d BackendRuntimeDeps, req codexrpc.RequestEnvelope) {
 	req.Method = "item/fileChange/requestApproval"
-	dispatchCodexRequest(a, req)
+	dispatchCodexRequest(d, req)
 }
 
-func onPermissionsApproval(a *App, req codexrpc.RequestEnvelope) {
+func onPermissionsApproval(d BackendRuntimeDeps, req codexrpc.RequestEnvelope) {
 	req.Method = "item/permissions/requestApproval"
-	dispatchCodexRequest(a, req)
+	dispatchCodexRequest(d, req)
 }
 
-func onToolUserInput(a *App, req codexrpc.RequestEnvelope) {
+func onToolUserInput(d BackendRuntimeDeps, req codexrpc.RequestEnvelope) {
 	req.Method = "item/tool/requestUserInput"
-	dispatchCodexRequest(a, req)
+	dispatchCodexRequest(d, req)
 }
 
-func onMcpElicitationRequest(a *App, req codexrpc.RequestEnvelope) {
+func onMcpElicitationRequest(d BackendRuntimeDeps, req codexrpc.RequestEnvelope) {
 	req.Method = "mcpServer/elicitation/request"
-	dispatchCodexRequest(a, req)
+	dispatchCodexRequest(d, req)
 }
 
 func finishTurn(turns *turn.Service, threadID, turnID, status string) {

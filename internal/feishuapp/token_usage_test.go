@@ -25,7 +25,7 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	handleNotification(a, "thread/tokenUsage/updated", json.RawMessage(`{
+	handleNotification(a.BackendRuntimeDeps(), "thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
 		"turnId":"turn-1",
 		"tokenUsage":{
@@ -126,7 +126,7 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
-	handleNotification(a, "thread/tokenUsage/updated", json.RawMessage(`{
+	handleNotification(a.BackendRuntimeDeps(), "thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
 		"turnId":"turn-1",
 		"tokenUsage":{
@@ -174,7 +174,7 @@ func TestFinalAnswerPrefersExactContextUsageFooter(t *testing.T) {
 	a.runtimeOwner.TurnBindings.BindTurnSubmission("thread-1", "turn-1", "sess-1", sub.ID)
 	a.runtimeOwner.TurnBindings.MarkTurnStartedAt("turn-1", time.Now().Add(-1500*time.Millisecond))
 
-	handleNotification(a, "thread/tokenUsage/updated", json.RawMessage(`{
+	handleNotification(a.BackendRuntimeDeps(), "thread/tokenUsage/updated", json.RawMessage(`{
 		"threadId":"thread-1",
 		"turnId":"turn-1",
 		"tokenUsage":{

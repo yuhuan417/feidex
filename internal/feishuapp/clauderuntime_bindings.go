@@ -39,7 +39,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				})
 			},
 			FinishTurn: func(threadID, turnID, status string) {
-				runSession(app, sessionKeyForBackendEvent(app, application.BackendEvent{ThreadID: threadID}), func() {
+				runSession(app, sessionKeyForBackendEvent(app.BackendRuntimeDeps(), application.BackendEvent{ThreadID: threadID}), func() {
 					finishTurn(app.bindings.Turns, threadID, turnID, status)
 				})
 			},

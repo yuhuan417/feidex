@@ -39,7 +39,7 @@ func backendRuntimeContextForApp(a *App) backendruntime.BackendContext {
 		}
 		return newCodexClient(a.cfg.Codex)
 	}
-	ctx.ConfigureCodexClient = func(client CodexClient) { configureCodexClientRuntime(a, client) }
+	ctx.ConfigureCodexClient = func(client CodexClient) { configureCodexClientRuntime(a.BackendRuntimeDeps(), client) }
 	ctx.NewClaudeCore = func() ClaudeCore {
 		if a.cfg == nil {
 			return nil

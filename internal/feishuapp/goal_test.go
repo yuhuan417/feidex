@@ -155,7 +155,7 @@ func TestCommandGoalStatusAndSetUseCodexGoalRPC(t *testing.T) {
 	}
 
 	ff.sendCardIDs = []string{"goal-turn-root-1"}
-	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal-first"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal-first"}}`))
 	foundSessionKey, sub := a.bindings.Submissions.FindSubmissionByTurn("thread-1", "turn-goal-first")
 	if foundSessionKey == "" || sub == nil {
 		t.Fatalf("first goal turn binding = %q / %+v, want synthetic submission", foundSessionKey, sub)
@@ -459,12 +459,12 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 	sessionKey := seedGoalTestSession(t, a, msg, "thread-1")
 	ff.sendCardIDs = []string{"goal-turn-root-1", "goal-turn-root-2"}
 
-	handleNotification(a, "thread/goal/updated", json.RawMessage(`{"threadId":"thread-1","goal":{"threadId":"thread-1","objective":"keep going","status":"active","tokenBudget":null,"tokensUsed":0,"timeUsedSeconds":0,"createdAt":1,"updatedAt":2}}`))
+	handleNotification(a.BackendRuntimeDeps(), "thread/goal/updated", json.RawMessage(`{"threadId":"thread-1","goal":{"threadId":"thread-1","objective":"keep going","status":"active","tokenBudget":null,"tokensUsed":0,"timeUsedSeconds":0,"createdAt":1,"updatedAt":2}}`))
 	if goal, ok := goalTrackerForApp(a).ActiveGoal("thread-1"); !ok || goal.Objective != "keep going" {
 		t.Fatalf("active goal after notification = %+v / %v", goal, ok)
 	}
 
-	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal"}}`))
 	foundSessionKey, sub := a.bindings.Submissions.FindSubmissionByTurn("thread-1", "turn-goal")
 	if foundSessionKey != sessionKey || sub == nil {
 		t.Fatalf("goal continuation binding = %q / %+v, want %q", foundSessionKey, sub, sessionKey)
@@ -504,7 +504,7 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 		t.Fatalf("UpdateSession(first goal continuation complete) error = %v", err)
 	}
 
-	handleNotification(a, "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal-2"}}`))
+	handleNotification(a.BackendRuntimeDeps(), "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"turn-goal-2"}}`))
 	_, sub = a.bindings.Submissions.FindSubmissionByTurn("thread-1", "turn-goal-2")
 	if sub == nil || sub.TriggerMessageID != "goal-turn-root-2" {
 		t.Fatalf("second goal continuation submission = %+v, want fresh outbound root", sub)
@@ -525,7 +525,7 @@ func TestGoalNotificationsBindActiveGoalContinuationTurn(t *testing.T) {
 		t.Fatalf("second goal continuation buttons = %#v, want none", buttons)
 	}
 
-	handleNotification(a, "thread/goal/cleared", json.RawMessage(`{"threadId":"thread-1"}`))
+	handleNotification(a.BackendRuntimeDeps(), "thread/goal/cleared", json.RawMessage(`{"threadId":"thread-1"}`))
 	if goal, ok := goalTrackerForApp(a).ActiveGoal("thread-1"); ok {
 		t.Fatalf("goal should be cleared, got %+v", goal)
 	}
