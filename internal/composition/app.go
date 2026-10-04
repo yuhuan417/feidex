@@ -427,7 +427,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
 	*autoRetryRuntimeDeps = frontend.BackendRuntimeDeps()
-	if err := feishuapp.CanonicalizeStoredSessionKeys(frontend); err != nil {
+	if err := feishuapp.CanonicalizeStoredSessionKeys(frontend.Store()); err != nil {
 		return nil, err
 	}
 	if backend := feishuapp.BackendKind(frontend); backend != "" {

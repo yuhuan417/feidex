@@ -2,15 +2,16 @@ package feishuapp
 
 import (
 	"feidex/internal/domain/identity"
+	"feidex/internal/state"
 	"feidex/internal/textutil"
 	"strings"
 )
 
-func canonicalizeStoredSessionKeys(a *App) error {
-	if a == nil || a.store == nil {
+func canonicalizeStoredSessionKeys(store *state.Store) error {
+	if store == nil {
 		return nil
 	}
-	return a.store.CanonicalizeSessionKeys(func(key, chatType, chatID, frontendHint string) string {
+	return store.CanonicalizeSessionKeys(func(key, chatType, chatID, frontendHint string) string {
 		key = strings.TrimSpace(key)
 		if isAuxiliarySessionKey(key) {
 			return key

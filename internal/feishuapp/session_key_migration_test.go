@@ -47,7 +47,7 @@ func TestCanonicalizeStoredSessionKeysMigratesLegacyTypedKeys(t *testing.T) {
 		t.Fatalf("UpsertAgentBinding() error = %v", err)
 	}
 
-	if err := canonicalizeStoredSessionKeys(a); err != nil {
+	if err := canonicalizeStoredSessionKeys(a.store); err != nil {
 		t.Fatalf("canonicalizeStoredSessionKeys() error = %v", err)
 	}
 

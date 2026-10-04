@@ -6,6 +6,7 @@ import (
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
 	"feidex/internal/runtime"
+	"feidex/internal/state"
 
 	workspacecards "feidex/internal/adapter/feishu/workspace"
 )
@@ -36,7 +37,9 @@ func NewDispatcher(a *App) application.Dispatcher { return newInputDispatcher(a)
 
 // CanonicalizeStoredSessionKeys performs the one-time state migration required
 // when a frontend enters the runtime.
-func CanonicalizeStoredSessionKeys(a *App) error { return canonicalizeStoredSessionKeys(a) }
+func CanonicalizeStoredSessionKeys(store *state.Store) error {
+	return canonicalizeStoredSessionKeys(store)
+}
 
 func BackendKind(a *App) string { return a.configView().configuredBackend() }
 

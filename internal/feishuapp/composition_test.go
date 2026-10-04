@@ -30,7 +30,7 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 	AttachStateView(a, NewStateView(a))
 	AttachWorkspacePresentation(a, NewWorkspacePresentation(a))
 	AttachDispatcher(a, NewDispatcher(a))
-	if err := CanonicalizeStoredSessionKeys(a); err != nil {
+	if err := CanonicalizeStoredSessionKeys(a.Store()); err != nil {
 		return nil, err
 	}
 	if backend := BackendKind(a); backend != "" {

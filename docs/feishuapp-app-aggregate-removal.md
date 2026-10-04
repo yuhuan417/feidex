@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 298 |
-| 收 `*App` 的顶层函数 | 178 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 296 |
+| 收 `*App` 的顶层函数 | 176 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
 | **持有 `*App` 字段的结构体** | **6** |
 
@@ -765,6 +765,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 128 将 `ForwardProcessor` 改为接收 frontend session actors 与 session-key builder；处理仍在同一 session actor 内串行执行，key 继续按当前 frontend 规范化。生产 `*App` 引用预算由 300 降至 299，收 `*App` 的顶层函数由 180 降至 179，lazy binding-read 预算保持 0。
 
 步骤 129 删除生产代码中已无调用方的 `replyError(*App, ...)` 包装器；回复逻辑统一由显式 context/frontend/effect-runner helper 执行，测试通过 test-only fixture 调用同一 helper。生产 `*App` 引用预算由 299 降至 298，收 `*App` 的顶层函数由 179 降至 178，lazy binding-read 预算保持 0。
+
+步骤 130 将 session-key migration helper 改为接收持久化 `state.Store`，不再经 `*App` 读取 store；key 规范化与 auxiliary-key 保留规则未变。生产 `*App` 引用预算由 298 降至 296，收 `*App` 的顶层函数由 178 降至 176，lazy binding-read 预算保持 0。
 
 ## 方法
 
