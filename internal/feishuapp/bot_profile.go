@@ -18,10 +18,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func commandWorkspaceProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
-	return commandWorkspace(a, msg, args)
-}
-
 func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") || len(args) == 0 {
 		return a.bindings.BackendConfiguration.HandleBackendModelCommand(msg, args)

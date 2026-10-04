@@ -14,14 +14,14 @@ import (
 func TestMenuWrapperCardsAndActionUserID(t *testing.T) {
 	a, _, _ := newTestApp(t)
 
-	sessionCard := renderSessionMenuCard(a, "sess-1")
+	sessionCard := renderToolsMenuCard(a, "sess-1")
 	if body := cardMarkdownContent(t, sessionCard); !strings.Contains(body, "当前位置：主菜单 / 常用工具") {
-		t.Fatalf("renderSessionMenuCard() body = %q", body)
+		t.Fatalf("renderToolsMenuCard() body = %q", body)
 	}
 
-	contextCard := renderContextMenuCard(a, "sess-1")
+	contextCard := renderCommandMenuCard(a, "sess-1")
 	if body := cardMarkdownContent(t, contextCard); !strings.Contains(body, "当前位置：主菜单") {
-		t.Fatalf("renderContextMenuCard() body = %q", body)
+		t.Fatalf("renderCommandMenuCard() body = %q", body)
 	}
 
 	if got := appdebugviewcmd.ActionUserID(nil); got != "" {

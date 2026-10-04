@@ -94,7 +94,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if groupBindingScopeActive(msg) {
 						return a.bindings.BindingCommands.commandWorkspace(msg, args)
 					}
-					return commandWorkspaceProfileAware(a, msg, args)
+					return commandWorkspace(a, msg, args)
 				},
 			},
 		},

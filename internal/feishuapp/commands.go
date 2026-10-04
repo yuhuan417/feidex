@@ -92,14 +92,6 @@ func renderToolsMenuCard(a *App, sessionKey string) map[string]any {
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(a.configView().configuredBackend(), spec.Action, sessionKey))
 }
 
-func renderSessionMenuCard(a *App, sessionKey string) map[string]any {
-	return renderToolsMenuCard(a, sessionKey)
-}
-
-func renderContextMenuCard(a *App, sessionKey string) map[string]any {
-	return renderCommandMenuCard(a, sessionKey)
-}
-
 func renderSystemMenuCard(a *App, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
 	backend := textutil.FirstNonEmpty(a.configView().configuredBackend(), "unset")
