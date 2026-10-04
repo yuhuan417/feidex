@@ -43,6 +43,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 	}
 	submissions := a.bindings.Submissions
 	pendingQueue := a.bindings.PendingQueue
+	queuedNotice := newOutboundCardService(a)
 	return appreviewcmd.Dependencies{
 		UseCase:        a.bindings.Review,
 		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
@@ -56,7 +57,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		},
 		SessionHasActiveWorkFn: sessionHasActiveWork, SessionHasInFlightSubmissionFn: conversation.HasInFlightSubmission,
 		StartNextSubmissionFn:           func(s string) error { return startNextSubmission(submissions, s) },
-		SendSubmissionQueuedNoticeFn:    func(c context.Context, s *domainsubmission.Submission) { sendSubmissionQueuedNotice(a, c, s) },
+		SendSubmissionQueuedNoticeFn:    func(c context.Context, s *domainsubmission.Submission) { queuedNotice.sendSubmissionQueuedNotice(c, s) },
 		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { pendingQueue.MarkSubmissionQueuedReactions(s) },
 		CompleteAsyncCommandActionFn: func(x *feishu.CardAction, s, r, f, t string, p map[string]any, ok, fail func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
 			return completeAsyncCommandAction(a, x, s, r, f, t, p, ok, fail, w)
@@ -120,7 +121,10 @@ func (r reviewTargetResolver) Resolve(cwd string, target appreview.TargetSpec) (
 	return (appreview.GitService{Context: r.app.Context()}).ResolveTarget(cwd, target)
 }
 
-type reviewDispatcher struct{ app *App }
+type reviewDispatcher struct {
+	app          *App
+	queuedNotice outboundCardService
+}
 
 func (d reviewDispatcher) StartNext(key string) error {
 	return d.app.bindings.Submissions.StartNextSubmission(key)
@@ -129,10 +133,10 @@ func (d reviewDispatcher) MarkQueued(sub *domainsubmission.Submission) {
 	d.app.bindings.PendingQueue.MarkSubmissionQueuedReactions(sub)
 }
 func (d reviewDispatcher) Notify(ctx context.Context, sub *domainsubmission.Submission) {
-	sendSubmissionQueuedNotice(d.app, ctx, sub)
+	d.queuedNotice.sendSubmissionQueuedNotice(ctx, sub)
 }
 func ReviewPorts(a *App) reviewapp.Dependencies {
-	return reviewapp.Dependencies{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Options: reviewOptions{app: a}, Gateway: func() (reviewapp.Gateway, error) { return requireCodexGateway(a) }, Repository: a.State(), Resolver: reviewTargetResolver{app: a}, Dispatcher: reviewDispatcher{app: a}}
+	return reviewapp.Dependencies{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Options: reviewOptions{app: a}, Gateway: func() (reviewapp.Gateway, error) { return requireCodexGateway(a) }, Repository: a.State(), Resolver: reviewTargetResolver{app: a}, Dispatcher: reviewDispatcher{app: a, queuedNotice: newOutboundCardService(a)}}
 }
 
 type reviewOptions struct{ app *App }

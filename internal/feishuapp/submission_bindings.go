@@ -221,6 +221,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 	workspaceSelection := a.bindings.WorkspaceSelection
 	defaultWorkspaceID := func() string { return configView.defaultWorkspaceID() }
 	runtime := runtimeView{owner: runtimeOwner}
+	queuedNotice := newOutboundCardService(a)
 	return appsubmission.Dependencies{
 		PlanConfirmation: plan,
 		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
@@ -267,7 +268,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			return replyTextByAnchorEffect(ctx, a, messageID, text, inThread)
 		},
 		SendQueuedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
-			sendSubmissionQueuedNotice(a, ctx, sub)
+			queuedNotice.sendSubmissionQueuedNotice(ctx, sub)
 		},
 		RunSessionAsync: func(sessionKey string, fn func()) {
 			if fn == nil {

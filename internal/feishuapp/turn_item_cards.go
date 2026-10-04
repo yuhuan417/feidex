@@ -16,11 +16,11 @@ func replyInThreadForSubmission(_ *domainsubmission.Submission) bool {
 	return false
 }
 
-func sendSubmissionQueuedNotice(a *App, ctx context.Context, sub *domainsubmission.Submission) {
+func (s outboundCardService) sendSubmissionQueuedNotice(ctx context.Context, sub *domainsubmission.Submission) {
 	if sub == nil {
 		return
 	}
-	sendTurnEventMessages(a, ctx, sub, "已加入队列，等待当前任务结束后开始处理。", replyInThreadForSubmission(sub), "turn_queued")
+	s.replyChunks.SendMessagesWithReuse(ctx, sub, "已加入队列，等待当前任务结束后开始处理。", replyInThreadForSubmission(sub), "turn_queued", "")
 }
 
 func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *domainsubmission.Submission) {

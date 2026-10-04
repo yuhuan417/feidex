@@ -63,7 +63,7 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	}
 
 	before := len(ff.replyCards)
-	sendSubmissionQueuedNotice(a, context.Background(), sub)
+	newOutboundCardService(a).sendSubmissionQueuedNotice(context.Background(), sub)
 	if len(ff.replyCards) != before+1 {
 		t.Fatalf("sendSubmissionQueuedNotice() replyCards = %d, want %d", len(ff.replyCards), before+1)
 	}
