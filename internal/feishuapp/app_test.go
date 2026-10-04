@@ -629,7 +629,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
-	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {

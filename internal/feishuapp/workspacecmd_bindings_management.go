@@ -17,13 +17,13 @@ var workspaceGitClone = appworkspacecmd.GitClone
 
 // buildWorkspaceManagementService takes the card presentation and conversation
 // service as construction-time inputs; see buildWorkspaceConfigService.
-func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service) *appworkspacecmd.ManagementService {
+func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service, scope BindingScope) *appworkspacecmd.ManagementService {
 	if a == nil {
 		return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{})
 	}
 
 	st := a.State()
-	bindingScope := a.bindings.BindingCommands.scope
+	bindingScope := scope.scope
 	threadMarker := liveThreadMarker{
 		tracker: a.runtimeOwner.LiveThreads, state: st,
 		announcement: a.bindings.AnnouncementQuery, refreshes: a.runtimeOwner.Announcements,

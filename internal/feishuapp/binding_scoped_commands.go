@@ -42,6 +42,16 @@ type bindingSessionScope struct {
 	frontendID          string
 }
 
+type BindingScope struct {
+	scope bindingSessionScope
+}
+
+func NewBindingScope(state *appstate.Store, normalizeSessionKey func(string) string, primary applicationrouting.Service, frontendID string) BindingScope {
+	return BindingScope{scope: bindingSessionScope{
+		state: state, normalizeSessionKey: normalizeSessionKey, primary: primary, frontendID: frontendID,
+	}}
+}
+
 func (s bindingSessionScope) chat(sessionKey string) (chatType, chatID string) {
 	sessionKey = strings.TrimSpace(sessionKey)
 	chatType, chatID = sessionKeyChat(sessionKey)

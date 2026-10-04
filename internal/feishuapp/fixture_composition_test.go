@@ -413,7 +413,7 @@ func prepareTestApp(a *App) *App {
 		ContinueClaude:            a.bindings.Continuation.ContinueClaudeSessionWithText,
 	})}
 	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
-	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 	a.bindings.Upgrades = BuildUpgrades(a, a.bindings.WorkspaceConfiguration)
 	actors, replayRunner := BindingReplayPorts(a.sessionActorRuntime(), a.runtimeOwner)
 	a.bindings.BindingReplay = runtime.BindingReplay{Service: a.bindings.BindingPending, Runner: replayRunner, Actors: actors}

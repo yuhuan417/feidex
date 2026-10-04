@@ -104,6 +104,18 @@ ForwardInputs        eager→[]                  lazy→[]
 BackendFailure owner，恢复完成回调只调用已赋值的 function slot。
 **判断环时必须区分 eager 与 lazy，否则会把已解决的当成未解决。**
 
+### BindingCommands 与 WorkspaceManagement 的反向边（已拆）
+
+`BindingCommands` 的命令和 callback 会在运行期使用 `WorkspaceManagement`；反向边
+原本只有一个构造依赖：`WorkspaceManagement` 从 `BindingCommands.scope` 读取
+binding session scope。它不需要整个命令 service，只需要 state、session-key normalizer、
+Primary owner 与 frontend ID。
+
+composition 现在通过 `feishuapp.NewBindingScope` 独立组装该值，先构造
+`WorkspaceManagement`，再构造 `BindingCommands`。workspace builder 不再读取
+`bindings.BindingCommands`，因此图中只保留运行期的 `BindingCommands → WorkspaceManagement`
+服务依赖，构造顺序可拓扑排序；没有新增 lazy binding read。
+
 ### 当时唯一剩下的真环（已解决）
 
 ```

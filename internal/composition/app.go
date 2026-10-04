@@ -155,7 +155,10 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}
 	bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: frontend}}
 	bindings.ModelCommands = feishuapp.BuildModelCommands(frontend)
-	bindings.BindingCommands = feishuapp.BuildBindingCommands(frontend)
+	frontendIDForBindingScope := frontend.FrontendID()
+	bindingScope := feishuapp.NewBindingScope(frontend.State(), func(key string) string {
+		return identity.CanonicalSessionKey(frontendIDForBindingScope, key)
+	}, bindings.Primary, frontendIDForBindingScope)
 	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner)
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 
@@ -434,7 +437,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// the conversation service at construction, so they are built once those
 	// bindings exist.
 	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend, bindings.WorkspacePresentation, bindings.Conversations)
-	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend, bindings.WorkspacePresentation, bindings.Conversations)
+	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend, bindings.WorkspacePresentation, bindings.Conversations, bindingScope)
+	bindings.BindingCommands = feishuapp.BuildBindingCommands(frontend)
 	bindings.Upgrades = feishuapp.BuildUpgrades(frontend, bindings.WorkspaceConfiguration)
 	actors, replayRunner := feishuapp.BindingReplayPorts(scope.RuntimeOwner.SessionActors, scope.RuntimeOwner)
 	bindings.BindingReplay = runtime.BindingReplay{Service: bindings.BindingPending, Runner: replayRunner, Actors: actors}
