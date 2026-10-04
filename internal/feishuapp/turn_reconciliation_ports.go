@@ -13,10 +13,10 @@ func TurnReconciliationGateway(runtimeDeps BackendRuntimeDeps) turn.Reconciliati
 	return turnReconciliationGateway{runtimeDeps: runtimeDeps}
 }
 
-func ClaudeSessionStopped(a *App) func(string) bool {
+func ClaudeSessionStopped(backend func() string, core func() ClaudeCore) func(string) bool {
 	return func(key string) bool {
-		core := a.runtimeView().currentClaudeCore()
-		return core != nil && a.configView().configuredBackend() == "claude" && core.SessionStopped(key)
+		current := core()
+		return current != nil && backend() == "claude" && current.SessionStopped(key)
 	}
 }
 func (p turnReconciliationGateway) Available() bool {
