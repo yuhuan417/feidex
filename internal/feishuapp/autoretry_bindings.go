@@ -56,7 +56,7 @@ func AutoRetryPorts(a *App, view retryview.Service) retry.Dependencies {
 		SaveEnabled: a.bindings.RuntimeSettings.SetAutoRetry,
 		Recovering: func() bool {
 			runtime := backendRuntime(a)
-			return runtime != nil && runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a))
+			return runtime != nil && runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a.BackendRuntimeDeps()))
 		},
 		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
 		Workspace:          func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },

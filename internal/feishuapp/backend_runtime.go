@@ -10,66 +10,63 @@ import (
 	backendruntime "feidex/internal/runtime"
 )
 
-func backendRuntimeContextForApp(a *App) backendruntime.BackendContext {
-	if a == nil {
-		return backendruntime.BackendContext{}
-	}
+func backendRuntimeContextForApp(d BackendRuntimeDeps) backendruntime.BackendContext {
 	ctx := backendruntime.BackendContext{
-		Backend:    a.configView().configuredBackend(),
-		FrontendID: a.frontendID,
-		Cfg:        a.cfg,
+		Backend:    d.view.configuredBackend(),
+		FrontendID: d.frontendID,
+		Cfg:        d.cfg,
 		// Do not ask RecoveryService for its current client while recovery is
 		// holding its mutex (startup recovery calls back into this context).
-		Codex:  a.runtimeView().getCodex(),
-		Claude: a.runtimeView().currentClaudeCore(),
+		Codex:  d.runtime.getCodex(),
+		Claude: d.runtime.currentClaudeCore(),
 	}
-	ctx.BeginStartupRecoveryScope = func() func() { return beginCodexAutoThreadRecoveryScope(a.bindings.CodexRecovery) }
+	ctx.BeginStartupRecoveryScope = func() func() { return beginCodexAutoThreadRecoveryScope(d.codexRecovery) }
 	ctx.ReconcileCompletedTurn = func(key string, sess *conversation.Session) *conversation.Session {
-		return reconcileCompletedCodexTurnFromFinalOutput(a.bindings.TurnReconciliation, key, sess)
+		return reconcileCompletedCodexTurnFromFinalOutput(d.turnReconciliation, key, sess)
 	}
 	ctx.ReconcileClaudeCompletedTurn = func(key string, sess *conversation.Session) *conversation.Session {
-		return a.bindings.ClaudeReconciliation.Reconcile(key, sess)
+		return d.claudeReconciliation.Reconcile(key, sess)
 	}
 	ctx.ClearActiveOperations = func(key string, sess *conversation.Session) *conversation.Session {
-		return a.bindings.Conversations.ClearInterruptedOperations(key, sess)
+		return d.conversations.ClearInterruptedOperations(key, sess)
 	}
 	ctx.BuildCodexClient = func() CodexClient {
-		if a.cfg == nil {
+		if d.cfg == nil {
 			return nil
 		}
-		return newCodexClient(a.cfg.Codex)
+		return newCodexClient(d.cfg.Codex)
 	}
-	ctx.ConfigureCodexClient = func(client CodexClient) { configureCodexClientRuntime(a.BackendRuntimeDeps(), client) }
+	ctx.ConfigureCodexClient = func(client CodexClient) { configureCodexClientRuntime(d, client) }
 	ctx.NewClaudeCore = func() ClaudeCore {
-		if a.cfg == nil {
+		if d.cfg == nil {
 			return nil
 		}
-		return newClaudeCore(a, a.cfg.Claude)
+		return newClaudeCore(d.claudeFactory, d.cfg.Claude)
 	}
 	ctx.StartCodex = func(startCtx context.Context, client CodexClient) error {
-		if client == nil || a.cfg == nil {
+		if client == nil || d.cfg == nil {
 			return nil
 		}
-		return client.Start(startCtx, a.cfg.Codex.ExperimentalAPI)
+		return client.Start(startCtx, d.cfg.Codex.ExperimentalAPI)
 	}
-	ctx.CodexMaintenanceActive = func() bool { return a.bindings.Maintenance.CodexMaintenanceActive() }
-	ctx.ClaudeMaintenanceActive = func() bool { return a.bindings.Maintenance.ClaudeMaintenanceActive() }
+	ctx.CodexMaintenanceActive = func() bool { return d.maintenance.CodexMaintenanceActive() }
+	ctx.ClaudeMaintenanceActive = func() bool { return d.maintenance.ClaudeMaintenanceActive() }
 	ctx.MaintenanceBlocksCommand = func(raw string) error {
-		if a.configView().configuredBackend() == domainbackend.BackendClaude {
-			return a.bindings.Maintenance.ClaudeMaintenanceBlocksCommand(raw)
+		if d.view.configuredBackend() == domainbackend.BackendClaude {
+			return d.maintenance.ClaudeMaintenanceBlocksCommand(raw)
 		}
-		return a.bindings.Maintenance.CodexMaintenanceBlocksCommand(raw)
+		return d.maintenance.CodexMaintenanceBlocksCommand(raw)
 	}
-	ctx.DeferQueuedSubmissionsRecovery = func() bool { return codexRuntimeRecovering(a.bindings.CodexRecovery) }
+	ctx.DeferQueuedSubmissionsRecovery = func() bool { return codexRuntimeRecovering(d.codexRecovery) }
 	ctx.DropThreadLineageAfterFailure = func(err error) bool {
-		return domainbackend.DropCodexLineageAfterFailure(codexRuntimeRecovering(a.bindings.CodexRecovery), errorText(err))
+		return domainbackend.DropCodexLineageAfterFailure(codexRuntimeRecovering(d.codexRecovery), errorText(err))
 	}
 	ctx.HandleTransportFailure = func(sessionKey, threadID string, err error) {
-		if a.configView().configuredBackend() == domainbackend.BackendClaude {
-			failClaudeSessionActiveWork(a.bindings.BackendFailure, sessionKey, threadID, err)
+		if d.view.configuredBackend() == domainbackend.BackendClaude {
+			failClaudeSessionActiveWork(d.backendFailure, sessionKey, threadID, err)
 			return
 		}
-		failBackendActiveWork(a, domainbackend.BackendCodex, sessionKey, threadID, errorText(err))
+		failBackendActiveWork(d, domainbackend.BackendCodex, sessionKey, threadID, errorText(err))
 	}
 	return ctx
 }
@@ -110,7 +107,7 @@ func buildBackendRuntimeHandle(a *App, target string) (*backendruntime.BackendHa
 	if backend == nil {
 		return nil, fmt.Errorf("unsupported backend %q", target)
 	}
-	return backend.BuildRuntime(backendRuntimeContextForApp(a)), nil
+	return backend.BuildRuntime(backendRuntimeContextForApp(a.BackendRuntimeDeps())), nil
 }
 
 func startPreparedBackendRuntime(a *App, ctx context.Context, handle *backendruntime.BackendHandle) error {
@@ -121,7 +118,7 @@ func startPreparedBackendRuntime(a *App, ctx context.Context, handle *backendrun
 	if backend == nil {
 		return nil
 	}
-	return backend.StartRuntime(ctx, backendRuntimeContextForApp(a), handle)
+	return backend.StartRuntime(ctx, backendRuntimeContextForApp(a.BackendRuntimeDeps()), handle)
 }
 
 func prepareBackendRuntime(a *App, ctx context.Context, target string) (*backendruntime.BackendHandle, error) {

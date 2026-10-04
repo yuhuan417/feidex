@@ -80,7 +80,7 @@ func (p inboundBackend) BlockedReason() string {
 }
 func (p inboundBackend) CheckMaintenance() error {
 	if owner := backendRuntime(p.app); owner != nil {
-		return owner.MaintenanceBlocksCommand(backendRuntimeContextForApp(p.app), "")
+		return owner.MaintenanceBlocksCommand(backendRuntimeContextForApp(p.app.BackendRuntimeDeps()), "")
 	}
 	return nil
 }

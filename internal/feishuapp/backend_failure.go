@@ -66,18 +66,18 @@ func errorText(err error) string {
 	return backendfailure.ErrorText(err)
 }
 
-func failBackendActiveWork(a *App, backend, scopeSessionKey, scopeThreadID, message string) {
-	if a == nil || a.store == nil {
+func failBackendActiveWork(d BackendRuntimeDeps, backend, scopeSessionKey, scopeThreadID, message string) {
+	if d.store == nil {
 		return
 	}
-	a.bindings.BackendFailure.FailBackendActiveWork(backend, scopeSessionKey, scopeThreadID, message)
+	d.backendFailure.FailBackendActiveWork(backend, scopeSessionKey, scopeThreadID, message)
 }
 
-func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, message string) {
-	if a == nil || a.store == nil || sub == nil {
+func failSubmissionWithoutTerminalCompletion(d BackendRuntimeDeps, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, message string) {
+	if d.store == nil || sub == nil {
 		return
 	}
-	a.bindings.BackendFailure.FailSubmissionWithoutTerminalCompletion(sessionKey, sub, threadID, turnID, message)
+	d.backendFailure.FailSubmissionWithoutTerminalCompletion(sessionKey, sub, threadID, turnID, message)
 }
 
 // BackendFailurePorts maps runtime and presentation effects to the failure use case.

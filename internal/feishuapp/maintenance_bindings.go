@@ -18,7 +18,7 @@ func StartupRecoveryPorts(a *App) maintenance.RecoveryDependencies {
 		BackendConfigured: func() bool { return a.configView().hasConfiguredBackend() },
 		BeginRecovery: func() func() {
 			if runtime := backendRuntime(a); runtime != nil {
-				return runtime.BeginStartupRecoveryScope(backendRuntimeContextForApp(a))
+				return runtime.BeginStartupRecoveryScope(backendRuntimeContextForApp(a.BackendRuntimeDeps()))
 			}
 			return func() {}
 		},

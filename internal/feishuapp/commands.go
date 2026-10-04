@@ -30,7 +30,7 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 		return conversation.NewWarning(reason)
 	}
 	if runtime := backendRuntime(a); runtime != nil {
-		if err := runtime.MaintenanceBlocksCommand(backendRuntimeContextForApp(a), raw); err != nil {
+		if err := runtime.MaintenanceBlocksCommand(backendRuntimeContextForApp(a.BackendRuntimeDeps()), raw); err != nil {
 			return err
 		}
 	}

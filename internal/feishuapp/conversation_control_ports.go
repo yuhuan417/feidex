@@ -30,14 +30,14 @@ func (r conversationRuntimeControl) Reconcile(key string, sess *conversation.Ses
 	if runtime == nil {
 		return sess
 	}
-	return runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(r.app), key, sess)
+	return runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(r.app.BackendRuntimeDeps()), key, sess)
 }
 func (r conversationRuntimeControl) Interrupted(key string, sess *conversation.Session) *conversation.Session {
 	runtime := backendRuntime(r.app)
 	if runtime == nil {
 		return sess
 	}
-	return runtime.ClearActiveOperationsAfterInterruptContext(backendRuntimeContextForApp(r.app), key, sess)
+	return runtime.ClearActiveOperationsAfterInterruptContext(backendRuntimeContextForApp(r.app.BackendRuntimeDeps()), key, sess)
 }
 func (r conversationRuntimeControl) Interrupt(ctx context.Context, key string, sess *conversation.Session) error {
 	return interruptConversation(r.app, ctx, key, sess)

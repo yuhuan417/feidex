@@ -194,7 +194,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		return client
 	}
 	createdClaude := []*fakeClaudeCore{}
-	newClaudeCore = func(_ *App, _ config.ClaudeConfig) ClaudeCore {
+	newClaudeCore = func(_ func(config.ClaudeConfig) ClaudeCore, _ config.ClaudeConfig) ClaudeCore {
 		client := &fakeClaudeCore{}
 		createdClaude = append(createdClaude, client)
 		return client
@@ -322,7 +322,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		}
 		return client
 	}
-	newClaudeCore = func(_ *App, _ config.ClaudeConfig) ClaudeCore {
+	newClaudeCore = func(_ func(config.ClaudeConfig) ClaudeCore, _ config.ClaudeConfig) ClaudeCore {
 		return &fakeClaudeCore{}
 	}
 

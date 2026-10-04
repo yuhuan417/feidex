@@ -40,7 +40,7 @@ type claudeInstallManager interface {
 
 var (
 	newCodexClient   = func(cfg config.CodexConfig) CodexClient { return codexrpc.New(cfg) }
-	newClaudeCore    func(*App, config.ClaudeConfig) ClaudeCore
+	newClaudeCore    func(func(config.ClaudeConfig) ClaudeCore, config.ClaudeConfig) ClaudeCore
 	newFeishuClient  = func(cfg config.FeishuConfig) FeishuClient { return feishu.New(cfg) }
 	newDaemonManager = daemon.NewManager
 	newReleaseClient = func() releaseClient {
@@ -58,5 +58,7 @@ var (
 // now share one dispatch graph, so eagerly binding these mutable test seams
 // would create a Go global-initialization cycle through command handlers.
 func init() {
-	newClaudeCore = func(a *App, cfg config.ClaudeConfig) ClaudeCore { return a.bindings.ClaudeFactory(cfg) }
+	newClaudeCore = func(factory func(config.ClaudeConfig) ClaudeCore, cfg config.ClaudeConfig) ClaudeCore {
+		return factory(cfg)
+	}
 }

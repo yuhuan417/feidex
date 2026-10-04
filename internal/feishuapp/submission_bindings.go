@@ -91,19 +91,19 @@ type sqBackendRuntimeFullAdapter struct{ app *App }
 
 func (a sqBackendRuntimeFullAdapter) ReconcileCompletedTurnFromFinalOutput(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app), sessionKey, sess)
+		return runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app.BackendRuntimeDeps()), sessionKey, sess)
 	}
 	return sess
 }
 func (a sqBackendRuntimeFullAdapter) DropThreadLineageAfterStartFailure(err error) bool {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.DropThreadLineageAfterStartFailure(backendRuntimeContextForApp(a.app), err)
+		return runtime.DropThreadLineageAfterStartFailure(backendRuntimeContextForApp(a.app.BackendRuntimeDeps()), err)
 	}
 	return false
 }
 func (a sqBackendRuntimeFullAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
 	if runtime := backendRuntime(a.app); runtime != nil {
-		return runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a.app))
+		return runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a.app.BackendRuntimeDeps()))
 	}
 	return false
 }

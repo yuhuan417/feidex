@@ -58,7 +58,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				})
 			},
 			FailBackendActiveWork: func(backend, sessionKey, threadID, message string) {
-				failBackendActiveWork(app, backend, sessionKey, threadID, message)
+				failBackendActiveWork(app.BackendRuntimeDeps(), backend, sessionKey, threadID, message)
 			},
 		},
 		TurnStream: appclauderuntime.TurnStreamDeps{

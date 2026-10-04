@@ -11,6 +11,7 @@ import (
 	"feidex/internal/config"
 	frontendruntime "feidex/internal/runtime"
 	appcodexruntime "feidex/internal/runtime/codex"
+	"feidex/internal/state"
 )
 
 // BackendRuntimeDeps is what the backend runtime context and the Codex
@@ -39,6 +40,8 @@ type BackendRuntimeDeps struct {
 	maintenance          backendmaintenance.MaintenanceStateService
 	backendFailure       *backendfailure.BackendFailureService
 	mcp                  *feidexMCPService
+	store                *state.Store
+	claudeFactory        func(config.ClaudeConfig) ClaudeCore
 }
 
 // BackendRuntimeDeps snapshots the bundle. It is the single conversion point:
@@ -69,6 +72,8 @@ func (a *App) BackendRuntimeDeps() BackendRuntimeDeps {
 		d.maintenance = a.bindings.Maintenance
 		d.backendFailure = a.bindings.BackendFailure
 		d.mcp = a.bindings.MCP
+		d.claudeFactory = a.bindings.ClaudeFactory
+		d.store = a.store
 	}
 	return d
 }

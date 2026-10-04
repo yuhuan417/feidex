@@ -104,7 +104,7 @@ func availableBackendsForApp(app *App) []backend.AvailableBackend {
 	}
 	out := make([]backend.AvailableBackend, 0, 2)
 	for _, runtime := range backendruntime.Backends() {
-		command := runtime.ConfiguredCommand(backendRuntimeContextForApp(app))
+		command := runtime.ConfiguredCommand(backendRuntimeContextForApp(app.BackendRuntimeDeps()))
 		if command == "" {
 			continue
 		}
@@ -145,7 +145,7 @@ func snapshotRuntimeForApp(app *App) *backend.BackendRuntimeHandle {
 
 func backendRuntimeReadyForApp(app *App, target string) bool {
 	if runtime := backendruntime.BackendForKind(target); runtime != nil {
-		return runtime.RuntimeReady(backendRuntimeContextForApp(app))
+		return runtime.RuntimeReady(backendRuntimeContextForApp(app.BackendRuntimeDeps()))
 	}
 	return false
 }

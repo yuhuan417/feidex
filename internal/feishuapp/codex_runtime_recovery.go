@@ -31,7 +31,7 @@ func CodexRecoveryPorts(a *App) appcodexruntime.RecoveryDependencies {
 			if detail := strings.TrimSpace(errorText(cause)); detail != "" {
 				message = "Codex 后端异常退出：" + detail
 			}
-			failBackendActiveWork(a, domainbackend.BackendCodex, "", "", message)
+			failBackendActiveWork(a.BackendRuntimeDeps(), domainbackend.BackendCodex, "", "", message)
 		},
 		StartVerifiedCodexClient: func(ctx context.Context) (appcodexruntime.CodexClient, error) {
 			return a.bindings.CodexUpgrade.StartVerifiedCodexClient(ctx)

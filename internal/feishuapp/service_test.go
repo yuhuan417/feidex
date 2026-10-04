@@ -30,7 +30,7 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 		return &fakeFeishuClient{}
 	}
 	claudeClients := []*fakeClaudeCore{}
-	newClaudeCore = func(_ *App, _ config.ClaudeConfig) ClaudeCore {
+	newClaudeCore = func(_ func(config.ClaudeConfig) ClaudeCore, _ config.ClaudeConfig) ClaudeCore {
 		client := &fakeClaudeCore{}
 		claudeClients = append(claudeClients, client)
 		return client
@@ -114,7 +114,7 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 		return &fakeCodexClient{}
 	}
 	claudeCalls := 0
-	newClaudeCore = func(_ *App, _ config.ClaudeConfig) ClaudeCore {
+	newClaudeCore = func(_ func(config.ClaudeConfig) ClaudeCore, _ config.ClaudeConfig) ClaudeCore {
 		claudeCalls++
 		return &fakeClaudeCore{}
 	}
