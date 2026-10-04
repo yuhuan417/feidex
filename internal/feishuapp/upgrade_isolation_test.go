@@ -29,7 +29,7 @@ func TestUpgradeCommandRemainsAvailableWithoutCodexOrSessionState(t *testing.T) 
 	}()
 
 	a, ff, _ := newTestApp(t)
-	setCodex(a, nil)
+	a.runtimeView().setCodex(nil)
 	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 
 	newReleaseClient = func() releaseClient {
@@ -84,7 +84,7 @@ func TestUpgradeLocalPathCommandRemainsAvailableWithoutCodexOrSessionState(t *te
 	}()
 
 	a, ff, _ := newTestApp(t)
-	setCodex(a, nil)
+	a.runtimeView().setCodex(nil)
 	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 
 	newDaemonManager = func(string) (daemon.Manager, error) {
@@ -136,7 +136,7 @@ func TestUpgradeConfirmationRemainsAvailableWithoutCodexOrSessionState(t *testin
 	defer func() { startDaemonUpgrade = origUpgrade }()
 
 	a, _, _ := newTestApp(t)
-	setCodex(a, nil)
+	a.runtimeView().setCodex(nil)
 	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 
 	if err := a.store.UpsertPending(&state.PendingRequest{

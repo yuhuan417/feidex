@@ -18,7 +18,7 @@ import (
 func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
+	a.runtimeView().setCodex(nil)
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
 
@@ -59,8 +59,8 @@ func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
-	setClaudeCore(a, &fakeClaudeCore{})
+	a.runtimeView().setCodex(nil)
+	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -86,8 +86,8 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
-	setClaudeCore(a, &fakeClaudeCore{})
+	a.runtimeView().setCodex(nil)
+	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -143,9 +143,9 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
+	a.runtimeView().setCodex(nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true, ensureSessionID: "session-resume-1"}
-	setClaudeCore(a, claude)
+	a.runtimeView().setClaudeCore(claude)
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -188,8 +188,8 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
-	setClaudeCore(a, &fakeClaudeCore{})
+	a.runtimeView().setCodex(nil)
+	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
 	altCwd := t.TempDir()
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: altCwd, ApprovalPolicy: "never", SandboxMode: "read-only"})
 

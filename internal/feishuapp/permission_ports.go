@@ -13,7 +13,7 @@ func PermissionTasks(a *App) threadsettings.PermissionTasks     { return permiss
 func PermissionFailure(a *App) threadsettings.PermissionFailure { return permissionPorts{app: a} }
 
 func (p permissionPorts) ApplyPermission(ctx context.Context, key, mode string) error {
-	core := currentClaudeCore(p.app)
+	core := p.app.runtimeView().currentClaudeCore()
 	if core == nil || p.app.configView().configuredBackend() != domainbackend.BackendClaude {
 		return nil
 	}

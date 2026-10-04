@@ -32,7 +32,7 @@ func CodexUpgradePorts(a *App) appcodexruntime.UpgradeDependencies {
 			return a.bindings.CodexUpgrade.CodexSmokeTest(ctx)
 		},
 		CurrentClient: func() appcodexruntime.CodexClient {
-			return currentCodexClient(a)
+			return a.runtimeView().currentCodexClient()
 		},
 		ReplaceClient: func(next appcodexruntime.CodexClient) appcodexruntime.CodexClient {
 			return replaceCodexClient(a.bindings.CodexRecovery, next)

@@ -306,7 +306,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 	a, ff, _ := newTestApp(t)
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
+	a.runtimeView().setCodex(nil)
 	claude := &blockingClaudeCompactCore{
 		fakeClaudeCore: &fakeClaudeCore{},
 		started:        make(chan struct{}, 1),
@@ -319,7 +319,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 			close(claude.release)
 		}
 	}()
-	setClaudeCore(a, claude)
+	a.runtimeView().setClaudeCore(claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{

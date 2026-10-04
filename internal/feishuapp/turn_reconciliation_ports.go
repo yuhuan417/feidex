@@ -15,12 +15,12 @@ func TurnReconciliationGateway(a *App) turn.ReconciliationGateway {
 
 func ClaudeSessionStopped(a *App) func(string) bool {
 	return func(key string) bool {
-		core := currentClaudeCore(a)
+		core := a.runtimeView().currentClaudeCore()
 		return core != nil && a.configView().configuredBackend() == "claude" && core.SessionStopped(key)
 	}
 }
 func (p turnReconciliationGateway) Available() bool {
-	return p.app.configView().configuredBackend() == "codex" && currentCodexClient(p.app) != nil
+	return p.app.configView().configuredBackend() == "codex" && p.app.runtimeView().currentCodexClient() != nil
 }
 func (p turnReconciliationGateway) ReadThreadTurns(ctx context.Context, threadID string) (backendops.ThreadTurns, error) {
 	gateway, err := requireCodexGateway(p.app)

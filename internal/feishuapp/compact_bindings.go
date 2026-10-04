@@ -30,7 +30,7 @@ func CompactionPorts(a *App) compaction.Dependencies {
 	st := a.State()
 	return compaction.Dependencies{
 		Context: a.Context, Repository: compactSessionStoreAdapter{Session: st.Session, Sessions: st.Sessions, Save: st.SaveSession},
-		Gateway: compactGateway{client: func() (CodexClient, error) { return requireCodexClient(a) }},
+		Gateway: compactGateway{client: func() (CodexClient, error) { return a.runtimeView().requireCodexClient() }},
 		Notices: func(ctx context.Context, sess *conversation.Session, text string) {
 			if a.feishu != nil && sess.ChatID != "" {
 				_ = sendTextEffect(ctx, a, sess.ChatID, text)

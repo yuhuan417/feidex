@@ -20,8 +20,8 @@ func backendRuntimeContextForApp(a *App) backendruntime.BackendContext {
 		Cfg:        a.cfg,
 		// Do not ask RecoveryService for its current client while recovery is
 		// holding its mutex (startup recovery calls back into this context).
-		Codex:  getCodex(a),
-		Claude: currentClaudeCore(a),
+		Codex:  a.runtimeView().getCodex(),
+		Claude: a.runtimeView().currentClaudeCore(),
 	}
 	ctx.BeginStartupRecoveryScope = func() func() { return beginCodexAutoThreadRecoveryScope(a.bindings.CodexRecovery) }
 	ctx.ReconcileCompletedTurn = func(key string, sess *conversation.Session) *conversation.Session {
@@ -86,7 +86,7 @@ func currentBackendRuntimeHandle(a *App) *backendruntime.BackendHandle {
 		return nil
 	}
 	return &backendruntime.BackendHandle{
-		Backend: a.configView().configuredBackend(), Codex: currentCodexClient(a), Claude: currentClaudeCore(a),
+		Backend: a.configView().configuredBackend(), Codex: a.runtimeView().currentCodexClient(), Claude: a.runtimeView().currentClaudeCore(),
 	}
 }
 
@@ -97,12 +97,12 @@ func installBackendRuntime(a *App, h *backendruntime.BackendHandle) {
 	if h == nil {
 		setRuntimeBackend(a, "")
 		replaceCodexClient(a.bindings.CodexRecovery, nil)
-		setClaudeCore(a, nil)
+		a.runtimeView().setClaudeCore(nil)
 		return
 	}
 	setRuntimeBackend(a, h.Backend)
 	replaceCodexClient(a.bindings.CodexRecovery, h.Codex)
-	setClaudeCore(a, h.Claude)
+	a.runtimeView().setClaudeCore(h.Claude)
 }
 
 func buildBackendRuntimeHandle(a *App, target string) (*backendruntime.BackendHandle, error) {

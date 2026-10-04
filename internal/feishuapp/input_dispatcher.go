@@ -115,7 +115,7 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 		transport = a.transport
 	}
 	runner := feishuoutbound.NewEffectRunner(transport)
-	if owner := ensureRuntimeOwner(a); owner != nil {
+	if owner := a.runtimeView().ensureRuntimeOwner(); owner != nil {
 		runner.Deduper = owner.EffectDeduper
 	}
 	runner.Save = func(ctx context.Context, e application.SaveState) error {
@@ -144,7 +144,7 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 		if e.Backend != domainbackend.BackendCodex {
 			return fmt.Errorf("unsupported response backend %q", e.Backend)
 		}
-		client, err := requireCodexClient(a)
+		client, err := a.runtimeView().requireCodexClient()
 		if err != nil {
 			return err
 		}

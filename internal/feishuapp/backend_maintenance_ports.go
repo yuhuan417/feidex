@@ -71,7 +71,7 @@ func ClaudeMaintenancePorts(a *App) (func(context.Context) error, func() bool, f
 		return clauderuntime.Smoke(ctx, a.Context(), cfg.Claude, workdir)
 	}
 	active := func() bool { return a.configView().configuredBackend() == "claude" }
-	current := func() interface{ Close() error } { return currentClaudeCore(a) }
-	create := func() { setClaudeCore(a, a.bindings.ClaudeFactory(modelConfigReadCopy(a).Claude)) }
+	current := func() interface{ Close() error } { return a.runtimeView().currentClaudeCore() }
+	create := func() { a.runtimeView().setClaudeCore(a.bindings.ClaudeFactory(modelConfigReadCopy(a).Claude)) }
 	return smoke, active, current, create
 }

@@ -68,16 +68,16 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 			backend := pendingBackend(a, pending)
 			switch normalizeRuntimeBackend(backend) {
 			case domainbackend.BackendCodex:
-				client := currentCodexClient(a)
+				client := a.runtimeView().currentCodexClient()
 				if client == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
 				return interactionreply.NewCodexAdapter(codexEffectReplyClient{app: a}, backend)
 			case domainbackend.BackendClaude:
-				if currentClaudeCore(a) == nil {
+				if a.runtimeView().currentClaudeCore() == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
-				return interactionreply.NewClaudeAdapter(claudeReplyClientShim{claude: currentClaudeCore(a)}, backend)
+				return interactionreply.NewClaudeAdapter(claudeReplyClientShim{claude: a.runtimeView().currentClaudeCore()}, backend)
 			default:
 				return interactionreply.NewUnsupportedAdapter(backend)
 			}

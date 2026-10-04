@@ -10,7 +10,7 @@ func (p modelDefaultsPublisher) PublishDefaults(backend string) {
 	if backend != "claude" {
 		return
 	}
-	if core := currentClaudeCore(p.app); core != nil {
+	if core := p.app.runtimeView().currentClaudeCore(); core != nil {
 		p.app.ConfigMu().RLock()
 		cfg := p.app.Config().Claude
 		p.app.ConfigMu().RUnlock()

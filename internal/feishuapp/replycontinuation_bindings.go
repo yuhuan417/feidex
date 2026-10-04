@@ -60,7 +60,7 @@ func ContinuationPorts(a *App) continuation.Dependencies {
 	}
 	deps.Context = a.Context
 	deps.Steer = func(ctx context.Context, threadID, turnID string, sub *domainsubmission.Submission) error {
-		client, err := requireCodexClient(a)
+		client, err := a.runtimeView().requireCodexClient()
 		if err != nil {
 			return err
 		}

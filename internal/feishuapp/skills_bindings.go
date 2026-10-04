@@ -48,7 +48,7 @@ func BuildSkillCommands(a *App) *skillsadapter.Service {
 		ReplyInThreadEnabled: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
 		FormatMenuBody:       menuCardBody, CommandLabel: commandLabel,
 		RunAsync: func(key string, work func()) bool {
-			return ensureRuntimeOwner(a).Lifecycle.Run(func() {
+			return a.runtimeView().ensureRuntimeOwner().Lifecycle.Run(func() {
 				a.sessionActorRuntime().Run("session:"+key, work)
 			}, a.asyncRunner)
 		},

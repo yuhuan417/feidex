@@ -43,7 +43,7 @@ func TestSkillsCallbacksAckBeforeReadingCatalog(t *testing.T) {
 
 func TestSkillsCallbackRejectedAfterShutdown(t *testing.T) {
 	a, ff, fc := newTestApp(t)
-	ensureRuntimeOwner(a).Lifecycle.Cancel()
+	a.runtimeView().ensureRuntimeOwner().Lifecycle.Cancel()
 	fc.callHook = func(context.Context, string, any, any) error {
 		t.Fatal("stopping frontend must not read catalog")
 		return nil

@@ -12,7 +12,7 @@ import (
 
 func StartupRecoveryPorts(a *App) maintenance.RecoveryDependencies {
 	return maintenance.RecoveryDependencies{
-		Context: a.Context, Repository: a.State(), RecoveryMu: &ensureRuntimeOwner(a).RecoveryMu,
+		Context: a.Context, Repository: a.State(), RecoveryMu: &a.runtimeView().ensureRuntimeOwner().RecoveryMu,
 		ResetLiveThreads:  func() { resetAppLiveThreadTracker(a) },
 		BelongsToFrontend: func(key string) bool { return a.configView().sessionBelongsToFrontend(key) },
 		BackendConfigured: func() bool { return a.configView().hasConfiguredBackend() },

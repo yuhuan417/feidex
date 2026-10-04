@@ -1282,8 +1282,8 @@ func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
 func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
-	setClaudeCore(a, &fakeClaudeCore{})
+	a.runtimeView().setCodex(nil)
+	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
 	sessionKey := "feishu:chat:chat"
 
 	toolsCard := renderToolsMenuCard(a, sessionKey)
@@ -1312,9 +1312,9 @@ func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 func TestClaudeStaleReviewMenuActionPassthroughsAndFallsBackToToolsMenu(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
+	a.runtimeView().setCodex(nil)
 	claude := &fakeClaudeCore{}
-	setClaudeCore(a, claude)
+	a.runtimeView().setClaudeCore(claude)
 	sessionKey := "feishu:chat:chat"
 
 	resp, err := newMenuActionService(a).completeMenuReview(&feishu.CardAction{

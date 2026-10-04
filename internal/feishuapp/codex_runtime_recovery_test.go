@@ -114,7 +114,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	close(blockStart)
 
 	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
-		current, ok := currentCodexClient(a).(*fakeCodexClient)
+		current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 		return ok && current == promoted && !codexRuntimeRecovering(a.bindings.CodexRecovery)
 	})
 	waitForTestCondition(t, "queued submission to start on recovered runtime", func() bool {
@@ -143,7 +143,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 
 func TestStartNextSubmissionDefersWhileCodexRuntimeRecovering(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	if !a.bindings.CodexRecovery.BeginRecovery(currentCodexClient(a)) {
+	if !a.bindings.CodexRecovery.BeginRecovery(a.runtimeView().currentCodexClient()) {
 		t.Fatal("recovery did not begin")
 	}
 
@@ -248,7 +248,7 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 	recoverFrontendRuntimeState(a.bindings.StartupRecovery)
 
 	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
-		current, ok := currentCodexClient(a).(*fakeCodexClient)
+		current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 		return ok && current == promoted && !codexRuntimeRecovering(a.bindings.CodexRecovery)
 	})
 
@@ -285,13 +285,13 @@ func TestCodexRecoveryIsFrontendScoped(t *testing.T) {
 	if !a.bindings.CodexRecovery.BeginRecovery(first) {
 		t.Fatal("first frontend recovery not admitted")
 	}
-	if codexRuntimeRecovering(b.bindings.CodexRecovery) || currentCodexClient(b) != second {
+	if codexRuntimeRecovering(b.bindings.CodexRecovery) || b.runtimeView().currentCodexClient() != second {
 		t.Fatal("recovery crossed frontend boundary")
 	}
-	if currentCodexClient(a) != nil {
+	if a.runtimeView().currentCodexClient() != nil {
 		t.Fatal("recovering frontend exposed failed client")
 	}
-	if require, err := requireCodexClient(prepareTestApp(&App{})); err == nil || require != nil {
+	if require, err := prepareTestApp(&App{}).runtimeView().requireCodexClient(); err == nil || require != nil {
 		t.Fatal("uninitialized frontend borrowed another frontend client")
 	}
 }

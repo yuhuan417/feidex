@@ -225,7 +225,7 @@ func SubmissionPorts(a *App) appsubmission.Dependencies {
 			return a.bindings.Review.StartSubmission(ctx, threadID, sub)
 		},
 		StartConversation: func(ctx context.Context, ws *config.Workspace, sess *conversation.Session, sub *domainsubmission.Submission, model string) (appsubmission.ConversationStarted, error) {
-			client, err := requireCodexClient(a)
+			client, err := a.runtimeView().requireCodexClient()
 			if err != nil {
 				return appsubmission.ConversationStarted{}, err
 			}
@@ -235,10 +235,10 @@ func SubmissionPorts(a *App) appsubmission.Dependencies {
 		ClaudePrompt:        claudeadapter.BuildPrompt,
 		Backend:             func() string { return a.configView().configuredBackend() },
 		ClaudeClient: func() appsubmission.QueueClaudeClient {
-			if currentClaudeCore(a) == nil {
+			if a.runtimeView().currentClaudeCore() == nil {
 				return nil
 			}
-			return claudeClientAdapter{claude: currentClaudeCore(a)}
+			return claudeClientAdapter{claude: a.runtimeView().currentClaudeCore()}
 		},
 		AgentBinding: func(chatType, chatID string) *state.AgentBinding {
 			return agentBindingForChat(a, chatType, chatID)

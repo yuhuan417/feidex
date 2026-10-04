@@ -94,7 +94,7 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func (a *App) beginLifecycle(ctx context.Context) {
-	ensureRuntimeOwner(a).Lifecycle.Begin(ctx)
+	a.runtimeView().ensureRuntimeOwner().Lifecycle.Begin(ctx)
 }
 
 func (a *App) Stop(ctx context.Context) error {
@@ -114,14 +114,14 @@ func (a *App) Context() context.Context {
 	if a == nil {
 		return context.Background()
 	}
-	return ensureRuntimeOwner(a).Lifecycle.Context()
+	return a.runtimeView().ensureRuntimeOwner().Lifecycle.Context()
 }
 
 func runAsync(a *App, fn func()) bool {
 	if fn == nil {
 		return false
 	}
-	return ensureRuntimeOwner(a).Lifecycle.Run(fn, a.asyncRunner)
+	return a.runtimeView().ensureRuntimeOwner().Lifecycle.Run(fn, a.asyncRunner)
 }
 
 func (a *App) HandleFeishuMessage(msg *feishu.InboundMessage) {

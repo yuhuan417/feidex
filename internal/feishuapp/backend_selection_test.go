@@ -362,7 +362,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 	if !codexRuntimeRecovering(app.bindings.CodexRecovery) {
 		t.Fatal("expected codex runtime to be marked recovering")
 	}
-	if got := currentCodexClient(app); got != nil {
+	if got := app.runtimeView().currentCodexClient(); got != nil {
 		t.Fatalf("currentCodexClient() = %#v, want nil while recovering", got)
 	}
 	if len(codexCalls) != 1 || codexCalls[0] != "thread/resume" {

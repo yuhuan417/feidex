@@ -25,9 +25,9 @@ func ConversationPorts(a *App) conversation.Dependencies {
 		Bindings: a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
 	}
 	s.Gateway = backendadapter.ConversationGateway{Selected: s.Backend, Gateways: map[string]conversation.Gateway{
-		domainbackend.BackendClaude: claudeadapter.ConversationGateway{Client: func() claudeadapter.ConversationClient { return currentClaudeCore(a) }, Continue: a.bindings.Continuation.ContinueClaudeSessionWithText},
+		domainbackend.BackendClaude: claudeadapter.ConversationGateway{Client: func() claudeadapter.ConversationClient { return a.runtimeView().currentClaudeCore() }, Continue: a.bindings.Continuation.ContinueClaudeSessionWithText},
 		domainbackend.BackendCodex: codexadapter.ConversationGateway{
-			Client:        func() (codexadapter.ConversationClient, error) { return requireCodexClient(a) },
+			Client:        func() (codexadapter.ConversationClient, error) { return a.runtimeView().requireCodexClient() },
 			Configuration: a.bindings.ConversationConfiguration,
 		},
 	}}
@@ -80,7 +80,7 @@ func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
 		if a.configView().configuredBackend() == domainbackend.BackendClaude {
 			return conversation.RecoveryEndpoint{LazyResume: true}, nil
 		}
-		client, err := requireCodexClient(a)
+		client, err := a.runtimeView().requireCodexClient()
 		if err != nil {
 			return conversation.RecoveryEndpoint{}, err
 		}
@@ -89,7 +89,7 @@ func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
 			Configuration: a.bindings.ConversationConfiguration,
 		}
 		return conversation.RecoveryEndpoint{Gateway: gateway, Current: func() bool {
-			return !codexRuntimeRecovering(a.bindings.CodexRecovery) && currentCodexClient(a) == client
+			return !codexRuntimeRecovering(a.bindings.CodexRecovery) && a.runtimeView().currentCodexClient() == client
 		}}, nil
 	}}
 }

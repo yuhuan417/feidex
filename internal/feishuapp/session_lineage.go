@@ -13,7 +13,7 @@ func getAppLiveThreadTracker(a *App) *frontendruntime.LiveThreads {
 	if a == nil {
 		return nil
 	}
-	owner := ensureRuntimeOwner(a)
+	owner := a.runtimeView().ensureRuntimeOwner()
 	return owner.LiveThreads
 }
 
@@ -21,7 +21,7 @@ func resetAppLiveThreadTracker(a *App) {
 	if a == nil {
 		return
 	}
-	owner := ensureRuntimeOwner(a)
+	owner := a.runtimeView().ensureRuntimeOwner()
 	owner.LiveThreads.Reset()
 }
 

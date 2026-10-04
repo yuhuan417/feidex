@@ -23,7 +23,7 @@ func startMCPService(a *App, ctx context.Context) error {
 	if err := a.runtimeOwner.MCP.Start(ctx); err != nil {
 		return err
 	}
-	publishMCPToCodexClient(a, currentCodexClient(a))
+	publishMCPToCodexClient(a, a.runtimeView().currentCodexClient())
 	return nil
 }
 

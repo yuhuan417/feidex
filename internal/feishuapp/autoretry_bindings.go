@@ -74,7 +74,7 @@ func (a *App) AutoRetries() *retry.Tracker {
 	if a == nil {
 		return nil
 	}
-	owner := ensureRuntimeOwner(a)
+	owner := a.runtimeView().ensureRuntimeOwner()
 	return owner.AutoRetries
 }
 func (a *App) RunAsync(fn func())                      { runAsync(a, fn) }

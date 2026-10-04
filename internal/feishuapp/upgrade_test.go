@@ -245,9 +245,9 @@ func TestRunCodexUpgradeOperationSuccess(t *testing.T) {
 	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.runtimeView().currentCodexClient(), promoted)
 	}
 	snapshot := a.bindings.Maintenance.CodexUpgradeState()
 	if snapshot.Running || snapshot.Result != "success" || snapshot.CurrentVersion != "1.1.0" {
@@ -324,9 +324,9 @@ func TestRunCodexUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testin
 	if smoke == nil || !smokeClosed {
 		t.Fatalf("smoke runtime = %+v, want closed after failed validation", smoke)
 	}
-	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 	if !ok || current != fc {
-		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
+		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.runtimeView().currentCodexClient(), fc)
 	}
 	snapshot := a.bindings.Maintenance.CodexUpgradeState()
 	if snapshot.Running || snapshot.Result != "failed" || snapshot.CurrentVersion != "1.0.0" {
@@ -400,9 +400,9 @@ func TestCommandCodexRestartStartsRestartOperation(t *testing.T) {
 	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.runtimeView().currentCodexClient(), promoted)
 	}
 	snapshot := a.bindings.Maintenance.CodexRestartState()
 	if snapshot.Running || snapshot.Result != "success" {
@@ -468,9 +468,9 @@ func TestRunCodexRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	if smoke == nil || !smokeClosed {
 		t.Fatalf("smoke runtime = %+v, want closed after failed restart validation", smoke)
 	}
-	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 	if !ok || current != fc {
-		t.Fatalf("a.codex = %#v, want original live runtime %#v", currentCodexClient(a), fc)
+		t.Fatalf("a.codex = %#v, want original live runtime %#v", a.runtimeView().currentCodexClient(), fc)
 	}
 	state := a.bindings.Maintenance.CodexRestartState()
 	if state.Running || state.Result != "failed" {
@@ -539,9 +539,9 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.runtimeView().currentCodexClient(), promoted)
 	}
 	state := a.bindings.Maintenance.CodexRestartState()
 	if state.Running || state.Result != "success" {
@@ -592,9 +592,9 @@ func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing
 	if liveClosed {
 		t.Fatal("existing codex runtime should not be touched on Claude backend")
 	}
-	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 	if !ok || current != fc {
-		t.Fatalf("a.codex = %#v, want original codex runtime %#v", currentCodexClient(a), fc)
+		t.Fatalf("a.codex = %#v, want original codex runtime %#v", a.runtimeView().currentCodexClient(), fc)
 	}
 }
 
@@ -636,9 +636,9 @@ func TestRefreshCodexRuntimeAfterMaintenanceIgnoresExitedOldRuntime(t *testing.T
 	if promoted == nil || !promotedStarted || promotedClosed {
 		t.Fatalf("promoted runtime = %+v, want started open client", promoted)
 	}
-	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.runtimeView().currentCodexClient(), promoted)
 	}
 }
 
@@ -702,9 +702,9 @@ func TestRefreshCodexRuntimeAfterMaintenanceRecoversFrontendThreadBindings(t *te
 	if !liveClosed {
 		t.Fatal("old runtime should be closed")
 	}
-	current, ok := currentCodexClient(a).(*fakeCodexClient)
+	current, ok := a.runtimeView().currentCodexClient().(*fakeCodexClient)
 	if !ok || current != promoted {
-		t.Fatalf("a.codex = %#v, want promoted runtime %#v", currentCodexClient(a), promoted)
+		t.Fatalf("a.codex = %#v, want promoted runtime %#v", a.runtimeView().currentCodexClient(), promoted)
 	}
 	wantCalls := []string{"model/list", "thread/resume", "thread/start"}
 	if strings.Join(calls, ",") != strings.Join(wantCalls, ",") {
@@ -857,7 +857,7 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.SetBackend(domainbackend.BackendClaude)
-	setClaudeCore(a, &fakeClaudeCore{})
+	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
 	a.bindings.Maintenance.BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
@@ -884,7 +884,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	setClaudeCore(a, claude)
+	a.runtimeView().setClaudeCore(claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -943,7 +943,7 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	setClaudeCore(a, claude)
+	a.runtimeView().setClaudeCore(claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1004,7 +1004,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	setClaudeCore(a, claude)
+	a.runtimeView().setClaudeCore(claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1060,7 +1060,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	setClaudeCore(a, claude)
+	a.runtimeView().setClaudeCore(claude)
 	manager := &fakeClaudeInstallManager{
 		probe: install.Probe{
 			Command:        "claude",
@@ -1107,7 +1107,7 @@ func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 func TestRefreshClaudeRuntimeAfterMaintenanceOnlySmokesOnCodexBackend(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	claude := &fakeClaudeCore{}
-	setClaudeCore(a, claude)
+	a.runtimeView().setClaudeCore(claude)
 
 	origSmoke := a.bindings.ClaudeMaintenance.Smoke
 	a.bindings.ClaudeMaintenance.Smoke = func(_ context.Context) error { return nil }

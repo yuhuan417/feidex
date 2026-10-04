@@ -9,11 +9,11 @@ import (
 func (a *App) Prepare(ctx context.Context) error {
 	a.beginLifecycle(ctx)
 	if err := startMCPService(a, a.Context()); err != nil {
-		ensureRuntimeOwner(a).Lifecycle.Cancel()
+		a.runtimeView().ensureRuntimeOwner().Lifecycle.Cancel()
 		return err
 	}
 	if err := startBackend(a, a.Context()); err != nil {
-		ensureRuntimeOwner(a).Lifecycle.Cancel()
+		a.runtimeView().ensureRuntimeOwner().Lifecycle.Cancel()
 		return err
 	}
 	return nil

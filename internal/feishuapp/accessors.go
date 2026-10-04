@@ -60,12 +60,12 @@ func (a *App) BackendDriver() appbackend.Driver {
 
 // Claude returns the Claude core client.
 func (a *App) Claude() ClaudeCore {
-	return currentClaudeCore(a)
+	return a.runtimeView().currentClaudeCore()
 }
 
 // Codex returns the Codex client.
 func (a *App) Codex() CodexClient {
-	return getCodex(a)
+	return a.runtimeView().getCodex()
 }
 
 // State returns the frontend-scoped app state store.
@@ -116,27 +116,6 @@ func (a *App) FrontendID() string {
 // BackendRuntime returns the runtime facade for the currently configured backend.
 func (a *App) BackendRuntime() frontendruntime.BackendFacade {
 	return backendRuntime(a)
-}
-
-func currentClaudeCore(a *App) ClaudeCore {
-	if a == nil {
-		return nil
-	}
-	return ensureRuntimeOwner(a).ClaudeCore()
-}
-
-func ensureRuntimeOwner(a *App) *frontendruntime.FrontendOwner {
-	if a == nil {
-		return nil
-	}
-	return a.runtimeOwner
-}
-
-func setClaudeCore(a *App, core ClaudeCore) {
-	if a == nil {
-		return
-	}
-	ensureRuntimeOwner(a).SetClaudeCore(core)
 }
 
 func submissionStartTracker(a *App) *frontendruntime.SubmissionStarts {

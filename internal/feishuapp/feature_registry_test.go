@@ -11,8 +11,8 @@ import (
 func TestHiddenBackendFeaturesDoNotAppearInHelpOrMenus(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	setCodex(a, nil)
-	setClaudeCore(a, &fakeClaudeCore{})
+	a.runtimeView().setCodex(nil)
+	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
 	sessionKey := "feishu:chat:chat"
 
 	helpBody := renderHelpBodyFromRegistry(domainbackend.BackendClaude)

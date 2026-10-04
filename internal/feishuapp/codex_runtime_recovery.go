@@ -6,7 +6,6 @@ import (
 	codexadapter "feidex/internal/adapter/backend/codex"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
-	"fmt"
 	"strings"
 
 	appcodexruntime "feidex/internal/runtime/codex"
@@ -17,7 +16,7 @@ func recoveryState(a *App) *appcodexruntime.RecoveryState {
 	if a == nil {
 		return nil
 	}
-	owner := ensureRuntimeOwner(a)
+	owner := a.runtimeView().ensureRuntimeOwner()
 	return owner.CodexRecovery
 }
 
@@ -72,41 +71,12 @@ func codexRuntimeRecovering(codexrecovery appcodexruntime.RecoveryService) bool 
 	return codexrecovery.IsRecovering()
 }
 
-func getCodex(a *App) CodexClient {
-	if a == nil {
-		return nil
-	}
-	return ensureRuntimeOwner(a).CodexClient()
-}
-
-func setCodex(a *App, c CodexClient) {
-	if a == nil {
-		return
-	}
-	ensureRuntimeOwner(a).SetCodexClient(c)
-}
-
-func currentCodexClient(a *App) CodexClient {
-	if a == nil {
-		return nil
-	}
-	return getCodex(a)
-}
-
-func requireCodexClient(a *App) (CodexClient, error) {
-	client := currentCodexClient(a)
-	if client == nil {
-		return nil, fmt.Errorf("codex client not initialized")
-	}
-	return client, nil
-}
-
 func replaceCodexClient(codexrecovery appcodexruntime.RecoveryService, next CodexClient) CodexClient {
 	return codexrecovery.ReplaceClient(next)
 }
 
 func replyCodexError(a *App, requestID json.RawMessage, code int, message string) {
-	if client := currentCodexClient(a); client != nil {
+	if client := a.runtimeView().currentCodexClient(); client != nil {
 		_ = client.ReplyError(requestID, code, message)
 	}
 }
@@ -116,6 +86,6 @@ func beginCodexAutoThreadRecoveryScope(codexrecovery appcodexruntime.RecoverySer
 }
 
 func requireCodexGateway(a *App) (codexadapter.Gateway, error) {
-	client, err := requireCodexClient(a)
+	client, err := a.runtimeView().requireCodexClient()
 	return codexadapter.Gateway{Client: client}, err
 }
