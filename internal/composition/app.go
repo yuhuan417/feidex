@@ -329,6 +329,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.CardActions = cardaction.NewService(feishuapp.CardActionPorts(
 		frontend, normalizeCardActionSessionKey,
 		scope.RuntimeOwner.BackendTransition.BackendSwitchBlocksCardAction,
+		bindings.WorkspaceConfiguration.WorkspaceDeleteActions(),
 		bindings.ServerRequests, bindings.ClaudeSupport, bindings.ReviewCommands,
 		bindings.Upgrades, bindings.BackendUpgrades,
 	))

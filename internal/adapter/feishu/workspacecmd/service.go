@@ -417,6 +417,64 @@ type ConfigService struct {
 	deps ConfigDeps
 }
 
+// WorkspaceDeleteActions is the narrow, App-free owner for delete card
+// callbacks. It carries only the workflow and presentation capabilities those
+// actions need.
+type WorkspaceDeleteActions struct {
+	workflow                *appworkspace.Workflow
+	renderDeleteMenuCard    func(string) (map[string]any, error)
+	renderDeleteConfirmCard func(string, string) (map[string]any, error)
+	renderWorkspaceMenuCard func(string) map[string]any
+}
+
+func (s ConfigService) WorkspaceDeleteActions() WorkspaceDeleteActions {
+	return WorkspaceDeleteActions{
+		workflow:                s.Deps.Workflow,
+		renderDeleteMenuCard:    s.deps.Render.RenderDeleteMenuCard,
+		renderDeleteConfirmCard: s.deps.Render.RenderDeleteConfirmCard,
+		renderWorkspaceMenuCard: s.deps.Render.RenderMenuCard,
+	}
+}
+
+func (s WorkspaceDeleteActions) CompleteWorkspaceDeletePrompt(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+	workspaceID = firstNonEmpty(strings.TrimSpace(workspaceID), strings.TrimSpace(action.Option))
+	if err := s.workflow.ValidateDeletion(sessionKey, workspaceID); err != nil {
+		card, renderErr := s.renderDeleteMenuCard(sessionKey)
+		if renderErr != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+		}
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+			Card:  rawCard(card),
+		}, nil
+	}
+	card, err := s.renderDeleteConfirmCard(sessionKey, workspaceID)
+	if err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "warning", Content: "确认后只删除配置，不删除目录"},
+		Card:  rawCard(card),
+	}, nil
+}
+
+func (s WorkspaceDeleteActions) CompleteWorkspaceDeleteConfirm(sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
+	if err := s.workflow.Delete(sessionKey, workspaceID); err != nil {
+		card, renderErr := s.renderDeleteMenuCard(sessionKey)
+		if renderErr != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
+		}
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
+			Card:  rawCard(card),
+		}, nil
+	}
+	return &callback.CardActionTriggerResponse{
+		Toast: &callback.Toast{Type: "success", Content: "已删除工作区 " + strings.TrimSpace(workspaceID)},
+		Card:  rawCard(s.renderWorkspaceMenuCard(sessionKey)),
+	}, nil
+}
+
 // NewConfigService creates a new ConfigService.
 func NewConfigService(deps ConfigDeps) *ConfigService {
 	return &ConfigService{Deps: deps.Dependencies, deps: deps}

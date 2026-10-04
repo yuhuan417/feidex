@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"strings"
 
+	"feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -106,12 +107,6 @@ func workspaceCardActionHandlers() map[string]cardActionHandler {
 			}
 			return s.app.bindings.WorkspaceConfiguration.CompleteWorkspaceDeleteMenu(actionSessionKey(action))
 		},
-		"workspace.delete.prompt": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return s.app.bindings.WorkspaceConfiguration.CompleteWorkspaceDeletePrompt(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
-		},
-		"workspace.delete.confirm": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return s.app.bindings.WorkspaceConfiguration.CompleteWorkspaceDeleteConfirm(actionSessionKey(action), actionStringValue(action, "workspace_id"))
-		},
 		"workspace.sandbox.set": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if groupBindingSessionScopeActive(s.app, actionSessionKey(action)) {
 				return s.app.bindings.BindingCommands.completeBindingSimpleOverride(action, actionSessionKey(action), "sandbox", actionStringValue(action, "sandbox_mode"))
@@ -189,4 +184,15 @@ func workspaceCardActionHandlers() map[string]cardActionHandler {
 		},
 	}
 
+}
+
+func workspaceDeletePortCardActionHandlers(service workspacecmd.WorkspaceDeleteActions) map[string]cardActionPortHandler {
+	return map[string]cardActionPortHandler{
+		"workspace.delete.prompt": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteWorkspaceDeletePrompt(action, actionSessionKey(action), actionStringValue(action, "workspace_id"))
+		},
+		"workspace.delete.confirm": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteWorkspaceDeleteConfirm(actionSessionKey(action), actionStringValue(action, "workspace_id"))
+		},
+	}
 }

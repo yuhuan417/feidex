@@ -5,6 +5,7 @@ import (
 
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
+	"feidex/internal/adapter/feishu/workspacecmd"
 )
 
 func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
@@ -23,6 +24,7 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 	}{
 		{name: "maintenance-ports", handlers: maintenancePortCardActionHandlers(appupgradecmd.UpgradeService{}, backendUpgradeService{})},
 		{name: "pending-ports", handlers: pendingPortCardActionHandlers(nil, appreviewcmd.ReviewFormService{})},
+		{name: "workspace-delete-ports", handlers: workspaceDeletePortCardActionHandlers(workspacecmd.WorkspaceDeleteActions{})},
 		{name: "server-request-ports", handlers: serverRequestCardActionHandlers(nil)},
 	}
 	appMaps := make([]map[string]cardActionHandler, 0, len(appSets))

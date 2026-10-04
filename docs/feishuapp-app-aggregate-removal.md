@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 502 |
-| 收 `*App` 的顶层函数 | 306 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 499 |
+| 收 `*App` 的顶层函数 | 303 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **65** |
 
@@ -247,6 +247,14 @@ callbacks 的完整调度路径不再持有 App。菜单、workspace、`upgrade.
 submission 都标为未使用并恒返回 `false`；所有 turn、delivery、MCP、Plan 与 Claude
 streaming 调用点不再把 App 传入该决策函数。线程回复策略和调用路径结果不变。架构预算由
 500 降至 499；不涉及 app-server lifecycle 或 request 状态。
+
+步骤 25 从 `ConfigService` 中抽出 `WorkspaceDeleteActions`，只持有 workspace
+workflow 与三项 workspace-card presentation 函数；该对象不保留 `ConfigService`，而
+presentation 函数只捕获 composition 已构造的 `workspacecards.Presentation`。原 ConfigService
+的删除 prompt/confirm API 委托同一个实现，CardAction composition 则直接注入窄 owner，删除
+确认不再经过 `cardActionService{app: ...}`。删除校验、workflow、toast、卡片和目录保留语义不变；
+删除菜单仍走 App handler，以保留群聊禁止删除本机 workspace 的 guard。此路径解耦不改变词面
+`*App` 引用数，预算保持 499；架构测试与 action dispatcher 集成测试覆盖现有分支。
 
 ## 方法
 

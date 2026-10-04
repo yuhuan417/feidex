@@ -238,43 +238,12 @@ func (s *ConfigService) CompleteWorkspaceDeleteMenu(sessionKey string) (*callbac
 
 // CompleteWorkspaceDeletePrompt handles the workspace delete prompt action.
 func (s *ConfigService) CompleteWorkspaceDeletePrompt(action *feishu.CardAction, sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
-	workspaceID = firstNonEmpty(strings.TrimSpace(workspaceID), strings.TrimSpace(action.Option))
-	if err := s.ValidateWorkspaceDeletion(sessionKey, workspaceID); err != nil {
-		card, renderErr := s.RenderDeleteMenuCard(sessionKey)
-		if renderErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(card),
-		}, nil
-	}
-	card, err := s.RenderDeleteConfirmCard(sessionKey, workspaceID)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "warning", Content: "确认后只删除配置，不删除目录"},
-		Card:  rawCard(card),
-	}, nil
+	return s.WorkspaceDeleteActions().CompleteWorkspaceDeletePrompt(action, sessionKey, workspaceID)
 }
 
 // CompleteWorkspaceDeleteConfirm handles the workspace delete confirm action.
 func (s *ConfigService) CompleteWorkspaceDeleteConfirm(sessionKey, workspaceID string) (*callback.CardActionTriggerResponse, error) {
-	if err := s.DeleteWorkspace(sessionKey, workspaceID); err != nil {
-		card, renderErr := s.RenderDeleteMenuCard(sessionKey)
-		if renderErr != nil {
-			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-		}
-		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
-			Card:  rawCard(card),
-		}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已删除工作区 " + strings.TrimSpace(workspaceID)},
-		Card:  rawCard(s.RenderMenuCard(sessionKey)),
-	}, nil
+	return s.WorkspaceDeleteActions().CompleteWorkspaceDeleteConfirm(sessionKey, workspaceID)
 }
 
 // CompleteMenuWorkspace handles the menu.workspace action.
