@@ -407,7 +407,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 }
 
 func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardAction, sessionKey, role, value string) (*callback.CardActionTriggerResponse, error) {
-	if err := ensureSessionModelConfigWritable(s.app, sessionKey); err != nil {
+	if err := ensureSessionModelConfigWritable(s.app.bindings.FrontendQuery, sessionKey); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)

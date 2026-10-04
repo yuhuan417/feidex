@@ -314,7 +314,7 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 }
 
 func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessionKey, modelID string) (*callback.CardActionTriggerResponse, error) {
-	if err := ensureSessionModelConfigWritable(s.app, sessionKey); err != nil {
+	if err := ensureSessionModelConfigWritable(s.app.bindings.FrontendQuery, sessionKey); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	modelID = clearableArg(modelID)
@@ -335,7 +335,7 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 }
 
 func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sessionKey, effort string) (*callback.CardActionTriggerResponse, error) {
-	if err := ensureSessionModelConfigWritable(s.app, sessionKey); err != nil {
+	if err := ensureSessionModelConfigWritable(s.app.bindings.FrontendQuery, sessionKey); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	effort = clearableArg(effort)

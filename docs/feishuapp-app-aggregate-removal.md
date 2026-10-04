@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 408 |
-| 收 `*App` 的顶层函数 | 251 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 407 |
+| 收 `*App` 的顶层函数 | 250 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **26** |
 
@@ -524,6 +524,11 @@ frontend aggregate。各调度入口只接收 coalescer/query，backend 仍在�
 该 query；composition 与 fixture 都从已经构造的 `Bindings.FrontendQuery` 注入 admission。模型配置
 写入仍只检查 frontend 的维护/切换事实，零值 query 仍允许写入。生产 `*App` 引用由 411 降至 408，
 收 `*App` 的函数由 253 降至 251，持有 App 字段的结构体由 27 降至 26；lazy binding-read 预算保持 13。
+
+步骤 69 将 `ensureSessionModelConfigWritable` 也改为接收 `frontend.Query`，其四个调用点从
+binding command owner 传入已构造的 frontend query，不再把 App 传给 guard。模型设置和命令路径继续
+使用同一 frontend activity policy。生产 `*App` 引用由 408 降至 407，收 `*App` 的函数由 251 降至
+250，持有 App 字段的结构体预算保持 26；lazy binding-read 预算保持 13。
 
 ## 方法
 
