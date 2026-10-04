@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 440 |
-| 收 `*App` 的顶层函数 | 277 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 439 |
+| 收 `*App` 的顶层函数 | 276 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **32** |
 
@@ -464,6 +464,11 @@ frontend 判断抽成纯 helper 供 config view 与 repository 共用。生产 `
 生产 composition 和测试 fixture 均从 frontend shell 传入这些依赖。模型配置快照仍使用同一
 配置修订锁与 frontend scope；生产 `*App` 引用预算由 441 降至 440，收 `*App` 的函数由 278
 降至 277，持有 App 字段的结构体预算保持 32；lazy binding-read 预算保持 13。
+
+步骤 58 将 `FrontendFacts` 从闭包捕获 `*App` 改为显式接收 frontend runtime owner 与维护状态，
+闭包仍在执行时读取 backend transition 和 message traffic 的当前值，维护状态服务在构造期注入；
+生产 `*App` 引用预算由 440 降至 439，收 `*App` 的函数由 277 降至 276，持有 App 字段的结构体
+预算保持 32；lazy binding-read 预算保持 13。
 
 ## 方法
 

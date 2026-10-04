@@ -146,7 +146,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: a.State(), Runtime: a.runtimeOwner.TurnBindings, Items: a.bindings.TurnItems}
 	a.bindings.AutoRetry = AutoRetryView(a)
 	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(a, a.bindings.AutoRetry, liveThreads))
-	a.bindings.FrontendQuery = frontendapp.Query{Repository: a.State(), Facts: FrontendFacts(a), Retrying: a.bindings.AutoRetry.HasBlockingAutoRetry}
+	a.bindings.FrontendQuery = frontendapp.Query{Repository: a.State(), Facts: FrontendFacts(a.runtimeOwner, a.bindings.Maintenance), Retrying: a.bindings.AutoRetry.HasBlockingAutoRetry}
 	var codexUpgrade codexruntime.UpgradeService
 	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(a,
 		func(ctx context.Context) (codexruntime.CodexClient, error) {
