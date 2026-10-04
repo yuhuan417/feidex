@@ -1267,7 +1267,7 @@ func TestPlanModePrefixesTitlesAndDropsBanner(t *testing.T) {
 		{name: "tools", title: cardHeaderTitle(t, renderToolsMenuCard(a, sessionKey)), body: cardMarkdownContent(t, renderToolsMenuCard(a, sessionKey))},
 		{name: "status", title: cardHeaderTitle(t, renderStatusCard(a, sessionKey)), body: cardMarkdownContent(t, renderStatusCard(a, sessionKey))},
 		{name: "interrupt", title: cardHeaderTitle(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。")), body: cardMarkdownContent(t, renderInterruptResultCard(a, sessionKey, "menu.tools", "已请求中断当前任务。"))},
-		{name: "compact", title: cardHeaderTitle(t, renderCompactPreparingCard(a, sessionKey)), body: cardMarkdownContent(t, renderCompactPreparingCard(a, sessionKey))},
+		{name: "compact", title: cardHeaderTitle(t, renderCompactPreparingCard(a.State(), sessionKey)), body: cardMarkdownContent(t, renderCompactPreparingCard(a.State(), sessionKey))},
 	}
 	for _, tc := range cases {
 		if !strings.HasPrefix(tc.title, workspacePrefix) {

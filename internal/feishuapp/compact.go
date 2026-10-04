@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	compactview "feidex/internal/adapter/feishu/compaction"
+	"feidex/internal/adapter/feishu/planmode"
 	compaction "feidex/internal/application/compaction"
 	"feidex/internal/domain/conversation"
 )
@@ -9,23 +10,23 @@ import (
 const sessionStatusCompacting = "compacting"
 
 func sessionHasActiveWork(sess *conversation.Session) bool { return conversation.HasActiveWork(sess) }
-func compactCardTitle(a *App, key string) string {
+func compactCardTitle(state planmode.SessionStateProvider, key string) string {
 	ws := ""
-	if a != nil {
-		if sess := a.State().Session(key); sess != nil {
+	if state != nil {
+		if sess := state.Session(key); sess != nil {
 			ws = sess.WorkspaceID
 		}
 	}
-	return contentCardTitleForSession(a, key, ws, "压缩上下文")
+	return planmode.ContentCardTitleForSessionFromState(state, state != nil, key, ws, "压缩上下文")
 }
-func renderCompactPreparingCard(a *App, key string) map[string]any {
-	return compactview.RenderCompactPreparingCard(compactCardTitle(a, key), key)
+func renderCompactPreparingCard(state planmode.SessionStateProvider, key string) map[string]any {
+	return compactview.RenderCompactPreparingCard(compactCardTitle(state, key), key)
 }
-func renderCompactAcceptedCard(a *App, key string) map[string]any {
-	return compactview.RenderCompactAcceptedCard(compactCardTitle(a, key), key)
+func renderCompactAcceptedCard(state planmode.SessionStateProvider, key string) map[string]any {
+	return compactview.RenderCompactAcceptedCard(compactCardTitle(state, key), key)
 }
-func renderCompactFailedCard(a *App, key, text string) map[string]any {
-	return compactview.RenderCompactFailedCard(compactCardTitle(a, key), key, text)
+func renderCompactFailedCard(state planmode.SessionStateProvider, key, text string) map[string]any {
+	return compactview.RenderCompactFailedCard(compactCardTitle(state, key), key, text)
 }
 func sendStandaloneCompactResult(compactionDep *compaction.Service, sess *conversation.Session, status string) {
 	compactionDep.SendSessionTextNotice(sess, compaction.StandaloneCompactResultText(status))

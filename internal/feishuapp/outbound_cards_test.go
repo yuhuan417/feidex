@@ -70,7 +70,7 @@ func TestPlanModeSessionCardsPrefixWorkspaceAndPlan(t *testing.T) {
 		{name: "status", card: renderStatusCard(a, sessionKey)},
 		{name: "quiet", card: renderQuietModeMenuCard(a, sessionKey)},
 		{name: "interrupt", card: renderInterruptPreparingCard(a, sessionKey, "menu.tools")},
-		{name: "compact", card: renderCompactPreparingCard(a, sessionKey)},
+		{name: "compact", card: renderCompactPreparingCard(a.State(), sessionKey)},
 		{name: "help", card: renderHelpCard(a, sessionKey)},
 	}
 	for _, tc := range cases {
