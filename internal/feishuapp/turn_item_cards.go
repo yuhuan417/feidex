@@ -2,6 +2,8 @@ package feishuapp
 
 import (
 	"context"
+	"feidex/internal/adapter/feishu/planmode"
+	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
 
 	appdelivery "feidex/internal/adapter/feishu/delivery"
@@ -21,6 +23,15 @@ func (s outboundCardService) sendSubmissionQueuedNotice(ctx context.Context, sub
 		return
 	}
 	s.replyChunks.SendMessagesWithReuse(ctx, sub, "已加入队列，等待当前任务结束后开始处理。", replyInThreadForSubmission(sub), "turn_queued", "")
+}
+
+func (s outboundCardService) expirePlanConfirmation(ctx context.Context, pending *interaction.PendingRequest) {
+	if pending == nil || strings.TrimSpace(pending.FeishuMsgID) == "" {
+		return
+	}
+	title := planmode.ContentCardTitleForSessionFromState(s.replyChunks.state, true, pending.SessionKey, "", planmode.ExitExpiredTitle)
+	card := s.statusCards.SimpleStatusCard(title, "grey", "当前已有新的提交，旧的计划确认已失效。", nil)
+	_ = s.replyChunks.outbound.PatchCard(ctx, pending.FeishuMsgID, card)
 }
 
 func sendSubmissionStartedNotice(a *App, ctx context.Context, sub *domainsubmission.Submission) {

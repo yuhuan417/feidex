@@ -1,7 +1,6 @@
 package feishuapp
 
 import (
-	"feidex/internal/adapter/feishu/planmode"
 	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/announcement"
@@ -231,9 +230,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 	return appsubmission.Dependencies{
 		PlanConfirmation: plan,
 		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
-			if pending.FeishuMsgID != "" {
-				_ = patchCardEffect(ctx, a, pending.FeishuMsgID, planmode.ExitExpiredCard(newPlanModeAppAdapter(a), pending.SessionKey, "", "当前已有新的提交，旧的计划确认已失效。"))
-			}
+			queuedNotice.expirePlanConfirmation(ctx, pending)
 		},
 		Context:            contextFn,
 		AppState:           stateStore,

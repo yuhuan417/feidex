@@ -566,6 +566,11 @@ reply/session-async callbacks 改捕获 effect outbound、frontend lifecycle、s
 工作仍先通过 lifecycle admission 再按 session 串行。生产 `*App` 引用由 397 降至 396，收 `*App` 的函数由
 241 降至 240，App-bearing `*Ports` 工厂保持 14，持有 App 字段的结构体保持 25；lazy binding-read 预算保持 13。
 
+步骤 77 将 plan confirmation expiry 的卡片渲染与 patch 从 `SubmissionPorts` 的 App 闭包移至
+`outboundCardService`。过期提示仍使用当前 scoped session 的 workspace/plan 标题、原灰色卡片与提示文案；新增
+回归测试验证渲染和 patch。该 helper 原本只经已有的 `newPlanModeAppAdapter(a)` 间接使用 App，没有减少 AST
+`*App` 数量，本步只缩小 callback 的运行时捕获边界；接下来继续把 `SubmissionPorts` 改为显式 inputs。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

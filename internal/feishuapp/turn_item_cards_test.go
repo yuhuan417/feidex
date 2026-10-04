@@ -8,6 +8,7 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
 	"testing"
@@ -96,6 +97,27 @@ func TestTurnItemDeliveryReuseFallbackAndFinalCard(t *testing.T) {
 	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", updatedSub)
 	if len(ff.replyCards) != before+1 {
 		t.Fatalf("noteTurnStarted() should not duplicate started notice, replyCards = %d, want %d", len(ff.replyCards), before+1)
+	}
+}
+
+func TestOutboundCardServiceExpiresPlanConfirmation(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	if err := a.State().SaveSession(&conversation.Session{
+		Key: "sess-plan-expired", WorkspaceID: "workspace-plan", ActiveThreadCollaborationMode: &conversation.SessionCollaborationMode{Mode: "plan", Model: "gpt-5"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	pending := &interaction.PendingRequest{SessionKey: "sess-plan-expired", FeishuMsgID: "expired-card"}
+	newOutboundCardService(a).expirePlanConfirmation(context.Background(), pending)
+	if len(ff.patchedCards) != 1 {
+		t.Fatalf("patched cards = %d, want 1", len(ff.patchedCards))
+	}
+	card := ff.patchedCards[0]
+	if got := cardHeaderTitle(t, card); got != "[workspace-plan] [plan] Plan confirmation expired" {
+		t.Fatalf("expired card title = %q", got)
+	}
+	if body := cardMarkdownContent(t, card); body != "当前已有新的提交，旧的计划确认已失效。" {
+		t.Fatalf("expired card body = %q", body)
 	}
 }
 
