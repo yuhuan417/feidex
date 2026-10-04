@@ -52,6 +52,10 @@ type Report struct {
 
 func main() {
 	dir := os.Args[1]
+	if len(os.Args) > 2 && os.Args[2] == "--bindings" {
+		runBindings(dir, false)
+		return
+	}
 	fset := token.NewFileSet()
 	files, _ := filepath.Glob(filepath.Join(dir, "*.go"))
 	var parsed []*ast.File

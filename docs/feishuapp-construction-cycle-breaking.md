@@ -60,6 +60,56 @@
 `*bindings.Submissions = ...` 原地填充。所以"指针已存在"不等于"值已就绪"，
 判断向后读要看**值**写入的位置。
 
+## 全量依赖图（2026-10 实测）
+
+`scripts/depmap --bindings` 会按**语句级**口径建图：composition 里每条
+`bindings.X = ...` 赋值语句作为节点，它调用的**所有** `feishuapp.*` 函数（不限
+`*Ports` 命名）读取的 binding 作为出边，并且**区分 eager 与 lazy**：
+
+- **eager**：`a.bindings.Y` 在函数体里直接读 —— 工厂被调用时就发生，**构成构造
+  顺序约束**
+- **lazy**：`a.bindings.Y` 在 func literal 里读 —— 闭包运行时才发生，**不构成构造
+  顺序约束**，但会挡住快照式的能力包
+
+实测结果（93 条赋值语句，337 个收 `*App` 的函数）：
+
+| | 数量 | 环 |
+|---|---|---|
+| **构造期环（只算 eager）** | **1** | `Plan ↔ Submissions ↔ TurnPresentation ↔ Turns` |
+| 含惰性读取的环 | 2 | 上面那个，加上 recovery 组 |
+
+### 已经解决的两个
+
+**环 3（`Inbound ↔ ForwardInputs`）** 和 **环 2（recovery 组）** 都已经通过注入
+入口函数值解决：它们的 eager 依赖现在全空，剩下的边全部是惰性的。
+
+逐个看环 2 的边就很清楚：
+
+```
+CodexRecovery        eager→[]   lazy→[CodexUpgrade StartupRecovery]
+CodexUpgrade         eager→[]   lazy→[CodexRecovery StartupRecovery]
+ConversationRecovery eager→[]   lazy→[CodexRecovery]
+StartupRecovery      eager→[]   lazy→[ConversationRecovery MaintenanceCommands]
+MaintenanceCommands  eager→[StartupRecovery]     ← 唯一 eager 边，且是正向
+```
+
+它们仍会出现在"只看有没有边"的朴素图里，因为注入的闭包在 composition 那一侧
+仍然读 `bindings.Z` —— 但那是延迟读取，不约束顺序。**判断环时必须区分 eager
+与 lazy，否则会把已解决的当成未解决。**
+
+### 唯一剩下的真环
+
+```
+Plan             eager→[Submissions]
+Submissions      eager→[Plan, TurnPresentation]
+TurnPresentation eager→[Turns]
+Turns            eager→[Submissions, TurnPresentation]
+```
+
+4 个节点、8 条 eager 边。`TurnStarter` 因为只有惰性边，已经从环里掉出去了。
+这是唯一需要设计改动的地方 —— 拆法与「环 1」一节相同（抽出共享的状态载体），
+但范围比原先估计的小：只有 4 个服务、且 `TurnStarter` 不必动。
+
 ## 环 1：turn / submission / turnstream
 
 ### 边（方法级）
