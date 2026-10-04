@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 395 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 394 |
 | 收 `*App` 的顶层函数 | 239 |
 | 收 `*App` 的 `*Ports` 工厂 | 13 |
-| **持有 `*App` 字段的结构体** | **25** |
+| **持有 `*App` 字段的结构体** | **24** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -79,7 +79,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
 | 15 | `ClaudeRuntimePorts` | 6 | 8 | 1 |
-| 12 | `InboundPorts` | 5 | 2 | 5 |
+| 11 | `InboundPorts` | 5 | 2 | 4 |
 | 9 | `AutoRetryPorts` | 7 | 2 | 0 |
 | 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
 | 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
@@ -576,6 +576,13 @@ ports。queued 与 expiry notice 的构造另改为接收 config view、scoped s
 client 与 effect runner；backend/client 仍在执行时从 owner 查询，session async 仍经过 lifecycle admission 后由
 session actor 串行。生产 `*App` 引用由 395 的前一基线 396 降至 395，收 `*App` 的函数由 240 降至 239，
 App-bearing `*Ports` 工厂由 14 降至 13，持有 App 字段的结构体保持 25；lazy binding-read 预算保持 13。
+
+步骤 79 将 `inboundBackend` 从持有 `*App` 改为持有当前 backend supplier、backend-selection callback、切换状态
+supplier 与 `BackendRuntimeDeps`。每次 inbound admission 仍读取 runtime owner 当前 backend，并用当前 runtime
+context 检查维护状态；Claude maintenance 期间非本地消息仍被拒绝，backend selection 提示与切换拦截行为不变。
+`TestClaudeUpgradeBlocksCommandsAndInboundMessages` 覆盖该 admission 边界。生产 `*App` 引用由 395 降至 394，
+App-bearing 结构体由 25 降至 24；收 `*App` 的函数保持 239，App-bearing `*Ports` 工厂保持 13，lazy
+binding-read 预算保持 13。此改动不改变 pending request、thread binding 或 turn lifecycle 状态转换。
 
 ## 方法
 

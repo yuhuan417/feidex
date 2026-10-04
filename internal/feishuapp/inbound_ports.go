@@ -12,6 +12,7 @@ import (
 	"feidex/internal/domain/interaction"
 	domainrouting "feidex/internal/domain/routing"
 	domainsubmission "feidex/internal/domain/submission"
+	backendruntime "feidex/internal/runtime"
 )
 
 type inboundRouting struct {
@@ -85,18 +86,21 @@ func (p inboundCommands) HandleCommand(msg *application.InboundMessage, text str
 	return handleCommand(p.app, msg, text)
 }
 
-type inboundBackend struct{ app *App }
+type inboundBackend struct {
+	configured    func() string
+	selectBackend func(*application.InboundMessage, string) error
+	blockedReason func() string
+	runtimeDeps   BackendRuntimeDeps
+}
 
-func (p inboundBackend) Configured() bool { return p.app.configView().hasConfiguredBackend() }
+func (p inboundBackend) Configured() bool { return strings.TrimSpace(p.configured()) != "" }
 func (p inboundBackend) ReplySelection(msg *application.InboundMessage) error {
-	return p.app.bindings.BackendSelection.ReplyBackendSelectionCard(msg, "")
+	return p.selectBackend(msg, "")
 }
-func (p inboundBackend) BlockedReason() string {
-	return p.app.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic()
-}
+func (p inboundBackend) BlockedReason() string { return p.blockedReason() }
 func (p inboundBackend) CheckMaintenance() error {
-	if owner := backendRuntime(p.app); owner != nil {
-		return owner.MaintenanceBlocksCommand(backendRuntimeContextForApp(p.app.BackendRuntimeDeps()), "")
+	if owner := backendruntime.BackendForKind(p.configured()); owner != nil {
+		return owner.MaintenanceBlocksCommand(backendRuntimeContextForApp(p.runtimeDeps.currentBackend()), "")
 	}
 	return nil
 }
@@ -105,13 +109,19 @@ func (p inboundBackend) CheckMaintenance() error {
 // than reaching for a.bindings.ForwardInputs.
 func InboundPorts(a *App, prefetchForward func(*application.InboundMessage)) inbound.Dependencies {
 	announcementRefresh := a.runtimeOwner.Announcements
+	configuredBackend := ConfiguredBackendBuilder(a.cfg, a.ConfigMu(), a.runtimeOwner.Backend, a.frontendID, a.frontendConfigIndex)
+	runtimeDeps := a.BackendRuntimeDeps()
 	return inbound.Dependencies{
 		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		Routing: inboundRouting{frontendID: a.FrontendID(), feishu: a.feishu, primary: a.bindings.Primary, primaryInitialization: a.bindings.PrimaryInitialization, groupMessages: a.bindings.GroupMessages}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{app: a},
 		Continuation: a.bindings.Continuation, Pending: inboundPending{PendingQueueService: a.bindings.PendingQueue, attachments: func(msg *application.InboundMessage, workspaceID, key string) ([]domainsubmission.SubmissionAttachment, error) {
 			return resolveInboundAttachments(a.cfg, a.Context, a.feishu, msg, workspaceID, key)
 		}},
-		Bindings: inboundBindings{app: a}, Commands: inboundCommands{app: a}, Backend: inboundBackend{app: a}, Queue: a.bindings.Submissions,
+		Bindings: inboundBindings{app: a}, Commands: inboundCommands{app: a}, Backend: inboundBackend{
+			configured: configuredBackend, selectBackend: a.bindings.BackendSelection.ReplyBackendSelectionCard,
+			blockedReason: a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
+			runtimeDeps:   runtimeDeps,
+		}, Queue: a.bindings.Submissions,
 		RefreshGroup:       func(chatID, reason string) { scheduleGroupAnnouncementStatusRefresh(announcementRefresh, chatID) },
 		FlushNotifications: func(msg *application.InboundMessage) { flushPendingFrontendCardNotifications(a, msg) },
 		PrefetchForward:    prefetchForward,
