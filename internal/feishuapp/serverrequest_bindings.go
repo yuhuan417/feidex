@@ -33,6 +33,10 @@ func (a *App) ServerRequestService() *serverrequest.Service {
 }
 
 func BuildServerRequests(a *App) *serverrequest.Service {
+	// Read once at construction so the dependency is visible.
+	pendingReplies := a.bindings.PendingReplies
+	submissionLookup := a.bindings.SubmissionLookup
+
 	if a == nil {
 		return nil
 	}
@@ -85,10 +89,10 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 
 		// Root service delegation
 		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
-			return a.bindings.PendingReplies.Finalize(pending)
+			return pendingReplies.Finalize(pending)
 		},
 		FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-			return a.bindings.SubmissionLookup.FindSubmissionByTurn(threadID, turnID)
+			return submissionLookup.FindSubmissionByTurn(threadID, turnID)
 		},
 		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, delivery serverrequest.PendingCardDelivery) error {
 			return deliverPendingCard(a, sub, card, pendingCardDelivery{

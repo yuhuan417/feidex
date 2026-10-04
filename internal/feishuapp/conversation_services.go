@@ -76,6 +76,10 @@ func interruptConversation(a *App, ctx context.Context, key string, sess *domain
 	return err
 }
 func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
+	// Read once at construction so the dependency is visible.
+	codexRecovery := a.bindings.CodexRecovery
+	conversationConfiguration := a.bindings.ConversationConfiguration
+
 	return conversation.RecoveryDependencies{Repository: a.State(), Conversations: a.bindings.Conversations, Workspaces: planWorkspaces{view: a.configView()}, Capture: func() (conversation.RecoveryEndpoint, error) {
 		if a.configView().configuredBackend() == domainbackend.BackendClaude {
 			return conversation.RecoveryEndpoint{LazyResume: true}, nil
@@ -86,10 +90,10 @@ func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
 		}
 		gateway := codexadapter.ConversationGateway{
 			Client:        func() (codexadapter.ConversationClient, error) { return client, nil },
-			Configuration: a.bindings.ConversationConfiguration,
+			Configuration: conversationConfiguration,
 		}
 		return conversation.RecoveryEndpoint{Gateway: gateway, Current: func() bool {
-			return !codexRuntimeRecovering(a.bindings.CodexRecovery) && a.runtimeView().currentCodexClient() == client
+			return !codexRuntimeRecovering(codexRecovery) && a.runtimeView().currentCodexClient() == client
 		}}, nil
 	}}
 }

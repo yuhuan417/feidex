@@ -17,6 +17,9 @@ import (
 // CodexUpgradePorts takes its own smoke test as a value: the port is built
 // before the service it belongs to exists.
 func CodexUpgradePorts(a *App, codexSmokeTest func(context.Context) error) appcodexruntime.UpgradeDependencies {
+	// Read once at construction so the dependency is visible.
+	startupRecovery := a.bindings.StartupRecovery
+
 	return appcodexruntime.UpgradeDependencies{
 		CreateClient: func() appcodexruntime.CodexClient {
 			return newCodexClient(a.cfg.Codex)
@@ -38,7 +41,7 @@ func CodexUpgradePorts(a *App, codexSmokeTest func(context.Context) error) appco
 			return replaceCodexClient(a.bindings.CodexRecovery, next)
 		},
 		RecoverFrontendRuntimeState: func() {
-			recoverFrontendRuntimeState(a.bindings.StartupRecovery)
+			recoverFrontendRuntimeState(startupRecovery)
 		},
 	}
 }

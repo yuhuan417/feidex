@@ -17,8 +17,11 @@ func frontendActivity(frontendquery frontend.Query, includeSessions bool) fronte
 }
 
 func FrontendFacts(a *App) func() frontend.RuntimeFacts {
+	// Read once at construction so the dependency is visible.
+	maintenanceService := a.bindings.Maintenance
+
 	return func() frontend.RuntimeFacts {
-		return frontend.RuntimeFacts{SwitchBlockedReason: a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic(), MessageTraffic: a.runtimeOwner.MessageTraffic(), CodexMaintenance: a.bindings.Maintenance.CodexMaintenanceActive(), ClaudeMaintenance: a.bindings.Maintenance.ClaudeMaintenanceActive()}
+		return frontend.RuntimeFacts{SwitchBlockedReason: a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic(), MessageTraffic: a.runtimeOwner.MessageTraffic(), CodexMaintenance: maintenanceService.CodexMaintenanceActive(), ClaudeMaintenance: maintenanceService.ClaudeMaintenanceActive()}
 	}
 }
 
