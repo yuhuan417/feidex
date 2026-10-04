@@ -138,7 +138,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Forms = &interaction.FormService{Repository: frontend.State()}
 	bindings.WorkspaceWorkflow = &workspaceapp.Workflow{Forms: bindings.Forms, Planning: bindings.WorkspacePlanning, Creation: bindings.WorkspaceCreation}
 	feishuapp.AttachWorkspacePresentation(frontend, feishuapp.NewWorkspacePresentation(frontend))
-	bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: feishuapp.ModelSnapshotRepository(frontend)}
+	bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: feishuapp.ModelSnapshotRepository(frontend.Config(), frontend.ConfigMu(), frontend.State())}
 	bindings.ModelDefaults = modelconfig.DefaultsService{
 		Repository: configadapter.ModelDefaultsRepository{Source: frontend, Scope: frontend.State()},
 		Admission:  feishuapp.ModelWriteAdmission(frontend), Frontend: frontend.FrontendID(),

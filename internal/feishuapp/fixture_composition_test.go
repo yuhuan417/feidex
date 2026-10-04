@@ -213,7 +213,7 @@ func prepareTestApp(a *App) *App {
 		a.bindings.ThreadSettings, a.Context, identity.FrontendID(a.FrontendID()),
 		*a.runtimeOwner.EffectRunner, SessionKeyBuilder(a.FrontendID()),
 	)
-	a.bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: ModelSnapshotRepository(a)}
+	a.bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: ModelSnapshotRepository(a.Config(), a.ConfigMu(), a.State())}
 	a.bindings.ModelSettings = modelconfig.SettingsService{Repository: a.State(), Admission: ModelWriteAdmission(a), Frontend: identity.FrontendID(a.FrontendID())}
 	a.bindings.ModelDefaults = modelconfig.DefaultsService{
 		Repository: configadapter.ModelDefaultsRepository{Source: a, Scope: a.State()},

@@ -1,8 +1,11 @@
 package feishuapp
 
 import (
+	"sync"
+
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/modelsettings"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 
 	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
@@ -17,8 +20,8 @@ func modelConfigSnapshot(snapshots applicationmodelconfig.SnapshotService, sess 
 	return snapshots.TurnSnapshot(backend, sess)
 }
 
-func ModelSnapshotRepository(a *App) applicationmodelconfig.SourceRepository {
-	return configadapter.ModelSourceRepository{Config: a.cfg, Mutex: a.ConfigMu(), Scopes: a.State()}
+func ModelSnapshotRepository(cfg *config.Config, mu *sync.RWMutex, scopes *appstate.Store) applicationmodelconfig.SourceRepository {
+	return configadapter.ModelSourceRepository{Config: cfg, Mutex: mu, Scopes: scopes}
 }
 
 func modelConfigStatus(a *App, sessionKey string) string {
