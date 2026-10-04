@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 365 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 364 |
 | 收 `*App` 的顶层函数 | 224 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **21** |
@@ -716,6 +716,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 103 将 `currentBackendRuntimeHandle` 改为接收 backend 值与 `runtimeView`，client snapshot 仍来自同一 frontend runtime owner；生产 `*App` 引用预算由 367 降至 366，lazy binding-read 预算保持 0。
 
 步骤 104 将 `backendRuntime` 改为接收 backend kind；commands 复用已读取的 kind，recovery、accessor 与 thread-menu 在调用点从 config view 读取当前值。空 backend 仍映射为 nil facade，生产 `*App` 引用预算由 366 降至 365，lazy binding-read 预算保持 0。
+
+步骤 105 将 `BuildFinalCardPatch` 改为接收显式 context、tracker、finder、patcher、renderer state/config 与 async runner；final card 的标题解析、渲染、footer 和 patch 调用不变。生产 `*App` 引用预算由 365 降至 364，lazy binding-read 预算保持 0。
 
 ## 方法
 

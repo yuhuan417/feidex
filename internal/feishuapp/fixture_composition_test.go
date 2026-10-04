@@ -215,7 +215,10 @@ func prepareTestApp(a *App) *App {
 	a.bindings.FileSharing = &fileshare.Service{Forms: a.bindings.Forms, Repository: a.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: a.Context, Run: downloadRunner}
 	a.bindings.Debug = BuildDebug(a)
 	a.bindings.Usage = BuildUsage(a)
-	a.bindings.FinalCardPatch = BuildFinalCardPatch(a)
+	a.bindings.FinalCardPatch = BuildFinalCardPatch(FinalCardPatchInputs{
+		Context: a.Context, Tracker: a.bindings.FinalCardPatches, Finder: a.State(),
+		Patcher: a.Feishu(), RunAsync: a.AsyncRunner(), Config: a.Config(), State: a.State(),
+	})
 	a.bindings.ClaudeSupport = BuildClaudeSupport(a)
 	a.bindings.ThreadSettings = threadsettings.Service{Repository: a.State()}
 	a.bindings.PermissionSettings = threadsettings.PermissionService{Settings: a.bindings.ThreadSettings, Source: configadapter.ThreadPermissionRepository{Source: a, Scope: a.State()}, Runtime: PermissionRuntime(a), Tasks: PermissionTasks(a), Failure: PermissionFailure(a), Context: a.Context}

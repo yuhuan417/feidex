@@ -235,7 +235,10 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.FileSharing = &fileshare.Service{Forms: bindings.Forms, Repository: frontend.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: frontend.Context, Run: downloadRunner}
 	bindings.Debug = feishuapp.BuildDebug(frontend)
 	bindings.Usage = feishuapp.BuildUsage(frontend)
-	bindings.FinalCardPatch = feishuapp.BuildFinalCardPatch(frontend)
+	bindings.FinalCardPatch = feishuapp.BuildFinalCardPatch(feishuapp.FinalCardPatchInputs{
+		Context: frontend.Context, Tracker: bindings.FinalCardPatches, Finder: frontend.State(),
+		Patcher: frontend.Feishu(), RunAsync: frontend.AsyncRunner(), Config: frontend.Config(), State: frontend.State(),
+	})
 	bindings.ClaudeSupport = feishuapp.BuildClaudeSupport(frontend)
 	bindings.ThreadSettings = threadsettings.Service{Repository: frontend.State()}
 	bindings.PermissionSettings = threadsettings.PermissionService{Settings: bindings.ThreadSettings, Source: configadapter.ThreadPermissionRepository{Source: frontend, Scope: frontend.State()}, Runtime: feishuapp.PermissionRuntime(frontend), Tasks: feishuapp.PermissionTasks(frontend), Failure: feishuapp.PermissionFailure(frontend), Context: frontend.Context}
