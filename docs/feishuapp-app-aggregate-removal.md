@@ -28,9 +28,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 268 |
-| 收 `*App` 的顶层函数 | 134 |
-| 收 `*App` 的 `*Ports` 工厂 | 2 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 267 |
+| 收 `*App` 的顶层函数 | 133 |
+| 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **4** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -776,6 +776,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 139 将 `TurnPresentationPorts(*App, turns)` 改为 `TurnPresentationPorts(TurnPresentationPortInputs)`，显式传入 runtime snapshot、turn lifecycle、stream/item trackers、submission lookup/status、compaction owner 与共享 outbound cards。开始提示保留原来的 `ClaimStartNotice` 去重、最新 submission 读取、`turn_started` 消息类型和 quiet-mode 过滤；workspace/config 查询仍使用当前 frontend config view。删除 `maybeSendSubmissionStartedNotice(*App, ...)`、其 App-bound sender 包装及由此失去调用方的 `sendTurnEventMessages`。对照 SM-04/07/08：只改变 presentation dependencies；item state、quiet working card 复用及 turn/compaction 终态顺序不变。生产 `*App` 引用预算由 274 降至 270，收 `*App` 的顶层函数由 140 降至 136，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 4 降至 3，lazy binding-read 预算保持 0；`TurnPresentationPorts` 的 App 传递依赖归零。
 
 步骤 140 将 `StartupRecoveryPorts(*App, ...)` 改为接收 runtime snapshot、`StartupState`、cleanup/restore callbacks 与 frontend-scoped effect text sender。backend configured 检查和启动恢复 scope 在执行时查询当前 frontend runtime/config，session filtering、RecoveryMu、live-thread reset、状态重置、attachment cleanup、conversation restore 与 ready notification 顺序不变。对照 SM-03 与启动恢复测试：恢复仍先清空 live-thread 标记，再按当前 backend scope 执行 restore；仅调整 dependencies。删除由迁移失去调用方的 App-bound `sendTextEffect`。生产 `*App` 引用预算由 270 降至 268，收 `*App` 的顶层函数由 136 降至 134，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 3 降至 2，lazy binding-read 预算保持 0；`StartupRecoveryPorts` 的 App 传递依赖归零。
+
+步骤 141 将 `ReviewPorts(*App)` 改为接收 `ReviewPortInputs`，显式传入 runtime snapshot、forms/delivery、frontend context/state、submission queue、pending queue 与 outbound cards；Codex gateway 在调用时继续查询当前 frontend runtime。review target 解析和队列/卡片通知仍由原 owner 执行。对照 SM-14：只改变 review dependencies，不改变 `review/start`、target resolution 或 submission queue 生命周期。生产 `*App` 引用预算由 268 降至 267，收 `*App` 的顶层函数由 134 降至 133，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 2 降至 1，lazy binding-read 预算保持 0；`ReviewPorts` 的 App 传递依赖归零。
 
 ## 方法
 

@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	"feidex/internal/application/interaction"
 	reviewapp "feidex/internal/application/review"
 	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/domain/conversation"
@@ -139,8 +140,28 @@ func (d reviewDispatcher) MarkQueued(sub *domainsubmission.Submission) {
 func (d reviewDispatcher) Notify(ctx context.Context, sub *domainsubmission.Submission) {
 	d.queuedNotice.sendSubmissionQueuedNotice(ctx, sub)
 }
-func ReviewPorts(a *App) reviewapp.Dependencies {
-	return reviewapp.Dependencies{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Options: reviewOptions{context: a.runtimeOwner.Lifecycle.Context}, Gateway: func() (reviewapp.Gateway, error) { return a.runtimeView().requireCodexGateway() }, Repository: a.State(), Resolver: reviewTargetResolver{context: a.runtimeOwner.Lifecycle.Context}, Dispatcher: reviewDispatcher{submissions: a.bindings.Submissions, pendingQueue: a.bindings.PendingQueue, queuedNotice: newOutboundCardService(a)}}
+
+type ReviewPortInputs struct {
+	Runtime      BackendRuntimeDeps
+	Forms        *interaction.FormService
+	Delivery     *interaction.DeliveryService
+	Context      func() context.Context
+	Repository   reviewapp.Repository
+	Submissions  *appsubmission.SubmissionQueueService
+	PendingQueue *appsubmission.PendingQueueService
+	Cards        OutboundCardService
+}
+
+func ReviewPorts(inputs ReviewPortInputs) reviewapp.Dependencies {
+	runtimeDeps := inputs.Runtime
+	return reviewapp.Dependencies{
+		Forms: inputs.Forms, Delivery: inputs.Delivery, Options: reviewOptions{context: inputs.Context},
+		Gateway: func() (reviewapp.Gateway, error) {
+			return runtimeDeps.currentBackend().runtime.requireCodexGateway()
+		},
+		Repository: inputs.Repository, Resolver: reviewTargetResolver{context: inputs.Context},
+		Dispatcher: reviewDispatcher{submissions: inputs.Submissions, pendingQueue: inputs.PendingQueue, queuedNotice: inputs.Cards},
+	}
 }
 
 type reviewOptions struct{ context func() context.Context }

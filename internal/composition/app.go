@@ -316,7 +316,17 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	})
 	bindings.Interactions.Deps = feishuapp.InteractionPorts(frontend.State(), bindings.SubmissionLookup)
 	bindings.InteractionDelivery = &interaction.DeliveryService{Repository: frontend.State()}
-	review := reviewapp.NewService(feishuapp.ReviewPorts(frontend))
+	reviewCards := feishuapp.NewOutboundCardService(feishuapp.OutboundCardInputs{
+		RuntimeDeps: frontend.BackendRuntimeDeps(), Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+		InteractionDelivery: bindings.InteractionDelivery, TurnPresentation: bindings.TurnPresentation,
+		Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
+		TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,
+	})
+	review := reviewapp.NewService(feishuapp.ReviewPorts(feishuapp.ReviewPortInputs{
+		Runtime: frontend.BackendRuntimeDeps(), Forms: bindings.Forms, Delivery: bindings.InteractionDelivery,
+		Context: frontend.Context, Repository: frontend.State(), Submissions: bindings.Submissions,
+		PendingQueue: bindings.PendingQueue, Cards: reviewCards,
+	}))
 	bindings.Review = &review
 	queuedNotice, expirePlan := feishuapp.SubmissionNoticePorts(feishuapp.SubmissionNoticeInputs{
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),

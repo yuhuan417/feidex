@@ -303,7 +303,17 @@ func prepareTestApp(a *App) *App {
 	})
 	a.bindings.Interactions.Deps = InteractionPorts(a.State(), a.bindings.SubmissionLookup)
 	a.bindings.InteractionDelivery = &interaction.DeliveryService{Repository: a.State()}
-	review := reviewapp.NewService(ReviewPorts(a))
+	reviewCards := NewOutboundCardService(OutboundCardInputs{
+		RuntimeDeps: a.BackendRuntimeDeps(), Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+		InteractionDelivery: a.bindings.InteractionDelivery, TurnPresentation: a.bindings.TurnPresentation,
+		Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
+		TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,
+	})
+	review := reviewapp.NewService(ReviewPorts(ReviewPortInputs{
+		Runtime: a.BackendRuntimeDeps(), Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery,
+		Context: a.Context, Repository: a.State(), Submissions: a.bindings.Submissions,
+		PendingQueue: a.bindings.PendingQueue, Cards: reviewCards,
+	}))
 	a.bindings.Review = &review
 	queuedNotice, expirePlan := SubmissionNoticePorts(SubmissionNoticeInputs{
 		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),
