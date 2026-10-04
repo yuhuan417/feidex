@@ -780,6 +780,78 @@ func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 	}
 }
 
+func TestClaudeNewCommandsBindSessionAfterFirstInput(t *testing.T) {
+	for _, raw := range []string{"/new", "/session new"} {
+		t.Run(raw, func(t *testing.T) {
+			a, ff, _ := newTestApp(t)
+			a.cfg.Feishu.Backend = domainbackend.BackendClaude
+			a.runtimeView().setCodex(nil)
+			claude := &fakeClaudeCore{ensureSessionSet: true}
+			a.runtimeView().setClaudeCore(claude)
+			sessionKey := "feishu:chat:chat"
+			if err := a.store.UpsertSession(&conversation.Session{
+				Key: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID,
+				ActiveThreadID: "claude-old", ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID,
+				ActiveClaudePermissionMode: "acceptEdits", Status: "idle",
+			}); err != nil {
+				t.Fatal(err)
+			}
+			markSessionThreadLive(a, sessionKey, "claude-old")
+			msg := &feishu.InboundMessage{MessageID: "msg-new", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+			if err := handleCommand(a, msg, raw); err != nil {
+				t.Fatalf("handleCommand(%q): %v", raw, err)
+			}
+			if claude.resetCalls != 1 || len(claude.ensureCalls) != 1 || claude.ensureCalls[0].resumeID != "" {
+				t.Fatalf("new session calls: reset=%d ensure=%+v", claude.resetCalls, claude.ensureCalls)
+			}
+			sess := a.store.GetSession(sessionKey)
+			if sess == nil || sess.ActiveThreadID != "" || sess.ActiveThreadWorkspaceID != a.cfg.Workspaces[0].ID || sess.ActiveClaudePermissionMode != "" || sess.Status != "idle" {
+				t.Fatalf("session after /new = %+v", sess)
+			}
+			if sessionHasLiveThread(a, sessionKey, "claude-old") {
+				t.Fatal("old live thread remains after /new")
+			}
+			if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "已创建新会话") {
+				t.Fatalf("new session reply = %#v", ff.replyTexts)
+			}
+			subID, err := a.store.CreateSubmission(&domainsubmission.Submission{
+				SessionKey: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID,
+				UserID: "user", ChatID: "chat", TriggerMessageID: "msg-input",
+				InputText: "hello fresh session", Status: "queued",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := a.store.QueueSubmission(sessionKey, subID); err != nil {
+				t.Fatal(err)
+			}
+			if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
+				t.Fatal(err)
+			}
+			if len(claude.ensureCalls) != 2 || claude.ensureCalls[1].resumeID != "" || len(claude.startTurnCalls) != 1 || claude.startTurnCalls[0].threadID != "" {
+				t.Fatalf("first input reused old lineage: ensure=%+v start=%+v", claude.ensureCalls, claude.startTurnCalls)
+			}
+			sub := a.store.GetSubmission(subID)
+			bindClaudeSessionThread(a, sessionKey, sub.TurnID, "claude-new")
+			if sess := a.store.GetSession(sessionKey); sess.ActiveThreadID != "claude-new" {
+				t.Fatalf("session after ready = %+v", sess)
+			}
+			if sub := a.store.GetSubmission(subID); sub.ThreadID != "claude-new" {
+				t.Fatalf("submission after ready = %+v", sub)
+			}
+		})
+	}
+}
+
+func TestCodexNewRejectsEmptyThreadID(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	fc.callHook = func(_ context.Context, _ string, _ any, _ any) error { return nil }
+	msg := &feishu.InboundMessage{MessageID: "msg-new", ChatID: "chat", ChatType: "p2p", UserID: "user"}
+	if err := handleCommand(a, msg, "/new"); err == nil || !strings.Contains(err.Error(), "empty thread id") {
+		t.Fatalf("/new error = %v, want empty thread id", err)
+	}
+}
+
 func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 	for _, raw := range []string{"/fork", "/session fork"} {
 		t.Run(raw, func(t *testing.T) {

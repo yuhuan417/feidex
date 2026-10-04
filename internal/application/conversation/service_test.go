@@ -78,7 +78,7 @@ func TestExplicitSelectionRejectsForeignWorkspaceBeforeBackendCall(t *testing.T)
 func TestClaudeStartBindsDeferredThreadIDWithoutLiveMark(t *testing.T) {
 	g := &gatewayStub{startResult: Thread{Name: "Claude", Preview: "preview"}}
 	r := &repositoryStub{}
-	live := &liveStub{}
+	live := &liveStub{marked: "previous"}
 	s := Service{Deps: Dependencies{Backend: func() string { return "claude" }, Gateway: g, Repository: r, Live: live}}
 	sess := &domain.Session{Key: "session", ActiveThreadID: "previous", ActiveThreadWorkspaceID: "ws"}
 
@@ -97,6 +97,19 @@ func TestClaudeStartBindsDeferredThreadIDWithoutLiveMark(t *testing.T) {
 	}
 	if live.marked != "" {
 		t.Fatalf("live thread = %q, want no live mark before the id exists", live.marked)
+	}
+}
+
+func TestClaudeDeferredStartPersistenceFailureKeepsLiveThread(t *testing.T) {
+	failure := errors.New("disk full")
+	g := &gatewayStub{startResult: Thread{Name: "Claude"}}
+	r := &repositoryStub{err: failure}
+	live := &liveStub{marked: "previous"}
+	s := Service{Deps: Dependencies{Backend: func() string { return "claude" }, Gateway: g, Repository: r, Live: live}}
+	sess := &domain.Session{Key: "session", ActiveThreadID: "previous", ActiveThreadWorkspaceID: "ws"}
+	_, err := s.StartWorkspaceThread("session", sess, &workspace.Workspace{ID: "ws"})
+	if !errors.Is(err, failure) || sess.ActiveThreadID != "previous" || live.marked != "previous" {
+		t.Fatalf("error=%v session=%#v live=%q", err, sess, live.marked)
 	}
 }
 

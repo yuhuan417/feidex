@@ -175,8 +175,12 @@ func (s *Service) bind(key string, sess *domain.Session, ws *workspace.Workspace
 		return nil, err
 	}
 	*original = *sess
-	if s.Deps.Live != nil && strings.TrimSpace(t.ID) != "" {
-		s.Deps.Live.MarkSessionThreadLive(key, t.ID)
+	if s.Deps.Live != nil {
+		if strings.TrimSpace(t.ID) != "" {
+			s.Deps.Live.MarkSessionThreadLive(key, t.ID)
+		} else {
+			s.Deps.Live.ClearSessionLiveThread(key)
+		}
 	}
 	return &domain.ThreadBinding{ThreadID: t.ID, Name: sess.ActiveThreadName, Preview: sess.ActiveThreadPreview, Resumed: resumed}, nil
 }
