@@ -15,7 +15,10 @@ import (
 )
 
 // Thread is a protocol-independent result. Applied is only present when the
-// backend confirms initialization settings; selection never invents an applied value.
+// backend confirms initialization settings; selection never invents an applied
+// value. ID is empty when the backend materializes its conversation id only on
+// the first input (see defersThreadID); callers must tolerate that instead of
+// treating the result as failed.
 type Thread struct {
 	ID, Name, Preview string
 	Applied           *modelconfig.Snapshot
@@ -143,10 +146,19 @@ func (s *Service) ListWorkspaceThreads(_ string, ws *workspace.Workspace, all bo
 	return s.Deps.Gateway.List(ctx, ws, all)
 }
 
+// defersThreadID reports whether the backend can create its conversation id
+// only when the first input arrives. The Claude CLI emits system/init — the
+// only frame carrying session_id — together with the first user message rather
+// than at process start, so start and fork legitimately return no id yet; the
+// runtime binds the real id when that frame arrives.
+func (s *Service) defersThreadID() bool { return s.Deps.Backend() == "claude" }
+
 func (s *Service) bind(key string, sess *domain.Session, ws *workspace.Workspace, t Thread, resumed, clear bool) (*domain.ThreadBinding, error) {
 	original := sess
 	sess = domain.CloneSession(sess)
-	if strings.TrimSpace(t.ID) == "" {
+	// A deferred id is not a failure: the session exists, it just has no id to
+	// record yet, so bind the context without one and let the runtime fill it in.
+	if strings.TrimSpace(t.ID) == "" && !s.defersThreadID() {
 		return nil, fmt.Errorf("thread operation returned empty thread id")
 	}
 	if clear {
@@ -163,7 +175,7 @@ func (s *Service) bind(key string, sess *domain.Session, ws *workspace.Workspace
 		return nil, err
 	}
 	*original = *sess
-	if s.Deps.Live != nil {
+	if s.Deps.Live != nil && strings.TrimSpace(t.ID) != "" {
 		s.Deps.Live.MarkSessionThreadLive(key, t.ID)
 	}
 	return &domain.ThreadBinding{ThreadID: t.ID, Name: sess.ActiveThreadName, Preview: sess.ActiveThreadPreview, Resumed: resumed}, nil
@@ -268,8 +280,7 @@ func (s *Service) ForkActiveConversation(key string, sess *domain.Session, ws *w
 	if err != nil {
 		return "", err
 	}
-	// Claude can defer materializing a branch until its next input.
-	if t.ID == "" && s.Deps.Backend() != "claude" {
+	if t.ID == "" && !s.defersThreadID() {
 		return "", fmt.Errorf("fork thread returned empty thread id")
 	}
 	if s.Deps.Backend() == "claude" {

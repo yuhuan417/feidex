@@ -185,6 +185,51 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 	}
 }
 
+// The Claude CLI emits system/init — the only frame carrying session_id — with
+// the first user message, so a fresh session has no id yet. /session new must
+// switch to it without an id instead of reporting a failed command.
+func TestHandleCommandSessionNewClaudeBindsDeferredSessionID(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	a.runtimeView().setCodex(nil)
+	claude := &fakeClaudeCore{ensureSessionSet: true, ensureSessionID: ""}
+	a.runtimeView().setClaudeCore(claude)
+
+	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
+	sessionKey := a.configView().makeSessionKey(msg)
+	workspaceID := a.cfg.Workspaces[0].ID
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key:                     sessionKey,
+		WorkspaceID:             workspaceID,
+		OwnerUserID:             "user-1",
+		ChatID:                  "chat-1",
+		ChatType:                "group",
+		Status:                  "idle",
+		ActiveThreadID:          "previous-session",
+		ActiveThreadWorkspaceID: workspaceID,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	if err := handleCommand(a, msg, "/session new"); err != nil {
+		t.Fatalf("handleCommand(/session new) error = %v", err)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil {
+		t.Fatal("session missing after Claude /session new")
+	}
+	if strings.TrimSpace(sess.ActiveThreadID) != "" || sess.ActiveThreadWorkspaceID != workspaceID {
+		t.Fatalf("session after Claude /session new = %+v, want the deferred id bound to workspace %q", sess, workspaceID)
+	}
+	if len(claude.ensureCalls) != 1 || strings.TrimSpace(claude.ensureCalls[0].resumeID) != "" {
+		t.Fatalf("Claude EnsureSession calls = %#v, want one fresh session", claude.ensureCalls)
+	}
+	replies := ff.replyTextsSnapshot()
+	if len(replies) == 0 || !strings.Contains(replies[len(replies)-1], "已创建新会话并切换过去") {
+		t.Fatalf("reply texts = %#v", replies)
+	}
+}
+
 func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude

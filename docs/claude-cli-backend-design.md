@@ -325,9 +325,11 @@ McpElicitation
 
 ### 会话绑定
 
-- Claude CLI 启动成功后，收到 `system subtype=init`。
-- `session_id` 作为 Claude conversation handle 持久化。
-- Feidex session 需要记录 backend kind=`claude` 和 backend conversation id=`session_id`。
+- Claude CLI 启动后只先应答 `control_request(initialize)`；唯一携带 `session_id` 的 `system subtype=init` 帧要等**首条 `user` 消息**才下发，不是进程启动时下发（实测 claude 2.1.289）。所以 `initialize` 成功不等于会话就绪，等待 init 也会一直等不到。
+- 新建会话（`/session new`、`/session fork`）在创建时还没有 `session_id`：绑定先落 workspace、名字和预览，`session_id` 留空，这是合法状态而不是失败；`start` 与 `fork` 都必须容忍空 id。
+- 首条消息触发 `system subtype=init` 后，adapter 再以 `session_id` 回填 conversation handle（`BindClaudeSessionThread` → `BindBackendSessionThread`），同时标记 live。
+- 空 id 期间不要标记 live thread，也不要用空 id 覆盖已有 lineage。
+- Feidex session 需要记录 backend kind=`claude` 和 backend conversation id=`session_id`（新建后可以一度为空）。
 
 ### turn 映射
 
