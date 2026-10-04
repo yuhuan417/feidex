@@ -100,8 +100,8 @@ func (s bindingSessionScope) Binding(sessionKey string) *state.AgentBinding {
 	return agentBindingForChat(s.state, chatType, chatID)
 }
 
-func groupBindingSessionScopeActive(a *App, sessionKey string) bool {
-	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
+func groupBindingSessionScopeActive(scope bindingSessionScope, sessionKey string) bool {
+	chatType, chatID := scope.chat(sessionKey)
 	return chatType == "group" && strings.TrimSpace(chatID) != ""
 }
 

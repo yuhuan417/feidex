@@ -29,7 +29,7 @@ func (s bindingService) isGroupWorkspacePending(action *feishu.CardAction, kind 
 	if pending == nil || strings.TrimSpace(pending.Kind) != strings.TrimSpace(kind) {
 		return false
 	}
-	return groupBindingSessionScopeActive(s.app, pending.SessionKey)
+	return groupBindingSessionScopeActive(s.scope, pending.SessionKey)
 }
 
 func (s bindingService) completeBindingWorkspaceSettingMenu(action *feishu.CardAction, sessionKey, fieldName string) (*callback.CardActionTriggerResponse, error) {
@@ -188,7 +188,7 @@ func normalizeBindingWorkspaceSettingName(value string) string {
 func (s bindingService) completeBindingWorkspaceNewSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID := actionStringValue(action, "request_id")
 	pending := s.app.State().Pending(requestID)
-	if pending == nil || !groupBindingSessionScopeActive(s.app, pending.SessionKey) {
+	if pending == nil || !groupBindingSessionScopeActive(s.scope, pending.SessionKey) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
 	}
 	payload := appworkspacecmd.MergeNewFormValues(appworkspacecmd.NewPayloadFromPending(pending), action.FormValue)
@@ -211,7 +211,7 @@ func (s bindingService) completeBindingWorkspaceNewSubmit(action *feishu.CardAct
 func (s bindingService) completeBindingWorkspaceCloneSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID := actionStringValue(action, "request_id")
 	pending := s.app.State().Pending(requestID)
-	if pending == nil || pending.Kind != "workspace_clone" || !groupBindingSessionScopeActive(s.app, pending.SessionKey) {
+	if pending == nil || pending.Kind != "workspace_clone" || !groupBindingSessionScopeActive(s.scope, pending.SessionKey) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区克隆请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {
@@ -300,7 +300,7 @@ func (s bindingService) finishBindingWorkspaceClone(ctx context.Context, mgmt *a
 func (s bindingService) completeBindingWorkspaceWorktreeSubmit(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID := actionStringValue(action, "request_id")
 	pending := s.app.State().Pending(requestID)
-	if pending == nil || pending.Kind != "workspace_worktree" || !groupBindingSessionScopeActive(s.app, pending.SessionKey) {
+	if pending == nil || pending.Kind != "workspace_worktree" || !groupBindingSessionScopeActive(s.scope, pending.SessionKey) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "Worktree 创建请求已过期"}}, nil
 	}
 	if pending.OwnerUserID != "" && pending.OwnerUserID != action.UserID {

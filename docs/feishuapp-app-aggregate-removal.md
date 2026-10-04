@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 261 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 260 |
 | 收 `*App` 的顶层函数 | 127 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
-| **持有 `*App` 字段的结构体** | **4** |
+| **持有 `*App` 字段的结构体** | **3** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 0。`*App`
@@ -786,6 +786,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 145 删除 `completeMaintenanceAsyncAction` 的薄转发，并让 backend upgrade command/card handlers 直接调用当前 service 实例，不再经 `App.Bindings.BackendUpgrades` 回调自身。命令参数、准备卡、失败卡和异步 dispatcher 参数保持一致；maintenance operation 生命周期不变。生产 `*App` 引用预算由 264 降至 263，收 `*App` 的顶层函数由 130 降至 129，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0；backend upgrade 的自绑定依赖边归零。
 
 步骤 146 将 `backendUpgradeService` 改为显式持有 session-key/reply policy、effect runner、frontend lifecycle、backend maintenance services/runners、maintenance state、presentation、forms 与 Codex upgrade owners；CardAction adapter 通过命令-completion port 继续调用原异步 command dispatcher。composition 移到 maintenance owners 都就绪后创建该 service。对照状态机审计的 frontend lifecycle admission、context cancellation 与维护流程要求：异步取消刷新仍由同一 lifecycle admission 和 20 秒 operation timeout 执行，restart/upgrade runner 调用顺序不变。生产 `*App` 引用预算由 263 降至 261，收 `*App` 的顶层函数由 129 降至 127，App-bearing 结构体由 4 降至 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0；`backendUpgradeService` 的 App-bearing 依赖闭包归零。
+
+步骤 147 将 `groupBindingSessionScopeActive` 从 `*App` 参数改为已构造的 `bindingSessionScope`，命令、workspace callback 与 help renderer 复用 `BindingCommands` 持有的 state、session-key normalizer、primary service 和 frontend identity。session metadata 回退、group binding 检查与 primary lookup 失败时的非群判定保持不变。生产 `*App` 引用预算由 261 降至 260，depmap 顶层 App-taking 函数计数保持 127，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
 
 ## 方法
 

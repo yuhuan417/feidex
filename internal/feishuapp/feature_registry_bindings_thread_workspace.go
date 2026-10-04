@@ -133,7 +133,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
-			if groupBindingSessionScopeActive(s.app, sessionKey) {
+			if groupBindingSessionScopeActive(s.app.bindings.BindingCommands.scope, sessionKey) {
 				svc := s.app.bindings.BindingCommands
 				switch actionName {
 				case "menu.model_auxiliary":
@@ -326,7 +326,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)
-			if groupBindingSessionScopeActive(s.app, sessionKey) {
+			if groupBindingSessionScopeActive(s.app.bindings.BindingCommands.scope, sessionKey) {
 				svc := s.app.bindings.BindingCommands
 				switch actionName {
 				case "menu.fast":

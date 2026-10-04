@@ -42,7 +42,7 @@ func renderHelpBodyFromRegistry(backend string) string {
 }
 
 func renderHelpBodyForSession(a *App, backend, sessionKey string) string {
-	return renderHelpBodyFromRegistryScoped(backend, groupBindingSessionScopeActive(a, sessionKey))
+	return renderHelpBodyFromRegistryScoped(backend, groupBindingSessionScopeActive(a.bindings.BindingCommands.scope, sessionKey))
 }
 
 func renderHelpBodyFromRegistryScoped(backend string, groupScoped bool) string {

@@ -257,7 +257,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 }
 
 func (s bindingService) unbindGroupWorkspace(sessionKey string) error {
-	if !groupBindingSessionScopeActive(s.app, sessionKey) {
+	if !groupBindingSessionScopeActive(s.scope, sessionKey) {
 		return fmt.Errorf("解除 workspace 绑定只能在群聊中使用")
 	}
 	return s.app.bindings.GroupWorkspaces.Unbind(sessionKey, s.scope.Binding(sessionKey))
