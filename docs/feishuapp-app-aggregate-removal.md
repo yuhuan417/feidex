@@ -28,13 +28,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 455 |
-| 收 `*App` 的顶层函数 | 282 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 454 |
+| 收 `*App` 的顶层函数 | 281 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **42** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 32。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
 如果调用点本身在闭包里，惰性读取预算会**上涨**——读取从 `f` 的函数体（不算惰性）
@@ -361,6 +361,16 @@ lifecycle/identity、effect deduper/runner 与 turn working-card state；非阻�
 final candidate，答案晚于 turn completion 时仍走同 thread continuation，回调认领和取消
 语义未变。生产 `*App` 引用预算由 456 降至 455，app-bearing 函数数由 283 降至 282，持有
 App 字段的结构体预算保持 42。
+
+步骤 42 将 local-file preview rewrite 与异步 card patch 迁入 App-free 的
+`localFileLinkPatcher`，显式持有配置、scoped session state、Feishu rewriter、frontend
+lifecycle/async runner、final-card patch tracker 与 effect outbound。rewrite/patch timeout、
+shutdown admission、tracker pending/done 与 final body 更新顺序不变；`outboundCardService`
+现在只通过该 owner 安排 final item 的 preview patch。同批将 message-link 写入迁入
+App-free 的 `messageLinkRecorder`，每次写入从 runtime owner 解析当前 backend，再通过
+Continuation 持久化。生产 `*App` 引用预算由 455 降至 454，
+app-bearing 函数数由 282 降至 281，持有 App 字段的结构体预算保持 42。
+异步 patch 闭包只捕获显式 owners，惰性 binding-read 预算也由 34 降至 32。
 
 ## 方法
 

@@ -89,9 +89,9 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			return ""
 		}
 		for _, result := range results {
-			recordMessageLink(s.app, result.MessageID, kind, sub, payload.ItemID)
+			s.links.Record(result.MessageID, kind, anchorForSubmission(sub), payload.ItemID)
 			if payload.IsFinalAnswer && result.CardID != "" {
-				scheduleLocalFileLinkPatch(s.app, sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
+				s.localFiles.Schedule(sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
 			}
 		}
 		return results[0].MessageID
@@ -99,7 +99,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	card := s.renderTurnItemCard(ctx, sub, payload, payload.IsFinalAnswer)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := s.replyChunks.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
-			recordMessageLink(s.app, reuseMessageID, kind, sub, payload.ItemID)
+			s.links.Record(reuseMessageID, kind, anchorForSubmission(sub), payload.ItemID)
 			return reuseMessageID
 		}
 	}
@@ -116,7 +116,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 		}
 		return ""
 	}
-	recordMessageLink(s.app, id, kind, sub, payload.ItemID)
+	s.links.Record(id, kind, anchorForSubmission(sub), payload.ItemID)
 	return id
 }
 
@@ -136,7 +136,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 	if strings.TrimSpace(reuseMessageID) != "" {
 		card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, title), color, "", body, nil)
 		if err := s.replyChunks.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
-			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
+			s.links.Record(reuseMessageID, kind, anchorForSubmission(sub), itemID)
 			return reuseMessageID
 		}
 	}
@@ -157,7 +157,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, title), color, "", body, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
 		if err := s.replyChunks.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
-			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
+			s.links.Record(reuseMessageID, kind, anchorForSubmission(sub), itemID)
 			return reuseMessageID
 		}
 	}
@@ -166,7 +166,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 		sendTurnEventMessages(s.app, ctx, sub, body, replyInThreadForSubmission(sub), kind)
 		return ""
 	}
-	recordMessageLink(s.app, id, kind, sub, itemID)
+	s.links.Record(id, kind, anchorForSubmission(sub), itemID)
 	return id
 }
 
