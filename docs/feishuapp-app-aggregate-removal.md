@@ -238,6 +238,11 @@ callbacks 的完整调度路径不再持有 App。菜单、workspace、`upgrade.
 命令调用点同步移除该实参。未改变群绑定命令与单聊 profile-aware 命令的分流。架构预算由
 502 降至 501；此改动不触及 app-server lifecycle 或 pending request 状态。
 
+步骤 23 从 `completeMaintenanceRestartRun` 移除未使用的 `*App` 参数，并同步唯一调用点。
+该 helper 仍按原有参数把 begin/run 与操作卡、状态卡、失败卡 renderer 委托给
+`appmaintenance.CompleteRestartRun`；restart 执行及异步维护边界不变。架构预算由 501 降至
+500；不涉及 app-server turn 或 pending request 状态转换。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

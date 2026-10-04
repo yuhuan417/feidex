@@ -89,7 +89,6 @@ func (s backendUpgradeService) completeRestartRun(kind backendUpgradeKind, actio
 	service := s.app.bindings.BackendMaintenance[string(kind)]
 	render := s.app.bindings.UpgradePresentation
 	return completeMaintenanceRestartRun(
-		s.app,
 		action,
 		service.BeginRestart,
 		func(messageID, sessionKey string) {

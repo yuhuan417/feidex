@@ -49,7 +49,6 @@ func completeMaintenanceAsyncAction(a *App,
 }
 
 func completeMaintenanceRestartRun[S any](
-	a *App,
 	action *feishu.CardAction,
 	begin func() (S, error),
 	run func(messageID, sessionKey string),
