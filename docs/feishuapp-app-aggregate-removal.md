@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 310 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 309 |
 | 收 `*App` 的顶层函数 | 183 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
-| **持有 `*App` 字段的结构体** | **16** |
+| **持有 `*App` 字段的结构体** | **15** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 0。`*App`
@@ -750,6 +750,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 121 将 pending backend fallback 改为接收 `frontendConfigView`，Codex goal gateway accessor 改为接收当前 Codex client，并把 Goal/Plan 重复的异步回复线程判断合并为 state lookup + config boolean helper。pending request 中明确记录的 backend 仍优先于当前 frontend 配置；未初始化 Codex client 的错误文本不变。对照 SM-25，gateway 获取依赖改变，不改变 goal 请求、通知或 continuation turn 处理。生产 `*App` 引用预算由 319 降至 315，收 `*App` 的顶层函数由 191 降至 187，lazy binding-read 预算保持 0。
 
 步骤 122 将 permission runtime、session task 与 failure-card ports 拆成独立窄依赖；Claude core/backend 仍在执行时动态查询，后台任务仍经 frontend lifecycle admission 和同一 session actor，失败卡片仍以当前 config/session 重绘并通过原 effect runner patch。backend permission renderer 只要求配置读取能力。对照状态机审计中权限设置的保存、运行时应用与失败提示顺序，本次仅调整依赖装配，不改变生命周期或权限迁移。生产 `*App` 引用预算由 315 降至 310，收 `*App` 的顶层函数由 187 降至 183，App-bearing 结构体由 17 降至 16，lazy binding-read 预算保持 0。
+
+步骤 123 将 Codex server-request reply adapter 的 `*App` 字段改为 frontend runtime owner 与 frontend ID；reply context 和 effect runner 仍在调用时从同一 owner 获取，response payload 与 backend target 不变。生产 `*App` 引用预算由 310 降至 309，App-bearing 结构体由 16 降至 15，lazy binding-read 预算保持 0。
 
 ## 方法
 

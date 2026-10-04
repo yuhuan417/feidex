@@ -76,7 +76,7 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 				if client == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
-				return interactionreply.NewCodexAdapter(codexEffectReplyClient{app: a}, backend)
+				return interactionreply.NewCodexAdapter(codexEffectReplyClient{runtimeOwner: a.runtimeOwner, frontendID: identity.FrontendID(a.FrontendID())}, backend)
 			case domainbackend.BackendClaude:
 				if a.runtimeView().currentClaudeCore() == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
@@ -246,15 +246,18 @@ func reviewCancelledBody(pending *state.PendingRequest) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
-type codexEffectReplyClient struct{ app *App }
+type codexEffectReplyClient struct {
+	runtimeOwner *appruntime.FrontendOwner
+	frontendID   identity.FrontendID
+}
 
 func (c codexEffectReplyClient) Reply(token json.RawMessage, payload any) error {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	return newEffectRunner(c.app.runtimeOwner).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: domainbackend.BackendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Payload: encoded}}})
+	return newEffectRunner(c.runtimeOwner).Run(c.runtimeOwner.Lifecycle.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: c.frontendID, Backend: domainbackend.BackendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Payload: encoded}}})
 }
 func (c codexEffectReplyClient) ReplyError(token json.RawMessage, code int, message string) error {
-	return newEffectRunner(c.app.runtimeOwner).Run(c.app.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: identity.FrontendID(c.app.FrontendID()), Backend: domainbackend.BackendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Error: &backendops.ResponseError{Code: code, Message: message}}}})
+	return newEffectRunner(c.runtimeOwner).Run(c.runtimeOwner.Lifecycle.Context(), []application.Effect{application.ResolveBackendRequest{Frontend: c.frontendID, Backend: domainbackend.BackendCodex, Response: backendops.Response{Token: append([]byte(nil), token...), Error: &backendops.ResponseError{Code: code, Message: message}}}})
 }
