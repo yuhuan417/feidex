@@ -17,14 +17,6 @@ func menuCardBodyForBackend(backend, action, body string) string {
 	return appmenuutil.MenuCardBodyForBackend(backend, action, body)
 }
 
-func menuCardBodyForSession(a *App, sessionKey, action, body string) string {
-	return menuCardBody(action, body)
-}
-
-func menuCardBodyForBackendForSession(a *App, sessionKey, backend, action, body string) string {
-	return menuCardBodyForBackend(backend, action, body)
-}
-
 // menuBackAction returns the action a card rendered for the given menu action
 // returns to when the user taps the back control: the node's parent, falling
 // back to the root menu.

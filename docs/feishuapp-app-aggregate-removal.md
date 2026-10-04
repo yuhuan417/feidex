@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 493 |
-| 收 `*App` 的顶层函数 | 300 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 491 |
+| 收 `*App` 的顶层函数 | 298 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **62** |
 
@@ -278,6 +278,11 @@ service 和 effect runner。交互卡仍先尝试复用 reasoning-only 工作卡
 步骤 29 将 `anchorForSubmission` 改为仅从 submission 投影 pending-card anchor，去掉未使用的
 `*App` 参数，并同步 pending delivery 与 message-link 调用点。投影字段和回复策略均不变；
 `*App` 引用预算由 494 降至 493，app-bearing 函数数由 301 降至 300。
+
+步骤 30 删除 `menuCardBodyForSession` 与 `menuCardBodyForBackendForSession` 两个纯转发包装，
+在调用点直接使用 backend-aware 或普通菜单 body renderer。两个包装原本没有读取 `App` 或
+session key，菜单文案、backend 选择与 action breadcrumb 均不变。生产 `*App` 引用预算由
+493 降至 491，app-bearing 函数数由 300 降至 298。
 
 ## 方法
 
