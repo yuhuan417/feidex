@@ -45,9 +45,8 @@ type ConfigurationFormattingDeps struct {
 }
 
 type ConfigurationCommandDeps struct {
-	HandleCodexModelCommand          func(msg *feishu.InboundMessage, args []string) error
-	HandleClaudeModelCommand         func(msg *feishu.InboundMessage, args []string) error
-	HandleWorkspacePermissionCommand func(msg *feishu.InboundMessage, args []string, sessionKey string) error
+	HandleCodexModelCommand  func(msg *feishu.InboundMessage, args []string) error
+	HandleClaudeModelCommand func(msg *feishu.InboundMessage, args []string) error
 }
 
 type ConfigurationClaudeDeps struct {
@@ -104,13 +103,6 @@ func (s ConfigurationService) HandleModelCommand(msg *feishu.InboundMessage, arg
 	default:
 		return unsupportedBackendError(configuredBackend(s.Permissions))
 	}
-}
-
-func (s ConfigurationService) HandleWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-	if s.deps.Commands.HandleWorkspacePermissionCommand == nil {
-		return fmt.Errorf("workspace permission handler not configured")
-	}
-	return s.deps.Commands.HandleWorkspacePermissionCommand(msg, args, sessionKey)
 }
 
 func (s ConfigurationService) CompleteClaudeModelSet(action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
@@ -265,12 +257,6 @@ func (s ConfigurationService) BackendWorkspaceCommandUsage() string {
 // HandleBackendModelCommand dispatches model commands for the active backend.
 func (s ConfigurationService) HandleBackendModelCommand(msg *feishu.InboundMessage, args []string) error {
 	return s.HandleModelCommand(msg, args)
-}
-
-// HandleBackendWorkspacePermissionCommand dispatches workspace permission
-// commands for the active backend.
-func (s ConfigurationService) HandleBackendWorkspacePermissionCommand(msg *feishu.InboundMessage, args []string, sessionKey string) error {
-	return s.HandleWorkspacePermissionCommand(msg, args, sessionKey)
 }
 
 // BackendWorkspaceSwitchInFlightNotice returns the notice text for a
