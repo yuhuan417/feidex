@@ -53,13 +53,6 @@ func sendCardWithIDEffect(ctx context.Context, a *App, chatID string, card map[s
 	return newEffectRunner(a.runtimeOwner).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: chatID}, View: feishuoutbound.Card(card)})
 }
 
-func replyTextWithIDEffect(ctx context.Context, a *App, parentMessageID, text string, inThread bool) (string, error) {
-	if a == nil {
-		return "", nil
-	}
-	return newEffectRunner(a.runtimeOwner).RunSendMessage(ctx, application.SendMessage{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, Text: text, InThread: inThread})
-}
-
 func patchCardEffect(ctx context.Context, a *App, messageID string, card map[string]any) error {
 	if a == nil {
 		return nil

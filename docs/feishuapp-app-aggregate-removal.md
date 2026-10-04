@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 251 |
-| 收 `*App` 的顶层函数 | 118 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 249 |
+| 收 `*App` 的顶层函数 | 116 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **3** |
 
@@ -798,6 +798,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 151 删除 `commandWorkspaceProfileAware`、`renderSessionMenuCard` 和 `renderContextMenuCard` 三个纯转发函数，workspace 命令直接进现有 handler，菜单测试直接验证实际 renderer。命令分流与卡片内容保持不变。生产 `*App` 引用预算由 255 降至 252，收 `*App` 的顶层函数由 122 降至 119，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
 
 步骤 152 删除无调用方的 `sendReplyMessages` 包装函数，唯一生产实现继续使用 `sendReplyMessagesWithReuse`，投递、复用消息 ID 和 message-link 记录逻辑不变。生产 `*App` 引用预算由 252 降至 251，收 `*App` 的顶层函数由 119 降至 118，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
+
+步骤 153 删除 `replyTextChunkedEffect(*App)` 中重复的分块循环，文本 fallback 改为通过窄 `effectOutbound` port 复用 `replyTextChunked`；同时删除因此失去调用方的 `replyTextWithIDEffect(*App)`。分块、code fence 保留和后续分块失败时报告已送达首段的语义不变。生产 `*App` 引用预算由 251 降至 249，收 `*App` 的顶层函数由 118 降至 116，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
 
 ## 方法
 
