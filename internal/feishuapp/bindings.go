@@ -38,7 +38,6 @@ import (
 	"feidex/internal/application/compaction"
 	"feidex/internal/application/continuation"
 	"feidex/internal/application/conversation"
-	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/application/fileshare"
 	"feidex/internal/application/frontend"
 	"feidex/internal/application/goal"
@@ -175,10 +174,10 @@ func BuildBackendConfiguration(a *App) backend.ConfigurationService {
 }
 func BuildBackendActions(a *App) backend.ActionService      { return buildBackendActionService(a) }
 func BuildBackendSelection(a *App) backend.SelectionService { return buildBackendSelectionService(a) }
-func BuildWorkspaceConfiguration(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service) *workspacecmd.ConfigService {
+func BuildWorkspaceConfiguration(a *App, presentation *workspacecards.Presentation, conversations *conversation.Service) *workspacecmd.ConfigService {
 	return buildWorkspaceConfigService(a, presentation, conversations)
 }
-func BuildWorkspaceManagement(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service) *workspacecmd.ManagementService {
+func BuildWorkspaceManagement(a *App, presentation *workspacecards.Presentation, conversations *conversation.Service) *workspacecmd.ManagementService {
 	return buildWorkspaceManagementService(a, presentation, conversations)
 }
 func BuildThreadMenu(a *App) *threadmenu.Service {

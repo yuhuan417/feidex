@@ -17,6 +17,10 @@ import (
 	"feidex/internal/feishu"
 )
 
+func renderClaudeWorkspacePermissionMenuCard(workspacepresentation *workspacecards.Presentation, sessionKey string) (map[string]any, error) {
+	return workspacepresentation.RenderWorkspacePermissionModeMenuCard(sessionKey)
+}
+
 func isClaudeBypassPermissionsEnabled(cfg *config.Config) bool {
 	if cfg == nil {
 		return false
@@ -81,24 +85,6 @@ func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[strin
 
 func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 	card, err := renderClaudeSessionPermissionMenuCard(a, a.configView().makeSessionKey(msg))
-	if err != nil {
-		return err
-	}
-	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
-		Frontend:       identity.FrontendID(a.FrontendID()),
-		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
-		ReplyMessageID: msg.MessageID,
-		View:           feishuoutbound.Card(card),
-		InThread:       a.configView().replyInThreadEnabled(),
-	}})
-}
-
-func renderClaudeWorkspacePermissionMenuCard(workspacepresentation *workspacecards.Presentation, sessionKey string) (map[string]any, error) {
-	return workspacepresentation.RenderWorkspacePermissionModeMenuCard(sessionKey)
-}
-
-func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error {
-	card, err := renderClaudeWorkspacePermissionMenuCard(a.bindings.WorkspacePresentation, a.configView().makeSessionKey(msg))
 	if err != nil {
 		return err
 	}
