@@ -25,7 +25,7 @@ import (
 // decoding has already completed when Dispatch is called.
 func newInputDispatcher(a *App) application.Dispatcher {
 	router := newFeishuEventRouter(a)
-	cardActions := newCardActionService(a)
+	cardActions := cardActionDispatcher{inner: a.bindings.CardActions}
 	backendEvents := a.bindings.BackendEvents
 	return application.NewDispatcher(identity.FrontendID(a.FrontendID()), application.Handlers{
 		Message: func(_ context.Context, event application.MessageReceived) (application.Result, error) {
@@ -185,7 +185,7 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 }
 func dispatchCardAction(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	if action == nil {
-		return newCardActionService(a).dispatch(nil)
+		return &callback.CardActionTriggerResponse{}, nil
 	}
 	result, err := dispatchInput(a.BackendRuntimeDeps(), application.CardActionReceived{Frontend: identity.FrontendID(a.FrontendID()), Action: toApplicationCardAction(action)})
 	if err != nil {

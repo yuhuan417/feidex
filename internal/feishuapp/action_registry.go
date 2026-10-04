@@ -24,10 +24,6 @@ type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func newCardActionService(app *App) cardActionDispatcher {
-	return cardActionDispatcher{inner: app.bindings.CardActions}
-}
-
 func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService) appcardaction.Dependencies {
 	appHandlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),

@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 503 |
-| 收 `*App` 的顶层函数 | 307 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 502 |
+| 收 `*App` 的顶层函数 | 306 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **65** |
 
@@ -128,6 +128,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 18（分阶段） | `CardActionPorts` | upgrade/restart actions 的 owners 显式化；当时仍经统一 callback wrapper 捕获 App，捕获边界在步骤 19 修正 |
 | 19 | `CardActionPorts` | 将 owner-only handlers 与 App handlers 分开绑定；前者的 handler 类型和回调闭包均不接收或捕获 App |
 | 20（分阶段） | `CardActionPorts` | normalization 与 backend-switch callbacks 改为 composition 传入的窄依赖；Feishu callback dispatcher 与 App handler context 分型，剩余 App-handler families 仍待拆分 |
+| 21 | card-action dispatcher | dispatcher 构造直接接收已组合的 `cardaction.Service`；nil action 直接返回空响应，移除生产 `newCardActionService(*App)` accessor |
 
 在最初纳入分析的 29 个工厂中，前两个是仅有的**立即求值、不捕获**工厂；当时
 步骤 3-5 也沿用这条路径：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -227,6 +228,10 @@ handler 只接收 `*feishu.CardAction`。两类 handler 使用独立 binder；ow
 card-action service 的 `cardActionDispatcher` 与持有 App 的 handler context 分型。因此 owner-only
 callbacks 的完整调度路径不再持有 App。菜单、workspace、`upgrade.dev` 与本地 pending handlers
 仍使用 App helper；预算保持 503/34。
+
+步骤 21 移除生产 `newCardActionService(app *App)`。composition 的 input dispatcher 直接把
+已组合的 `bindings.CardActions` 放进 `cardActionDispatcher`；nil action 快速返回空响应，不再
+为了这个边界对象绕回 App。`*App` 引用预算由 503 降至 502，惰性读取预算保持 34。
 
 ## 方法
 
