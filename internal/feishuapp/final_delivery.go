@@ -101,7 +101,7 @@ func (d replyChunkDelivery) SendEmptyFinalCardWithReuse(ctx context.Context, sub
 }
 
 func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool) []string {
-	results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, text, footerLines, inThread, nil)
+	results := sendFinalMessagesWithFooterAndReuse(newOutboundCardService(a).replyChunks, ctx, sub, text, footerLines, inThread, nil)
 	if len(results) == 0 {
 		return nil
 	}
@@ -112,19 +112,17 @@ func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *domainsubmiss
 	return ids
 }
 
-func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
-	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
+func sendFinalMessagesWithFooterAndReuse(delivery replyChunkDelivery, ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
+	if !delivery.ready || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if quietmode.Enabled(a.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(a.configView().feishuConfig()), "final_message") {
+	feishuConfig := delivery.config.feishuConfig()
+	if quietmode.Enabled(feishuConfig) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig), "final_message") {
 		return nil
 	}
 	title, color, _, _ := outboundMessageCardMeta("final_message", sub.WorkspaceID)
 	chunks := appdelivery.BuildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
-	results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil,
-		a.configView(), newMessageLinkRecorder(a.configView(), a.runtimeOwner, a.bindings.Continuation),
-		newLocalFileLinkPatcher(a.Config(), a.State(), a.feishu, &a.runtimeOwner.Lifecycle, a.asyncRunner, a.bindings.FinalCardPatch, newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil),
-	).SendWithReuseIDs(ctx, sub, title, color, chunks, inThread, true, reuseMessageIDs)
+	results := delivery.SendWithReuseIDs(ctx, sub, title, color, chunks, inThread, true, reuseMessageIDs)
 	if len(results) == 0 {
 		return nil
 	}

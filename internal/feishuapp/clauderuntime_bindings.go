@@ -132,7 +132,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				return outputSegments.Finalize(ctx, threadID, turnID, body)
 			},
 			SendFinalMessages: func(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
-				return sendFinalMessagesWithFooterAndReuse(app, ctx, sub, text, footerLines, inThread, reuseMessageIDs)
+				return sendFinalMessagesWithFooterAndReuse(cards.replyChunks, ctx, sub, text, footerLines, inThread, reuseMessageIDs)
 			},
 			ReplyInThread: func(sub *domainsubmission.Submission) bool {
 				return replyInThreadForSubmission(sub)
