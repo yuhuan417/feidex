@@ -28,13 +28,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 394 |
-| 收 `*App` 的顶层函数 | 239 |
-| 收 `*App` 的 `*Ports` 工厂 | 13 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 393 |
+| 收 `*App` 的顶层函数 | 238 |
+| 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **24** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 12。`*App`
 引用与 lazy binding-read 都只允许单向下降；即使某一步只改善其中一项，也不能让另一项回升。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
@@ -80,7 +80,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 |---|---|---|---|---|
 | 15 | `ClaudeRuntimePorts` | 6 | 8 | 1 |
 | 11 | `InboundPorts` | 5 | 2 | 4 |
-| 9 | `AutoRetryPorts` | 7 | 2 | 0 |
 | 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
 | 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
 | 7 | `TurnPorts` | 2 | 3 | 2 |
@@ -583,6 +582,14 @@ context 检查维护状态；Claude maintenance 期间非本地消息仍被拒�
 `TestClaudeUpgradeBlocksCommandsAndInboundMessages` 覆盖该 admission 边界。生产 `*App` 引用由 395 降至 394，
 App-bearing 结构体由 25 降至 24；收 `*App` 的函数保持 239，App-bearing `*Ports` 工厂保持 13，lazy
 binding-read 预算保持 13。此改动不改变 pending request、thread binding 或 turn lifecycle 状态转换。
+
+步骤 80 将 `AutoRetryPorts(*App, ...)` 改为 `AutoRetryPorts(AutoRetryPortInputs)`，显式注入 retry tracker、scoped
+repository、runtime owner、queue starter、config view、presenter 与 async runner。engine 仍在 submission queue
+构造前创建并由 queue 按值捕获；composition 持有的 `BackendRuntimeDeps` 指针在 dispatcher 和 runtime owners
+就绪后填充，定时 dispatch 仍从当前 runtime owner 读取 backend、经 lifecycle admission 后 dispatch 原
+`RetryTimerFired` input。生产 `*App` 引用由 394 降至 393，收 `*App` 的函数由 239 降至 238，App-bearing
+`*Ports` 工厂由 13 降至 12，App-bearing 结构体保持 24；lazy binding-read 预算由 13 降至 12。自动重试优先级、
+失败后重排、停止后失效与 turn terminal presentation 用例覆盖行为边界。
 
 ## 方法
 

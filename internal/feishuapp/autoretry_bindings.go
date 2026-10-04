@@ -1,13 +1,18 @@
 package feishuapp
 
 import (
+	"context"
+	"sync"
+
 	retryview "feidex/internal/adapter/feishu/autoretry"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
 	retry "feidex/internal/application/autoretry"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -27,24 +32,42 @@ func AutoRetryView(a *App) retryview.Service {
 	return view
 }
 
-func AutoRetryPorts(a *App, view retryview.Service, liveThreads retry.LiveThreads) retry.Dependencies {
+type AutoRetryPortInputs struct {
+	Context      func() context.Context
+	Tracker      *retry.Tracker
+	Repository   *appstate.Store
+	Live         retry.LiveThreads
+	Enabled      func() bool
+	SaveEnabled  func(bool) error
+	RuntimeDeps  *BackendRuntimeDeps
+	RuntimeOwner *frontendruntime.FrontendOwner
+	RunAsync     func(func())
+	FrontendID   string
+	Config       *config.Config
+	ConfigMu     *sync.RWMutex
+	Starter      retry.SubmissionStarter
+	Presenter    retryview.Service
+}
+
+func AutoRetryPorts(inputs AutoRetryPortInputs) retry.Dependencies {
+	configView := frontendConfigView{cfg: inputs.Config, mu: inputs.ConfigMu}
 	return retry.Dependencies{
-		Context: a.Context, Tracker: a.AutoRetries(), Repository: a.State(), Live: liveThreads,
-		Enabled:     func() bool { return view.Settings().Enabled },
-		SaveEnabled: a.bindings.RuntimeSettings.SetAutoRetry,
+		Context: inputs.Context, Tracker: inputs.Tracker, Repository: inputs.Repository, Live: inputs.Live,
+		Enabled:     inputs.Enabled,
+		SaveEnabled: inputs.SaveEnabled,
 		Recovering: func() bool {
-			runtime := backendRuntime(a)
-			return runtime != nil && runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a.BackendRuntimeDeps()))
+			runtime := frontendruntime.BackendForKind(inputs.RuntimeOwner.Backend())
+			return runtime != nil && runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(inputs.RuntimeDeps.currentBackend()))
 		},
-		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
-		Workspace:          func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
-		Starter:            func() retry.SubmissionStarter { return a.bindings.Submissions },
+		DefaultWorkspaceID: configView.defaultWorkspaceID,
+		Workspace:          func(id string) *config.Workspace { return config.FindWorkspace(inputs.Config, id) },
+		Starter:            func() retry.SubmissionStarter { return inputs.Starter },
 		DispatchTimer: func(key string, seq uint64) {
-			runAsync(a, func() {
-				_, _ = dispatchInput(a.BackendRuntimeDeps(), application.RetryTimerFired{Frontend: identity.FrontendID(a.FrontendID()), SessionKey: identity.SessionKey(key), Sequence: seq})
+			inputs.RunAsync(func() {
+				_, _ = dispatchInput(inputs.RuntimeDeps.currentBackend(), application.RetryTimerFired{Frontend: identity.FrontendID(inputs.FrontendID), SessionKey: identity.SessionKey(key), Sequence: seq})
 			})
 		},
-		Presenter: view,
+		Presenter: inputs.Presenter,
 	}
 }
 

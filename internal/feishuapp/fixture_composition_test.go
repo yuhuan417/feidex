@@ -151,7 +151,14 @@ func prepareTestApp(a *App) *App {
 	a.bindings.MaintenanceCommands = BuildMaintenanceCommands(a)
 	a.bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: a.State(), Runtime: a.runtimeOwner.TurnBindings, Items: a.bindings.TurnItems}
 	a.bindings.AutoRetry = AutoRetryView(a)
-	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(a, a.bindings.AutoRetry, liveThreads))
+	autoRetryRuntimeDeps := &BackendRuntimeDeps{}
+	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(AutoRetryPortInputs{
+		Context: a.Context, Tracker: a.runtimeOwner.AutoRetries, Repository: a.State(), Live: liveThreads,
+		Enabled: func() bool { return a.bindings.AutoRetry.Settings().Enabled }, SaveEnabled: a.bindings.RuntimeSettings.SetAutoRetry,
+		RuntimeDeps: autoRetryRuntimeDeps, RuntimeOwner: a.runtimeOwner, RunAsync: a.RunAsync,
+		FrontendID: a.FrontendID(), Config: a.Config(), ConfigMu: a.ConfigMu(),
+		Starter: a.bindings.Submissions, Presenter: a.bindings.AutoRetry,
+	}))
 	a.bindings.FrontendQuery = frontendapp.Query{Repository: a.State(), Facts: FrontendFacts(a.runtimeOwner, a.bindings.Maintenance), Retrying: a.bindings.AutoRetry.HasBlockingAutoRetry}
 	var codexUpgrade codexruntime.UpgradeService
 	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(a,
@@ -384,6 +391,7 @@ func prepareTestApp(a *App) *App {
 		a.bindings.MCP = mcp
 		a.runtimeOwner.MCP = runtime.NewResource(mcp)
 	}
+	*autoRetryRuntimeDeps = a.BackendRuntimeDeps()
 	return a
 }
 

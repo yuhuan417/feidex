@@ -169,7 +169,15 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.MaintenanceCommands = feishuapp.BuildMaintenanceCommands(frontend)
 	bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings, Items: bindings.TurnItems}
 	bindings.AutoRetry = feishuapp.AutoRetryView(frontend)
-	bindings.AutoRetry.Engine = retry.NewEngine(feishuapp.AutoRetryPorts(frontend, bindings.AutoRetry, liveThreads))
+	// The queue captures AutoRetry by value before the dispatcher is wired.
+	autoRetryRuntimeDeps := &feishuapp.BackendRuntimeDeps{}
+	bindings.AutoRetry.Engine = retry.NewEngine(feishuapp.AutoRetryPorts(feishuapp.AutoRetryPortInputs{
+		Context: frontend.Context, Tracker: scope.RuntimeOwner.AutoRetries, Repository: frontend.State(), Live: liveThreads,
+		Enabled: func() bool { return bindings.AutoRetry.Settings().Enabled }, SaveEnabled: bindings.RuntimeSettings.SetAutoRetry,
+		RuntimeDeps: autoRetryRuntimeDeps, RuntimeOwner: scope.RuntimeOwner, RunAsync: frontend.RunAsync,
+		FrontendID: frontend.FrontendID(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
+		Starter: bindings.Submissions, Presenter: bindings.AutoRetry,
+	}))
 	bindings.FrontendQuery = frontendapp.Query{Repository: frontend.State(), Facts: feishuapp.FrontendFacts(scope.RuntimeOwner, bindings.Maintenance), Retrying: bindings.AutoRetry.HasBlockingAutoRetry}
 	var codexUpgrade codexruntime.UpgradeService
 	bindings.CodexRecovery = codexruntime.NewRecoveryService(feishuapp.CodexRecoveryPorts(frontend,
@@ -397,6 +405,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		bindings.Upgrades, bindings.BackendUpgrades,
 	))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
+	*autoRetryRuntimeDeps = frontend.BackendRuntimeDeps()
 	if err := feishuapp.CanonicalizeStoredSessionKeys(frontend); err != nil {
 		return nil, err
 	}
