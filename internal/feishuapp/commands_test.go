@@ -609,7 +609,7 @@ func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := commandCompact(a, msg, nil); err != nil {
+	if err := commandCompact(a.bindings.BackendActions, a.bindings.Compaction, msg, nil); err != nil {
 		t.Fatalf("commandCompact() error = %v", err)
 	}
 	if gotMethod != "thread/compact/start" || gotThreadID != "thread-1" {
@@ -641,7 +641,7 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := commandCompact(a, msg, nil); err == nil {
+	if err := commandCompact(a.bindings.BackendActions, a.bindings.Compaction, msg, nil); err == nil {
 		t.Fatal("expected commandCompact() to fail")
 	}
 	sess := a.store.GetSession("feishu:chat:chat")

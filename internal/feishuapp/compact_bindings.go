@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	codexadapter "feidex/internal/adapter/backend/codex"
+	"feidex/internal/adapter/feishu/backend"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
 	compaction "feidex/internal/application/compaction"
@@ -53,18 +54,12 @@ func (g compactGateway) StartCompaction(ctx context.Context, threadID string) er
 	}
 	return (codexadapter.Gateway{Client: client}).StartCompaction(ctx, threadID)
 }
-func commandCompact(a *App, msg *feishu.InboundMessage, args []string) error {
+func commandCompact(backendActions backend.ActionService, compactionService *compaction.Service, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /compact")
 	}
-	if a == nil {
+	if compactionService == nil {
 		return nil
 	}
-	return a.bindings.BackendActions.HandleCompactCommand(msg, a.bindings.Compaction)
-}
-func runMenuCompactAction(a *App, action *feishu.CardAction, key string) error {
-	if a == nil {
-		return nil
-	}
-	return a.bindings.BackendActions.RunMenuCompactAction(action, key, a.bindings.Compaction)
+	return backendActions.HandleCompactCommand(msg, compactionService)
 }

@@ -130,7 +130,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"compact": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return commandCompact(a, msg, args)
+					return commandCompact(a.bindings.BackendActions, a.bindings.Compaction, msg, args)
 				},
 			},
 		},

@@ -67,7 +67,7 @@ func (s cardActionService) completeMenuCompact(action *feishu.CardAction, sessio
 	}
 	runAsync(s.app, func() {
 		card := renderCompactAcceptedCard(s.app.State(), sessionKey)
-		if err := runMenuCompactAction(s.app, action, sessionKey); err != nil {
+		if err := s.app.bindings.BackendActions.RunMenuCompactAction(action, sessionKey, s.app.bindings.Compaction); err != nil {
 			card = renderCompactFailedCard(s.app.State(), sessionKey, err.Error())
 		}
 		patchMaintenanceCard(s.app.Context(), s.app.FrontendID(), newEffectRunner(s.app.runtimeOwner), messageID, card, "compact menu patch failed",

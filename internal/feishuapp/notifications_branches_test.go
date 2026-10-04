@@ -135,7 +135,7 @@ func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 		return nil
 	}
 
-	if err := commandCompact(a, msg, nil); err != nil {
+	if err := commandCompact(a.bindings.BackendActions, a.bindings.Compaction, msg, nil); err != nil {
 		t.Fatalf("commandCompact() error = %v", err)
 	}
 	sess := a.store.GetSession(sessionKey)
