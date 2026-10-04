@@ -48,7 +48,7 @@ func TestDeliveryHelpers(t *testing.T) {
 		t.Fatalf("zero-value replyChunkDelivery final messages = %+v, want none", got)
 	}
 	a := prepareTestApp(&App{cfg: config.Default()})
-	if got := sendReplyMessages(a, nil, &domainsubmission.Submission{}, "ignored", false, "final_message"); got != nil {
+	if got := sendReplyMessagesWithReuse(a, nil, &domainsubmission.Submission{}, "ignored", false, "final_message", ""); got != nil {
 		t.Fatalf("sendReplyMessages(without feishu) = %+v, want nil", got)
 	}
 }

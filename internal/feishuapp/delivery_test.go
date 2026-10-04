@@ -51,7 +51,7 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 
 	ff.replyCardErr = errors.New("boom")
 	ff.replyTextWithIDs = nil
-	if ids := sendReplyMessages(a, context.Background(), sub, "", false, "turn_reasoning"); len(ids) != 1 {
+	if ids := sendReplyMessagesWithReuse(a, context.Background(), sub, "", false, "turn_reasoning", ""); len(ids) != 1 {
 		t.Fatalf("sendReplyMessages(fallback ids) = %#v", ids)
 	}
 	if len(ff.replyTextWithIDs) != 1 || ff.replyTextWithIDs[0] != "任务已结束。" {
@@ -60,7 +60,7 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 
 	ff.replyCardErr = nil
 	before := len(ff.replyCards)
-	if ids := sendReplyMessages(a, context.Background(), sub, "agent body", false, "turn_output"); len(ids) != 1 {
+	if ids := sendReplyMessagesWithReuse(a, context.Background(), sub, "agent body", false, "turn_output", ""); len(ids) != 1 {
 		t.Fatalf("sendReplyMessages(turn_output) = %#v", ids)
 	}
 	if len(ff.replyCards) != before+1 {
@@ -68,7 +68,7 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeProgress
-	if ids := sendReplyMessages(a, context.Background(), sub, "hidden", false, "turn_reasoning"); ids != nil {
+	if ids := sendReplyMessagesWithReuse(a, context.Background(), sub, "hidden", false, "turn_reasoning", ""); ids != nil {
 		t.Fatalf("sendReplyMessages(quiet gated) = %#v, want nil", ids)
 	}
 
