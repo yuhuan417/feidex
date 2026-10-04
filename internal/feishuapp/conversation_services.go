@@ -96,12 +96,6 @@ func forkReplyMessage(backend, id string) string {
 	}
 	return "forked current thread and switched to new branch thread."
 }
-func renderConversationUsage(a *App, sess *domain.Session) string {
-	if a.configView().configuredBackend() == domainbackend.BackendClaude {
-		return a.bindings.Usage.RenderClaudeUsageBody(sess)
-	}
-	return a.bindings.Usage.RenderCodexUsageBody(sess)
-}
 func interruptConversation(conversations *conversation.Service, deps BackendRuntimeDeps, ctx context.Context, key string, sess *domain.Session) error {
 	err := conversations.InterruptActiveTurn(ctx, key, sess)
 	deps = deps.currentBackend()

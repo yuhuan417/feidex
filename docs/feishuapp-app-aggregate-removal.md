@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 354 |
-| 收 `*App` 的顶层函数 | 222 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 349 |
+| 收 `*App` 的顶层函数 | 221 |
 | 收 `*App` 的 `*Ports` 工厂 | 11 |
-| **持有 `*App` 字段的结构体** | **21** |
+| **持有 `*App` 字段的结构体** | **17** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 0。`*App`
@@ -727,6 +727,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 109 将 `threadMenuWorkspaceConfigAdapter` 改为持有 workspace configuration service 和 backend supplier；当前 thread 选择与缺少活动线程时的 backend-specific 提示不变。生产 `*App` 引用预算由 358 降至 356，lazy binding-read 预算保持 0。
 
 步骤 110 将 Goal continuation dependencies 直接在 composition root 中装配，不再由 `GoalContinuationPorts(*App)` 读取聚合字段；配置查询和 workspace selection 默认值改为接收 config/mutex，frontend 隔离仍按相同 session key parser 判断。对照 SM-25，后台 continuation 仍只创建合成 submission 和新的 Feishu anchor，不触发本地 `turn/start`；生产 `*App` 引用预算由 356 降至 354，lazy binding-read 预算保持 0。
+
+步骤 111 将 debug usage、runtime state 与 workspace adapters 从持有整个 `*App` 改为持有 turn-binding tracker、tracker-backed usage renderer/backend supplier、workspace config service 和 picker renderer，并删除因此无用的聚合 helper。该改动不改变 debug/usage 查询或卡片渲染行为；生产 `*App` 引用预算由 354 降至 349，App-bearing 结构体由 21 降至 17，lazy binding-read 预算保持 0。
 
 ## 方法
 

@@ -5,11 +5,15 @@ import (
 	configadapter "feidex/internal/adapter/config"
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+	"feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/application/fileshare"
 	"feidex/internal/config"
+	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	domainturn "feidex/internal/domain/turn"
+	domainworkspace "feidex/internal/domain/workspace"
 	"feidex/internal/feishu"
+	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -44,9 +48,16 @@ func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 	}
 	return appdebugviewcmd.Dependencies{
 		ConfigProvider: app, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)), FileSharing: app.bindings.FileSharing, CardRenderer: simpleStatusCardRenderer{client: app.feishu}, StateProvider: app.State(),
-		RuntimeStateProvider: debugRuntimeStateAdapter{app: app}, ConversationBackendProvider: debugConversationBackendAdapter{app: app},
-		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{app: app}, WorkspaceRenderProvider: debugWorkspaceRenderAdapter{app: app},
-		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return app.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return app.configView().replyInThreadEnabled() },
+		RuntimeStateProvider: debugRuntimeStateAdapter{tracker: app.runtimeOwner.TurnBindings},
+		ConversationBackendProvider: debugConversationBackendAdapter{
+			backend:      ConfiguredBackendBuilder(app.Config(), app.ConfigMu(), app.runtimeOwner.Backend, app.FrontendID(), app.FrontendConfigIndex()),
+			runtimeState: debugRuntimeStateAdapter{tracker: app.runtimeOwner.TurnBindings},
+			threadLabel:  appthreadmenu.SessionCurrentThreadLabel,
+			missingLabel: primaryConversationMissingLabel,
+		},
+		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{configuration: app.bindings.WorkspaceConfiguration},
+		WorkspaceRenderProvider: debugWorkspaceRenderAdapter{render: app.bindings.WorkspacePresentation.RenderPathPickerCard},
+		MakeSessionKeyFn:        func(m *feishu.InboundMessage) string { return app.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return app.configView().replyInThreadEnabled() },
 		CompleteMenuCommandFn: func(a *feishu.CardAction, s, r, p string) (*callback.CardActionTriggerResponse, error) {
 			return completeMenuCommand(app, a, s, r, p)
 		},
@@ -64,38 +75,66 @@ func BuildUsage(app *App) appdebugviewcmd.UsageService {
 	return appdebugviewcmd.NewUsageService(newDebugViewAppAdapter(app))
 }
 
-type debugRuntimeStateAdapter struct {
-	app *App
+type debugTurnBindingTracker interface {
+	appdebugviewcmd.TurnBindingTracker
+	CurrentThreadUsage(string) (domainturn.ThreadTokenUsage, bool)
 }
 
+type debugRuntimeStateAdapter struct{ tracker debugTurnBindingTracker }
+
 func (a debugRuntimeStateAdapter) TurnBindingTracker() appdebugviewcmd.TurnBindingTracker {
-	return a.app.runtimeOwner.TurnBindings
+	return a.tracker
 }
 
 func (a debugRuntimeStateAdapter) CurrentThreadUsage(threadID string) (domainturn.ThreadTokenUsage, bool) {
-	return a.app.runtimeOwner.TurnBindings.CurrentThreadUsage(threadID)
+	return a.tracker.CurrentThreadUsage(threadID)
 }
 
 type debugConversationBackendAdapter struct {
-	app *App
+	backend      func() string
+	runtimeState debugRuntimeStateAdapter
+	threadLabel  func(*conversation.Session) string
+	missingLabel func(string) string
 }
 
 func (a debugConversationBackendAdapter) RenderUsageBody(sess *conversation.Session) string {
-	return renderConversationUsage(a.app, sess)
+	backend := a.backend()
+	if backend == domainbackend.BackendClaude {
+		if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+			return a.missingLabel(domainbackend.BackendClaude) + "。"
+		}
+		body := "当前会话暂无 Claude usage 数据。"
+		if a.runtimeState.tracker != nil {
+			if usage, ok := a.runtimeState.tracker.GetClaudeThreadUsage(sess.ActiveThreadID); ok {
+				body = appdebugviewcmd.RenderClaudeThreadUsageCardBody(a.threadLabel(sess), sess.ActiveThreadID, usage)
+			}
+		}
+		return body
+	}
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
+		return a.missingLabel(domainbackend.BackendCodex) + "。"
+	}
+	body := "当前线程暂无 token usage 数据。"
+	if usage, ok := a.runtimeState.CurrentThreadUsage(sess.ActiveThreadID); ok {
+		contextLine := ""
+		if usage.ModelContextWindow != nil {
+			contextLine = appdebugviewcmd.FormatContextLeftLine(usage.Last.InputTokens, *usage.ModelContextWindow)
+		}
+		body = appdebugviewcmd.RenderThreadUsageCardBody(a.threadLabel(sess), sess.ActiveThreadID, usage, contextLine)
+	}
+	return body
 }
 
-type debugWorkspaceConfigAdapter struct {
-	app *App
-}
+type debugWorkspaceConfigAdapter struct{ configuration *workspacecmd.ConfigService }
 
 func (a debugWorkspaceConfigAdapter) CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (string, *conversation.Session, *config.Workspace) {
-	return currentWorkspaceForMessage(a.app.bindings.WorkspaceConfiguration, msg)
+	return currentWorkspaceForMessage(a.configuration, msg)
 }
 
 type debugWorkspaceRenderAdapter struct {
-	app *App
+	render func(string, domainworkspace.PathPickerPayload) (map[string]any, error)
 }
 
 func (a debugWorkspaceRenderAdapter) RenderPathPickerCard(requestID string, payload appdebugviewcmd.PathPickerPayload) (map[string]any, error) {
-	return a.app.bindings.WorkspacePresentation.RenderPathPickerCard(requestID, payload)
+	return a.render(requestID, payload)
 }
