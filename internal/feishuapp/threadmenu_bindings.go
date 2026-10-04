@@ -9,6 +9,7 @@ import (
 	appbackend "feidex/internal/adapter/feishu/backend"
 
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+	"feidex/internal/adapter/feishu/workspacecmd"
 	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -133,7 +134,10 @@ func (a *App) ThreadMenuWorkspaceThread() appthreadmenu.WorkspaceThreadProvider 
 }
 
 func (a *App) ThreadMenuWorkspaceConfig() appthreadmenu.WorkspaceConfigProvider {
-	return threadMenuWorkspaceConfigAdapter{app: a}
+	return threadMenuWorkspaceConfigAdapter{
+		workspaceConfiguration: a.bindings.WorkspaceConfiguration,
+		backend:                ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
+	}
 }
 
 func (a *App) ThreadMenuBackendActions() appthreadmenu.BackendActionProvider {
@@ -169,11 +173,12 @@ func (a *App) ShowClaudeSessionPermissionMenuFromApp(msg *feishu.InboundMessage)
 }
 
 type threadMenuWorkspaceConfigAdapter struct {
-	app *App
+	workspaceConfiguration *workspacecmd.ConfigService
+	backend                func() string
 }
 
 func (a threadMenuWorkspaceConfigAdapter) CurrentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error) {
-	return currentThreadForMessage(a.app, msg)
+	return currentThreadForMessage(a.workspaceConfiguration, a.backend, msg)
 }
 
 func (a *App) LockAutoRetryDispatch(sessionKey string) func() {

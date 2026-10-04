@@ -129,10 +129,10 @@ func currentWorkspaceForMessage(workspaceconfiguration *workspacecmd.ConfigServi
 	return workspaceconfiguration.CurrentWorkspaceForMessage(msg)
 }
 
-func currentThreadForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error) {
-	sessionKey, sess, ws = currentWorkspaceForMessage(a.bindings.WorkspaceConfiguration, msg)
+func currentThreadForMessage(workspaceConfiguration *workspacecmd.ConfigService, backend func() string, msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error) {
+	sessionKey, sess, ws = currentWorkspaceForMessage(workspaceConfiguration, msg)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(a.configView().configuredBackend()))
+		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(backend()))
 	}
 	return sessionKey, sess, ws, strings.TrimSpace(sess.ActiveThreadID), nil
 }
