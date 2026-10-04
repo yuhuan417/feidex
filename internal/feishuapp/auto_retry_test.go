@@ -156,8 +156,8 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.frontendID = "default"
-	recomposeTestApp(a)
 	a.asyncRunner = func(fn func()) { fn() }
+	recomposeTestApp(a)
 
 	scheduled := make([]scheduledRetry, 0, 2)
 	a.bindings.AutoRetry.AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {
@@ -284,8 +284,8 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	a.frontendID = "default"
-	recomposeTestApp(a)
 	a.asyncRunner = func(fn func()) { fn() }
+	recomposeTestApp(a)
 
 	scheduled := make([]scheduledRetry, 0, 2)
 	a.bindings.AutoRetry.AutoRetryTracker().After = func(delay time.Duration, fn func()) appautoretry.DelayedTask {

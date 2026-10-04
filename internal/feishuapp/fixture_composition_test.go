@@ -9,6 +9,7 @@ import (
 	"feidex/internal/adapter/feishu/finalcardpatch"
 	"feidex/internal/adapter/feishu/goalcmd"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/adapter/feishu/turnmeta"
 	"feidex/internal/adapter/feishu/turnstream"
@@ -316,7 +317,22 @@ func prepareTestApp(a *App) *App {
 		ClearProcessing: a.bindings.PendingQueue.ClearSubmissionProcessingReactions,
 		StartTurn:       a.bindings.TurnStarter.Start, StartReview: a.bindings.Review.StartSubmission,
 	}))
-	*a.bindings.Turns = turn.NewService(TurnPorts(a, a.bindings.TurnPresentation))
+	turnPlanMode := &planmode.Dependencies{}
+	runtimeDeps := a.BackendRuntimeDeps()
+	turnCards := NewOutboundCardService(OutboundCardInputs{
+		RuntimeDeps: runtimeDeps, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+		InteractionDelivery: a.bindings.InteractionDelivery, TurnPresentation: a.bindings.TurnPresentation,
+		Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
+		TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,
+	})
+	*a.bindings.Turns = turn.NewService(TurnPorts(TurnPortInputs{
+		Runtime: runtimeDeps, TurnPresentation: a.bindings.TurnPresentation, Cards: turnCards,
+		TurnMetadata: a.bindings.TurnMetadata, Continuation: a.bindings.Continuation,
+		PendingQueue: a.bindings.PendingQueue, Submissions: a.bindings.Submissions, AutoRetry: a.bindings.AutoRetry,
+		SubmissionCleanup: a.bindings.SubmissionCleanup, Compaction: a.bindings.Compaction,
+		GoalContinuation: a.bindings.GoalContinuation, PlanMode: turnPlanMode,
+		AnnouncementQuery: a.bindings.AnnouncementQuery, AsyncRunner: a.AsyncRunner(),
+	}))
 	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(a, a.bindings.Turns))
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a.BackendRuntimeDeps()), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}
 	a.bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: ClaudeSessionStopped(ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()), a.runtimeOwner.ClaudeCore), Session: a.State().Session, Finish: a.bindings.Turns.FinishTurn}
@@ -422,6 +438,12 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ThreadMenu = BuildThreadMenu(a)
 	planSource, planCatalog, planWorkspaces := PlanPorts(a.Config(), a.ConfigMu(), a.bindings.ModelSnapshots, a.runtimeOwner)
 	*a.bindings.Plan = planapp.Service{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Repository: a.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: a.Context}, Conversations: a.bindings.Conversations, Workspaces: planWorkspaces, Queue: a.bindings.Submissions}
+	*turnPlanMode = PlanModePorts(PlanModePortInputs{
+		Runtime: a.BackendRuntimeDeps(), UseCase: a.bindings.Plan, Continuation: a.bindings.Continuation,
+		State: a.State(), ModelSnapshots: a.bindings.ModelSnapshots,
+		WorkspaceSelection: a.bindings.WorkspaceSelection, Submissions: a.bindings.Submissions,
+		Conversations: a.bindings.Conversations, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+	})
 	a.bindings.ReviewCommands = BuildReviewCommands(a)
 	cardActionFrontendID := a.FrontendID()
 	normalizeCardActionSessionKey := func(key string) string {

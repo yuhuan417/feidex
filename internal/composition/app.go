@@ -18,6 +18,7 @@ import (
 	"feidex/internal/adapter/feishu/goalcmd"
 	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/adapter/feishu/turnmeta"
 	"feidex/internal/adapter/feishu/turnstream"
@@ -329,7 +330,24 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		ClearProcessing: bindings.PendingQueue.ClearSubmissionProcessingReactions,
 		StartTurn:       bindings.TurnStarter.Start, StartReview: bindings.Review.StartSubmission,
 	}))
-	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(frontend, bindings.TurnPresentation))
+	// Turn completion callbacks run after composition, but the plan-mode service
+	// and conversation service are assembled later in this function.
+	turnPlanMode := &planmode.Dependencies{}
+	runtimeDeps := frontend.BackendRuntimeDeps()
+	turnCards := feishuapp.NewOutboundCardService(feishuapp.OutboundCardInputs{
+		RuntimeDeps: runtimeDeps, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+		InteractionDelivery: bindings.InteractionDelivery, TurnPresentation: bindings.TurnPresentation,
+		Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
+		TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,
+	})
+	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(feishuapp.TurnPortInputs{
+		Runtime: runtimeDeps, TurnPresentation: bindings.TurnPresentation, Cards: turnCards,
+		TurnMetadata: bindings.TurnMetadata, Continuation: bindings.Continuation,
+		PendingQueue: bindings.PendingQueue, Submissions: bindings.Submissions, AutoRetry: bindings.AutoRetry,
+		SubmissionCleanup: bindings.SubmissionCleanup, Compaction: bindings.Compaction,
+		GoalContinuation: bindings.GoalContinuation, PlanMode: turnPlanMode,
+		AnnouncementQuery: bindings.AnnouncementQuery, AsyncRunner: frontend.AsyncRunner(),
+	}))
 	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend, bindings.Turns))
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend.BackendRuntimeDeps()), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
 	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex()), scope.RuntimeOwner.ClaudeCore), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}
@@ -448,6 +466,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ThreadMenu = feishuapp.BuildThreadMenu(frontend)
 	planSource, planCatalog, planWorkspaces := feishuapp.PlanPorts(frontend.Config(), frontend.ConfigMu(), bindings.ModelSnapshots, scope.RuntimeOwner)
 	*bindings.Plan = planapp.Service{Forms: bindings.Forms, Delivery: bindings.InteractionDelivery, Repository: frontend.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: frontend.Context}, Conversations: bindings.Conversations, Workspaces: planWorkspaces, Queue: bindings.Submissions}
+	*turnPlanMode = feishuapp.PlanModePorts(feishuapp.PlanModePortInputs{
+		Runtime: frontend.BackendRuntimeDeps(), UseCase: bindings.Plan, Continuation: bindings.Continuation,
+		State: frontend.State(), ModelSnapshots: bindings.ModelSnapshots,
+		WorkspaceSelection: bindings.WorkspaceSelection, Submissions: bindings.Submissions,
+		Conversations: bindings.Conversations, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+	})
 	bindings.ReviewCommands = feishuapp.BuildReviewCommands(frontend)
 	bindings.MCP, err = feishuapp.BuildMCP(frontend)
 	if err != nil {

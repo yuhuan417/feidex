@@ -2,16 +2,21 @@ package feishuapp
 
 import (
 	"context"
+	retryview "feidex/internal/adapter/feishu/autoretry"
 	"feidex/internal/adapter/feishu/planmode"
+	"feidex/internal/adapter/feishu/turnmeta"
 	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/application/announcement"
 	"feidex/internal/application/compaction"
+	"feidex/internal/application/continuation"
 	"feidex/internal/application/goal"
+	"feidex/internal/application/submission"
 	applicationturn "feidex/internal/application/turn"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
 	frontendruntime "feidex/internal/runtime"
+	"feidex/internal/runtime/maintenance"
 	"strings"
 )
 
@@ -72,7 +77,7 @@ func (p liveThreadMarker) MarkSessionThreadLive(sessionKey, threadID string) {
 type turnContinuationPort struct {
 	compaction *compaction.Service
 	goal       *goal.Service
-	plan       planmode.Dependencies
+	plan       *planmode.Dependencies
 }
 
 func (p turnContinuationPort) BindStandaloneCompactTurn(threadID, turnID string) bool {
@@ -85,7 +90,10 @@ func (p turnContinuationPort) FinishStandaloneCompactTurn(threadID, turnID, stat
 	return p.compaction.FinishStandaloneCompactTurn(threadID, turnID, status)
 }
 func (p turnContinuationPort) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush applicationturn.TurnStreamFlushResult) bool {
-	return planmode.ProcessCodexPlanModeExitOnTurnCompleted(p.plan, sessionKey, sub, threadID, turnID, status, planmode.TurnStreamFlushResult{
+	if p.plan == nil {
+		return false
+	}
+	return planmode.ProcessCodexPlanModeExitOnTurnCompleted(*p.plan, sessionKey, sub, threadID, turnID, status, planmode.TurnStreamFlushResult{
 		ShouldUsePlanExitPrompt: flush.ShouldUsePlanExitPrompt, PlanMarkdown: flush.PlanMarkdown,
 		PlanMessageID: flush.PlanMessageID,
 	})
@@ -112,23 +120,45 @@ func (p turnDiagnosticsPort) LogSessionState(event, sessionKey string, sess *con
 	logSessionState(event, sessionKey, sess)
 }
 
-func TurnPorts(app *App, turnPresentation *appturnstream.Service) applicationturn.Dependencies {
-	owner := app.runtimeOwner
-	outboundCards := newOutboundCardService(app)
+type TurnPortInputs struct {
+	Runtime           BackendRuntimeDeps
+	TurnPresentation  *appturnstream.Service
+	Cards             OutboundCardService
+	TurnMetadata      turnmeta.Service
+	Continuation      *continuation.Service
+	PendingQueue      *submission.PendingQueueService
+	Submissions       *submission.SubmissionQueueService
+	AutoRetry         retryview.Service
+	SubmissionCleanup maintenance.SubmissionCleanup
+	Compaction        *compaction.Service
+	GoalContinuation  *goal.Service
+	PlanMode          *planmode.Dependencies
+	AnnouncementQuery announcement.Query
+	AsyncRunner       func(func())
+}
+
+func TurnPorts(inputs TurnPortInputs) applicationturn.Dependencies {
+	runtimeDeps := inputs.Runtime
+	owner := runtimeDeps.runtime.owner
+	if owner == nil {
+		return applicationturn.Dependencies{}
+	}
+	outboundCards := inputs.Cards
+	state := runtimeDeps.stateView
 	return applicationturn.Dependencies{
-		State: app.State(), Bindings: app.bindings.TurnMetadata,
-		Replies: app.bindings.Continuation, Streams: turnPresentation,
-		Reactions: app.bindings.PendingQueue, Cards: outboundCards,
-		Queue: app.bindings.Submissions, Retry: app.bindings.AutoRetry,
-		Cleanup: app.bindings.SubmissionCleanup,
-		Runtime: turnRuntimePort{lifecycle: &owner.Lifecycle, asyncRunner: app.asyncRunner, liveThreads: liveThreadMarker{
-			tracker: owner.LiveThreads, state: app.State(), announcement: app.bindings.AnnouncementQuery, refreshes: owner.Announcements,
+		State: state, Bindings: inputs.TurnMetadata,
+		Replies: inputs.Continuation, Streams: inputs.TurnPresentation,
+		Reactions: inputs.PendingQueue, Cards: outboundCards,
+		Queue: inputs.Submissions, Retry: inputs.AutoRetry,
+		Cleanup: inputs.SubmissionCleanup,
+		Runtime: turnRuntimePort{lifecycle: &owner.Lifecycle, asyncRunner: inputs.AsyncRunner, liveThreads: liveThreadMarker{
+			tracker: owner.LiveThreads, state: state, announcement: inputs.AnnouncementQuery, refreshes: owner.Announcements,
 		}}, RunSessionAsync: func(sessionKey string, fn func()) {
 			if fn == nil {
 				return
 			}
-			runAsync(app, func() { app.sessionActorRuntime().Run("session:"+strings.TrimSpace(sessionKey), fn) })
-		}, Continuations: turnContinuationPort{compaction: app.bindings.Compaction, goal: app.bindings.GoalContinuation, plan: newPlanModeAppAdapter(app)},
-		Delivery: turnDeliveryPort{state: app.State(), replyChunks: outboundCards.replyChunks}, Diagnostics: turnDiagnosticsPort{},
+			owner.Lifecycle.Run(func() { runSessionOnActor(runtimeDeps.sessionActors, sessionKey, fn) }, inputs.AsyncRunner)
+		}, Continuations: turnContinuationPort{compaction: inputs.Compaction, goal: inputs.GoalContinuation, plan: inputs.PlanMode},
+		Delivery: turnDeliveryPort{state: state, replyChunks: outboundCards.replyChunks}, Diagnostics: turnDiagnosticsPort{},
 	}
 }
