@@ -359,7 +359,18 @@ func prepareTestApp(a *App) *App {
 			ReplyCodexError:              CodexErrorReplyPort(a.runtimeOwner),
 		}),
 	}
-	failure := backendfailure.NewBackendFailureService(BackendFailurePorts(a))
+	failureCards := NewOutboundCardService(OutboundCardInputs{
+		RuntimeDeps: runtimeDeps, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+		InteractionDelivery: a.bindings.InteractionDelivery, TurnPresentation: a.bindings.TurnPresentation,
+		Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
+		TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,
+	})
+	failure := backendfailure.NewBackendFailureService(BackendFailurePorts(BackendFailurePortInputs{
+		Runtime: runtimeDeps, TurnPresentation: a.bindings.TurnPresentation, Compaction: a.bindings.Compaction,
+		InteractionLifecycle: a.bindings.InteractionLifecycle, AutoRetry: a.bindings.AutoRetry,
+		SubmissionCleanup: a.bindings.SubmissionCleanup, PendingQueue: a.bindings.PendingQueue,
+		Submissions: a.bindings.Submissions, Cards: failureCards, AsyncRunner: a.AsyncRunner(),
+	}))
 	a.bindings.BackendFailure = &failure
 	inboundService := &inbound.Service{}
 	forwardService := inbound.ForwardService{Gateway: ForwardGateway(a.feishu), Tasks: ForwardTasks(&a.runtimeOwner.Lifecycle, a.asyncRunner), Context: a.Context, Process: ForwardProcessor(a.runtimeOwner.SessionActors, SessionKeyBuilder(a.FrontendID()), func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a.runtimeOwner.Lifecycle.Context, a.FrontendID(), *a.runtimeOwner.EffectRunner)}

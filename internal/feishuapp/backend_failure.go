@@ -1,10 +1,15 @@
 package feishuapp
 
 import (
+	retryview "feidex/internal/adapter/feishu/autoretry"
 	mcpbridge "feidex/internal/adapter/feishu/mcpbridge"
 	"feidex/internal/application/backendfailure"
+	"feidex/internal/application/compaction"
+	"feidex/internal/application/interaction"
+	"feidex/internal/application/submission"
 	domainsubmission "feidex/internal/domain/submission"
 	backendruntime "feidex/internal/runtime"
+	"feidex/internal/runtime/maintenance"
 
 	"context"
 	"encoding/json"
@@ -84,43 +89,53 @@ func failSubmissionWithoutTerminalCompletion(d BackendRuntimeDeps, sessionKey st
 // case. The services it calls back into are read once at construction: by the
 // time composition builds the failure service every one of them is assigned,
 // and a closure that reads a.bindings would hide that from the type system.
-func BackendFailurePorts(a *App) backendfailure.FailureDeps {
-	turnPresentation := a.bindings.TurnPresentation
-	compaction := a.bindings.Compaction
-	interactionLifecycle := a.bindings.InteractionLifecycle
-	autoRetry := a.bindings.AutoRetry
-	submissionCleanup := a.bindings.SubmissionCleanup
-	pendingQueue := a.bindings.PendingQueue
-	submissions := a.bindings.Submissions
+type BackendFailurePortInputs struct {
+	Runtime              BackendRuntimeDeps
+	TurnPresentation     *appturnstream.Service
+	Compaction           *compaction.Service
+	InteractionLifecycle interaction.LifecycleService
+	AutoRetry            retryview.Service
+	SubmissionCleanup    maintenance.SubmissionCleanup
+	PendingQueue         *submission.PendingQueueService
+	Submissions          *submission.SubmissionQueueService
+	Cards                OutboundCardService
+	AsyncRunner          func(func())
+}
+
+func BackendFailurePorts(inputs BackendFailurePortInputs) backendfailure.FailureDeps {
+	runtimeDeps := inputs.Runtime
+	owner := runtimeDeps.runtime.owner
+	if owner == nil {
+		return backendfailure.FailureDeps{}
+	}
+	stateStore := runtimeDeps.stateView
 	return backendfailure.FailureDeps{
-		Context: a.Context,
+		Context: owner.Lifecycle.Context,
 		State: backendfailure.FailureStateDeps{
 			AllSessions: func() []*conversation.Session {
-				return a.State().Sessions()
+				return stateStore.Sessions()
 			},
 			GetSubmission: func(id string) *domainsubmission.Submission {
-				return a.State().Submission(id)
+				return stateStore.Submission(id)
 			},
 			AllPendingRequests: func() []*state.PendingRequest {
-				return a.State().PendingRequests()
+				return stateStore.PendingRequests()
 			},
-			GetSession:     a.State().Session,
-			CommitTerminal: a.State().CommitTerminal,
+			GetSession:     stateStore.Session,
+			CommitTerminal: stateStore.CommitTerminal,
 		},
 		Sessions: backendfailure.FailureSessionDeps{
-			SessionBelongsToFrontend: func(sessionKey string) bool {
-				return a.configView().sessionBelongsToFrontend(sessionKey)
-			},
+			SessionBelongsToFrontend: runtimeDeps.view.sessionBelongsToFrontend,
 		},
 		Runtime: backendfailure.FailureRuntimeDeps{
 			RecordTurnError: func(threadID, turnID, message string) {
-				turnPresentation.RecordTurnError(threadID, turnID, message)
+				inputs.TurnPresentation.RecordTurnError(threadID, turnID, message)
 			},
 			FlushTurnStream: func(ctx context.Context, threadID, turnID string) appturnstream.FlushResult {
-				return turnPresentation.FlushTurnStream(ctx, threadID, turnID)
+				return inputs.TurnPresentation.FlushTurnStream(ctx, threadID, turnID)
 			},
 			FailStandaloneCompactTurn: func(threadID, turnID, message string) bool {
-				return compaction.FailStandaloneCompactTurn(threadID, turnID, message)
+				return inputs.Compaction.FailStandaloneCompactTurn(threadID, turnID, message)
 			},
 			BackendRuntimeFailsStandaloneCompaction: func(backend string) bool {
 				if runtime := backendruntime.BackendForKind(backend); runtime != nil {
@@ -131,39 +146,39 @@ func BackendFailurePorts(a *App) backendfailure.FailureDeps {
 		},
 		Cards: backendfailure.FailureCardDeps{
 			ExpireClaudeInteractions: func(key string) {
-				interactionLifecycle.ExpireAndPresent("claude", key, nil, "transport failure")
+				inputs.InteractionLifecycle.ExpireAndPresent("claude", key, nil, "transport failure")
 			},
 			ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool {
-				return autoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
+				return inputs.AutoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
 			},
 			ReplaceTurnEventCard: func(ctx context.Context, sub *domainsubmission.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
-				newOutboundCardService(a).replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
+				inputs.Cards.replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
 			},
 			PrependAttentionMention: func(text, userID string) string {
 				return apputil.PrependAttentionMentionMarkdown(text, userID)
 			},
 			TurnStopAttentionUserID: func(sub *domainsubmission.Submission, turnID string) string {
-				return turnStopAttentionUserID(a.State(), sub, turnID)
+				return turnStopAttentionUserID(stateStore, sub, turnID)
 			},
 		},
 		Async: backendfailure.FailureAsyncDeps{
 			CleanupSubmissionRuntimeState: func(sub *domainsubmission.Submission) {
-				submissionCleanup.CleanupSubmissionRuntimeState(sub)
+				inputs.SubmissionCleanup.CleanupSubmissionRuntimeState(sub)
 			},
 			ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
-				pendingQueue.ClearSubmissionProcessingReactions(sub)
+				inputs.PendingQueue.ClearSubmissionProcessingReactions(sub)
 			},
 			StartNextSubmissionAsync: func(sessionKey, reason string) {
-				submissions.StartNextSubmissionAsync(sessionKey, reason)
+				inputs.Submissions.StartNextSubmissionAsync(sessionKey, reason)
 			},
 			NextQueuedSubmissionSessionKey: func(sessionKey string) string {
-				return submissions.NextQueuedSessionKey(sessionKey)
+				return inputs.Submissions.NextQueuedSessionKey(sessionKey)
 			},
 			RunAsync: func(fn func()) {
-				runAsync(a, fn)
+				owner.Lifecycle.Run(fn, inputs.AsyncRunner)
 			},
 			RunSessionAsync: func(sessionKey string, fn func()) {
-				runSessionAsync(a, sessionKey, fn)
+				owner.Lifecycle.Run(func() { runSessionOnActor(runtimeDeps.sessionActors, sessionKey, fn) }, inputs.AsyncRunner)
 			},
 		},
 	}

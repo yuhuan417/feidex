@@ -374,7 +374,18 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			ReplyCodexError:              feishuapp.CodexErrorReplyPort(scope.RuntimeOwner),
 		}),
 	}
-	failure := backendfailure.NewBackendFailureService(feishuapp.BackendFailurePorts(frontend))
+	failureCards := feishuapp.NewOutboundCardService(feishuapp.OutboundCardInputs{
+		RuntimeDeps: runtimeDeps, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+		InteractionDelivery: bindings.InteractionDelivery, TurnPresentation: bindings.TurnPresentation,
+		Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
+		TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,
+	})
+	failure := backendfailure.NewBackendFailureService(feishuapp.BackendFailurePorts(feishuapp.BackendFailurePortInputs{
+		Runtime: runtimeDeps, TurnPresentation: bindings.TurnPresentation, Compaction: bindings.Compaction,
+		InteractionLifecycle: bindings.InteractionLifecycle, AutoRetry: bindings.AutoRetry,
+		SubmissionCleanup: bindings.SubmissionCleanup, PendingQueue: bindings.PendingQueue,
+		Submissions: bindings.Submissions, Cards: failureCards, AsyncRunner: frontend.AsyncRunner(),
+	}))
 	bindings.BackendFailure = &failure
 	// Inbound and ForwardInputs call each other at runtime, so neither can be
 	// built from the other's finished value. They are wired here instead: the

@@ -28,9 +28,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 276 |
-| 收 `*App` 的顶层函数 | 142 |
-| 收 `*App` 的 `*Ports` 工厂 | 6 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 275 |
+| 收 `*App` 的顶层函数 | 141 |
+| 收 `*App` 的 `*Ports` 工厂 | 5 |
 | **持有 `*App` 字段的结构体** | **4** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -77,7 +77,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | `a.X` | bindings | helpers | structs |
 |---|---|---|---|---|---|
-| 13 | `BackendFailurePorts` | 3 | 7 | 3 | 0 |
 | 10 | `CodexRecoveryPorts` | 7 | 1 | 2 | 0 |
 | 10 | `TurnPresentationPorts` | 3 | 5 | 2 | 0 |
 | 9 | `StartupRecoveryPorts` | 7 | 1 | 1 | 0 |
@@ -772,6 +771,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 135 将 `ClaudeRuntimePorts(*App, cfg)` 改为 `ClaudeRuntimePorts(ClaudeRuntimePortInputs)`，production composition 在 Claude runtime 创建时显式提供 backend runtime deps、card delivery、submission/model/interaction/turn/conversation owners；test-only fixture 在 `_test.go` 中保留便捷装配。factory 创建时仍动态取得当前 backend/runtime deps，Claude lifecycle、model acknowledgement、MCP 配置与卡片投递回调行为不变。本步对照 SM-03/04/08/15：只调整 runtime adapter 的依赖装配，不改变 session actor 串行边界、turn 完成语义、模型设置确认时机或 MCP 生命周期。生产 `*App` 引用预算由 281 降至 280，AST 中直接收 `*App` 的函数由 147 降至 146，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 8 降至 7，lazy binding-read 预算保持 0；`ClaudeRuntimePorts` 自身及其传递依赖不再含 `*App`。
 
 步骤 136 将 `TurnPorts(*App, ...)` 改为 `TurnPorts(TurnPortInputs)`，turn lifecycle、queue、retry、cleanup、runtime、card delivery 与 continuation owners 在 composition 显式传入；plan-mode completion dependencies 在 `Plan` 与 `Conversations` 服务装配完成后写入共享的 capability 值，避免 factory 闭包延迟读取 bindings。session 异步工作仍经过 frontend lifecycle admission 和同一 session actor，队列恢复仍在 completion cleanup 后调度；plan-exit follow-up 保留 parent/reuse、message-link 和缺少 Feishu client 时的失败行为。新显式 outbound/link adapter 替代后删除三个已无调用方的 App helper。对照 SM-03/04/06/08/14/25/26：未改变 thread/turn 绑定、终态边界、review/compact/goal continuation 分流、异步问题处理或 turn 完成后的队列顺序。自动重试队列优先级测试继续覆盖 retry 清理后同 session 与 group queue 的恢复。生产 `*App` 引用预算由 280 降至 276，收 `*App` 的顶层函数由 146 降至 142，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 7 降至 6，lazy binding-read 预算保持 0；`TurnPorts` 的 App 传递依赖归零。
+
+步骤 137 将 `BackendFailurePorts(*App)` 改为接收 `BackendFailurePortInputs`，由 composition 显式传入 runtime、turn/compaction、interaction、retry、cleanup、queue、card 与 async owners；failure adapter 不再读取 bindings 或捕获 App。后台任务仍通过 frontend lifecycle admission 和同一 session actor 执行。对照 SM-04/06/07：失败上下文记录不触发终态，仍由 `turn/completed(failed)` 收口；interrupt 与 compaction 生命周期不变。生产 `*App` 引用预算由 276 降至 275，收 `*App` 的顶层函数由 142 降至 141，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 6 降至 5，lazy binding-read 预算保持 0；`BackendFailurePorts` 的 App 传递依赖归零。
 
 ## 方法
 
