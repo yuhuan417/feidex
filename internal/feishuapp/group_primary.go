@@ -126,20 +126,20 @@ func currentBotOpenID(client FeishuClient) string {
 	return strings.TrimSpace(provider.BotOpenID())
 }
 
-func currentLiveBotOpenID(a *App) string {
-	if a == nil || a.feishu == nil {
+func currentLiveBotOpenID(client FeishuClient) string {
+	if client == nil {
 		return ""
 	}
-	if provider, ok := a.feishu.(liveBotOpenIDProvider); ok {
+	if provider, ok := client.(liveBotOpenIDProvider); ok {
 		if openID := strings.TrimSpace(provider.RefreshBotOpenID()); openID != "" {
 			return openID
 		}
 	}
-	return currentBotOpenID(a.feishu)
+	return currentBotOpenID(client)
 }
 
-func LiveBotOpenID(a *App) func() string {
-	return func() string { return currentLiveBotOpenID(a) }
+func LiveBotOpenID(client FeishuClient) func() string {
+	return func() string { return currentLiveBotOpenID(client) }
 }
 
 func currentBotName(client FeishuClient) string {
@@ -197,22 +197,22 @@ func setGroupPrimary(a *App, chatType, chatID string, enabled bool) (*state.Grou
 	return setGroupPrimaryState(a, chatType, chatID, enabled, nil)
 }
 
-func syncGroupPrimaryAssignment(a *App, msg *feishu.InboundMessage) (bool, error) {
+func syncGroupPrimaryAssignment(primary approuting.Service, frontendID string, client FeishuClient, msg *feishu.InboundMessage) (bool, error) {
 	assignment, ok := groupPrimaryAssignmentFromMessage(msg)
 	if !ok {
 		return false, nil
 	}
-	selfOpenID := currentLiveBotOpenID(a)
+	selfOpenID := currentLiveBotOpenID(client)
 	if selfOpenID == "" {
 		slog.Warn("group primary assignment skipped without live bot identity",
-			"frontend_id", strings.TrimSpace(a.FrontendID()),
+			"frontend_id", strings.TrimSpace(frontendID),
 			"chat_id", msg.ChatID,
 			"message_id", msg.MessageID,
 		)
 		return true, nil
 	}
-	stale, err := a.bindings.Primary.IsStaleAssignment(
-		a.FrontendID(), msg.ChatType, msg.ChatID, domainrouting.AssignmentStamp{MessageID: msg.MessageID, CreatedAt: msg.CreatedAt},
+	stale, err := primary.IsStaleAssignment(
+		frontendID, msg.ChatType, msg.ChatID, domainrouting.AssignmentStamp{MessageID: msg.MessageID, CreatedAt: msg.CreatedAt},
 	)
 	if err != nil {
 		return true, err
@@ -226,8 +226,29 @@ func syncGroupPrimaryAssignment(a *App, msg *feishu.InboundMessage) (bool, error
 		// it can acknowledge the assignment.
 		return false, nil
 	}
-	_, err = setGroupPrimaryState(a, msg.ChatType, msg.ChatID, false, msg)
-	return true, err
+	_, err = primary.SetPrimary(approuting.ChangePrimary{
+		Frontend: identity.FrontendID(frontendID),
+		Chat:     identity.ChatRef{Type: identity.ChatType(msg.ChatType), ID: msg.ChatID},
+		Enabled:  false,
+		Assignment: &domainrouting.AssignmentStamp{
+			MessageID: msg.MessageID,
+			CreatedAt: msg.CreatedAt,
+		},
+	})
+	if err != nil {
+		return true, err
+	}
+	updated, _ := primary.Lookup(frontendID, msg.ChatType, msg.ChatID)
+	if updated == nil {
+		return true, fmt.Errorf("group primary state for %s/%s not found after update", msg.ChatType, msg.ChatID)
+	}
+	slog.Info("group primary state written",
+		"frontend_id", strings.TrimSpace(frontendID),
+		"chat_id", msg.ChatID,
+		"primary_enabled", updated.Enabled,
+		"assignment_message_id", strings.TrimSpace(updated.LastAssignmentMessageID),
+	)
+	return true, nil
 }
 
 func isGroupPrimaryControlMessage(msg *feishu.InboundMessage) bool {

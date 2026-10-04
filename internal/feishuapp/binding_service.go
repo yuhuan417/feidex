@@ -208,7 +208,7 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 		return fmt.Errorf("usage: /primary on")
 	}
 	assignment, ok := groupPrimaryAssignmentForCommand(msg)
-	if !ok || strings.TrimSpace(currentLiveBotOpenID(s.app)) != assignment.TargetBotOpenID {
+	if !ok || strings.TrimSpace(currentLiveBotOpenID(s.app.feishu)) != assignment.TargetBotOpenID {
 		return fmt.Errorf("usage: /primary on（群内需要明确 @目标 Bot）")
 	}
 	return s.setPrimaryForMessage(msg)
@@ -218,7 +218,7 @@ func (s bindingService) setPrimaryForMessage(msg *feishu.InboundMessage) error {
 	if msg == nil {
 		return nil
 	}
-	currentOpenID := currentLiveBotOpenID(s.app)
+	currentOpenID := currentLiveBotOpenID(s.app.feishu)
 	if currentOpenID == "" {
 		return fmt.Errorf("bot open_id is required to set group primary")
 	}

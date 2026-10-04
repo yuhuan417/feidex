@@ -100,7 +100,8 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: func() string { return a.configView().configuredBackend() }}, Runner: newEffectRunner(a.runtimeOwner), Context: a.Context()}
 	primaryRepository := statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())
 	a.bindings.Primary = routing.Service{Repository: primaryRepository}
-	a.bindings.GroupMessages = routing.GroupMessages{Frontend: a.FrontendID(), Primary: a.bindings.Primary, Links: a.State(), SelfOpenID: func() string { return currentLiveBotOpenID(a) }}
+	feishuClient := a.feishu
+	a.bindings.GroupMessages = routing.GroupMessages{Frontend: a.FrontendID(), Primary: a.bindings.Primary, Links: a.State(), SelfOpenID: LiveBotOpenID(feishuClient)}
 	a.bindings.Announcements = announcement.Service{Repository: a.State(), Gateway: AnnouncementGateway(a.feishu), Frontend: a.FrontendID(), Primary: func(chatID string) bool {
 		enabled, _ := a.bindings.Primary.IsPrimary(a.FrontendID(), "group", chatID)
 		return enabled
@@ -113,7 +114,9 @@ func prepareTestApp(a *App) *App {
 		a.runtimeOwner.Announcements = runtime.NewCoalescedRefresh(&a.runtimeOwner.Lifecycle, 2*time.Second, 15*time.Second, GroupAnnouncementRefresh(a))
 	}
 	liveThreads := SubmissionLiveThreads(a.runtimeOwner.LiveThreads, a.State().Session, a.bindings.AnnouncementQuery, a.runtimeOwner.Announcements.Schedule)
-	a.bindings.PrimaryInitialization = routing.InitializationService{Repository: primaryRepository, BotCount: func(ctx context.Context, chatID string) (int, error) { return a.feishu.GetGroupBotCount(ctx, chatID) }, LiveBotOpenID: func() string { return currentLiveBotOpenID(a) }}
+	a.bindings.PrimaryInitialization = routing.InitializationService{Repository: primaryRepository, BotCount: func(ctx context.Context, chatID string) (int, error) {
+		return feishuClient.GetGroupBotCount(ctx, chatID)
+	}, LiveBotOpenID: LiveBotOpenID(feishuClient)}
 	a.bindings.TurnMetadata = turnmeta.Service{Tracker: a.runtimeOwner.TurnBindings}
 	a.bindings.ItemContext = approval.ItemContext{Items: a.bindings.TurnItems, Started: func(threadID, turnID string) { a.bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
 	a.bindings.PendingReplies = PendingReplyAdapter{Service: a.bindings.Interactions, Repository: a.State()}

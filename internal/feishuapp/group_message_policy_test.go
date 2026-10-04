@@ -41,20 +41,20 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 		t.Fatalf("setGroupPrimary() error = %v", err)
 	}
 
-	if !shouldAcceptGroupMessage(a, "chat-1", "", "", false, false) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "", "", false, false) {
 		t.Fatal("primary binding rejected an unmentioned group message")
 	}
 	defaultedTopLevel := &feishu.InboundMessage{MessageID: "top-1", RootMessageID: "top-1", ChatType: "group", ChatID: "chat-1"}
 	if got := groupPolicyRootMessageID(defaultedTopLevel); got != "" {
 		t.Fatalf("groupPolicyRootMessageID(defaulted top-level) = %q, want empty", got)
 	}
-	if !shouldAcceptGroupMessage(a, "chat-1", groupPolicyRootMessageID(defaultedTopLevel), defaultedTopLevel.ParentMessageID, false, false) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", groupPolicyRootMessageID(defaultedTopLevel), defaultedTopLevel.ParentMessageID, false, false) {
 		t.Fatal("primary binding rejected an unmentioned top-level group message with defaulted root")
 	}
-	if !shouldAcceptGroupMessage(a, "chat-1", "", "", true, true) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "", "", true, true) {
 		t.Fatal("primary binding rejected a direct self mention")
 	}
-	if shouldAcceptGroupMessage(a, "chat-1", "", "", false, true) {
+	if shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "", "", false, true) {
 		t.Fatal("primary binding accepted a mention of another bot")
 	}
 
@@ -65,14 +65,14 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
-	if !shouldAcceptGroupMessage(a, "chat-1", "bot-reply-1", "user-reply-1", false, false) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "bot-reply-1", "user-reply-1", false, false) {
 		t.Fatal("primary binding rejected a reply to its own message")
 	}
 	reply := &feishu.InboundMessage{MessageID: "reply-1", RootMessageID: "bot-reply-1", ParentMessageID: "bot-reply-1", ChatType: "group", ChatID: "chat-1"}
 	if got := groupPolicyRootMessageID(reply); got != "bot-reply-1" {
 		t.Fatalf("groupPolicyRootMessageID(reply) = %q, want bot-reply-1", got)
 	}
-	if shouldAcceptGroupMessage(a, "chat-1", "other-bot-reply", "user-reply-2", false, false) {
+	if shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "other-bot-reply", "user-reply-2", false, false) {
 		t.Fatal("primary binding accepted a reply without a local message link")
 	}
 	if err := store.UpsertMessageLink(&state.MessageLink{
@@ -82,7 +82,7 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertMessageLink(parent) error = %v", err)
 	}
-	if !shouldAcceptGroupMessage(a, "chat-1", "original-root-1", "bot-parent-1", false, false) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "original-root-1", "bot-parent-1", false, false) {
 		t.Fatal("primary binding rejected a reply with only a parent message link")
 	}
 
@@ -94,10 +94,10 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding(pending) error = %v", err)
 	}
-	if !shouldAcceptGroupMessage(a, "chat-2", "", "", true, true) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-2", "", "", true, true) {
 		t.Fatal("pending binding rejected direct onboarding mention")
 	}
-	if shouldAcceptGroupMessage(a, "chat-2", "", "", false, false) {
+	if shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-2", "", "", false, false) {
 		t.Fatal("pending binding accepted an unmentioned message")
 	}
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
@@ -111,7 +111,7 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 	if _, err := setGroupPrimary(a, "group", "chat-3", true); err != nil {
 		t.Fatalf("setGroupPrimary(chat-3) error = %v", err)
 	}
-	if !shouldAcceptGroupMessage(a, "chat-3", "", "", false, false) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-3", "", "", false, false) {
 		t.Fatal("pending primary binding rejected an unmentioned message")
 	}
 }
@@ -134,10 +134,10 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 	if _, err := setGroupPrimary(a, "group", "chat-1", false); err != nil {
 		t.Fatalf("setGroupPrimary() error = %v", err)
 	}
-	if shouldAcceptGroupMessage(a, "chat-1", "", "", false, false) {
+	if shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "", "", false, false) {
 		t.Fatal("non-primary binding accepted an unmentioned group message")
 	}
-	if !shouldAcceptGroupMessage(a, "chat-1", "", "", true, true) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "", "", true, true) {
 		t.Fatal("non-primary binding rejected direct mention")
 	}
 	if err := store.UpsertMessageLink(&state.MessageLink{
@@ -147,7 +147,7 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertMessageLink() error = %v", err)
 	}
-	if !shouldAcceptGroupMessage(a, "chat-1", "client-reply", "user-reply", false, false) {
+	if !shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-1", "client-reply", "user-reply", false, false) {
 		t.Fatal("non-primary binding rejected reply to its own message")
 	}
 }
@@ -177,7 +177,7 @@ func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.
 	cfg := config.Default()
 	a := prepareTestApp(&App{cfg: cfg, store: store, frontendID: "frontend-auto"})
 
-	if shouldAcceptGroupMessage(a, "chat-new", "", "", false, false) {
+	if shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-new", "", "", false, false) {
 		t.Fatal("app policy accepted unmentioned message before primary init")
 	}
 	if !shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new"}) {

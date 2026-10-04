@@ -115,7 +115,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: func() string { return feishuapp.BackendKind(frontend) }}, Runner: feishuapp.NewEffectRunner(frontend), Context: frontend.Context()}
 	primaryRepository := statejson.NewGroupPrimaryRepository(frontend.Store(), frontend.FrontendID())
 	bindings.Primary = routing.Service{Repository: primaryRepository}
-	bindings.GroupMessages = routing.GroupMessages{Frontend: frontend.FrontendID(), Primary: bindings.Primary, Links: frontend.State(), SelfOpenID: feishuapp.LiveBotOpenID(frontend)}
+	bindings.GroupMessages = routing.GroupMessages{Frontend: frontend.FrontendID(), Primary: bindings.Primary, Links: frontend.State(), SelfOpenID: feishuapp.LiveBotOpenID(frontend.Feishu())}
 	bindings.Announcements = announcement.Service{Repository: frontend.State(), Gateway: feishuapp.AnnouncementGateway(frontend.Feishu()), Frontend: frontend.FrontendID(), Primary: func(chatID string) bool {
 		enabled, _ := bindings.Primary.IsPrimary(frontend.FrontendID(), "group", chatID)
 		return enabled
@@ -126,7 +126,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}}
 	scope.RuntimeOwner.Announcements = runtime.NewCoalescedRefresh(&scope.RuntimeOwner.Lifecycle, 2*time.Second, 15*time.Second, feishuapp.GroupAnnouncementRefresh(frontend))
 	liveThreads := feishuapp.SubmissionLiveThreads(scope.RuntimeOwner.LiveThreads, frontend.State().Session, bindings.AnnouncementQuery, scope.RuntimeOwner.Announcements.Schedule)
-	bindings.PrimaryInitialization = routing.InitializationService{Repository: primaryRepository, BotCount: frontend.Feishu().GetGroupBotCount, LiveBotOpenID: feishuapp.LiveBotOpenID(frontend)}
+	bindings.PrimaryInitialization = routing.InitializationService{Repository: primaryRepository, BotCount: frontend.Feishu().GetGroupBotCount, LiveBotOpenID: feishuapp.LiveBotOpenID(frontend.Feishu())}
 	bindings.TurnMetadata = turnmeta.Service{Tracker: scope.RuntimeOwner.TurnBindings}
 	bindings.ItemContext = approval.ItemContext{Items: bindings.TurnItems, Started: func(threadID, turnID string) { bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
 	bindings.PendingReplies = feishuapp.PendingReplyAdapter{Service: bindings.Interactions, Repository: frontend.State()}

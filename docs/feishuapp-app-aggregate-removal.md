@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 427 |
-| 收 `*App` 的顶层函数 | 268 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 420 |
+| 收 `*App` 的顶层函数 | 262 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **28** |
+| **持有 `*App` 字段的结构体** | **27** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -71,9 +71,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `backendUpgradeService` | 15 | 4 |
 | 1 | `backendSelectionRuntime` | 6 | 6 |
 | 1 | `threadMenuConversationBackendAdapter` | 5 | 3 |
-| 1 | `inboundRouting` | 4 | 4 |
 | 1 | `inboundBackend` | 4 | 1 |
-| 1 | `feishuEventRouter` | 4 | 1 |
 
 `cardRenderer`、`outboundCardService`、`turnStreamOutboundCardAdapter` 和 `turnRuntimePort`
 已不再持有 `*App`，不属于这份图。当前工厂按直接依赖总数排序：
@@ -501,6 +499,13 @@ counter 与失败回复能力。dispatcher 组合失败回复时只捕获 fronte
 和配置值；消息过期检查、去重 claim/release/mark-done、流量计数、recall/reaction 丢弃行为与
 错误 effect 均保持原有顺序和生命周期。生产 `*App` 引用由 429 降至 427，收 `*App` 的函数由
 269 降至 268，持有 App 字段的结构体由 29 降至 28；lazy binding-read 预算保持 13。
+
+步骤 65 将 `inboundRouting` 改为持有 frontend ID、Feishu client、group-primary services 与
+`GroupMessages`，移除其 `*App` 字段。group primary assignment 同步改为接收这些显式依赖；
+`LiveBotOpenID` supplier 只捕获 Feishu client，group delivery gate 直接调用 `GroupMessages`。
+primary 初始化、stale assignment 判断、非目标 bot 关闭 primary、`@所有人` 旁路及消息提及判断
+沿用原有顺序与决策。生产 `*App` 引用由 427 降至 420，收 `*App` 的函数由 268 降至 262，
+持有 App 字段的结构体由 28 降至 27；lazy binding-read 预算保持 13。
 
 ## 方法
 

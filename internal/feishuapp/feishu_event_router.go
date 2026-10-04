@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"feidex/internal/application"
 	"feidex/internal/application/inbound"
+	"feidex/internal/application/routing"
 	"log/slog"
 	"strings"
 	"time"
@@ -87,7 +88,7 @@ func (r *feishuEventRouter) processMessage(msg *feishu.InboundMessage) error {
 // drift apart: that path answers to nobody in particular and is delivered to
 // every bot, so this gate must not apply to it. Without the MentionAll check a
 // non-primary bot passes the adapter and is dropped here.
-func routerDropsGroupMessage(a *App, msg *feishu.InboundMessage) bool {
+func routerDropsGroupMessage(groupMessages routing.GroupMessages, msg *feishu.InboundMessage) bool {
 	if msg == nil || msg.ChatType != "group" {
 		return false
 	}
@@ -95,7 +96,7 @@ func routerDropsGroupMessage(a *App, msg *feishu.InboundMessage) bool {
 		return false
 	}
 	return !shouldAcceptGroupMessage(
-		a,
+		groupMessages,
 		msg.ChatID,
 		application.GroupPolicyRootMessageID(msg.MessageID, msg.RootMessageID, msg.ParentMessageID),
 		msg.ParentMessageID,

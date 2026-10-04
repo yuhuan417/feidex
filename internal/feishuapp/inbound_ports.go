@@ -2,20 +2,28 @@ package feishuapp
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"feidex/internal/application"
 	"feidex/internal/application/inbound"
+	approuting "feidex/internal/application/routing"
 	"feidex/internal/application/submission"
 	"feidex/internal/domain/interaction"
 	domainrouting "feidex/internal/domain/routing"
 	domainsubmission "feidex/internal/domain/submission"
 )
 
-type inboundRouting struct{ app *App }
+type inboundRouting struct {
+	frontendID            string
+	feishu                FeishuClient
+	primary               approuting.Service
+	primaryInitialization approuting.InitializationService
+	groupMessages         approuting.GroupMessages
+}
 
 func (p inboundRouting) NormalizeGroupMessage(msg *application.InboundMessage) bool {
-	msg.MentionedSelf = messageMentionsCurrentBot(p.app, msg.MentionedOpenIDs, msg.MentionedSelf)
+	msg.MentionedSelf = messageMentionsCurrentBot(p.feishu, msg.MentionedOpenIDs, msg.MentionedSelf)
 	if _, ok := groupPrimaryAssignmentFromMessage(msg); ok && domainrouting.ParseEmptyBotMention(msg.Text) {
 		msg.Text = "/primary on"
 	}
@@ -27,14 +35,22 @@ func (p inboundRouting) NormalizeGroupMessage(msg *application.InboundMessage) b
 	return true
 }
 func (p inboundRouting) EnsurePrimary(ctx context.Context, kind, id string) error {
-	_, err := ensureGroupPrimaryInitialized(ctx, p.app, kind, id)
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	id = strings.TrimSpace(id)
+	if kind != "group" || id == "" {
+		return nil
+	}
+	if p.feishu == nil {
+		return fmt.Errorf("feishu client not initialized")
+	}
+	_, err := p.primaryInitialization.Ensure(ctx, p.frontendID, kind, id)
 	return err
 }
 func (p inboundRouting) SyncPrimary(msg *application.InboundMessage) (bool, error) {
-	return syncGroupPrimaryAssignment(p.app, msg)
+	return syncGroupPrimaryAssignment(p.primary, p.frontendID, p.feishu, msg)
 }
 func (p inboundRouting) DropsGroupMessage(msg *application.InboundMessage) bool {
-	return routerDropsGroupMessage(p.app, msg)
+	return routerDropsGroupMessage(p.groupMessages, msg)
 }
 
 type inboundRootInputs struct{ app *App }
@@ -90,7 +106,7 @@ func (p inboundBackend) CheckMaintenance() error {
 func InboundPorts(a *App, prefetchForward func(*application.InboundMessage)) inbound.Dependencies {
 	return inbound.Dependencies{
 		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return a.configView().makeSessionKey(msg) },
-		Routing: inboundRouting{app: a}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{app: a},
+		Routing: inboundRouting{frontendID: a.FrontendID(), feishu: a.feishu, primary: a.bindings.Primary, primaryInitialization: a.bindings.PrimaryInitialization, groupMessages: a.bindings.GroupMessages}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{app: a},
 		Continuation: a.bindings.Continuation, Pending: inboundPending{PendingQueueService: a.bindings.PendingQueue, attachments: func(msg *application.InboundMessage, workspaceID, key string) ([]domainsubmission.SubmissionAttachment, error) {
 			return resolveInboundAttachments(a.cfg, a.Context, a.feishu, msg, workspaceID, key)
 		}},
