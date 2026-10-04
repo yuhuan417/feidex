@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	codexadapter "feidex/internal/adapter/backend/codex"
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/approval"
 	appbackend "feidex/internal/adapter/feishu/backend"
@@ -205,7 +206,13 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		bindings.BackendMaintenance[kind] = service
 		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(frontend.AsyncRunner())}
 	}
-	bindings.History = feishuapp.BuildHistory(frontend)
+	frontendID := identity.FrontendID(frontend.FrontendID())
+	bindings.History = feishuapp.BuildHistory(
+		frontendID, frontend.State(), feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex()),
+		func() codexadapter.RPCClient { return scope.RuntimeOwner.CodexClient() },
+		scope.RuntimeOwner.Lifecycle.Context, *scope.RuntimeOwner.EffectRunner,
+		feishuapp.SessionKeyBuilder(frontend.FrontendID()), func(string) bool { return false },
+	)
 	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend)
 	bindings.FileSharing = &fileshare.Service{Forms: bindings.Forms, Repository: frontend.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: frontend.Context, Run: downloadRunner}
 	bindings.Debug = feishuapp.BuildDebug(frontend)
@@ -330,6 +337,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		frontend, normalizeCardActionSessionKey,
 		scope.RuntimeOwner.BackendTransition.BackendSwitchBlocksCardAction,
 		bindings.WorkspaceConfiguration.WorkspaceDeleteActions(),
+		bindings.History,
 		bindings.ServerRequests, bindings.ClaudeSupport, bindings.ReviewCommands,
 		bindings.Upgrades, bindings.BackendUpgrades,
 	))

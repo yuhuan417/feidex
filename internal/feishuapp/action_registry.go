@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	claudesupport "feidex/internal/adapter/feishu/claudesupport"
+	history "feidex/internal/adapter/feishu/history"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
@@ -25,7 +26,7 @@ type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService) appcardaction.Dependencies {
+func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService) appcardaction.Dependencies {
 	appHandlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
 		workspaceCardActionHandlers(),
@@ -36,6 +37,7 @@ func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedR
 		maintenancePortCardActionHandlers(upgrades, backendUpgrades),
 		pendingPortCardActionHandlers(claudeSupport, reviewCommands),
 		workspaceDeletePortCardActionHandlers(workspaceDeleteActions),
+		historyCardActionHandlers(historyService),
 		serverRequestCardActionHandlers(serverRequests),
 	)
 	bound := bindAppCardActionHandlers(cardActionService{app: app}, appHandlers)

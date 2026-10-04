@@ -670,8 +670,8 @@ func TestActionHelperBranches(t *testing.T) {
 		t.Fatal("renderMenuNodeCard(missing) should fail")
 	}
 
-	if resp, err := newMenuActionService(a).completeHistoryPage(&feishu.CardAction{}, "sess-1", 0); err != nil || resp.Card == nil {
-		t.Fatalf("completeHistoryPage() = %#v, %v", resp, err)
+	if resp, err := historyCardActionHandlers(a.bindings.History)["history.page"](&feishu.CardAction{ActionValue: map[string]any{"session_key": "sess-1", "page": 0}}); err != nil || resp.Card == nil {
+		t.Fatalf("history page action = %#v, %v", resp, err)
 	}
 
 	if resp, err := newMenuActionService(a).completeServiceTierSet(&feishu.CardAction{}, "sess-1", "thread-1", appservicetiercmd.ServiceTierFast); err != nil || resp.Toast == nil || resp.Toast.Type != "success" {

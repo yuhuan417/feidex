@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 499 |
-| 收 `*App` 的顶层函数 | 303 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 497 |
+| 收 `*App` 的顶层函数 | 302 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **65** |
+| **持有 `*App` 字段的结构体** | **64** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -255,6 +255,14 @@ presentation 函数只捕获 composition 已构造的 `workspacecards.Presentati
 确认不再经过 `cardActionService{app: ...}`。删除校验、workflow、toast、卡片和目录保留语义不变；
 删除菜单仍走 App handler，以保留群聊禁止删除本机 workspace 的 guard。此路径解耦不改变词面
 `*App` 引用数，预算保持 499；架构测试与 action dispatcher 集成测试覆盖现有分支。
+
+步骤 26 将 history 构造从 `BuildHistory(*App)` 改为显式接收 frontend identity、scoped
+repository、动态 runtime backend/Codex client/context、effect runner 与 frontend session-key
+builder。history outbound 只持有 identity/effect runner；分页、详情和选择回调绑定
+`history.Service` owner，移除 menuActionService 中重复的 App-bound history handlers。
+backend、Codex client、lifecycle context 和 session key 仍动态取自对应的 runtime/config
+owners。history 查询与卡片行为不变。生产 `*App` 引用预算由 499 降至 497，app-bearing
+函数数降至 302；不涉及 turn lifecycle 或 pending request 状态。
 
 ## 方法
 

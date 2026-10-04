@@ -133,3 +133,21 @@ func (v frontendConfigView) makeSessionKey(msg *feishu.InboundMessage) string {
 	}
 	return "feishu:chat:" + chatID
 }
+
+func SessionKeyBuilder(frontendID string) func(*feishu.InboundMessage) string {
+	view := frontendConfigView{frontendID: frontendID}
+	return view.makeSessionKey
+}
+
+func ConfiguredBackendBuilder(cfg *config.Config, mu *sync.RWMutex, backend func() string, frontendID string, frontendConfigIndex int) func() string {
+	return func() string {
+		active := ""
+		if backend != nil {
+			active = backend()
+		}
+		return (frontendConfigView{
+			cfg: cfg, mu: mu, backend: active,
+			frontendID: frontendID, frontendConfigIndex: frontendConfigIndex,
+		}).configuredBackend()
+	}
+}

@@ -146,6 +146,9 @@ func buildMenuCardActionHandlers() map[string]cardActionHandler {
 			}(name, binding)
 		}
 	}
+	delete(handlers, "history.page")
+	delete(handlers, "history.detail")
+	delete(handlers, "history.detail.select")
 	return handlers
 }
 

@@ -133,26 +133,6 @@ func (s menuActionService) completeMenuHistory(action *feishu.CardAction, sessio
 	return completeMenuCommand(s.app, action, sessionKey, "/history", "menu.tools")
 }
 
-func (s menuActionService) completeHistoryPage(action *feishu.CardAction, sessionKey string, page int) (*callback.CardActionTriggerResponse, error) {
-	card, err := s.app.bindings.History.RenderHistoryCard(sessionKey, page)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Card: rawCard(card),
-	}, nil
-}
-
-func (s menuActionService) completeHistoryDetail(action *feishu.CardAction, sessionKey string, index int) (*callback.CardActionTriggerResponse, error) {
-	card, err := s.app.bindings.History.RenderHistoryDetailCard(sessionKey, index)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{
-		Card: rawCard(card),
-	}, nil
-}
-
 func (s menuActionService) completeMenuFast(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/fast config", "menu.group.model")
 }

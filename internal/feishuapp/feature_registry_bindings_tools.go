@@ -168,16 +168,6 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			switch actionName {
 			case "menu.history":
 				return newMenuActionService(s.app).completeMenuHistory(action, sessionKey)
-			case "history.page":
-				return newMenuActionService(s.app).completeHistoryPage(action, sessionKey, actionIntValue(action, "page"))
-			case "history.detail":
-				return newMenuActionService(s.app).completeHistoryDetail(action, sessionKey, actionIntValue(action, "index"))
-			case "history.detail.select":
-				errResp, index, ok := actionIndexOption(action, "未收到有效 turn 选项")
-				if !ok {
-					return errResp, nil
-				}
-				return newMenuActionService(s.app).completeHistoryDetail(action, sessionKey, index)
 			default:
 				return nil, nil
 			}

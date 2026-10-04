@@ -4,24 +4,31 @@ import (
 	"context"
 	codexadapter "feidex/internal/adapter/backend/codex"
 	history "feidex/internal/adapter/feishu/history"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/application"
+	historyapp "feidex/internal/application/history"
 	"feidex/internal/compositionkit"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	"feidex/internal/runtime"
 )
 
-type historyOutbound struct{ app *App }
-
-func (o historyOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+type historyOutbound struct {
+	frontend identity.FrontendID
+	runner   runtime.EffectRunner
 }
 
-func BuildHistory(app *App) history.Service {
+func (o historyOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
+	return o.runner.RunSendCard(ctx, application.SendCard{
+		Frontend: o.frontend, ReplyMessageID: messageID,
+		View: feishuoutbound.Card(card), InThread: inThread,
+	})
+}
+
+func BuildHistory(frontend identity.FrontendID, repository historyapp.Repository, backend func() string, codexClient func() codexadapter.RPCClient, ctx func() context.Context, runner runtime.EffectRunner, sessionKey func(*feishu.InboundMessage) string, replyInThread func(string) bool) history.Service {
 	return compositionkit.NewHistory(compositionkit.HistoryDependencies{
-		Frontend: identity.FrontendID(app.FrontendID()),
-		Context:  app.Context, Outbound: historyOutbound{app: app},
-		Repository: app.State(), Backend: func() string { return app.configView().configuredBackend() },
-		CodexClient:   func() codexadapter.RPCClient { return app.runtimeView().currentCodexClient() },
-		SessionKey:    func(msg *feishu.InboundMessage) string { return app.configView().makeSessionKey(msg) },
-		ReplyInThread: func(chatType string) bool { return app.configView().replyInThreadEnabled() },
+		Frontend: frontend, Context: ctx, Outbound: historyOutbound{frontend: frontend, runner: runner},
+		Repository: repository, Backend: backend, CodexClient: codexClient,
+		SessionKey: sessionKey, ReplyInThread: replyInThread,
 	})
 }

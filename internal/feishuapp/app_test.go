@@ -3511,9 +3511,9 @@ func TestCompleteHistoryDetailShowsInputs(t *testing.T) {
 		return nil
 	}
 
-	resp, err := newMenuActionService(a).completeHistoryDetail(&feishu.CardAction{}, sessionKey, 0)
+	resp, err := historyCardActionHandlers(a.bindings.History)["history.detail"](&feishu.CardAction{ActionValue: map[string]any{"session_key": sessionKey, "index": 0}})
 	if err != nil || resp == nil || resp.Card == nil {
-		t.Fatalf("completeHistoryDetail() = %#v, %v", resp, err)
+		t.Fatalf("history detail action = %#v, %v", resp, err)
 	}
 	card, _ := resp.Card.Data.(map[string]any)
 	body := cardMarkdownContent(t, card)
