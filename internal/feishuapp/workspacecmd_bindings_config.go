@@ -3,7 +3,9 @@ package feishuapp
 import (
 	"context"
 	appbackend "feidex/internal/adapter/feishu/backend"
+	workspacecards "feidex/internal/adapter/feishu/workspace"
 	"feidex/internal/adapter/feishu/workspacecmd"
+	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
@@ -81,7 +83,11 @@ func workspaceBackendConfigDeps(driver appbackend.Driver) workspacecmd.BackendCo
 	}
 }
 
-func buildWorkspaceConfigService(a *App) *workspacecmd.ConfigService {
+// buildWorkspaceConfigService takes the card presentation and conversation
+// service as construction-time inputs. Reading them through a.bindings inside
+// the closures would hide the dependency and force the caller to build this
+// service before those bindings are assigned.
+func buildWorkspaceConfigService(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service) *workspacecmd.ConfigService {
 	if a == nil {
 		return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{})
 	}
@@ -96,7 +102,7 @@ func buildWorkspaceConfigService(a *App) *workspacecmd.ConfigService {
 		},
 		Threads: workspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*workspacecmd.ThreadBinding, error) {
-				return a.bindings.Conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+				return conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 		},
 		Backend: workspaceBackendConfigDeps(a.BackendDriver()),
@@ -114,28 +120,28 @@ func buildWorkspaceConfigService(a *App) *workspacecmd.ConfigService {
 		},
 		Render: workspacecmd.ConfigRenderDeps{
 			RenderMenuCard: func(sessionKey string) map[string]any {
-				return a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
+				return presentation.RenderWorkspaceMenuCard(sessionKey)
 			},
 			RenderChooseMenuCard: func(sessionKey string) map[string]any {
-				return a.bindings.WorkspacePresentation.RenderWorkspaceChooseCard(sessionKey)
+				return presentation.RenderWorkspaceChooseCard(sessionKey)
 			},
 			RenderSandboxMenuCard: func(sessionKey string) (map[string]any, error) {
-				return a.bindings.WorkspacePresentation.RenderWorkspaceSandboxMenuCard(sessionKey)
+				return presentation.RenderWorkspaceSandboxMenuCard(sessionKey)
 			},
 			RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
-				return a.bindings.WorkspacePresentation.RenderWorkspacePolicyMenuCard(sessionKey)
+				return presentation.RenderWorkspacePolicyMenuCard(sessionKey)
 			},
 			RenderMultiAgentMenuCard: func(sessionKey string) (map[string]any, error) {
-				return a.bindings.WorkspacePresentation.RenderWorkspaceMultiAgentMenuCard(sessionKey)
+				return presentation.RenderWorkspaceMultiAgentMenuCard(sessionKey)
 			},
 			RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
-				return a.bindings.WorkspacePresentation.RenderWorkspaceDeleteMenuCard(sessionKey)
+				return presentation.RenderWorkspaceDeleteMenuCard(sessionKey)
 			},
 			RenderDeleteConfirmCard: func(sessionKey, workspaceID string) (map[string]any, error) {
-				return a.bindings.WorkspacePresentation.RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
+				return presentation.RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
 			},
 			RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return a.bindings.WorkspacePresentation.RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+				return presentation.RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
 			},
 		},
 	})

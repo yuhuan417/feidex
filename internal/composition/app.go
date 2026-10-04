@@ -139,7 +139,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.UpgradePresentation = feishuapp.BuildUpgradePresentation(frontend)
 	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner)
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
-	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend)
 	bindings.Upgrades = feishuapp.BuildUpgrades(frontend)
 
 	bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(scope.RuntimeOwner.MaintenanceTrackers, feishuapp.MaintenanceRepository(frontend))
@@ -191,7 +190,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	backendSwitch := backendselection.NewService(feishuapp.BackendSwitchPorts(frontend))
 	bindings.BackendSwitch = &backendSwitch
 	bindings.BackendSelection = feishuapp.BuildBackendSelection(frontend)
-	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend)
 	bindings.ServerRequests = feishuapp.BuildServerRequests(frontend)
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(frontend)
@@ -221,6 +219,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Inbound = inboundService
 	bindings.ForwardInputs = forwardService
 	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(frontend)}
+	// The workspace command services read the workspace card presentation and
+	// the conversation service at construction, so they are built once those
+	// bindings exist.
+	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend, bindings.WorkspacePresentation, bindings.Conversations)
+	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend, bindings.WorkspacePresentation, bindings.Conversations)
 	bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: bindings.WorkspaceCreation.Lifecycle, Runtime: feishuapp.WorkspaceEffectRuntime(frontend), Conversations: bindings.Conversations, Context: frontend.Context}
 	bindings.WorkspaceWorkflow.Effects = bindings.WorkspaceEffects
 	bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: frontend.State(), Creation: bindings.WorkspaceCreation, Planning: bindings.WorkspacePlanning, Effects: bindings.WorkspaceEffects}

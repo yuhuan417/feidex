@@ -1129,7 +1129,7 @@ func TestFeishuAppAggregateDoesNotGrow(t *testing.T) {
 // The goal is zero. The budget only ratchets down; lower it in the same
 // commit that removes reads.
 func TestFeishuAppLazyBindingReadsDoesNotGrow(t *testing.T) {
-	const budget = 72 // goal: 0
+	const budget = 47 // goal: 0
 
 	root := repositoryRoot(t)
 	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))

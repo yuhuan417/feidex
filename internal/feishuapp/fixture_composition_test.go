@@ -175,8 +175,6 @@ func prepareTestApp(a *App) *App {
 	backendSwitch := backendselection.NewService(BackendSwitchPorts(a))
 	a.bindings.BackendSwitch = &backendSwitch
 	a.bindings.BackendSelection = BuildBackendSelection(a)
-	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a)
-	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a)
 	a.bindings.ServerRequests = BuildServerRequests(a)
 	a.bindings.Skills = compositionkit.NewSkillService(SkillUseCasePorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner.PendingSkills, a.FrontendID(), a.runtimeOwner))
 	a.bindings.SkillCommands = BuildSkillCommands(a)
@@ -203,6 +201,8 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Inbound = inboundService
 	a.bindings.ForwardInputs = forwardService
 	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(a)}
+	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(a), Conversations: a.bindings.Conversations, Context: a.Context}
 	a.bindings.WorkspaceWorkflow.Effects = a.bindings.WorkspaceEffects
 	a.bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(a.FrontendID()), Repository: a.State(), Creation: a.bindings.WorkspaceCreation, Planning: a.bindings.WorkspacePlanning, Effects: a.bindings.WorkspaceEffects}

@@ -400,7 +400,7 @@ func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
-	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a)
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
 
 	msg := &feishu.InboundMessage{
 		MessageID:     "clone-new-group-url-1",
