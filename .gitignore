@@ -8,3 +8,9 @@
 /tmp/
 /.tmp-*/
 *.log
+
+# Go tool binaries built from scripts/
+scripts/*/[a-z]*
+!scripts/*/*.go
+!scripts/*/go.mod
+!scripts/*/*.md
