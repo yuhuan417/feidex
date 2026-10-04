@@ -92,7 +92,7 @@ func InboundPorts(a *App, prefetchForward func(*application.InboundMessage)) inb
 		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		Routing: inboundRouting{app: a}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{app: a},
 		Continuation: a.bindings.Continuation, Pending: inboundPending{PendingQueueService: a.bindings.PendingQueue, attachments: func(msg *application.InboundMessage, workspaceID, key string) ([]domainsubmission.SubmissionAttachment, error) {
-			return resolveInboundAttachments(a, msg, workspaceID, key)
+			return resolveInboundAttachments(a.cfg, a.Context, a.feishu, msg, workspaceID, key)
 		}},
 		Bindings: inboundBindings{app: a}, Commands: inboundCommands{app: a}, Backend: inboundBackend{app: a}, Queue: a.bindings.Submissions,
 		RefreshGroup:       func(chatID, reason string) { scheduleGroupAnnouncementStatusRefresh(a, chatID, reason) },

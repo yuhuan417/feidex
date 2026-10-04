@@ -23,7 +23,7 @@ func TestResolveInboundAttachmentsUsesForwardedMessageID(t *testing.T) {
 	}
 	a := prepareTestApp(&App{cfg: cfg, feishu: stub})
 
-	attachments, err := resolveInboundAttachments(a, &feishu.InboundMessage{
+	attachments, err := resolveInboundAttachments(a.cfg, a.Context, a.feishu, &feishu.InboundMessage{
 		MessageID: "root-message",
 		Attachments: []feishu.Attachment{{
 			Kind:            "image",

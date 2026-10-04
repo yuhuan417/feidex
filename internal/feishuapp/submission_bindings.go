@@ -86,7 +86,7 @@ func (a claudeClientAdapter) StartSteerTurn(ctx context.Context, sessionKey, thr
 type sqAttachmentResolverFullAdapter struct{ app *App }
 
 func (a sqAttachmentResolverFullAdapter) ResolveInboundAttachments(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
-	return resolveInboundAttachments(a.app, msg, workspaceID, sessionKey)
+	return resolveInboundAttachments(a.app.cfg, a.app.Context, a.app.feishu, msg, workspaceID, sessionKey)
 }
 
 type sqBackendRuntimeFullAdapter struct{ app *App }

@@ -11,11 +11,11 @@ import (
 	"time"
 )
 
-func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
+func resolveInboundAttachments(cfg *config.Config, contextFn func() context.Context, client FeishuClient, msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 	if msg == nil || len(msg.Attachments) == 0 {
 		return nil, nil
 	}
-	workspace := config.FindWorkspace(a.cfg, workspaceID)
+	workspace := config.FindWorkspace(cfg, workspaceID)
 	if workspace == nil {
 		return nil, fmt.Errorf("workspace %q not found", workspaceID)
 	}
@@ -24,7 +24,7 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 	}
 
 	dir := attachments.SessionAttachmentDir(workspace.Cwd, sessionKey, msg.MessageID)
-	ctx, cancel := context.WithTimeout(a.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(contextFn(), 30*time.Second)
 	defer cancel()
 
 	att := make([]domainsubmission.SubmissionAttachment, 0, len(msg.Attachments))
@@ -33,7 +33,7 @@ func resolveInboundAttachments(a *App, msg *feishu.InboundMessage, workspaceID, 
 		if sourceMessageID == "" {
 			sourceMessageID = strings.TrimSpace(msg.MessageID)
 		}
-		path, name, err := a.feishu.DownloadMessageResource(ctx, sourceMessageID, attachment, dir)
+		path, name, err := client.DownloadMessageResource(ctx, sourceMessageID, attachment, dir)
 		if err != nil {
 			return nil, err
 		}

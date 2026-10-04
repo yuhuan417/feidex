@@ -194,7 +194,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(frontend)
 	*bindings.PendingQueue = submission.NewPendingQueueService(feishuapp.PendingQueuePorts(frontend.Context, frontend.State(), bindings.SubmissionCleanup, frontend.Config(), frontend.ConfigMu(), frontend.Feishu()))
-	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend)
+	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner, bindings.Submissions, frontend.FrontendID(), frontend.FrontendConfigIndex(), frontend.Feishu())
 	bindings.Compaction.Deps = feishuapp.CompactionPorts(frontend.Context, frontend.State(), scope.RuntimeOwner, frontend.FrontendID(), frontend.Feishu() != nil)
 	bindings.GoalContinuation.Deps = feishuapp.GoalContinuationPorts(frontend)
 	*bindings.GoalCommands = goalcmd.NewService(feishuapp.GoalCommandPorts(frontend))
