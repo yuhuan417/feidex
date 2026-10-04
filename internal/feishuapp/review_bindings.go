@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	reviewapp "feidex/internal/application/review"
+	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 
@@ -48,7 +49,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		UseCase:        a.bindings.Review,
 		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
 		ContextProvider:        a,
-		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
+		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{config: a.Config(), configView: a.configView(), session: a.State().Session}, GitProvider: reviewGitProviderAdapter{context: a.runtimeOwner.Lifecycle.Context},
 		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return a.runtimeView().requireCodexGateway() },
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
 		MenuCardBodyFn: menuCardBody, ActionStringValueFn: actionStringValue,
@@ -79,71 +80,74 @@ func BuildReviewCommands(app *App) appreviewcmd.ReviewFormService {
 // reviewWorkspaceProviderAdapter wraps workspace access for the review
 // service.
 type reviewWorkspaceProviderAdapter struct {
-	app *App
+	config     *config.Config
+	configView frontendConfigView
+	session    func(string) *conversation.Session
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewWorkspaceForSessionKey(sessionKey string) *config.Workspace {
-	sess := a.app.State().Session(sessionKey)
-	workspaceID := a.app.configView().defaultWorkspaceID()
+	sess := a.session(sessionKey)
+	workspaceID := a.configView.defaultWorkspaceID()
 	if sess != nil {
 		if wid := sess.WorkspaceID; wid != "" {
 			workspaceID = wid
 		}
 	}
-	return config.FindWorkspace(a.app.cfg, workspaceID)
+	return config.FindWorkspace(a.config, workspaceID)
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewDefaultWorkspaceID() string {
-	return a.app.configView().defaultWorkspaceID()
+	return a.configView.defaultWorkspaceID()
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewFindWorkspace(workspaceID string) *config.Workspace {
-	return config.FindWorkspace(a.app.cfg, workspaceID)
+	return config.FindWorkspace(a.config, workspaceID)
 }
 
-type reviewGitProviderAdapter struct{ app *App }
+type reviewGitProviderAdapter struct{ context func() context.Context }
 
 func (a reviewGitProviderAdapter) ReviewResolveTarget(cwd string, target appreview.TargetSpec) (appreview.TargetSpec, error) {
-	return (appreview.GitService{Context: a.app.Context()}).ResolveTarget(cwd, target)
+	return (appreview.GitService{Context: a.context()}).ResolveTarget(cwd, target)
 }
 
 func (a reviewGitProviderAdapter) ReviewListBranches(cwd string) ([]appreview.BranchOption, error) {
-	return (appreview.GitService{Context: a.app.Context()}).ListBranches(cwd)
+	return (appreview.GitService{Context: a.context()}).ListBranches(cwd)
 }
 
 func (a reviewGitProviderAdapter) ReviewListCommits(cwd string, limit int) ([]appreview.CommitOption, error) {
-	return (appreview.GitService{Context: a.app.Context()}).ListCommits(cwd, limit)
+	return (appreview.GitService{Context: a.context()}).ListCommits(cwd, limit)
 }
 
-type reviewTargetResolver struct{ app *App }
+type reviewTargetResolver struct{ context func() context.Context }
 
 func (r reviewTargetResolver) Resolve(cwd string, target appreview.TargetSpec) (appreview.TargetSpec, error) {
-	return (appreview.GitService{Context: r.app.Context()}).ResolveTarget(cwd, target)
+	return (appreview.GitService{Context: r.context()}).ResolveTarget(cwd, target)
 }
 
 type reviewDispatcher struct {
-	app          *App
+	submissions  *appsubmission.SubmissionQueueService
+	pendingQueue *appsubmission.PendingQueueService
 	queuedNotice outboundCardService
 }
 
 func (d reviewDispatcher) StartNext(key string) error {
-	return d.app.bindings.Submissions.StartNextSubmission(key)
+	return d.submissions.StartNextSubmission(key)
 }
 func (d reviewDispatcher) MarkQueued(sub *domainsubmission.Submission) {
-	d.app.bindings.PendingQueue.MarkSubmissionQueuedReactions(sub)
+	d.pendingQueue.MarkSubmissionQueuedReactions(sub)
 }
 func (d reviewDispatcher) Notify(ctx context.Context, sub *domainsubmission.Submission) {
 	d.queuedNotice.sendSubmissionQueuedNotice(ctx, sub)
 }
 func ReviewPorts(a *App) reviewapp.Dependencies {
-	return reviewapp.Dependencies{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Options: reviewOptions{app: a}, Gateway: func() (reviewapp.Gateway, error) { return a.runtimeView().requireCodexGateway() }, Repository: a.State(), Resolver: reviewTargetResolver{app: a}, Dispatcher: reviewDispatcher{app: a, queuedNotice: newOutboundCardService(a)}}
+	return reviewapp.Dependencies{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Options: reviewOptions{context: a.runtimeOwner.Lifecycle.Context}, Gateway: func() (reviewapp.Gateway, error) { return a.runtimeView().requireCodexGateway() }, Repository: a.State(), Resolver: reviewTargetResolver{context: a.runtimeOwner.Lifecycle.Context}, Dispatcher: reviewDispatcher{submissions: a.bindings.Submissions, pendingQueue: a.bindings.PendingQueue, queuedNotice: newOutboundCardService(a)}}
 }
 
-type reviewOptions struct{ app *App }
+type reviewOptions struct{ context func() context.Context }
 
 func (o reviewOptions) Branches(cwd string) ([]reviewapp.BranchOption, error) {
-	return (appreview.GitService{Context: o.app.Context()}).ListBranches(cwd)
+	return (appreview.GitService{Context: o.context()}).ListBranches(cwd)
 }
 func (o reviewOptions) Commits(cwd string, limit int) ([]reviewapp.CommitOption, error) {
-	return (appreview.GitService{Context: o.app.Context()}).ListCommits(cwd, limit)
+	return (appreview.GitService{Context: o.context()}).ListCommits(cwd, limit)
 }
