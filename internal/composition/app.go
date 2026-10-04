@@ -130,12 +130,16 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Forms = &interaction.FormService{Repository: frontend.State()}
 	bindings.WorkspaceWorkflow = &workspaceapp.Workflow{Forms: bindings.Forms, Planning: bindings.WorkspacePlanning, Creation: bindings.WorkspaceCreation}
 	feishuapp.AttachWorkspacePresentation(frontend, feishuapp.NewWorkspacePresentation(frontend))
+	bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: feishuapp.ModelSnapshotRepository(frontend)}
+	bindings.ModelDefaults = modelconfig.DefaultsService{Repository: configadapter.ModelDefaultsRepository{Source: frontend, Scope: frontend.State()}, Admission: feishuapp.ModelWriteAdmission(frontend), Frontend: frontend.FrontendID(), Publisher: feishuapp.ModelDefaultsPublisher(frontend)}
+	bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: frontend}}
 	bindings.ModelCommands = feishuapp.BuildModelCommands(frontend)
 	bindings.BindingCommands = feishuapp.BuildBindingCommands(frontend)
 	bindings.BackendUpgrades = feishuapp.BuildBackendUpgrades(frontend)
 	bindings.UpgradePresentation = feishuapp.BuildUpgradePresentation(frontend)
 	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner)
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
+	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend)
 	bindings.Upgrades = feishuapp.BuildUpgrades(frontend)
 
 	bindings.Maintenance = backendmaintenance.NewMaintenanceStateService(scope.RuntimeOwner.MaintenanceTrackers, feishuapp.MaintenanceRepository(frontend))
@@ -178,10 +182,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ThreadSettings = threadsettings.Service{Repository: frontend.State()}
 	bindings.PermissionSettings = threadsettings.PermissionService{Settings: bindings.ThreadSettings, Source: configadapter.ThreadPermissionRepository{Source: frontend, Scope: frontend.State()}, Runtime: feishuapp.PermissionRuntime(frontend), Tasks: feishuapp.PermissionTasks(frontend), Failure: feishuapp.PermissionFailure(frontend), Context: frontend.Context}
 	bindings.ServiceTier = feishuapp.BuildServiceTier(frontend)
-	bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: feishuapp.ModelSnapshotRepository(frontend)}
 	bindings.ModelSettings = modelconfig.SettingsService{Repository: frontend.State(), Admission: feishuapp.ModelWriteAdmission(frontend), Frontend: identity.FrontendID(frontend.FrontendID())}
-	bindings.ModelDefaults = modelconfig.DefaultsService{Repository: configadapter.ModelDefaultsRepository{Source: frontend, Scope: frontend.State()}, Admission: feishuapp.ModelWriteAdmission(frontend), Frontend: frontend.FrontendID(), Publisher: feishuapp.ModelDefaultsPublisher(frontend)}
-	bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: frontend}}
 	bindings.ConversationConfiguration = conversation.Configuration{Models: bindings.ModelSnapshots, ServiceName: feishuapp.CodexServiceName(frontend)}
 	bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(frontend.FrontendID()), Effects: feishuapp.NewEffectRunner(frontend), Collaboration: bindings.Plan}
 	bindings.BindingPending = routing.PendingService{Configuration: bindings.RoutingConfiguration.ConfigurationService, Repository: frontend.State()}
@@ -190,7 +191,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	backendSwitch := backendselection.NewService(feishuapp.BackendSwitchPorts(frontend))
 	bindings.BackendSwitch = &backendSwitch
 	bindings.BackendSelection = feishuapp.BuildBackendSelection(frontend)
-	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend)
 	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend)
 	bindings.ServerRequests = feishuapp.BuildServerRequests(frontend)
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
@@ -202,6 +202,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	*bindings.GoalCommands = goalcmd.NewService(feishuapp.GoalCommandPorts(frontend))
 	bindings.Interactions.Deps = feishuapp.InteractionPorts(frontend.State(), bindings.SubmissionLookup)
 	bindings.InteractionDelivery = &interaction.DeliveryService{Repository: frontend.State()}
+	review := reviewapp.NewService(feishuapp.ReviewPorts(frontend))
+	bindings.Review = &review
 	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(frontend, bindings.Plan, bindings.TurnPresentation))
 	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(frontend, bindings.TurnPresentation))
 	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend, bindings.Turns))
@@ -232,8 +234,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ThreadMenu = feishuapp.BuildThreadMenu(frontend)
 	planSource, planCatalog, planWorkspaces := feishuapp.PlanPorts(frontend)
 	*bindings.Plan = planapp.Service{Forms: bindings.Forms, Delivery: bindings.InteractionDelivery, Repository: frontend.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: frontend.Context}, Conversations: bindings.Conversations, Workspaces: planWorkspaces, Queue: bindings.Submissions}
-	review := reviewapp.NewService(feishuapp.ReviewPorts(frontend))
-	bindings.Review = &review
 	bindings.ReviewCommands = feishuapp.BuildReviewCommands(frontend)
 	bindings.MCP, err = feishuapp.BuildMCP(frontend)
 	if err != nil {
