@@ -86,7 +86,7 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 	if got := a.store.GetSession(sub.SessionKey).AppliedModelConfig; got.Model != "new" {
 		t.Fatalf("applied snapshot lost: %+v", got)
 	}
-	if got := modelConfigStatus(a, sub.SessionKey); !strings.Contains(got, "最近已应用模型：`new-plan`；推理强度：`high`") ||
+	if got := modelConfigStatus(a.bindings.ModelSnapshots, a.State(), a.configView(), sub.SessionKey); !strings.Contains(got, "最近已应用模型：`new-plan`；推理强度：`high`") ||
 		!strings.Contains(got, "下一轮本地启动模型：`new-plan`；推理强度：`high`") {
 		t.Fatalf("plan status did not reflect collaboration mode: %s", got)
 	}
@@ -271,7 +271,7 @@ func TestModelConfigStartupRecoveryUsesSessionScope(t *testing.T) {
 					if got := a.State().Session(key).AppliedModelConfig.Model; got != model {
 						t.Fatalf("%s applied model = %q, want %q", chat, got, model)
 					}
-					if got := modelConfigStatus(a, key); !strings.Contains(got, "最近已应用模型：`"+model+"`") {
+					if got := modelConfigStatus(a.bindings.ModelSnapshots, a.State(), a.configView(), key); !strings.Contains(got, "最近已应用模型：`"+model+"`") {
 						t.Fatalf("%s status = %s", chat, got)
 					}
 				}

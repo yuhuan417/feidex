@@ -24,14 +24,12 @@ func ModelSnapshotRepository(cfg *config.Config, mu *sync.RWMutex, scopes *appst
 	return configadapter.ModelSourceRepository{Config: cfg, Mutex: mu, Scopes: scopes}
 }
 
-func modelConfigStatus(a *App, sessionKey string) string {
-	backend := a.configView().configuredBackend()
+func modelConfigStatus(snapshots applicationmodelconfig.SnapshotService, store *appstate.Store, view frontendConfigView, sessionKey string) string {
 	var sess *conversation.Session
-	if store := a.State(); store != nil {
-		sess = store.Session(a.configView().normalizeSessionKey(sessionKey))
+	if store != nil {
+		sess = store.Session(view.normalizeSessionKey(sessionKey))
 	}
-	view := a.bindings.ModelSnapshots.SessionView(backend, sess)
-	return modelsettings.RenderStatus(view)
+	return modelsettings.RenderStatus(snapshots.SessionView(view.configuredBackend(), sess))
 }
 
 func configReadCopy(cfg *config.Config, mu *sync.RWMutex) *config.Config {
@@ -40,10 +38,6 @@ func configReadCopy(cfg *config.Config, mu *sync.RWMutex) *config.Config {
 		defer mu.RUnlock()
 	}
 	return config.Clone(cfg)
-}
-
-func modelConfigReadCopy(a *App) *config.Config {
-	return configReadCopy(a.cfg, a.ConfigMu())
 }
 
 func CodexServiceName(cfg *config.Config, mu *sync.RWMutex) func() string {

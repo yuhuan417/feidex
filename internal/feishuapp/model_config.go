@@ -12,6 +12,13 @@ import (
 )
 
 func BuildModelCommands(app *App) modelconfig.ModelConfigService {
+	statusSnapshots := app.bindings.ModelSnapshots
+	statusStore := app.State()
+	statusConfig := app.cfg
+	statusConfigMu := app.ConfigMu()
+	statusBackend := app.runtimeOwner.Backend
+	statusFrontendID := app.frontendID
+	statusFrontendConfigIndex := app.frontendConfigIndex
 	return modelconfig.ModelConfigService{
 		Defaults:    &app.bindings.ModelDefaults,
 		Backend:     func() string { return app.configView().configuredBackend() },
@@ -42,9 +49,15 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 		SessionConfig: func(sessionKey string) *config.Config {
 			return sessionScopedConfigForApp(app, sessionKey)
 		},
-		MenuBackAction:    menuBackAction,
-		FormatMenuBody:    menuCardBody,
-		ModelConfigStatus: func(sessionKey string) string { return modelConfigStatus(app, sessionKey) },
+		MenuBackAction: menuBackAction,
+		FormatMenuBody: menuCardBody,
+		ModelConfigStatus: func(sessionKey string) string {
+			view := frontendConfigView{
+				cfg: statusConfig, mu: statusConfigMu, backend: statusBackend(),
+				frontendID: statusFrontendID, frontendConfigIndex: statusFrontendConfigIndex,
+			}
+			return modelConfigStatus(statusSnapshots, statusStore, view, sessionKey)
+		},
 		ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 			return replyCommandActionResponse(app, msg, resp)
 		},
@@ -55,7 +68,7 @@ func sessionScopedConfigForApp(a *App, sessionKey string) *config.Config {
 	if a == nil || a.cfg == nil || !p2pSessionScopeActive(a, sessionKey) {
 		return nil
 	}
-	clone := modelConfigReadCopy(a)
+	clone := configReadCopy(a.cfg, a.ConfigMu())
 	sess := a.State().Session(a.configView().normalizeSessionKey(sessionKey))
 	values := a.bindings.ModelSnapshots.Auxiliary(sess)
 	main := a.bindings.ModelSnapshots.Desired(a.configView().configuredBackend(), sess)

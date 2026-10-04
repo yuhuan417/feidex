@@ -74,7 +74,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 }
 
 func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, binding *state.AgentBinding, result catalog.ModelListResult) map[string]any {
-	cfg := modelConfigReadCopy(s.app)
+	cfg := configReadCopy(s.app.cfg, s.app.ConfigMu())
 	if binding == nil {
 		binding = &state.AgentBinding{}
 	}
@@ -219,12 +219,12 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		Type:  "default",
 		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app.bindings.ModelSnapshots, s.app.State(), s.app.configView(), sessionKey)})
 	return card
 }
 
 func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, binding *state.AgentBinding) map[string]any {
-	cfg := modelConfigReadCopy(s.app)
+	cfg := configReadCopy(s.app.cfg, s.app.ConfigMu())
 	if binding == nil {
 		binding = &state.AgentBinding{}
 	}
@@ -326,12 +326,12 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 		Type:  "default",
 		Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey},
 	}}))
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app.bindings.ModelSnapshots, s.app.State(), s.app.configView(), sessionKey)})
 	return card
 }
 
 func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
-	cfg := modelConfigReadCopy(s.app)
+	cfg := configReadCopy(s.app.cfg, s.app.ConfigMu())
 	if binding == nil {
 		binding = bindingForSessionKey(s.app, sessionKey)
 	}
@@ -402,7 +402,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 		cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("group_aux_subagent_effort", "subagent 推理强度", map[string]any{"action": "model.aux_config.select_subagent_effort", "session_key": sessionKey}, effortOptions, textutil.FirstNonEmpty(subagentEffort, appmodelconfig.DefaultOptionValue)))
 	}
 	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}}}))
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app, sessionKey)})
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": modelConfigStatus(s.app.bindings.ModelSnapshots, s.app.State(), s.app.configView(), sessionKey)})
 	return card, nil
 }
 

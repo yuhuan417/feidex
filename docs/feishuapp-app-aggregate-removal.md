@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 407 |
-| 收 `*App` 的顶层函数 | 250 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 405 |
+| 收 `*App` 的顶层函数 | 248 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **26** |
 
@@ -529,6 +529,11 @@ frontend aggregate。各调度入口只接收 coalescer/query，backend 仍在�
 binding command owner 传入已构造的 frontend query，不再把 App 传给 guard。模型设置和命令路径继续
 使用同一 frontend activity policy。生产 `*App` 引用由 408 降至 407，收 `*App` 的函数由 251 降至
 250，持有 App 字段的结构体预算保持 26；lazy binding-read 预算保持 13。
+
+步骤 70 将 `modelConfigStatus` 改为接收 snapshot service、scoped state 和 frontend config view，
+配置副本读取统一直接使用既有 config+lock helper。`BuildModelCommands` 的状态 callback 在构造期捕获
+这些明确依赖，执行时仍通过 runtime owner 读取当前 backend。生产 `*App` 引用由 407 降至 405，收
+`*App` 的函数由 250 降至 248，持有 App 字段的结构体预算保持 26；lazy binding-read 预算保持 13。
 
 ## 方法
 
