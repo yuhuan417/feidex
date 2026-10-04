@@ -182,7 +182,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend)
 	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend)
 	bindings.ServerRequests = feishuapp.BuildServerRequests(frontend)
-	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend))
+	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(frontend)
 	*bindings.PendingQueue = submission.NewPendingQueueService(feishuapp.PendingQueuePorts(frontend))
 	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend)
