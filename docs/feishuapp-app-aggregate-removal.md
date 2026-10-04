@@ -28,13 +28,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 454 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 452 |
 | 收 `*App` 的顶层函数 | 281 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **42** |
+| **持有 `*App` 字段的结构体** | **40** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 32。
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 18。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
 如果调用点本身在闭包里，惰性读取预算会**上涨**——读取从 `f` 的函数体（不算惰性）
@@ -65,20 +65,20 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 工厂数 | 结构体 | 方法数 | helper 数 |
 |---|---|---|---|
-| 3 | `outboundCardService` | 7 | 11 |
 | 2 | `turnRuntimePort` | 3 | 2 |
+| 1 | `bindingService` | 40 | 20 |
 | 1 | `menuActionService` | 19 | 15 |
+| 1 | `backendUpgradeService` | 15 | 4 |
 | 1 | `claudeTurnStreamPort` | 7 | 0 |
 | 1 | `backendSelectionRuntime` | 6 | 6 |
-| 1 | `inboundBackend` | 4 | 1 |
+| 1 | `threadMenuConversationBackendAdapter` | 5 | 3 |
 | 1 | `inboundRouting` | 4 | 4 |
-| 1 | `conversationRuntimeControl` | 3 | 2 |
-| 1 | `reviewDispatcher` | 3 | 1 |
-| 1 | `sqBackendRuntimeFullAdapter` | 3 | 1 |
+| 1 | `inboundBackend` | 4 | 1 |
+| 1 | `feishuEventRouter` | 4 | 1 |
 | 1 | `turnDeliveryPort` | 3 | 1 |
-| 1 | `turnStreamOutboundCardAdapter` | 3 | 1 |
 
-`cardRenderer` 已不再持有 `*App`，不属于这份图。当前工厂按直接依赖总数排序：
+`cardRenderer`、`outboundCardService` 和 `turnStreamOutboundCardAdapter` 已不再持有
+`*App`，不属于这份图。当前工厂按直接依赖总数排序：
 
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
@@ -86,13 +86,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 15 | `ClaudeRuntimePorts` | 6 | 8 | 1 |
 | 12 | `InboundPorts` | 5 | 2 | 5 |
 | 9 | `AutoRetryPorts` | 7 | 2 | 0 |
-| 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
 | 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
+| 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
 | 7 | `TurnPorts` | 2 | 3 | 2 |
 | 6 | `BackendFailurePorts` | 3 | 3 | 0 |
 | 6 | `ConversationPorts` | 6 | 0 | 0 |
 | 6 | `GoalContinuationPorts` | 5 | 0 | 1 |
-| 6 | `TurnPresentationPorts` | 3 | 1 | 2 |
+| 6 | `TurnPresentationPorts` | 3 | 2 | 1 |
 | 5 | `ConversationControlPorts` | 4 | 0 | 1 |
 | 5 | `FileSharePorts` | 3 | 2 | 0 |
 | 5 | `ReviewPorts` | 1 | 1 | 3 |
@@ -386,6 +386,13 @@ state、动态 frontend 配置、renderer 与 transport readiness；final-footer
 注入的 `TurnFinalFooterLines` 函数提供。卡片发送、quiet-mode、标题投影、pending input 和
 fallback 行为保持不变。该 owner 不再是持有 `*App` 字段的结构体，生产 `*App` 引用预算由
 454 降至 453，持有 App 字段的结构体由 42 降至 41，收 `*App` 的函数预算保持 281。
+
+步骤 45 将 `turnStreamOutboundCardAdapter` 改为持有已构造的 `outboundCardService`，并在
+`TurnPresentationPorts` 组装时注入。stream 的 plan/item 投递继续走同一组 frontend-scoped
+owners，同时去掉 adapter 对 `App` 的字段依赖。生产 `*App` 引用预算由 453 降至 452，
+持有 App 字段的结构体预算由 41 降至 40，收 `*App` 的函数预算保持 281。同批在
+`ClaudeRuntimePorts` 中把 14 个已就绪的 owner binding 从回调体提升为构造期快照，
+保持配置及 runtime 选择的动态读取；lazy binding-read 预算由 32 降至 18。
 
 ## 方法
 

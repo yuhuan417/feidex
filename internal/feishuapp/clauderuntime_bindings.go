@@ -33,8 +33,13 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	// than through app.bindings inside the callbacks below.
 	submissionLookup := app.bindings.SubmissionLookup
 	modelSnapshots := app.bindings.ModelSnapshots
+	modelAcknowledgements := app.bindings.ModelAcknowledgements
 	claudeSupport := app.bindings.ClaudeSupport
 	interactionLifecycle := app.bindings.InteractionLifecycle
+	turns := app.bindings.Turns
+	backendFailure := app.bindings.BackendFailure
+	usageRecorder := app.bindings.Usage
+	turnMetadata := app.bindings.TurnMetadata
 	return appclauderuntime.Deps{
 		Context: app.Context,
 		Cfg:     cfg,
@@ -46,7 +51,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 			},
 			FinishTurn: func(threadID, turnID, status string) {
 				runSession(app, sessionKeyForBackendEvent(app.BackendRuntimeDeps(), application.BackendEvent{ThreadID: threadID}), func() {
-					finishTurn(app.bindings.Turns, threadID, turnID, status)
+					finishTurn(turns, threadID, turnID, status)
 				})
 			},
 			FinishSteerSubmission: func(submissionID, status string) {
@@ -55,12 +60,12 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 					sessionKey = sub.SessionKey
 				}
 				runSession(app, sessionKey, func() {
-					app.bindings.Turns.FinishSteerSubmission(submissionID, status)
+					turns.FinishSteerSubmission(submissionID, status)
 				})
 			},
 			FailClaudeSessionWork: func(sessionKey, threadID string, err error) {
 				runSession(app, sessionKey, func() {
-					failClaudeSessionActiveWork(app.bindings.BackendFailure, sessionKey, threadID, err)
+					failClaudeSessionActiveWork(backendFailure, sessionKey, threadID, err)
 				})
 			},
 			FailBackendActiveWork: func(backend, sessionKey, threadID, message string) {
@@ -72,7 +77,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 		},
 		Usage: appclauderuntime.UsageDeps{
 			RecordClaudeThreadUsage: func(threadID string, usage claudecli.TurnUsage) {
-				app.bindings.Usage.RecordClaudeThreadUsage(threadID, domainturn.ClaudeThreadUsage{
+				usageRecorder.RecordClaudeThreadUsage(threadID, domainturn.ClaudeThreadUsage{
 					InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens,
 					CacheReadTokens: usage.CacheReadTokens, CacheCreationTokens: usage.CacheCreationTokens,
 					CumulativeInputTokens: usage.CumulativeInputTokens, CumulativeOutputTokens: usage.CumulativeOutputTokens,
@@ -87,7 +92,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				app.runtimeOwner.TurnBindings.RecordTurnContextUsagePercent(turnID, percent)
 			},
 			TurnFinalFooterLines: func(turnID string, completedAt time.Time) []string {
-				return app.bindings.TurnMetadata.TurnFinalFooterLines(turnID, completedAt)
+				return turnMetadata.TurnFinalFooterLines(turnID, completedAt)
 			},
 		},
 		Delivery: appclauderuntime.DeliveryDeps{
@@ -115,25 +120,25 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				return sendClaudeApprovalCard(claudeSupport, requestID, sessionKey, sub, presentation)
 			},
 			SendClaudeUserInputCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
-				return sendClaudeUserInputCard(app.bindings.ClaudeSupport, requestID, sessionKey, sub, payload)
+				return sendClaudeUserInputCard(claudeSupport, requestID, sessionKey, sub, payload)
 			},
 			SendClaudeUserInputFormCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
-				return sendClaudeUserInputFormCard(app.bindings.ClaudeSupport, requestID, sessionKey, sub, payload)
+				return sendClaudeUserInputFormCard(claudeSupport, requestID, sessionKey, sub, payload)
 			},
 			SendClaudePlanModeCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error {
-				return sendClaudePlanModeCard(app.bindings.ClaudeSupport, requestID, sessionKey, sub, threadID, turnID, body)
+				return sendClaudePlanModeCard(claudeSupport, requestID, sessionKey, sub, threadID, turnID, body)
 			},
 			SendDetachedApprovalCard: func(requestID string, target appclauderuntime.InteractionTarget, presentation appapproval.Presentation) error {
-				return app.bindings.ClaudeSupport.SendDetachedApprovalCard(requestID, target, presentation)
+				return claudeSupport.SendDetachedApprovalCard(requestID, target, presentation)
 			},
 			SendDetachedUserInputCard: func(requestID string, target appclauderuntime.InteractionTarget, payload apppendingforms.ToolUserInputPayload) error {
-				return app.bindings.ClaudeSupport.SendDetachedUserInputCard(requestID, target, payload)
+				return claudeSupport.SendDetachedUserInputCard(requestID, target, payload)
 			},
 			SendDetachedUserInputFormCard: func(requestID string, target appclauderuntime.InteractionTarget, payload apppendingforms.ToolUserInputPayload) error {
-				return app.bindings.ClaudeSupport.SendDetachedUserInputFormCard(requestID, target, payload)
+				return claudeSupport.SendDetachedUserInputFormCard(requestID, target, payload)
 			},
 			SendDetachedPlanModeCard: func(requestID string, target appclauderuntime.InteractionTarget, body string) error {
-				return app.bindings.ClaudeSupport.SendDetachedPlanModeCard(requestID, target, body)
+				return claudeSupport.SendDetachedPlanModeCard(requestID, target, body)
 			},
 			ExpireInteractionCards: func(sessionKey string, requestIDs []string, reason string) {
 				ExpireClaudeInteractionCards(interactionLifecycle, sessionKey, requestIDs, reason)
@@ -172,14 +177,14 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 			return modelConfigSnapshot(modelSnapshots, sess, domainbackend.BackendClaude)
 		},
 		ModelSettingsApplied: func(sessionKey string, settings domainmodelconfig.Snapshot) {
-			err := app.bindings.ModelAcknowledgements.Applied(sessionKey, settings)
+			err := modelAcknowledgements.Applied(sessionKey, settings)
 			if err != nil {
 				slog.Warn("record Claude model settings failed", "session_key", sessionKey, "error", err)
 			}
 		},
 		AuxiliaryModels: func(sessionKey string) (string, string) {
 			sess := app.State().Session(app.configView().normalizeSessionKey(sessionKey))
-			settings := app.bindings.ModelSnapshots.Desired(domainbackend.BackendClaude, sess)
+			settings := modelSnapshots.Desired(domainbackend.BackendClaude, sess)
 			return settings.SmallModel, settings.SubagentModel
 		},
 	}

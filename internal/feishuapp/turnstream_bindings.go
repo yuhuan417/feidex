@@ -16,17 +16,17 @@ import (
 // ---------------------------------------------------------------------------
 
 type turnStreamOutboundCardAdapter struct {
-	app     *App
+	cards   outboundCardService
 	compact interface {
 		CompleteStandaloneCompactItem(string, string, map[string]any) bool
 	}
 }
 
 func (a turnStreamOutboundCardAdapter) SendPlanCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, planText, reuseMessageID string) string {
-	return newOutboundCardService(a.app).sendPlanCardWithReuse(ctx, sub, planText, reuseMessageID)
+	return a.cards.sendPlanCardWithReuse(ctx, sub, planText, reuseMessageID)
 }
 func (a turnStreamOutboundCardAdapter) SendTurnItemCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, payload turnitem.CardPayload, reuseMessageID string) string {
-	return newOutboundCardService(a.app).sendTurnItemCardWithReuse(ctx, sub, payload, reuseMessageID)
+	return a.cards.sendTurnItemCardWithReuse(ctx, sub, payload, reuseMessageID)
 }
 func (a turnStreamOutboundCardAdapter) CompleteStandaloneCompactItem(threadID, turnID string, item turnitem.ProtocolItem) bool {
 	return a.compact.CompleteStandaloneCompactItem(threadID, turnID, item.MergedRaw())
@@ -66,7 +66,7 @@ func TurnPresentationPorts(a *App, turns *appturn.Service) appturnstream.Depende
 	return appturnstream.Dependencies{
 		Context: a.Context,
 		Tracker: a.bindings.TurnStreams, Finder: a.bindings.SubmissionLookup, Lifecycle: turns, Runtime: turnItemsPort{tracker: a.bindings.TurnItems},
-		Outbound: turnStreamOutboundCardAdapter{app: a, compact: a.bindings.Compaction}, Quiet: turnStreamQuietCardExecutorAdapter{app: a},
+		Outbound: turnStreamOutboundCardAdapter{cards: newOutboundCardService(a), compact: a.bindings.Compaction}, Quiet: turnStreamQuietCardExecutorAdapter{app: a},
 		SendStartedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
 			maybeSendSubmissionStartedNotice(a, ctx, sub)
 		},

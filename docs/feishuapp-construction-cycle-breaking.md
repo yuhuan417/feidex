@@ -312,9 +312,10 @@ nil。这也解释了为什么 `SubmissionPorts` 那处能改、而 `BuildUpgrad
   显式传给 upgrade ports，再通过局部 upgrade service 回调完成恢复启动和 smoke
   test 连接。ports 不捕获 `App` 或 `Bindings`，runtime snapshot 中的 transport
   handler 也持有已构造的 recovery service。
-- `ClaudeRuntimePorts`（14 处）—— 它由 `bindings.ClaudeFactory` 在运行时调用，
-  惰性是真的；要去掉只能把工厂改成"组合期先建 ports、调用时只补 cfg"
-- 其余 20 处散在 16 个函数里，多为 1-3 处
+- `ClaudeRuntimePorts` 原有的 14 个 binding 闭包读取已改为该 factory 调用时的局部快照；
+  `ClaudeFactory` 运行时调用 ports factory，但这些 owner bindings 在 factory 被调用前已就绪。
+  其它由闭包查询的配置与 runtime 状态仍保持动态读取
+- 其余 18 处散在多个函数里，多为 1-3 处
 
 `BuildUpgrades ← WorkspaceConfiguration` 已经不再是惰性读取：workspace 两个
 builder 改成构造期参数后，这条边变成了正向的显式依赖。
@@ -326,7 +327,7 @@ builder 改成构造期参数后，这条边变成了正向的显式依赖。
 | 测试 | 起始值 | 当前 | 目标 |
 |---|---|---|---|
 | `TestFeishuAppAggregateDoesNotGrow` | 541 | 503 | 0 |
-| `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **34** | **0** |
+| `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **18** | **0** |
 
 ### 分析口径的第三次修正：语句级图必须闭包到 wrapper 的实现
 
