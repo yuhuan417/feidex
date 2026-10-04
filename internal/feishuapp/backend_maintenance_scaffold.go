@@ -6,6 +6,7 @@ import (
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
+	frontendruntime "feidex/internal/runtime"
 	"log/slog"
 	"strings"
 
@@ -14,14 +15,11 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func patchMaintenanceCard(a *App, messageID string, card map[string]any, warnMsg string, attrs ...any) {
-	if a == nil {
-		return
-	}
+func patchMaintenanceCard(ctx context.Context, frontendID string, runner frontendruntime.EffectRunner, messageID string, card map[string]any, warnMsg string, attrs ...any) {
 	if strings.TrimSpace(messageID) == "" || card == nil {
 		return
 	}
-	if err := newEffectRunner(a.runtimeOwner).Run(a.Context(), []application.Effect{application.PatchCard{Frontend: identity.FrontendID(a.FrontendID()), MessageID: messageID, View: feishuoutbound.Card(card)}}); err != nil {
+	if err := runner.Run(ctx, []application.Effect{application.PatchCard{Frontend: identity.FrontendID(frontendID), MessageID: messageID, View: feishuoutbound.Card(card)}}); err != nil {
 		slog.Warn(warnMsg, append(attrs, "error", err)...)
 	}
 }

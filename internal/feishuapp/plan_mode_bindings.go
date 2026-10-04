@@ -207,7 +207,7 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 	runAsync(a, func() {
 		resp, err := completeMenuCommand(a, action, sessionKey, "/plan", "menu.tools")
 		if card := callbackResponseCard(resp); card != nil {
-			patchMaintenanceCard(a, messageID, card, "plan menu patch failed",
+			patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, "plan menu patch failed",
 				"session_key", sessionKey,
 				"message_id", messageID,
 			)

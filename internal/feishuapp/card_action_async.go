@@ -48,7 +48,7 @@ func completeAsyncCommandAction(
 		default:
 			card = failureCard(sessionKey, textutil.FirstNonEmpty(strings.TrimSpace(text), "命令没有返回卡片"))
 		}
-		patchMaintenanceCard(a, messageID, card, patchWarnMsg,
+		patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, patchWarnMsg,
 			"session_key", sessionKey,
 			"message_id", messageID,
 		)
@@ -82,7 +82,7 @@ func completeAsyncRenderedCardAction(
 			}
 			card = failureCard(sessionKey, textutil.FirstNonEmpty(strings.TrimSpace(errText), "操作没有返回卡片"))
 		}
-		patchMaintenanceCard(a, messageID, card, patchWarnMsg,
+		patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, patchWarnMsg,
 			"session_key", sessionKey,
 			"message_id", messageID,
 		)

@@ -143,10 +143,10 @@ func (s backendUpgradeService) completeUpgradeAction(kind backendUpgradeKind, ac
 			defer cancel()
 			view, err := h.loadView(ctx, false)
 			if err != nil {
-				patchMaintenanceCard(s.app, action.MessageID, render.renderUpgradeFailedCard(h.spec, sessionKey, err.Error()), h.patchLog)
+				patchMaintenanceCard(s.app.Context(), s.app.FrontendID(), newEffectRunner(s.app.runtimeOwner), action.MessageID, render.renderUpgradeFailedCard(h.spec, sessionKey, err.Error()), h.patchLog)
 				return
 			}
-			patchMaintenanceCard(s.app, action.MessageID, render.renderUpgradeStatusCard(h.spec, sessionKey, view, false), h.patchLog)
+			patchMaintenanceCard(s.app.Context(), s.app.FrontendID(), newEffectRunner(s.app.runtimeOwner), action.MessageID, render.renderUpgradeStatusCard(h.spec, sessionKey, view, false), h.patchLog)
 		})
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已取消升级"}, Card: rawCard(render.renderUpgradePreparingCard(h.spec, sessionKey, "已取消升级"))}, nil
 	}

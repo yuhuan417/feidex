@@ -95,7 +95,7 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 		} else {
 			card = a.feishu.SimpleStatusCard("输入已提交", "green", answerText, nil)
 		}
-		patchMaintenanceCard(a, pending.FeishuMsgID, card, "async user input patch failed", "request_id", requestID)
+		patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), pending.FeishuMsgID, card, "async user input patch failed", "request_id", requestID)
 	}); err != nil {
 		return warning(err.Error())
 	}

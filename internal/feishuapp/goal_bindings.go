@@ -129,7 +129,7 @@ func completeGoalAsyncResult(a *App, action *feishu.CardAction, sessionKey, mess
 		return
 	}
 	if card := callbackResponseCard(resp); card != nil {
-		patchMaintenanceCard(a, messageID, card, patchWarnMsg,
+		patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, patchWarnMsg,
 			"session_key", sessionKey,
 			"message_id", messageID,
 		)
