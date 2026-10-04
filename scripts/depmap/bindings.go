@@ -24,6 +24,14 @@ type Read struct {
 // FuncReads maps a feishuapp function to every binding it reads.
 type FuncReads map[string][]Read
 
+// Call is an edge from one function to another *App-taking function or to a
+// struct whose methods hold an *App field. Lazy means the call sits inside a
+// func literal, so the callee runs when the closure runs.
+type Call struct {
+	Fn   string `json:"fn"`
+	Lazy bool   `json:"lazy"`
+}
+
 // Stmt is one `bindings.X = ...` assignment in composition.
 type Stmt struct {
 	Produces string   `json:"produces"`
@@ -34,18 +42,25 @@ type Stmt struct {
 
 type BindingGraph struct {
 	Funcs FuncReads           `json:"func_reads"`
+	Calls map[string][]Call   `json:"calls"` // function -> *App-taking callees and instantiated structs
 	Stmts []Stmt              `json:"stmts"`
 	Eager map[string][]string `json:"eager_edges"` // producer -> producers it needs at construction time
 	Any   map[string][]string `json:"any_edges"`   // including lazy reads
 }
 
 func scanBindings(repoRoot string) *BindingGraph {
-	g := &BindingGraph{Funcs: FuncReads{}, Eager: map[string][]string{}, Any: map[string][]string{}}
+	g := &BindingGraph{Funcs: FuncReads{}, Calls: map[string][]Call{}, Eager: map[string][]string{}, Any: map[string][]string{}}
 	fs := token.NewFileSet()
 
-	// pass 1: what every feishuapp function reads
 	dir := filepath.Join(repoRoot, "internal/feishuapp")
 	files, _ := filepath.Glob(filepath.Join(dir, "*.go"))
+
+	// pass 0: parse everything, and learn which names take *App (called
+	// functions) and which structs hold an *App field (instantiated structs).
+	var parsed []*ast.File
+	appFuncs := map[string]bool{}
+	structAppField := map[string]string{}
+	var decls []*ast.FuncDecl
 	for _, p := range files {
 		if strings.HasSuffix(p, "_test.go") {
 			continue
@@ -54,25 +69,66 @@ func scanBindings(repoRoot string) *BindingGraph {
 		if err != nil {
 			continue
 		}
+		parsed = append(parsed, f)
 		for _, d := range f.Decls {
-			fd, ok := d.(*ast.FuncDecl)
-			if !ok || fd.Body == nil {
-				continue
-			}
-			var appVar string
-			if fd.Type.Params != nil {
-				for _, prm := range fd.Type.Params.List {
-					if star, ok := prm.Type.(*ast.StarExpr); ok {
-						if id, ok := star.X.(*ast.Ident); ok && id.Name == "App" && len(prm.Names) > 0 {
-							appVar = prm.Names[0].Name
+			switch decl := d.(type) {
+			case *ast.FuncDecl:
+				decls = append(decls, decl)
+				if decl.Recv == nil && takesAppParam(decl) != "" {
+					appFuncs[decl.Name.Name] = true
+				}
+			case *ast.GenDecl:
+				for _, spec := range decl.Specs {
+					ts, ok := spec.(*ast.TypeSpec)
+					if !ok {
+						continue
+					}
+					st, ok := ts.Type.(*ast.StructType)
+					if !ok {
+						continue
+					}
+					for _, fld := range st.Fields.List {
+						star, ok := fld.Type.(*ast.StarExpr)
+						if !ok || len(fld.Names) == 0 {
+							continue
+						}
+						if id, ok := star.X.(*ast.Ident); ok && id.Name == "App" {
+							structAppField[ts.Name.Name] = fld.Names[0].Name
 						}
 					}
 				}
 			}
+		}
+	}
+
+	// pass 1: what every function and *App-holding struct method reads, and
+	// which *App-taking functions or App-holding structs it reaches.
+	structMethods := map[string][]string{}
+	for _, fd := range decls {
+		if fd.Body == nil {
+			continue
+		}
+		key, appVar := "", ""
+		if fd.Recv == nil {
+			appVar = takesAppParam(fd)
 			if appVar == "" {
 				continue
 			}
-			g.Funcs[fd.Name.Name] = collectReads(fd.Body, appVar)
+			key = fd.Name.Name
+		} else {
+			recv := recvTypeName(fd.Recv.List[0].Type)
+			field, ok := structAppField[recv]
+			if !ok {
+				continue
+			}
+			appVar = field
+			key = recv + "." + fd.Name.Name
+		}
+		g.Funcs[key] = collectReads(fd.Body, appVar)
+		g.Calls[key] = collectCalls(fd.Body, appVar, appFuncs, structAppField)
+		if fd.Recv != nil {
+			recv := recvTypeName(fd.Recv.List[0].Type)
+			structMethods[recv] = append(structMethods[recv], recv+"."+fd.Name.Name)
 		}
 	}
 
@@ -140,13 +196,15 @@ func scanBindings(repoRoot string) *BindingGraph {
 			}
 		}
 		for _, fn := range st.Funcs {
-			for _, r := range g.Funcs[fn] {
-				if r.Binding == st.Produces || !assigned[r.Binding] || placeholder[r.Binding] {
+			eagerReads := g.reach(fn, true, structMethods, map[string]bool{})
+			anyReads := g.reach(fn, false, structMethods, map[string]bool{})
+			for b := range anyReads {
+				if b == st.Produces || !assigned[b] || placeholder[b] {
 					continue
 				}
-				any[r.Binding] = true
-				if !r.Lazy {
-					eager[r.Binding] = true
+				any[b] = true
+				if eagerReads[b] {
+					eager[b] = true
 				}
 			}
 		}
@@ -154,6 +212,125 @@ func scanBindings(repoRoot string) *BindingGraph {
 		g.Any[st.Produces] = keysOf(any)
 	}
 	return g
+}
+
+// reach returns every binding a call to name reads. eagerOnly follows just the
+// calls that happen when name runs; otherwise calls inside func literals are
+// followed too and their reads count as lazy. Struct values are expanded into
+// their methods: handing a struct out hands its *App field to every method.
+//
+// The result depends only on name and eagerOnly, so callers memoize it.
+func (g *BindingGraph) reach(name string, eagerOnly bool, structMethods map[string][]string, visiting map[string]bool) map[string]bool {
+	if visiting[name] {
+		return nil
+	}
+	visiting[name] = true
+	out := map[string]bool{}
+	for _, r := range g.Funcs[name] {
+		if eagerOnly && r.Lazy {
+			continue
+		}
+		out[r.Binding] = true
+	}
+	for _, c := range g.Calls[name] {
+		if eagerOnly && c.Lazy {
+			continue
+		}
+		// A struct value handed out by the factory only runs its methods after
+		// construction, so its reads are dependencies but never construction
+		// order constraints.
+		if methods, ok := structMethods[c.Fn]; ok {
+			if eagerOnly {
+				continue
+			}
+			for _, target := range methods {
+				for b := range g.reach(target, false, structMethods, visiting) {
+					out[b] = true
+				}
+			}
+			continue
+		}
+		for b := range g.reach(c.Fn, eagerOnly, structMethods, visiting) {
+			out[b] = true
+		}
+	}
+	delete(visiting, name)
+	return out
+}
+
+// takesAppParam returns the parameter name of a leading *App parameter, or "".
+func takesAppParam(fd *ast.FuncDecl) string {
+	if fd.Type.Params == nil {
+		return ""
+	}
+	for _, prm := range fd.Type.Params.List {
+		star, ok := prm.Type.(*ast.StarExpr)
+		if !ok || len(prm.Names) == 0 {
+			continue
+		}
+		if id, ok := star.X.(*ast.Ident); ok && id.Name == "App" {
+			return prm.Names[0].Name
+		}
+	}
+	return ""
+}
+
+func recvTypeName(e ast.Expr) string {
+	switch t := e.(type) {
+	case *ast.StarExpr:
+		return recvTypeName(t.X)
+	case *ast.Ident:
+		return t.Name
+	}
+	return ""
+}
+
+// collectCalls records every *App-taking function called in the body and every
+// App-holding struct literal it builds, marking calls inside func literals as
+// lazy.
+func collectCalls(body *ast.BlockStmt, appVar string, appFuncs map[string]bool, structAppField map[string]string) []Call {
+	seen := map[string]bool{}
+	var out []Call
+	var walk func(n ast.Node, lazy bool)
+	walk = func(n ast.Node, lazy bool) {
+		ast.Inspect(n, func(m ast.Node) bool {
+			switch x := m.(type) {
+			case *ast.FuncLit:
+				walk(x.Body, true)
+				return false
+			case *ast.CallExpr:
+				if id, ok := x.Fun.(*ast.Ident); ok && appFuncs[id.Name] {
+					key := fmt.Sprintf("%s/%v", id.Name, lazy)
+					if !seen[key] {
+						seen[key] = true
+						out = append(out, Call{Fn: id.Name, Lazy: lazy})
+					}
+				}
+			case *ast.CompositeLit:
+				id, ok := x.Type.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				if _, ok := structAppField[id.Name]; !ok {
+					return true
+				}
+				key := fmt.Sprintf("%s/%v", id.Name, lazy)
+				if !seen[key] {
+					seen[key] = true
+					out = append(out, Call{Fn: id.Name, Lazy: lazy})
+				}
+			}
+			return true
+		})
+	}
+	walk(body, false)
+	sort.Slice(out, func(a, b int) bool {
+		if out[a].Fn != out[b].Fn {
+			return out[a].Fn < out[b].Fn
+		}
+		return !out[a].Lazy
+	})
+	return out
 }
 
 // collectReads walks a body and records every appVar.bindings.X read, marking
@@ -312,6 +489,28 @@ func runBindings(repoRoot string, asJSON bool) {
 	fmt.Printf("\n=== 含惰性读取的环: %d 个 ===\n", len(anyCycles))
 	for _, c := range anyCycles {
 		fmt.Printf("    %s\n", strings.Join(c, " ↔ "))
+	}
+
+	// An eager read of a binding that is assigned later captures its zero
+	// value. This is the check that catches reorderings which look topological
+	// but are not, which is how WorkspaceConfiguration once captured a zero
+	// BackendConfiguration.
+	line := map[string]int{}
+	for _, st := range g.Stmts {
+		line[st.Produces] = st.Line
+	}
+	fmt.Printf("\n=== 反向 eager 读取（读了还没赋值的 binding）===\n")
+	backward := 0
+	for _, st := range g.Stmts {
+		for _, dep := range g.Eager[st.Produces] {
+			if assignedLine, ok := line[dep]; ok && assignedLine > st.Line {
+				fmt.Printf("    %s (line %d) reads %s (assigned line %d)\n", st.Produces, st.Line, dep, assignedLine)
+				backward++
+			}
+		}
+	}
+	if backward == 0 {
+		fmt.Printf("    0 个\n")
 	}
 
 	// 每个环的边，标出 eager/lazy
