@@ -26,11 +26,12 @@ func CodexRecoveryPorts(a *App,
 	recoverFrontend func(),
 ) appcodexruntime.RecoveryDependencies {
 	submissions := a.bindings.Submissions
+	liveThreads := a.runtimeOwner.LiveThreads
 	return appcodexruntime.RecoveryDependencies{
 		State:     recoveryState(a.runtimeView()),
 		Context:   a.Context,
 		RunAsync:  func(fn func()) { runAsync(a, fn) },
-		ClearLive: func() { resetAppLiveThreadTracker(a) },
+		ClearLive: liveThreads.Reset,
 		FailActiveWork: func(cause error) {
 			message := "Codex 后端异常退出。"
 			if detail := strings.TrimSpace(errorText(cause)); detail != "" {

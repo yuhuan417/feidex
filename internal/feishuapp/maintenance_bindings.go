@@ -12,9 +12,10 @@ import (
 // StartupRecoveryPorts takes the maintenance-command entry point it needs
 // from a service constructed after it.
 func StartupRecoveryPorts(a *App, cleanupExpiredAttachments func(), restoreConversationState func() error) maintenance.RecoveryDependencies {
+	liveThreads := a.runtimeOwner.LiveThreads
 	return maintenance.RecoveryDependencies{
 		Context: a.Context, Repository: a.State(), RecoveryMu: &a.runtimeView().ensureRuntimeOwner().RecoveryMu,
-		ResetLiveThreads:  func() { resetAppLiveThreadTracker(a) },
+		ResetLiveThreads:  liveThreads.Reset,
 		BelongsToFrontend: func(key string) bool { return a.configView().sessionBelongsToFrontend(key) },
 		BackendConfigured: func() bool { return a.configView().hasConfiguredBackend() },
 		BeginRecovery: func() func() {

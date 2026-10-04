@@ -5,10 +5,42 @@ import (
 	domainsubmission "feidex/internal/domain/submission"
 
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
+	"feidex/internal/application/announcement"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"testing"
 )
+
+func testAppLiveThreadMarker(a *App) liveThreadMarker {
+	if a == nil {
+		return liveThreadMarker{}
+	}
+	owner := a.runtimeView().ensureRuntimeOwner()
+	var announcement announcement.Query
+	if a.bindings != nil {
+		announcement = a.bindings.AnnouncementQuery
+	}
+	return liveThreadMarker{
+		tracker: owner.LiveThreads, state: a.State(), announcement: announcement, refreshes: owner.Announcements,
+	}
+}
+
+func markSessionThreadLive(a *App, sessionKey, threadID string) {
+	testAppLiveThreadMarker(a).MarkSessionThreadLive(sessionKey, threadID)
+}
+
+func sessionHasLiveThread(a *App, sessionKey, threadID string) bool {
+	if a == nil {
+		return false
+	}
+	return a.runtimeView().ensureRuntimeOwner().LiveThreads.Has(sessionKey, threadID)
+}
+
+func clearSessionLiveThread(a *App, sessionKey string) {
+	if a != nil {
+		a.runtimeView().ensureRuntimeOwner().LiveThreads.Clear(sessionKey)
+	}
+}
 
 func TestSwitchSessionWorkspaceClearsIdleThreadContext(t *testing.T) {
 	sess := &conversation.Session{

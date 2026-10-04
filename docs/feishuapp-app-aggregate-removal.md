@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 338 |
-| 收 `*App` 的顶层函数 | 211 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 332 |
+| 收 `*App` 的顶层函数 | 205 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
 | **持有 `*App` 字段的结构体** | **17** |
 
@@ -735,6 +735,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 113 将 group binding session 查找与 workspace 解析改为使用 `bindingSessionScope` 的 scoped state、normalizer、primary lookup 和 frontend ID，不再把 `*App` 传入 binding lookup helper。group chat type 的 fallback 仍先查 agent binding，再查 primary 状态；生产 `*App` 引用预算由 346 降至 344，收 `*App` 的顶层函数由 219 降至 217，lazy binding-read 预算保持 0。
 
 步骤 114 将 primary 初始化、查询、状态判断与写入 helpers 改为接收既有 routing services、frontend ID 和 Feishu client，不再从 `*App` 中取 primary owner。命令状态卡、primary assignment 和 bot-added 初始化仍走同一 application owners；生产 `*App` 引用预算由 344 降至 338，收 `*App` 的顶层函数由 217 降至 211，lazy binding-read 预算保持 0。
+
+步骤 115 删除 App-bearing live-thread tracker/session marker helpers，并移除无调用方的 `App.MarkSessionThreadLive` 方法。Turn runtime 已有的 `liveThreadMarker` 复用于 workspace thread 创建；workspace 清理及 Codex/startup recovery 在构造时直接捕获 frontend-owned tracker。session mark 仍按原顺序更新 tracker，再读取 session 并刷新 group announcement；clear/reset 仍只影响当前 frontend tracker。对照状态机审计 SM-03：这只操作当前 frontend 的易失 attached-thread 标记，不改变 thread ID/session binding、thread start/resume 或 lifecycle 转换。测试兼容 helper 留在 `_test.go`。生产 `*App` 引用预算由 338 降至 332，收 `*App` 的顶层函数由 211 降至 205，lazy binding-read 预算保持 0。
 
 ## 方法
 

@@ -23,19 +23,23 @@ func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presen
 	}
 
 	st := a.State()
+	threadMarker := liveThreadMarker{
+		tracker: a.runtimeOwner.LiveThreads, state: st,
+		announcement: a.bindings.AnnouncementQuery, refreshes: a.runtimeOwner.Announcements,
+	}
 	return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{
 		Dependencies: workspaceCommandApp(a),
 		State:        workspaceStateDeps(st),
 		SessionContext: appworkspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
-			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
+			ClearSessionLiveThread: threadMarker.tracker.Clear,
 		},
 		Threads: appworkspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
 				return conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
-			MarkSessionThreadLive:  func(sessionKey, threadID string) { markSessionThreadLive(a, sessionKey, threadID) },
-			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
+			MarkSessionThreadLive:  threadMarker.MarkSessionThreadLive,
+			ClearSessionLiveThread: threadMarker.tracker.Clear,
 			StartWorkspaceThread: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
 				return conversations.StartWorkspaceThread(sessionKey, sess, ws)
 			},

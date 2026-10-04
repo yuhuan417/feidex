@@ -17,10 +17,6 @@ import (
 // *App methods satisfying runtime and delivery ports
 // ---------------------------------------------------------------------------
 
-func (a *App) MarkSessionThreadLive(sessionKey, threadID string) {
-	markSessionThreadLive(a, sessionKey, threadID)
-}
-
 func (a *App) TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID string) string {
 	return turnStopAttentionUserID(a.State(), sub, turnID)
 }

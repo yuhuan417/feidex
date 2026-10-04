@@ -3,60 +3,8 @@ package feishuapp
 import (
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
-	identity "feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
-	frontendruntime "feidex/internal/runtime"
-	"strings"
 )
-
-func getAppLiveThreadTracker(a *App) *frontendruntime.LiveThreads {
-	if a == nil {
-		return nil
-	}
-	owner := a.runtimeView().ensureRuntimeOwner()
-	return owner.LiveThreads
-}
-
-func resetAppLiveThreadTracker(a *App) {
-	if a == nil {
-		return
-	}
-	owner := a.runtimeView().ensureRuntimeOwner()
-	owner.LiveThreads.Reset()
-}
-
-func markSessionThreadLive(a *App, sessionKey, threadID string) {
-	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
-		return
-	}
-	tracker := getAppLiveThreadTracker(a)
-	tracker.Mark(sessionKey, threadID)
-	if sess := a.State().Session(sessionKey); sess != nil {
-		chatID := strings.TrimSpace(sess.ChatID)
-		if chatID == "" {
-			_, _, chatID, _, _ = identity.ParseSessionKey(sess.Key)
-		}
-		if sessionMatchesGroupChat(a.bindings.AnnouncementQuery, sess, chatID) {
-			scheduleGroupAnnouncementStatusRefresh(a.runtimeOwner.Announcements, chatID)
-		}
-	}
-}
-
-func sessionHasLiveThread(a *App, sessionKey, threadID string) bool {
-	if a == nil || strings.TrimSpace(sessionKey) == "" || strings.TrimSpace(threadID) == "" {
-		return false
-	}
-	tracker := getAppLiveThreadTracker(a)
-	return tracker.Has(sessionKey, threadID)
-}
-
-func clearSessionLiveThread(a *App, sessionKey string) {
-	if a == nil || strings.TrimSpace(sessionKey) == "" {
-		return
-	}
-	tracker := getAppLiveThreadTracker(a)
-	tracker.Clear(sessionKey)
-}
 
 func effectiveThreadApprovalPolicy(sess *conversation.Session, ws *config.Workspace) string {
 	workspaceValue := ""

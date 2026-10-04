@@ -71,12 +71,13 @@ func buildWorkspaceConfigService(a *App, presentation *workspacecards.Presentati
 	}
 
 	st := a.State()
+	liveThreads := a.runtimeOwner.LiveThreads
 	return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{
 		Dependencies: workspaceCommandApp(a),
 		State:        workspaceStateDeps(st),
 		SessionContext: workspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
-			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
+			ClearSessionLiveThread: liveThreads.Clear,
 		},
 		Threads: workspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*workspacecmd.ThreadBinding, error) {
