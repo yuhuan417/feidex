@@ -66,7 +66,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			title, color, _, _ = outboundMessageCardMeta("turn_output", sub.WorkspaceID)
 			title = contentCardTitleForSubmission(s.app.State(), sub, title)
 		}
-		results := sendReplyCardChunksWithReuse(s.app,
+		results := s.replyChunks.SendWithReuse(
 			ctx,
 			sub,
 			title,
@@ -98,12 +98,12 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	}
 	card := s.renderTurnItemCard(ctx, sub, payload, payload.IsFinalAnswer)
 	if strings.TrimSpace(reuseMessageID) != "" {
-		if err := patchCardEffect(ctx, s.app, reuseMessageID, card); err == nil {
+		if err := s.replyChunks.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
 			recordMessageLink(s.app, reuseMessageID, kind, sub, payload.ItemID)
 			return reuseMessageID
 		}
 	}
-	id, err := replyCardWithIDEffect(ctx, s.app, sub.TriggerMessageID, card, replyInThreadForSubmission(sub))
+	id, err := s.replyChunks.outbound.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := payload.SummaryText
 		if fallback == "" {
@@ -135,7 +135,7 @@ func (s outboundCardService) replaceTurnEventCardWithReuse(ctx context.Context, 
 	}
 	if strings.TrimSpace(reuseMessageID) != "" {
 		card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, title), color, "", body, nil)
-		if err := patchCardEffect(ctx, s.app, reuseMessageID, card); err == nil {
+		if err := s.replyChunks.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
 			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
 		}
@@ -156,12 +156,12 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	}
 	card := newCardRenderer(s.app.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(s.app.State(), sub, title), color, "", body, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
-		if err := patchCardEffect(ctx, s.app, reuseMessageID, card); err == nil {
+		if err := s.replyChunks.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
 			recordMessageLink(s.app, reuseMessageID, kind, sub, itemID)
 			return reuseMessageID
 		}
 	}
-	id, err := replyCardWithIDEffect(ctx, s.app, sub.TriggerMessageID, card, replyInThreadForSubmission(sub))
+	id, err := s.replyChunks.outbound.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
 		sendTurnEventMessages(s.app, ctx, sub, body, replyInThreadForSubmission(sub), kind)
 		return ""

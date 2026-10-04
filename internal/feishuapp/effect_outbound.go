@@ -32,6 +32,12 @@ func (o effectOutbound) ReplyText(ctx context.Context, messageID, text string, i
 	}})
 }
 
+func (o effectOutbound) ReplyTextWithID(ctx context.Context, messageID, text string, inThread bool) (string, error) {
+	return o.runner.RunSendMessage(ctx, application.SendMessage{
+		Frontend: o.frontend, ReplyMessageID: messageID, Text: text, InThread: inThread,
+	})
+}
+
 func (o effectOutbound) SendCard(ctx context.Context, chatID string, card map[string]any) (string, error) {
 	return o.runner.RunSendCard(ctx, application.SendCard{
 		Frontend: o.frontend, Chat: identity.ChatRef{ID: chatID}, View: outbound.Card(card),

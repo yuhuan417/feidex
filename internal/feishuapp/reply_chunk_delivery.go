@@ -7,7 +7,10 @@ import (
 
 	appdelivery "feidex/internal/adapter/feishu/delivery"
 	"fmt"
+	"log/slog"
 	"strings"
+
+	"github.com/larksuite/oapi-sdk-go/v3/channel/outbound"
 )
 
 type replyChunkRenderSpec struct {
@@ -19,16 +22,52 @@ type replyChunkRenderSpec struct {
 	EnablePreview bool
 }
 
-func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []replyChunkRenderSpec {
-	if a == nil {
+type replyChunkDelivery struct {
+	renderer cardRenderer
+	state    turnStopStateProvider
+	outbound effectOutbound
+	ready    bool
+}
+
+func newReplyChunkDelivery(renderer cardRenderer, state turnStopStateProvider, outbound effectOutbound, ready bool) replyChunkDelivery {
+	return replyChunkDelivery{renderer: renderer, state: state, outbound: outbound, ready: ready}
+}
+
+func (d replyChunkDelivery) SendWithReuse(ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread, enablePreview bool, reuseMessageID string) []appdelivery.SentReplyChunk {
+	reuseMessageIDs := []string(nil)
+	if strings.TrimSpace(reuseMessageID) != "" {
+		reuseMessageIDs = []string{strings.TrimSpace(reuseMessageID)}
+	}
+	return d.SendWithReuseIDs(ctx, sub, title, color, chunks, inThread, enablePreview, reuseMessageIDs)
+}
+
+func (d replyChunkDelivery) SendWithReuseIDs(ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread, enablePreview bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
+	if !d.ready || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
+	specs := d.prepareSpecs(ctx, sub, title, color, chunks, enablePreview)
+	results := make([]appdelivery.SentReplyChunk, 0, len(specs))
+	for i, spec := range specs {
+		currentReuse := ""
+		if i < len(reuseMessageIDs) {
+			currentReuse = strings.TrimSpace(reuseMessageIDs[i])
+		}
+		result, ok := d.sendChunk(ctx, sub, spec, inThread, currentReuse)
+		if !ok {
+			break
+		}
+		results = append(results, result)
+	}
+	return results
+}
+
+func (d replyChunkDelivery) prepareSpecs(ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []replyChunkRenderSpec {
 	if strings.Contains(strings.TrimSpace(title), "最终答复") && len(chunks) > 0 {
 		copied := append([]appdelivery.ReplyCardChunk(nil), chunks...)
-		copied[0].Body = apputil.PrependAttentionMentionMarkdown(copied[0].Body, turnStopAttentionUserID(a.State(), sub, sub.TurnID))
+		copied[0].Body = apputil.PrependAttentionMentionMarkdown(copied[0].Body, turnStopAttentionUserID(d.state, sub, sub.TurnID))
 		chunks = copied
 	}
-	chunks = fitReplyCardChunks(a, ctx, sub, title, color, chunks, enablePreview)
+	chunks = fitReplyCardChunks(d.renderer, ctx, sub, title, color, chunks, enablePreview)
 	if len(chunks) == 0 {
 		return nil
 	}
@@ -52,12 +91,8 @@ func prepareReplyChunkRenderSpecs(a *App, ctx context.Context, sub *domainsubmis
 	return specs
 }
 
-func sendReplyChunk(a *App, ctx context.Context, sub *domainsubmission.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (appdelivery.SentReplyChunk, bool) {
-	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
-		return appdelivery.SentReplyChunk{}, false
-	}
-
-	card := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(a.State(), sub, spec.Title), spec.Color, spec.ShowHeader, spec.Body, nil, spec.EnablePreview)
+func (d replyChunkDelivery) sendChunk(ctx context.Context, sub *domainsubmission.Submission, spec replyChunkRenderSpec, inThread bool, reuseMessageID string) (appdelivery.SentReplyChunk, bool) {
+	card := d.renderer.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(d.state, sub, spec.Title), spec.Color, spec.ShowHeader, spec.Body, nil, spec.EnablePreview)
 	appendReplyCardFooter(card, spec.FooterLines)
 
 	cardID := ""
@@ -65,24 +100,24 @@ func sendReplyChunk(a *App, ctx context.Context, sub *domainsubmission.Submissio
 	var err error
 	if strings.TrimSpace(reuseMessageID) != "" {
 		id = strings.TrimSpace(reuseMessageID)
-		err = patchCardEffect(ctx, a, id, card)
+		err = d.outbound.PatchCard(ctx, id, card)
 		if err == nil {
 			cardID = id
 		} else {
-			id, err = replyCardWithIDEffect(ctx, a, sub.TriggerMessageID, card, inThread)
+			id, err = d.outbound.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
 			if err == nil && strings.TrimSpace(id) != "" {
 				cardID = strings.TrimSpace(id)
 			}
 		}
 	} else {
-		id, err = replyCardWithIDEffect(ctx, a, sub.TriggerMessageID, card, inThread)
+		id, err = d.outbound.ReplyCard(ctx, sub.TriggerMessageID, card, inThread)
 		if err == nil && strings.TrimSpace(id) != "" {
 			cardID = strings.TrimSpace(id)
 		}
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
 		fallback := appendFooterText(strings.TrimSpace(spec.Body), spec.FooterLines)
-		id, err = replyTextChunkedEffect(ctx, a, sub.TriggerMessageID, fallback, inThread)
+		id, err = d.replyTextChunked(ctx, sub.TriggerMessageID, fallback, inThread)
 	}
 	if err != nil || strings.TrimSpace(id) == "" {
 		return appdelivery.SentReplyChunk{}, false
@@ -95,4 +130,23 @@ func sendReplyChunk(a *App, ctx context.Context, sub *domainsubmission.Submissio
 		FooterLines: append([]string(nil), spec.FooterLines...),
 		ShowHeader:  spec.ShowHeader,
 	}, true
+}
+
+func (d replyChunkDelivery) replyTextChunked(ctx context.Context, messageID, text string, inThread bool) (string, error) {
+	chunks := outbound.SplitWithCodeFences(text, appdelivery.ReplyTextMaxBytes)
+	firstID := ""
+	for i, chunk := range chunks {
+		id, err := d.outbound.ReplyTextWithID(ctx, messageID, chunk, inThread)
+		if err != nil {
+			if firstID == "" {
+				return "", err
+			}
+			slog.Warn("feishu reply text fallback partially delivered", "message_id", messageID, "chunk", i+1, "chunks", len(chunks), "error", err)
+			return firstID, nil
+		}
+		if firstID == "" {
+			firstID = strings.TrimSpace(id)
+		}
+	}
+	return firstID, nil
 }

@@ -1,21 +1,26 @@
 package feishuapp
 
 import (
-	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/state"
 	"feidex/internal/textutil"
 	"strings"
 )
 
-func turnStopAttentionUserID(store *appstate.Store, sub *domainsubmission.Submission, turnID string) string {
+type turnStopStateProvider interface {
+	Session(string) *conversation.Session
+	PendingRequests() []*state.PendingRequest
+}
+
+func turnStopAttentionUserID(store turnStopStateProvider, sub *domainsubmission.Submission, turnID string) string {
 	if !shouldMentionOnTurnStop(store, sub, turnID) {
 		return ""
 	}
 	return strings.TrimSpace(sub.UserID)
 }
 
-func shouldMentionOnTurnStop(store *appstate.Store, sub *domainsubmission.Submission, turnID string) bool {
+func shouldMentionOnTurnStop(store turnStopStateProvider, sub *domainsubmission.Submission, turnID string) bool {
 	if store == nil || sub == nil || strings.TrimSpace(sub.UserID) == "" {
 		return false
 	}

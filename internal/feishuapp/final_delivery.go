@@ -81,7 +81,7 @@ func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *domai
 	}
 	title, color, _, _ := outboundMessageCardMeta("final_message", sub.WorkspaceID)
 	chunks := appdelivery.BuildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
-	results := sendReplyCardChunksWithReuseIDs(a, ctx, sub, title, color, chunks, inThread, true, reuseMessageIDs)
+	results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil).SendWithReuseIDs(ctx, sub, title, color, chunks, inThread, true, reuseMessageIDs)
 	if len(results) == 0 {
 		return nil
 	}

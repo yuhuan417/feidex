@@ -9,19 +9,19 @@ import (
 	appdelivery "feidex/internal/adapter/feishu/delivery"
 )
 
-func fitReplyCardChunks(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
+func fitReplyCardChunks(renderer cardRenderer, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
 	if len(chunks) == 0 {
 		return nil
 	}
 	fitted := make([]appdelivery.ReplyCardChunk, 0, len(chunks))
 	for _, chunk := range chunks {
-		fitted = append(fitted, expandReplyCardChunkToFit(a, ctx, sub, title, color, chunk, enablePreview)...)
+		fitted = append(fitted, expandReplyCardChunkToFit(renderer, ctx, sub, title, color, chunk, enablePreview)...)
 	}
 	return fitted
 }
 
-func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
-	if replyCardChunkFits(a, ctx, sub, title, color, chunk, enablePreview) {
+func expandReplyCardChunkToFit(renderer cardRenderer, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) []appdelivery.ReplyCardChunk {
+	if replyCardChunkFits(renderer, ctx, sub, title, color, chunk, enablePreview) {
 		return []appdelivery.ReplyCardChunk{chunk}
 	}
 
@@ -37,7 +37,7 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *domainsubmissio
 		blocks = blocks[1:]
 		candidate := current
 		candidate.Body = appdelivery.JoinReplyChunkBodies(current.Body, block.Text)
-		if replyCardChunkFits(a, ctx, sub, title, color, candidate, enablePreview) {
+		if replyCardChunkFits(renderer, ctx, sub, title, color, candidate, enablePreview) {
 			current = candidate
 			continue
 		}
@@ -54,7 +54,7 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *domainsubmissio
 			continue
 		}
 		parts := appdelivery.SplitReplyTextBlockToFit(block.Text, func(part string) bool {
-			return replyCardChunkFits(a, ctx, sub, title, color, appdelivery.ReplyCardChunk{
+			return replyCardChunkFits(renderer, ctx, sub, title, color, appdelivery.ReplyCardChunk{
 				Body:       part,
 				ShowHeader: current.ShowHeader,
 			}, enablePreview)
@@ -83,7 +83,7 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *domainsubmissio
 
 	last := len(result) - 1
 	result[last].FooterLines = append([]string(nil), chunk.FooterLines...)
-	if replyCardChunkFits(a, ctx, sub, title, color, result[last], enablePreview) {
+	if replyCardChunkFits(renderer, ctx, sub, title, color, result[last], enablePreview) {
 		return result
 	}
 
@@ -92,15 +92,15 @@ func expandReplyCardChunkToFit(a *App, ctx context.Context, sub *domainsubmissio
 		FooterLines: append([]string(nil), chunk.FooterLines...),
 	}
 	result[last].FooterLines = nil
-	if replyCardChunkFits(a, ctx, sub, title, color, result[last], enablePreview) && replyCardChunkFits(a, ctx, sub, title, color, footerOnly, enablePreview) {
+	if replyCardChunkFits(renderer, ctx, sub, title, color, result[last], enablePreview) && replyCardChunkFits(renderer, ctx, sub, title, color, footerOnly, enablePreview) {
 		return append(result, footerOnly)
 	}
 	result[last].FooterLines = append([]string(nil), chunk.FooterLines...)
 	return result
 }
 
-func replyCardChunkFits(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
-	card := newCardRenderer(a.Config()).renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
+func replyCardChunkFits(renderer cardRenderer, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunk appdelivery.ReplyCardChunk, enablePreview bool) bool {
+	card := renderer.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, title, color, chunk.ShowHeader, chunk.Body, nil, enablePreview)
 	appendReplyCardFooter(card, chunk.FooterLines)
 	payload, err := json.Marshal(card)
 	if err != nil {

@@ -102,7 +102,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 	}
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind, sub.WorkspaceID)
 	if replyClass {
-		results := sendReplyCardChunksWithReuse(a, ctx, sub, title, color, appdelivery.BuildReplyCardChunks(text, showHeader, nil), inThread, enablePreview, reuseMessageID)
+		results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil).SendWithReuse(ctx, sub, title, color, appdelivery.BuildReplyCardChunks(text, showHeader, nil), inThread, enablePreview, reuseMessageID)
 		if len(results) == 0 {
 			return nil
 		}
@@ -160,34 +160,6 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 		}
 	}
 	return []string{id}
-}
-
-func sendReplyCardChunksWithReuse(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread bool, enablePreview bool, reuseMessageID string) []appdelivery.SentReplyChunk {
-	reuseMessageIDs := []string(nil)
-	if strings.TrimSpace(reuseMessageID) != "" {
-		reuseMessageIDs = []string{strings.TrimSpace(reuseMessageID)}
-	}
-	return sendReplyCardChunksWithReuseIDs(a, ctx, sub, title, color, chunks, inThread, enablePreview, reuseMessageIDs)
-}
-
-func sendReplyCardChunksWithReuseIDs(a *App, ctx context.Context, sub *domainsubmission.Submission, title, color string, chunks []appdelivery.ReplyCardChunk, inThread bool, enablePreview bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {
-	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
-		return nil
-	}
-	specs := prepareReplyChunkRenderSpecs(a, ctx, sub, title, color, chunks, enablePreview)
-	results := make([]appdelivery.SentReplyChunk, 0, len(specs))
-	for i, spec := range specs {
-		currentReuse := ""
-		if i < len(reuseMessageIDs) {
-			currentReuse = strings.TrimSpace(reuseMessageIDs[i])
-		}
-		result, ok := sendReplyChunk(a, ctx, sub, spec, inThread, currentReuse)
-		if !ok {
-			break
-		}
-		results = append(results, result)
-	}
-	return results
 }
 
 func outboundMessageCardMeta(kind string, workspaceID ...string) (title, color string, replyClass bool, showHeader bool) {

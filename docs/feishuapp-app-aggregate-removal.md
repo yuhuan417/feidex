@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 463 |
-| 收 `*App` 的顶层函数 | 290 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 456 |
+| 收 `*App` 的顶层函数 | 283 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **42** |
 
@@ -342,6 +342,16 @@ patch owners。
 Dependencies API 保留并委托到同一 state 投影，维持其它 planmode 调用行为。production
 `*App` 引用预算由 464 降至 463，app-bearing 函数数由 291 降至 290，持有 App 字段的结构体
 预算保持 42。
+
+步骤 40 将 reply chunk 的拟合、渲染、复用 patch/reply 与文本 fallback 迁入 App-free 的
+`replyChunkDelivery` owner。owner 只持有 card renderer、scoped turn state、frontend-scoped
+`effectOutbound` 与 Feishu 可用状态；reply-card chunk 大小/组件限制、reasoning-only 消息复用、
+patch 幂等键、footer 拆分和部分文本 fallback 语义保持不变。`outboundCardService` 显式持有该
+owner，Claude stream、turn items 和 final delivery 共用同一实现。对照 SM-04/26，chunk delivery
+仍只负责投递已完成 item 的展示，async user-input pending lifecycle 未改变，也没有触碰
+`turn/completed` 收口边界。`replyChunkDelivery` 构造时显式接收 card renderer、turn state、
+effect outbound 与 transport readiness，不再新增 `*App` 参数。生产 `*App` 引用预算由 463
+降至 456，app-bearing 函数数由 290 降至 283，持有 App 字段的结构体预算保持 42。
 
 ## 方法
 
