@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 248 |
-| 收 `*App` 的顶层函数 | 115 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 247 |
+| 收 `*App` 的顶层函数 | 114 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **3** |
 
@@ -802,6 +802,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 153 删除 `replyTextChunkedEffect(*App)` 中重复的分块循环，文本 fallback 改为通过窄 `effectOutbound` port 复用 `replyTextChunked`；同时删除因此失去调用方的 `replyTextWithIDEffect(*App)`。分块、code fence 保留和后续分块失败时报告已送达首段的语义不变。生产 `*App` 引用预算由 251 降至 249，收 `*App` 的顶层函数由 118 降至 116，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
 
 步骤 154 将 `enqueuePassthroughCommand` 改为接收 submission queue 与调用方解析的 session key，不再收 `*App`。消息副本、trim 后的 raw command、空输入短路和普通 submission enqueue 参数保持一致；生产 `*App` 引用预算由 249 降至 248，收 `*App` 的顶层函数由 116 降至 115，其他棘轮保持。
+
+步骤 155 删除无生产调用方的 `renderQuietModeCard(*App)` 空 session-key 转发，测试改为直接覆盖 `renderQuietModeMenuCard`。quiet mode 卡片内容和按钮不变；生产 `*App` 引用预算由 248 降至 247，收 `*App` 的顶层函数由 115 降至 114，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持。
 
 ## 方法
 

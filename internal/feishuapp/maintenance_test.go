@@ -21,12 +21,12 @@ func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	cfg.Workspaces[0].Cwd = t.TempDir()
 	a := prepareTestApp(&App{cfg: cfg, cfgPath: filepath.Join(t.TempDir(), "config.toml"), feishu: feishu.New(cfg.Feishu)})
 
-	card := renderQuietModeCard(a)
+	card := renderQuietModeMenuCard(a, "")
 	title, preview, buttonCount := feishu.New(cfg.Feishu).SimpleStatusCard("tmp", "blue", "tmp", nil)["header"], cardElementsForTest(card), 0
 	_ = title
 	_ = preview
 	if elems := cardElementsForTest(card); len(elems) != 5 {
-		t.Fatalf("renderQuietModeCard() elements = %#v", elems)
+		t.Fatalf("renderQuietModeMenuCard() elements = %#v", elems)
 	}
 	if err := commandQuiet(a, &feishu.InboundMessage{}, []string{"bad"}); err == nil {
 		t.Fatal("expected commandQuiet(invalid arg) to fail")

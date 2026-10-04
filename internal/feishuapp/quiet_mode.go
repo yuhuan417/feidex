@@ -18,10 +18,6 @@ func shouldDeliverTurnItemPayloadInQuiet(mode config.QuietMode, payload turnitem
 	return quietmode.ShouldDeliverTurnItemPayload(mode, payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)
 }
 
-func renderQuietModeCard(a *App) map[string]any {
-	return renderQuietModeMenuCard(a, "")
-}
-
 func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
 	mode := quietmode.Mode(a.configView().feishuConfig())
 	lines := []string{
