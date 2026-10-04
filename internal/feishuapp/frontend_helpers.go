@@ -11,9 +11,9 @@ func startBackend(a *App, ctx context.Context) error {
 	return startPreparedBackendRuntime(a, ctx, currentBackendRuntimeHandle(a))
 }
 
-func startFrontend(a *App, ctx context.Context) error {
-	if a == nil || a.feishu == nil {
+func startFrontend(client FeishuClient, ctx context.Context) error {
+	if client == nil {
 		return nil
 	}
-	return a.feishu.Start(ctx)
+	return client.Start(ctx)
 }

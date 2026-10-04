@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 370 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 369 |
 | 收 `*App` 的顶层函数 | 224 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **21** |
@@ -708,6 +708,8 @@ upgrade/workspace 选择仍委托原 services，production 与 test fixture 构�
 StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-read 预算由 3 降至 2，`*App` 引用预算不变。
 
 步骤 100 让 Codex recovery 与 effect runner 在构造时捕获预先分配的 submission queue 指针。composition 和测试 fixture 都先挂入该占位 owner，再原地填充 queue service；effect runner 因而移到 bindings 挂接之后创建。异步 recovery、`EnqueueInput` 校验和队列调用行为不变；对照 SM-03，恢复与 turn/session 状态迁移顺序不变。lazy binding-read 预算由 2 降至 0，`*App` 引用预算不变。
+
+步骤 101 将 `startFrontend` 的依赖从 `*App` 缩为 Feishu client 与 context；Serve 仍以同一 context 启动同一 transport，生产 `*App` 引用预算由 370 降至 369，lazy binding-read 预算保持 0。
 
 ## 方法
 

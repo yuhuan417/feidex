@@ -25,7 +25,7 @@ func (a *App) ResetStartupState() error { return a.bindings.StartupRecovery.Rese
 func (a *App) RecoverFrontend() error {
 	return a.bindings.StartupRecovery.RecoverFrontendRuntimeState()
 }
-func (a *App) Serve() error { return startFrontend(a, a.Context()) }
+func (a *App) Serve() error { return startFrontend(a.feishu, a.Context()) }
 func (a *App) StartBackground() {
 	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 24*time.Hour, a.bindings.MaintenanceCommands.RunDriveArtifactGC)
 	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 30*time.Second, a.bindings.MaintenanceCommands.CheckPendingUpgrades)
