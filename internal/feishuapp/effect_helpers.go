@@ -79,14 +79,3 @@ func cardEffectKey(kind, frontendID, target string, card map[string]any) string 
 	}
 	return application.StableEffectKey(kind, frontendID, target, string(data))
 }
-
-func sendTextEffect(ctx context.Context, a *App, chatID, text string) error {
-	if a == nil {
-		return nil
-	}
-	return newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.SendMessage{
-		Frontend: identity.FrontendID(a.FrontendID()),
-		Chat:     identity.ChatRef{ID: chatID},
-		Text:     text,
-	}})
-}

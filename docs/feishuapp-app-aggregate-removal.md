@@ -28,9 +28,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 270 |
-| 收 `*App` 的顶层函数 | 136 |
-| 收 `*App` 的 `*Ports` 工厂 | 3 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 268 |
+| 收 `*App` 的顶层函数 | 134 |
+| 收 `*App` 的 `*Ports` 工厂 | 2 |
 | **持有 `*App` 字段的结构体** | **4** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -77,7 +77,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | `a.X` | bindings | helpers | structs |
 |---|---|---|---|---|---|
-| 9 | `StartupRecoveryPorts` | 7 | 1 | 1 | 0 |
 | 8 | `ReviewPorts` | 3 | 4 | 1 | 0 |
 | 1 | `CardActionPorts` | 0 | 0 | 0 | 1 |
 
@@ -775,6 +774,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 138 将 `CodexRecoveryPorts(*App, ...)` 改为接收 `CodexRecoveryPortInputs`，runtime state、frontend identity/config、scoped session state、lifecycle admission 与 session actors 通过显式 runtime snapshot 提供；submission queue 和异步 runner 也显式注入。BackendFailure 尚在稍后构造，因此 recovery 的失败回调使用 composition 局部 owner 槽位；StartupRecovery callback 使用局部 function 槽位，均不捕获 App 或 bindings 容器。对照 SM-03：只调整恢复依赖装配；恢复完成后先恢复 frontend runtime state，再按原 session actor 顺序启动 queued submission，thread/session 隔离和 client promotion 边界不变。`depmap --bindings` 中的惰性读取 SCC 从 CodexRecovery、ConversationRecovery、MaintenanceCommands、StartupRecovery 四节点降为仅 MaintenanceCommands 与 StartupRecovery 两节点。生产 `*App` 引用预算由 275 降至 274，收 `*App` 的顶层函数由 141 降至 140，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 5 降至 4，lazy binding-read 预算保持 0；`CodexRecoveryPorts` 的 App 传递依赖归零。
 
 步骤 139 将 `TurnPresentationPorts(*App, turns)` 改为 `TurnPresentationPorts(TurnPresentationPortInputs)`，显式传入 runtime snapshot、turn lifecycle、stream/item trackers、submission lookup/status、compaction owner 与共享 outbound cards。开始提示保留原来的 `ClaimStartNotice` 去重、最新 submission 读取、`turn_started` 消息类型和 quiet-mode 过滤；workspace/config 查询仍使用当前 frontend config view。删除 `maybeSendSubmissionStartedNotice(*App, ...)`、其 App-bound sender 包装及由此失去调用方的 `sendTurnEventMessages`。对照 SM-04/07/08：只改变 presentation dependencies；item state、quiet working card 复用及 turn/compaction 终态顺序不变。生产 `*App` 引用预算由 274 降至 270，收 `*App` 的顶层函数由 140 降至 136，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 4 降至 3，lazy binding-read 预算保持 0；`TurnPresentationPorts` 的 App 传递依赖归零。
+
+步骤 140 将 `StartupRecoveryPorts(*App, ...)` 改为接收 runtime snapshot、`StartupState`、cleanup/restore callbacks 与 frontend-scoped effect text sender。backend configured 检查和启动恢复 scope 在执行时查询当前 frontend runtime/config，session filtering、RecoveryMu、live-thread reset、状态重置、attachment cleanup、conversation restore 与 ready notification 顺序不变。对照 SM-03 与启动恢复测试：恢复仍先清空 live-thread 标记，再按当前 backend scope 执行 restore；仅调整 dependencies。删除由迁移失去调用方的 App-bound `sendTextEffect`。生产 `*App` 引用预算由 270 降至 268，收 `*App` 的顶层函数由 136 降至 134，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 3 降至 2，lazy binding-read 预算保持 0；`StartupRecoveryPorts` 的 App 传递依赖归零。
 
 ## 方法
 

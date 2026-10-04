@@ -413,9 +413,12 @@ func prepareTestApp(a *App) *App {
 		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),
 		a.bindings.Conversations, a.runtimeOwner, a.bindings.CodexRecovery, a.bindings.ConversationConfiguration,
 	))
-	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a, func() {
-		a.bindings.MaintenanceCommands.CleanupExpiredAttachments()
-	}, a.bindings.ConversationRecovery.Restore))
+	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(StartupRecoveryPortInputs{
+		Runtime: a.BackendRuntimeDeps(), StartupState: a.bindings.StartupState,
+		CleanupExpiredAttachments: func() { a.bindings.MaintenanceCommands.CleanupExpiredAttachments() },
+		RestoreConversationState:  a.bindings.ConversationRecovery.Restore,
+		SendText:                  newEffectOutbound(a.FrontendID(), *a.runtimeOwner.EffectRunner).SendText,
+	}))
 	recoverFrontendRuntimeState = a.bindings.StartupRecovery.RecoverFrontendRuntimeState
 	backendSwitch := backendselection.NewService(BackendSwitchPorts(BackendSwitchPortInputs{
 		RuntimeDeps: a.BackendRuntimeDeps(), Transition: &a.runtimeOwner.BackendTransition,

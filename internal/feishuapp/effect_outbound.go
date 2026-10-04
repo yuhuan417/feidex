@@ -13,6 +13,10 @@ type effectOutbound struct {
 	runner   runtime.EffectRunner
 }
 
+func FrontendTextSender(frontendID string, runner runtime.EffectRunner) func(context.Context, string, string) error {
+	return effectOutbound{frontend: identity.FrontendID(frontendID), runner: runner}.SendText
+}
+
 func (o effectOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
 	return o.runner.RunSendCard(ctx, application.SendCard{
 		Frontend: o.frontend, ReplyMessageID: messageID, View: outbound.Card(card), InThread: inThread,

@@ -434,9 +434,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		frontend.Config(), frontend.ConfigMu(), frontend.FrontendConfigIndex(), frontend.State(),
 		bindings.Conversations, scope.RuntimeOwner, bindings.CodexRecovery, bindings.ConversationConfiguration,
 	))
-	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend, func() {
-		bindings.MaintenanceCommands.CleanupExpiredAttachments()
-	}, bindings.ConversationRecovery.Restore))
+	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(feishuapp.StartupRecoveryPortInputs{
+		Runtime: frontend.BackendRuntimeDeps(), StartupState: bindings.StartupState,
+		CleanupExpiredAttachments: func() { bindings.MaintenanceCommands.CleanupExpiredAttachments() },
+		RestoreConversationState:  bindings.ConversationRecovery.Restore,
+		SendText:                  feishuapp.FrontendTextSender(frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner),
+	}))
 	recoverFrontendRuntimeState = bindings.StartupRecovery.RecoverFrontendRuntimeState
 	backendSwitch := backendselection.NewService(feishuapp.BackendSwitchPorts(feishuapp.BackendSwitchPortInputs{
 		RuntimeDeps: frontend.BackendRuntimeDeps(), Transition: &scope.RuntimeOwner.BackendTransition,

@@ -4,35 +4,45 @@ import (
 	"context"
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	appmaintenance "feidex/internal/adapter/feishu/maintenance"
+	"feidex/internal/application/conversation"
 	"feidex/internal/config"
+	backendruntime "feidex/internal/runtime"
 	"feidex/internal/runtime/maintenance"
 	"feidex/internal/state"
 )
 
-// StartupRecoveryPorts takes the maintenance-command entry point it needs
-// from a service constructed after it.
-func StartupRecoveryPorts(a *App, cleanupExpiredAttachments func(), restoreConversationState func() error) maintenance.RecoveryDependencies {
-	liveThreads := a.runtimeOwner.LiveThreads
+type StartupRecoveryPortInputs struct {
+	Runtime                   BackendRuntimeDeps
+	StartupState              conversation.StartupState
+	CleanupExpiredAttachments func()
+	RestoreConversationState  func() error
+	SendText                  func(context.Context, string, string) error
+}
+
+func StartupRecoveryPorts(inputs StartupRecoveryPortInputs) maintenance.RecoveryDependencies {
+	runtimeDeps := inputs.Runtime
+	owner := runtimeDeps.runtime.owner
+	if owner == nil {
+		return maintenance.RecoveryDependencies{}
+	}
+	liveThreads := owner.LiveThreads
+	stateStore := runtimeDeps.stateView
 	return maintenance.RecoveryDependencies{
-		Context: a.Context, Repository: a.State(), RecoveryMu: &a.runtimeView().ensureRuntimeOwner().RecoveryMu,
+		Context: owner.Lifecycle.Context, Repository: stateStore, RecoveryMu: &owner.RecoveryMu,
 		ResetLiveThreads:  liveThreads.Reset,
-		BelongsToFrontend: func(key string) bool { return a.configView().sessionBelongsToFrontend(key) },
-		BackendConfigured: func() bool { return a.configView().hasConfiguredBackend() },
+		BelongsToFrontend: runtimeDeps.view.sessionBelongsToFrontend,
+		BackendConfigured: func() bool { return runtimeDeps.currentBackend().view.hasConfiguredBackend() },
 		BeginRecovery: func() func() {
-			if runtime := backendRuntime(a.configView().configuredBackend()); runtime != nil {
-				return runtime.BeginStartupRecoveryScope(backendRuntimeContextForApp(a.BackendRuntimeDeps()))
+			current := runtimeDeps.currentBackend()
+			if runtime := backendruntime.BackendForKind(current.view.configuredBackend()); runtime != nil {
+				return runtime.BeginStartupRecoveryScope(backendRuntimeContextForApp(current))
 			}
 			return func() {}
 		},
-		RestoreState:       restoreConversationState,
-		ResetState:         a.bindings.StartupState.Reset,
-		CleanupAttachments: cleanupExpiredAttachments,
-		SendText: func(ctx context.Context, id, text string) error {
-			if a.feishu == nil {
-				return nil
-			}
-			return sendTextEffect(ctx, a, id, text)
-		},
+		RestoreState:       inputs.RestoreConversationState,
+		ResetState:         inputs.StartupState.Reset,
+		CleanupAttachments: inputs.CleanupExpiredAttachments,
+		SendText:           inputs.SendText,
 	}
 }
 func BuildMaintenanceCommands(a *App) appmaintenance.RuntimeMaintenanceService {
