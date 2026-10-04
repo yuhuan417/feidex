@@ -1,7 +1,10 @@
 # 拆掉 `feishuapp` 的 `*App` 聚合
 
-本文是施工图，记录把 `internal/feishuapp` 里 582 处 `*App` 引用清掉的路径、
-已完成的步骤，以及下一步该改什么、为什么按这个顺序。
+本文是施工图，记录把 `internal/feishuapp` 的 `*App` 引用清掉的路径、已完成的
+步骤，以及下一步该改什么、为什么按这个顺序。
+
+构造期存在两个真环，必须先拆掉才能让快照式的能力包适用于所有工厂 —— 见
+[拆掉 feishuapp 的构造环](feishuapp-construction-cycle-breaking.md)。
 
 ## 为什么 `Bindings` 存在
 
