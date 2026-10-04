@@ -96,9 +96,9 @@ func sendClaudeApprovalCardWithPayload(claudesupportDep *claudesupport.Service, 
 	return claudesupportDep.SendApprovalCardWithPayload(sub, kind, requestID, sessionKey, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
 }
 
-func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
+func sendClaudeApprovalCard(claudesupportDep *claudesupport.Service, requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
 	return sendClaudeApprovalCardWithPayload(
-		a.bindings.ClaudeSupport,
+		claudesupportDep,
 		presentation.Kind.String(),
 		requestID,
 		sessionKey,

@@ -508,7 +508,7 @@ func TestGroupAnnouncementRefreshSkipsChatAfterBotAbsent(t *testing.T) {
 	// Re-adding the bot clears the mark, so the chat converges back to normal.
 	ff.announcementListErr = nil
 	ff.announcementBlocks = nil
-	clearGroupAnnouncementBotAbsent(a, "chat-1")
+	clearGroupAnnouncementBotAbsent(a.bindings.Announcements, "chat-1")
 	if record := a.State().GroupAnnouncementBlock("group", "chat-1"); record == nil || record.BotAbsent {
 		t.Fatalf("mark should be cleared after the bot rejoins, record = %+v", record)
 	}

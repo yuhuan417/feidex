@@ -60,7 +60,7 @@ func handleBotGroupAdded(a *App, event *feishu.BotGroupEvent) {
 	}
 	// The bot is in this chat again, so undo any earlier "no longer a member"
 	// mark; otherwise its announcement would stay disabled forever.
-	clearGroupAnnouncementBotAbsent(a, chatID)
+	clearGroupAnnouncementBotAbsent(a.bindings.Announcements, chatID)
 	scheduleGroupAnnouncementStatusRefresh(a, chatID, "bot_added")
 }
 
@@ -115,11 +115,11 @@ func isGroupPrimary(a *App, chatType, chatID string) bool {
 	return err == nil && enabled
 }
 
-func currentBotOpenID(a *App) string {
-	if a == nil || a.feishu == nil {
+func currentBotOpenID(client FeishuClient) string {
+	if client == nil {
 		return ""
 	}
-	provider, ok := a.feishu.(botOpenIDProvider)
+	provider, ok := client.(botOpenIDProvider)
 	if !ok {
 		return ""
 	}
@@ -135,18 +135,18 @@ func currentLiveBotOpenID(a *App) string {
 			return openID
 		}
 	}
-	return currentBotOpenID(a)
+	return currentBotOpenID(a.feishu)
 }
 
 func LiveBotOpenID(a *App) func() string {
 	return func() string { return currentLiveBotOpenID(a) }
 }
 
-func currentBotName(a *App) string {
-	if a == nil || a.feishu == nil {
+func currentBotName(client FeishuClient) string {
+	if client == nil {
 		return ""
 	}
-	provider, ok := a.feishu.(botNameProvider)
+	provider, ok := client.(botNameProvider)
 	if !ok {
 		return ""
 	}
@@ -154,10 +154,10 @@ func currentBotName(a *App) string {
 }
 
 func currentBotDisplayName(a *App) string {
-	if name := currentBotName(a); name != "" {
+	if name := currentBotName(a.feishu); name != "" {
 		return name
 	}
-	return currentBotOpenID(a)
+	return currentBotOpenID(a.feishu)
 }
 
 func setGroupPrimaryState(a *App, chatType, chatID string, enabled bool, assignment *feishu.InboundMessage) (*state.GroupPrimary, error) {

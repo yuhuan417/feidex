@@ -4,6 +4,7 @@ import (
 	"context"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
+	appinteraction "feidex/internal/application/interaction"
 	domainbackend "feidex/internal/domain/backend"
 	"log/slog"
 	"strings"
@@ -33,11 +34,8 @@ func detachedCardAnchor(target appclauderuntime.InteractionTarget) pendingCardAn
 //
 // An empty requestIDs slice targets every open Claude interaction of the
 // session, which is what transport failures need.
-func ExpireClaudeInteractionCards(a *App, sessionKey string, requestIDs []string, reason string) {
-	if a == nil {
-		return
-	}
-	a.bindings.InteractionLifecycle.ExpireAndPresent(domainbackend.BackendClaude, sessionKey, requestIDs, reason)
+func ExpireClaudeInteractionCards(lifecycle appinteraction.LifecycleService, sessionKey string, requestIDs []string, reason string) {
+	lifecycle.ExpireAndPresent(domainbackend.BackendClaude, sessionKey, requestIDs, reason)
 }
 
 type interactionExpiryPresentation struct{ app *App }

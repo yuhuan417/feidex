@@ -33,6 +33,8 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	// than through app.bindings inside the callbacks below.
 	submissionLookup := app.bindings.SubmissionLookup
 	modelSnapshots := app.bindings.ModelSnapshots
+	claudeSupport := app.bindings.ClaudeSupport
+	interactionLifecycle := app.bindings.InteractionLifecycle
 	return appclauderuntime.Deps{
 		Context: app.Context,
 		Cfg:     cfg,
@@ -110,7 +112,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 		},
 		Interactive: appclauderuntime.InteractiveDeps{
 			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
-				return sendClaudeApprovalCard(app, requestID, sessionKey, sub, presentation)
+				return sendClaudeApprovalCard(claudeSupport, requestID, sessionKey, sub, presentation)
 			},
 			SendClaudeUserInputCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
 				return sendClaudeUserInputCard(app.bindings.ClaudeSupport, requestID, sessionKey, sub, payload)
@@ -134,7 +136,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				return app.bindings.ClaudeSupport.SendDetachedPlanModeCard(requestID, target, body)
 			},
 			ExpireInteractionCards: func(sessionKey string, requestIDs []string, reason string) {
-				ExpireClaudeInteractionCards(app, sessionKey, requestIDs, reason)
+				ExpireClaudeInteractionCards(interactionLifecycle, sessionKey, requestIDs, reason)
 			},
 		},
 		Lookup: appclauderuntime.LookupDeps{
@@ -156,7 +158,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 		},
 		Permission: appclauderuntime.PermissionDeps{
 			EffectivePermissionMode: func(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
-				return effectiveBindingClaudePermissionMode(app, sess, ws, cfg)
+				return effectiveBindingClaudePermissionMode(app.State(), sess, ws, cfg)
 			},
 			QuietWorkingCardEnabled: func() bool {
 				return quietmode.WorkingCardEnabled(app.configView().feishuConfig())

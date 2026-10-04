@@ -114,7 +114,7 @@ func TestExpireClaudeInteractionCardsPatchesCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	newClaudeInteractionPending(t, a, "claude-approval-3", "command", state.PendingRequestStatusPending.String())
 
-	ExpireClaudeInteractionCards(a, "feishu:chat:chat-1", []string{"claude-approval-3"}, "session reset")
+	ExpireClaudeInteractionCards(a.bindings.InteractionLifecycle, "feishu:chat:chat-1", []string{"claude-approval-3"}, "session reset")
 
 	pending := a.store.PendingByID("claude-approval-3")
 	if pending == nil || pending.Status != state.PendingRequestStatusExpired.String() {

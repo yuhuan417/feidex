@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/textutil"
 	"fmt"
@@ -44,11 +45,11 @@ func GroupAnnouncementRefresh(a *App) func(context.Context, string) error {
 // longer a member of chatID, so later refreshes skip it instead of retrying a
 // request that cannot succeed. Cleared by clearGroupAnnouncementBotAbsent when
 // the bot is added back.
-func clearGroupAnnouncementBotAbsent(a *App, chatID string) {
-	if a == nil || strings.TrimSpace(chatID) == "" {
+func clearGroupAnnouncementBotAbsent(announcements announcement.Service, chatID string) {
+	if strings.TrimSpace(chatID) == "" {
 		return
 	}
-	if err := a.bindings.Announcements.SetAbsent(chatID, false); err != nil {
+	if err := announcements.SetAbsent(chatID, false); err != nil {
 		slog.Warn("clear announcement membership failed", "error", err)
 	}
 }
@@ -86,7 +87,7 @@ type groupAnnouncementStatus struct {
 }
 
 func buildGroupAnnouncementCommonStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
-	botOpenID := currentBotOpenID(a)
+	botOpenID := currentBotOpenID(a.feishu)
 	stableLines := []string{
 		groupAnnouncementCommonTitle,
 		groupAnnouncementField("Primary Bot", currentBotDisplayName(a)),
@@ -107,15 +108,15 @@ func buildGroupAnnouncementCommonStatus(a *App, chatID string, updatedAt time.Ti
 func buildGroupAnnouncementStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
 	frontendID := textutil.FirstNonEmpty(strings.TrimSpace(a.FrontendID()), config.DefaultFrontendID)
 	botOpenID := groupAnnouncementBotOpenID(a, chatID)
-	botName := groupAnnouncementBotName(a, botOpenID)
+	botName := groupAnnouncementBotName(a.feishu, botOpenID)
 	marker := groupAnnouncementMarker(botName, botOpenID)
 	stableLines := []string{
 		groupAnnouncementDivider,
 		groupAnnouncementField("Bot", botName),
 		groupAnnouncementField("Machine IP", textutil.FirstNonEmpty(localAnnouncementMachineIP(), "unknown")),
-		groupAnnouncementField("Workspace", groupAnnouncementWorkspaceDir(a, chatID)),
+		groupAnnouncementField("Workspace", groupAnnouncementWorkspaceDir(a.bindings.AnnouncementQuery, chatID)),
 		groupAnnouncementField("Backend", textutil.FirstNonEmpty(a.configView().configuredBackend(), "unset")),
-		groupAnnouncementField("Thread", textutil.FirstNonEmpty(groupAnnouncementThreadID(a, chatID), "none")),
+		groupAnnouncementField("Thread", textutil.FirstNonEmpty(groupAnnouncementThreadID(a.bindings.ConversationQuery, chatID), "none")),
 		groupAnnouncementField("Marker", marker),
 	}
 	stableContent := strings.Join(stableLines, "\n")
@@ -145,7 +146,7 @@ func groupAnnouncementField(key, value string) string {
 
 func groupAnnouncementBotOpenID(a *App, chatID string) string {
 	_ = chatID
-	return strings.TrimSpace(currentBotOpenID(a))
+	return strings.TrimSpace(currentBotOpenID(a.feishu))
 }
 
 func groupAnnouncementMarker(botName, botOpenID string) string {
@@ -176,9 +177,9 @@ func groupAnnouncementMarkerToken(value string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-func groupAnnouncementBotName(a *App, botOpenID string) string {
-	if a != nil && a.feishu != nil {
-		if name := strings.TrimSpace(a.feishu.BotName()); name != "" {
+func groupAnnouncementBotName(client FeishuClient, botOpenID string) string {
+	if client != nil {
+		if name := strings.TrimSpace(client.BotName()); name != "" {
 			return name
 		}
 	}
@@ -190,18 +191,15 @@ func hashGroupAnnouncementStableContent(content string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func groupAnnouncementWorkspaceDir(a *App, chatID string) string {
-	if a == nil {
-		return "unconfigured"
-	}
-	return a.bindings.AnnouncementQuery.WorkspaceDirectory(chatID)
+func groupAnnouncementWorkspaceDir(query announcement.Query, chatID string) string {
+	return query.WorkspaceDirectory(chatID)
 }
 
-func groupAnnouncementThreadID(a *App, chatID string) string {
-	if a == nil || strings.TrimSpace(chatID) == "" {
+func groupAnnouncementThreadID(query conversationapp.Query, chatID string) string {
+	if strings.TrimSpace(chatID) == "" {
 		return ""
 	}
-	best := a.bindings.ConversationQuery.LatestGroupSession(chatID, "")
+	best := query.LatestGroupSession(chatID, "")
 	if best == nil {
 		return ""
 	}
