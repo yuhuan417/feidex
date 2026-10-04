@@ -10,7 +10,9 @@ import (
 	"feidex/internal/state"
 )
 
-func StartupRecoveryPorts(a *App) maintenance.RecoveryDependencies {
+// StartupRecoveryPorts takes the maintenance-command entry point it needs
+// from a service constructed after it.
+func StartupRecoveryPorts(a *App, cleanupExpiredAttachments func()) maintenance.RecoveryDependencies {
 	return maintenance.RecoveryDependencies{
 		Context: a.Context, Repository: a.State(), RecoveryMu: &a.runtimeView().ensureRuntimeOwner().RecoveryMu,
 		ResetLiveThreads:  func() { resetAppLiveThreadTracker(a) },
@@ -24,7 +26,7 @@ func StartupRecoveryPorts(a *App) maintenance.RecoveryDependencies {
 		},
 		RestoreState:       func() error { return a.bindings.ConversationRecovery.Restore() },
 		ResetState:         a.bindings.StartupState.Reset,
-		CleanupAttachments: func() { a.bindings.MaintenanceCommands.CleanupExpiredAttachments() },
+		CleanupAttachments: cleanupExpiredAttachments,
 		SendText: func(ctx context.Context, id, text string) error {
 			if a.feishu == nil {
 				return nil

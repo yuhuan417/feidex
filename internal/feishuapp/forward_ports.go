@@ -13,10 +13,14 @@ func ForwardTasks(a *App) inbound.ForwardTasks     { return forwardPorts{app: a}
 func ForwardFailure(a *App) func(*application.InboundMessage, error) {
 	return func(msg *application.InboundMessage, err error) { _ = replyError(a, msg, err) }
 }
-func ForwardProcessor(a *App) func(*application.InboundMessage) error {
+
+// ForwardProcessor takes the inbound entry point as a value rather than
+// reaching for a.bindings.Inbound, so composition can wire the two services
+// together after both exist instead of them holding each other.
+func ForwardProcessor(a *App, process func(*application.InboundMessage) error) func(*application.InboundMessage) error {
 	return func(msg *application.InboundMessage) error {
 		var err error
-		runSession(a, a.configView().makeSessionKey(msg), func() { err = a.bindings.Inbound.ProcessMessage(msg) })
+		runSession(a, a.configView().makeSessionKey(msg), func() { err = process(msg) })
 		return err
 	}
 }

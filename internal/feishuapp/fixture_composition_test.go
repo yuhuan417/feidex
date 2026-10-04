@@ -12,6 +12,7 @@ import (
 	filesystempicker "feidex/internal/adapter/filesystem/pathpicker"
 	statejson "feidex/internal/adapter/storage/json"
 	scoped "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application"
 	"feidex/internal/application/announcement"
 	"feidex/internal/application/asyncinput"
 	retry "feidex/internal/application/autoretry"
@@ -133,14 +134,23 @@ func prepareTestApp(a *App) *App {
 	}
 	a.bindings.StartupState = conversation.StartupState{Repository: a.State(), DefaultWorkspaceID: func() string { return a.WorkspaceSelection().ResolveSession(nil) }}
 	a.bindings.UpgradePoller = upgrade.Poller{Repository: a.State(), Units: upgradeunits.Units{}}
-	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a))
+	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a, func() {
+		a.bindings.MaintenanceCommands.CleanupExpiredAttachments()
+	}))
 	a.bindings.MaintenanceCommands = BuildMaintenanceCommands(a)
 	a.bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: a.State(), Runtime: a.runtimeOwner.TurnBindings, Items: a.bindings.TurnItems}
 	a.bindings.AutoRetry = AutoRetryView(a)
 	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(a, a.bindings.AutoRetry))
 	a.bindings.FrontendQuery = frontendapp.Query{Repository: a.State(), Facts: FrontendFacts(a), Retrying: a.bindings.AutoRetry.HasBlockingAutoRetry}
-	a.bindings.CodexUpgrade = codexruntime.NewUpgradeService(CodexUpgradePorts(a))
-	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(a))
+	a.bindings.CodexUpgrade = codexruntime.NewUpgradeService(CodexUpgradePorts(a, func(ctx context.Context) error {
+		return a.bindings.CodexUpgrade.CodexSmokeTest(ctx)
+	}))
+	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(a,
+		func(ctx context.Context) (codexruntime.CodexClient, error) {
+			return a.bindings.CodexUpgrade.StartVerifiedCodexClient(ctx)
+		},
+		func() { a.bindings.StartupRecovery.RecoverFrontendRuntimeState() },
+	))
 	smoke, active, current, create := ClaudeMaintenancePorts(a)
 	a.bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	a.bindings.History = BuildHistory(a)
@@ -185,8 +195,11 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BackendEvents.Deps = BackendEventPorts(a)
 	failure := backendfailure.NewBackendFailureService(BackendFailurePorts(a))
 	a.bindings.BackendFailure = &failure
-	a.bindings.Inbound = &inbound.Service{Deps: InboundPorts(a)}
-	a.bindings.ForwardInputs = inbound.ForwardService{Gateway: ForwardGateway(a), Tasks: ForwardTasks(a), Context: a.Context, Process: ForwardProcessor(a), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a)}
+	inboundService := &inbound.Service{}
+	forwardService := inbound.ForwardService{Gateway: ForwardGateway(a), Tasks: ForwardTasks(a), Context: a.Context, Process: ForwardProcessor(a, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a)}
+	inboundService.Deps = InboundPorts(a, forwardService.Start)
+	a.bindings.Inbound = inboundService
+	a.bindings.ForwardInputs = forwardService
 	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(a)}
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(a), Conversations: a.bindings.Conversations, Context: a.Context}
 	a.bindings.WorkspaceWorkflow.Effects = a.bindings.WorkspaceEffects

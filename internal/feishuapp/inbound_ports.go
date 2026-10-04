@@ -85,7 +85,9 @@ func (p inboundBackend) CheckMaintenance() error {
 	return nil
 }
 
-func InboundPorts(a *App) inbound.Dependencies {
+// InboundPorts takes the forward prefetch entry point as a value rather
+// than reaching for a.bindings.ForwardInputs.
+func InboundPorts(a *App, prefetchForward func(*application.InboundMessage)) inbound.Dependencies {
 	return inbound.Dependencies{
 		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		Routing: inboundRouting{app: a}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{app: a},
@@ -95,7 +97,7 @@ func InboundPorts(a *App) inbound.Dependencies {
 		Bindings: inboundBindings{app: a}, Commands: inboundCommands{app: a}, Backend: inboundBackend{app: a}, Queue: a.bindings.Submissions,
 		RefreshGroup:       func(chatID, reason string) { scheduleGroupAnnouncementStatusRefresh(a, chatID, reason) },
 		FlushNotifications: func(msg *application.InboundMessage) { flushPendingFrontendCardNotifications(a, msg) },
-		PrefetchForward:    func(msg *application.InboundMessage) { a.bindings.ForwardInputs.Start(msg) },
+		PrefetchForward:    prefetchForward,
 	}
 }
 

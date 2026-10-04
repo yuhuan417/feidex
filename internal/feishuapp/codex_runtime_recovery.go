@@ -20,7 +20,12 @@ func recoveryState(a *App) *appcodexruntime.RecoveryState {
 	return owner.CodexRecovery
 }
 
-func CodexRecoveryPorts(a *App) appcodexruntime.RecoveryDependencies {
+// CodexRecoveryPorts takes the two entry points it needs from services that
+// are constructed after it, so the recovery/upgrade group is a DAG.
+func CodexRecoveryPorts(a *App,
+	startVerifiedCodexClient func(context.Context) (appcodexruntime.CodexClient, error),
+	recoverFrontend func(),
+) appcodexruntime.RecoveryDependencies {
 	return appcodexruntime.RecoveryDependencies{
 		State:     recoveryState(a),
 		Context:   a.Context,
@@ -33,18 +38,14 @@ func CodexRecoveryPorts(a *App) appcodexruntime.RecoveryDependencies {
 			}
 			failBackendActiveWork(a.BackendRuntimeDeps(), domainbackend.BackendCodex, "", "", message)
 		},
-		StartVerifiedCodexClient: func(ctx context.Context) (appcodexruntime.CodexClient, error) {
-			return a.bindings.CodexUpgrade.StartVerifiedCodexClient(ctx)
-		},
+		StartVerifiedCodexClient: startVerifiedCodexClient,
 		FrontendID: func() string {
 			return a.frontendID
 		},
 		IsBackendActive: func() bool {
 			return a.configView().configuredBackend() == domainbackend.BackendCodex
 		},
-		RecoverFrontendRuntimeState: func() {
-			recoverFrontendRuntimeState(a.bindings.StartupRecovery)
-		},
+		RecoverFrontendRuntimeState: recoverFrontend,
 		SessionKeysForRecovery: func() []string {
 			var keys []string
 			for _, sess := range a.State().Sessions() {

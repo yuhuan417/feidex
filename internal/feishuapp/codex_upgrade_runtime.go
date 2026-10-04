@@ -14,7 +14,9 @@ import (
 
 // newCodexUpgradeService builds a codexruntime.UpgradeService with
 // all callbacks wired to *App dependencies.
-func CodexUpgradePorts(a *App) appcodexruntime.UpgradeDependencies {
+// CodexUpgradePorts takes its own smoke test as a value: the port is built
+// before the service it belongs to exists.
+func CodexUpgradePorts(a *App, codexSmokeTest func(context.Context) error) appcodexruntime.UpgradeDependencies {
 	return appcodexruntime.UpgradeDependencies{
 		CreateClient: func() appcodexruntime.CodexClient {
 			return newCodexClient(a.cfg.Codex)
@@ -28,9 +30,7 @@ func CodexUpgradePorts(a *App) appcodexruntime.UpgradeDependencies {
 		IsBackendActive: func() bool {
 			return a.configView().configuredBackend() == domainbackend.BackendCodex
 		},
-		SmokeTest: func(ctx context.Context) error {
-			return a.bindings.CodexUpgrade.CodexSmokeTest(ctx)
-		},
+		SmokeTest: codexSmokeTest,
 		CurrentClient: func() appcodexruntime.CodexClient {
 			return a.runtimeView().currentCodexClient()
 		},

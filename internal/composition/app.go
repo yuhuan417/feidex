@@ -2,6 +2,8 @@
 package composition
 
 import (
+	"context"
+	"feidex/internal/application"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -147,14 +149,23 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}
 	bindings.StartupState = conversation.StartupState{Repository: frontend.State(), DefaultWorkspaceID: func() string { return frontend.WorkspaceSelection().ResolveSession(nil) }}
 	bindings.UpgradePoller = upgrade.Poller{Repository: frontend.State(), Units: upgradeunits.Units{}}
-	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend))
+	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend, func() {
+		bindings.MaintenanceCommands.CleanupExpiredAttachments()
+	}))
 	bindings.MaintenanceCommands = feishuapp.BuildMaintenanceCommands(frontend)
 	bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings, Items: bindings.TurnItems}
 	bindings.AutoRetry = feishuapp.AutoRetryView(frontend)
 	bindings.AutoRetry.Engine = retry.NewEngine(feishuapp.AutoRetryPorts(frontend, bindings.AutoRetry))
 	bindings.FrontendQuery = frontendapp.Query{Repository: frontend.State(), Facts: feishuapp.FrontendFacts(frontend), Retrying: bindings.AutoRetry.HasBlockingAutoRetry}
-	bindings.CodexUpgrade = codexruntime.NewUpgradeService(feishuapp.CodexUpgradePorts(frontend))
-	bindings.CodexRecovery = codexruntime.NewRecoveryService(feishuapp.CodexRecoveryPorts(frontend))
+	bindings.CodexUpgrade = codexruntime.NewUpgradeService(feishuapp.CodexUpgradePorts(frontend, func(ctx context.Context) error {
+		return bindings.CodexUpgrade.CodexSmokeTest(ctx)
+	}))
+	bindings.CodexRecovery = codexruntime.NewRecoveryService(feishuapp.CodexRecoveryPorts(frontend,
+		func(ctx context.Context) (codexruntime.CodexClient, error) {
+			return bindings.CodexUpgrade.StartVerifiedCodexClient(ctx)
+		},
+		func() { bindings.StartupRecovery.RecoverFrontendRuntimeState() },
+	))
 	smoke, active, current, create := feishuapp.ClaudeMaintenancePorts(frontend)
 	bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	bindings.History = feishuapp.BuildHistory(frontend)
@@ -199,8 +210,14 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BackendEvents.Deps = feishuapp.BackendEventPorts(frontend)
 	failure := backendfailure.NewBackendFailureService(feishuapp.BackendFailurePorts(frontend))
 	bindings.BackendFailure = &failure
-	bindings.Inbound = &inbound.Service{Deps: feishuapp.InboundPorts(frontend)}
-	bindings.ForwardInputs = inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend), Tasks: feishuapp.ForwardTasks(frontend), Context: frontend.Context, Process: feishuapp.ForwardProcessor(frontend), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(frontend)}
+	// Inbound and ForwardInputs call each other at runtime, so neither can be
+	// built from the other's finished value. They are wired here instead: the
+	// two entry points are passed in after both exist.
+	inboundService := &inbound.Service{}
+	forwardService := inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend), Tasks: feishuapp.ForwardTasks(frontend), Context: frontend.Context, Process: feishuapp.ForwardProcessor(frontend, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(frontend)}
+	inboundService.Deps = feishuapp.InboundPorts(frontend, forwardService.Start)
+	bindings.Inbound = inboundService
+	bindings.ForwardInputs = forwardService
 	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(frontend)}
 	bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: bindings.WorkspaceCreation.Lifecycle, Runtime: feishuapp.WorkspaceEffectRuntime(frontend), Conversations: bindings.Conversations, Context: frontend.Context}
 	bindings.WorkspaceWorkflow.Effects = bindings.WorkspaceEffects
