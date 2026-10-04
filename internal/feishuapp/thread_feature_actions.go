@@ -1,6 +1,7 @@
 package feishuapp
 
 import (
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/textutil"
 	"strings"
 
@@ -38,31 +39,31 @@ func interruptStatusButtons(sessionKey, parentAction, targetTurnID string, inclu
 	return buttons
 }
 
-func renderInterruptPreparingCard(a *App, sessionKey, parentAction string) map[string]any {
-	return a.feishu.SimpleStatusCard(
-		planModeTitleForSession(a, sessionKey, "中断任务"),
+func renderInterruptPreparingCard(state planmode.SessionStateProvider, client FeishuClient, sessionKey, parentAction string) map[string]any {
+	return client.SimpleStatusCard(
+		planmode.ContentCardTitleForSessionFromState(state, state != nil, sessionKey, "", "中断任务"),
 		"blue",
 		menuCardBody(textutil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), "正在向 Claude 请求中断当前任务，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 	)
 }
 
-func renderInterruptResultCard(a *App, sessionKey, parentAction, text string) map[string]any {
-	return a.feishu.SimpleStatusCard(
-		planModeTitleForSession(a, sessionKey, "中断任务"),
+func renderInterruptResultCard(state planmode.SessionStateProvider, client FeishuClient, sessionKey, parentAction, text string) map[string]any {
+	return client.SimpleStatusCard(
+		planmode.ContentCardTitleForSessionFromState(state, state != nil, sessionKey, "", "中断任务"),
 		"green",
 		menuCardBody(textutil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), textutil.FirstNonEmpty(strings.TrimSpace(text), "已请求中断当前任务。")),
 		interruptStatusButtons(sessionKey, parentAction, "", false),
 	)
 }
 
-func renderInterruptFailedCard(a *App, sessionKey, parentAction, targetTurnID, errText string) map[string]any {
+func renderInterruptFailedCard(state planmode.SessionStateProvider, client FeishuClient, sessionKey, parentAction, targetTurnID, errText string) map[string]any {
 	body := "请求中断当前任务失败。"
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text
 	}
-	return a.feishu.SimpleStatusCard(
-		planModeTitleForSession(a, sessionKey, "中断任务"),
+	return client.SimpleStatusCard(
+		planmode.ContentCardTitleForSessionFromState(state, state != nil, sessionKey, "", "中断任务"),
 		"orange",
 		menuCardBody(textutil.FirstNonEmpty(strings.TrimSpace(parentAction), "menu.tools"), body),
 		interruptStatusButtons(sessionKey, parentAction, targetTurnID, true),

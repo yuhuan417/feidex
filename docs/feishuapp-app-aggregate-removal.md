@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 323 |
-| 收 `*App` 的顶层函数 | 196 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 319 |
+| 收 `*App` 的顶层函数 | 191 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
 | **持有 `*App` 字段的结构体** | **17** |
 
@@ -743,6 +743,10 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 117 将 frontend idle 与 message-traffic allowance helpers 改为接收 `frontend.Query`；backend-selection runtime 在装配时捕获同一个 query，不再把 `*App` 传给 idle gate。session、pending request、retry、maintenance 和 message-traffic 的判定继续由同一 Query/Activity owner 执行，nil repository 仍返回未初始化提示。生产 `*App` 引用预算由 328 降至 324，收 `*App` 的顶层函数由 201 降至 197，lazy binding-read 预算保持 0。
 
 步骤 118 将状态卡 renderer 改为显式接收 scoped state、Feishu renderer、backend kind 与已生成的状态正文。title 投影继续使用 state-based workspace/plan helper，保持 `[workspace] [plan]` 前缀；Status 正文仍由 backend configuration owner 生成。生产 `*App` 引用预算由 324 降至 323，收 `*App` 的顶层函数由 197 降至 196，lazy binding-read 预算保持 0。
+
+步骤 119 将共享 approval card renderer 改为显式接收 scoped session state 与 Feishu card renderer；Claude support 和 server-request adapter 在组合边界传入已持有的值。workspace/plan 标题投影、attention mention、颜色、正文和按钮保持不变。生产 `*App` 引用预算由 323 降至 322，收 `*App` 的顶层函数由 196 降至 194，lazy binding-read 预算保持 0。
+
+步骤 120 将 interrupt preparing/result/failed card renderer 改为显式接收 scoped session state 与 Feishu card renderer；backend action composition 捕获构造期 state/client。workspace/plan 标题、parent action 返回按钮、重试按钮和提示正文不变。生产 `*App` 引用预算由 322 降至 319，收 `*App` 的顶层函数由 194 降至 191，lazy binding-read 预算保持 0。
 
 ## 方法
 

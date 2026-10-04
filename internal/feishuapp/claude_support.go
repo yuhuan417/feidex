@@ -58,7 +58,7 @@ func BuildClaudeSupport(a *App) *claudesupport.Service {
 			})
 		},
 		RenderApprovalCard: func(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
-			return renderApprovalCard(a, "", sub, title, color, body, buttons)
+			return renderApprovalCard(a.State(), a.feishu, sub, title, color, body, buttons)
 		},
 		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
 			return a.feishu.SimpleStatusCard(title, color, body, buttons)

@@ -13,6 +13,7 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 	if app == nil {
 		return appbackend.ActionService{}
 	}
+	state, feishuClient := app.State(), app.feishu
 	return appbackend.NewActionService(appbackend.ActionDeps{
 		Backend:    func() string { return app.configView().configuredBackend() },
 		SessionKey: func(msg *feishu.InboundMessage) string { return app.configView().makeSessionKey(msg) },
@@ -36,13 +37,13 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 		},
 		Render: appbackend.ActionRenderDeps{
 			RenderInterruptPreparingCard: func(sessionKey, parentAction string) map[string]any {
-				return renderInterruptPreparingCard(app, sessionKey, parentAction)
+				return renderInterruptPreparingCard(state, feishuClient, sessionKey, parentAction)
 			},
 			RenderInterruptResultCard: func(sessionKey, parentAction, text string) map[string]any {
-				return renderInterruptResultCard(app, sessionKey, parentAction, text)
+				return renderInterruptResultCard(state, feishuClient, sessionKey, parentAction, text)
 			},
 			RenderInterruptFailedCard: func(sessionKey, parentAction, targetTurnID, errText string) map[string]any {
-				return renderInterruptFailedCard(app, sessionKey, parentAction, targetTurnID, errText)
+				return renderInterruptFailedCard(state, feishuClient, sessionKey, parentAction, targetTurnID, errText)
 			},
 		},
 		Execution: appbackend.ActionExecutionDeps{

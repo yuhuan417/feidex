@@ -112,7 +112,7 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 			})
 		},
 		RenderApprovalCard: func(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
-			return renderApprovalCard(a, "", sub, title, color, body, buttons)
+			return renderApprovalCard(a.State(), a.feishu, sub, title, color, body, buttons)
 		},
 		PrepareMentionText: func(text, userID string) string {
 			return apputil.PrependAttentionMentionMarkdown(text, userID)
