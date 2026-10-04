@@ -108,7 +108,10 @@ func (a *App) ThreadMenuConversationBackend() appthreadmenu.ConversationBackendP
 }
 
 func (a *App) ThreadMenuBackendRuntime() appthreadmenu.BackendRuntimeProvider {
-	return threadMenuBackendRuntimeAdapter{app: a, runtime: backendRuntime(a)}
+	if a == nil {
+		return threadMenuBackendRuntimeAdapter{}
+	}
+	return threadMenuBackendRuntimeAdapter{app: a, runtime: backendRuntime(a.configView().configuredBackend())}
 }
 
 func (a *App) ThreadMenuPendingQueue() appthreadmenu.PendingQueueProvider {

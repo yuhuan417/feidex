@@ -18,7 +18,7 @@ func StartupRecoveryPorts(a *App, cleanupExpiredAttachments func(), restoreConve
 		BelongsToFrontend: func(key string) bool { return a.configView().sessionBelongsToFrontend(key) },
 		BackendConfigured: func() bool { return a.configView().hasConfiguredBackend() },
 		BeginRecovery: func() func() {
-			if runtime := backendRuntime(a); runtime != nil {
+			if runtime := backendRuntime(a.configView().configuredBackend()); runtime != nil {
 				return runtime.BeginStartupRecoveryScope(backendRuntimeContextForApp(a.BackendRuntimeDeps()))
 			}
 			return func() {}

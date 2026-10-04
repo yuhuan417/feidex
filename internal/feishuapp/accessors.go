@@ -115,7 +115,10 @@ func (a *App) FrontendID() string {
 
 // BackendRuntime returns the runtime facade for the currently configured backend.
 func (a *App) BackendRuntime() frontendruntime.BackendFacade {
-	return backendRuntime(a)
+	if a == nil {
+		return nil
+	}
+	return backendRuntime(a.configView().configuredBackend())
 }
 
 func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {

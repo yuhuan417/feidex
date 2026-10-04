@@ -29,7 +29,7 @@ func handleCommand(a *App, msg *feishu.InboundMessage, raw string) error {
 	if reason := a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic(); reason != "" {
 		return conversation.NewWarning(reason)
 	}
-	if runtime := backendRuntime(a); runtime != nil {
+	if runtime := backendRuntime(backend); runtime != nil {
 		if err := runtime.MaintenanceBlocksCommand(backendRuntimeContextForApp(a.BackendRuntimeDeps()), raw); err != nil {
 			return err
 		}

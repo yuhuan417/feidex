@@ -77,11 +77,8 @@ func backendRuntimeContextForApp(d BackendRuntimeDeps) backendruntime.BackendCon
 	return ctx
 }
 
-func backendRuntime(a *App) backendruntime.BackendFacade {
-	if a == nil {
-		return nil
-	}
-	return backendruntime.BackendForKind(a.configView().configuredBackend())
+func backendRuntime(backend string) backendruntime.BackendFacade {
+	return backendruntime.BackendForKind(backend)
 }
 
 func currentBackendRuntimeHandle(backend string, view runtimeView) *backendruntime.BackendHandle {

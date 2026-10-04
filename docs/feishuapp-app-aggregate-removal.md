@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 366 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 365 |
 | 收 `*App` 的顶层函数 | 224 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **21** |
@@ -714,6 +714,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 102 删除只被 `Prepare` 调用的 `startBackend` 包装及只转调 `App.SetBackend` 的 `setRuntimeBackend`；调用点继续构造当前 runtime handle 并用同一 backend 值更新 frontend owner，生产 `*App` 引用预算由 369 降至 367，lazy binding-read 预算保持 0。
 
 步骤 103 将 `currentBackendRuntimeHandle` 改为接收 backend 值与 `runtimeView`，client snapshot 仍来自同一 frontend runtime owner；生产 `*App` 引用预算由 367 降至 366，lazy binding-read 预算保持 0。
+
+步骤 104 将 `backendRuntime` 改为接收 backend kind；commands 复用已读取的 kind，recovery、accessor 与 thread-menu 在调用点从 config view 读取当前值。空 backend 仍映射为 nil facade，生产 `*App` 引用预算由 366 降至 365，lazy binding-read 预算保持 0。
 
 ## 方法
 
