@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"feidex/internal/adapter/feishu/debugviewcmd"
 	"feidex/internal/adapter/feishu/goalcmd"
+	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
@@ -68,7 +69,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"plan": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return commandPlan(a, msg, args)
+					return planmode.CommandPlan(newPlanModeAppAdapter(a), msg, args)
 				},
 			},
 		},

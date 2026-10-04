@@ -35,10 +35,6 @@ const (
 	codexPlanModeExitFollowupKind           = planmode.ExitFollowupKind
 )
 
-func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
-	return planmode.CommandPlan(newPlanModeAppAdapter(a), msg, args)
-}
-
 func (a *App) PlanModeTitleForSession(sessionKey, title string) string {
 	return planModeTitleForSession(a, sessionKey, title)
 }

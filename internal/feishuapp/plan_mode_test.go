@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	appplanmode "feidex/internal/adapter/feishu/planmode"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
@@ -12,6 +13,10 @@ import (
 	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 )
+
+func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
+	return appplanmode.CommandPlan(newPlanModeAppAdapter(a), msg, args)
+}
 
 func TestCommandPlanOnSavesThreadCollaborationMode(t *testing.T) {
 	a, ff, fc := newTestApp(t)
