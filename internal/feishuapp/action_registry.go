@@ -17,29 +17,32 @@ import (
 )
 
 type cardActionService struct {
-	app   *App
+	app *App
+}
+
+type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func newCardActionService(app *App) cardActionService {
-	return cardActionService{app: app, inner: app.bindings.CardActions}
+func newCardActionService(app *App) cardActionDispatcher {
+	return cardActionDispatcher{inner: app.bindings.CardActions}
 }
 
-func CardActionPorts(app *App, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService) appcardaction.Dependencies {
-	handlers := mergeCardActionHandlerSets(
+func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService) appcardaction.Dependencies {
+	appHandlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
 		workspaceCardActionHandlers(),
-		maintenanceCardActionHandlers(upgrades, backendUpgrades),
-		pendingCardActionHandlers(claudeSupport, reviewCommands),
+		maintenanceCardActionHandlers(),
+		pendingCardActionHandlers(),
+	)
+	portHandlers := mergeCardActionPortHandlerSets(
+		maintenancePortCardActionHandlers(upgrades, backendUpgrades),
+		pendingPortCardActionHandlers(claudeSupport, reviewCommands),
 		serverRequestCardActionHandlers(serverRequests),
 	)
-	bound := make(map[string]appcardaction.Handler, len(handlers))
-	for name, handler := range handlers {
-		h := handler
-		bound[name] = func(action application.CardAction) (any, error) {
-			response, err := h(cardActionService{app: app}, fromApplicationCardAction(action))
-			return response, err
-		}
+	bound := bindAppCardActionHandlers(cardActionService{app: app}, appHandlers)
+	for name, handler := range bindCardActionPortHandlers(portHandlers) {
+		bound[name] = handler
 	}
 	return appcardaction.Dependencies{
 		NormalizeSessionKey: func(action *application.CardAction) {
@@ -50,19 +53,40 @@ func CardActionPorts(app *App, serverRequests *serverrequest.Service, claudeSupp
 			if !ok {
 				return
 			}
-			if normalized := app.configView().normalizeSessionKey(raw); normalized != strings.TrimSpace(raw) {
+			if normalized := normalizeSessionKey(raw); normalized != strings.TrimSpace(raw) {
 				action.ActionValue.SetString("session_key", normalized)
 			}
 		},
 		ResolveActionName: resolvedApplicationCardActionName,
-		BlockedReason: func(name string) string {
-			return app.runtimeOwner.BackendTransition.BackendSwitchBlocksCardAction(name)
-		},
-		Handlers: bound,
+		BlockedReason:     blockedReason,
+		Handlers:          bound,
 	}
 }
 
-func (s cardActionService) dispatch(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func bindAppCardActionHandlers(service cardActionService, handlers map[string]cardActionHandler) map[string]appcardaction.Handler {
+	bound := make(map[string]appcardaction.Handler, len(handlers))
+	for name, handler := range handlers {
+		h := handler
+		bound[name] = func(action application.CardAction) (any, error) {
+			response, err := h(service, fromApplicationCardAction(action))
+			return response, err
+		}
+	}
+	return bound
+}
+
+func bindCardActionPortHandlers(handlers map[string]cardActionPortHandler) map[string]appcardaction.Handler {
+	bound := make(map[string]appcardaction.Handler, len(handlers))
+	for name, handler := range handlers {
+		h := handler
+		bound[name] = func(action application.CardAction) (any, error) {
+			return h(fromApplicationCardAction(action))
+		}
+	}
+	return bound
+}
+
+func (s cardActionDispatcher) dispatch(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	if action == nil {
 		return &callback.CardActionTriggerResponse{}, nil
 	}
@@ -105,24 +129,25 @@ func resolvedApplicationCardActionName(action application.CardAction) string {
 }
 
 type cardActionHandler func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
+type cardActionPortHandler func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
 
 // Card action handlers run on the Feishu callback ack path.
 // Keep them fast: validate input, persist state, enqueue work, and return.
 // Do not put clone/download/fetch/review/upgrade or other blocking workflows
 // directly in these handlers.
 
-func serverRequestCardActionHandlers(service *serverrequest.Service) map[string]cardActionHandler {
-	return map[string]cardActionHandler{
-		"user_input.answer": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func serverRequestCardActionHandlers(service *serverrequest.Service) map[string]cardActionPortHandler {
+	return map[string]cardActionPortHandler{
+		"user_input.answer": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return service.CompleteUserInputAnswer(action)
 		},
-		"user_input.toggle_multi": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"user_input.toggle_multi": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return service.CompleteUserInputMultiToggle(action)
 		},
-		"elicitation_form.answer": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"elicitation_form.answer": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return service.CompleteElicitationFormAnswer(action)
 		},
-		"elicitation_form.toggle_multi": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"elicitation_form.toggle_multi": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return service.CompleteElicitationMultiToggle(action)
 		},
 		"approval.command.accept":             serverRequestApprovalAction(service, "approval.command.accept"),
@@ -141,16 +166,26 @@ func serverRequestCardActionHandlers(service *serverrequest.Service) map[string]
 	}
 }
 
-func serverRequestApprovalAction(service *serverrequest.Service, name string) cardActionHandler {
-	return func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func serverRequestApprovalAction(service *serverrequest.Service, name string) cardActionPortHandler {
+	return func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return service.CompleteApprovalAction(action, name)
 	}
 }
 
-func serverRequestElicitationAction(service *serverrequest.Service, name string) cardActionHandler {
-	return func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func serverRequestElicitationAction(service *serverrequest.Service, name string) cardActionPortHandler {
+	return func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 		return service.CompleteElicitationURLAction(action, name)
 	}
+}
+
+func mergeCardActionPortHandlerSets(sets ...map[string]cardActionPortHandler) map[string]cardActionPortHandler {
+	merged := make(map[string]cardActionPortHandler)
+	for _, set := range sets {
+		for name, handler := range set {
+			merged[name] = handler
+		}
+	}
+	return merged
 }
 
 func mergeCardActionHandlerSets(sets ...map[string]cardActionHandler) map[string]cardActionHandler {

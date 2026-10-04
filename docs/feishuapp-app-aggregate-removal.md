@@ -123,9 +123,11 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 13 | `BackendMaintenancePorts` | 改为显式接收配置/锁、maintenance state、Codex upgrade 与 Claude maintenance owner、渲染和 patch ports；runtime callback 仍观察 Claude service 的更新字段 |
 | 14 | `GoalCommandPorts` | 移除 App-bearing 工厂与 outbound/renderer；composition 显式组装 `goalcmd.Dependencies`，outbound adapter 仅持有 frontend ID 与 effect runner |
 | 15 | `BackendEventPorts` | 移除 App-bearing presenter 与 ports 工厂；composition 直接连接 backendevents owners，并为 interaction presenter 注入 submission/workspace/item-context/server-request/Codex error capabilities |
-| 16（分阶段） | `CardActionPorts` | server-request actions 改为捕获显式注入的 `ServerRequests` owner；其余菜单、workspace、maintenance 与本地 pending handlers 仍待拆分，尚未完成工厂解耦 |
-| 17（分阶段） | `CardActionPorts` | review form 与 Claude plan-approve actions 改为捕获显式注入的 `ReviewCommands`、`ClaudeSupport` owners；pending handlers 其余 App helper 仍待迁移 |
-| 18（分阶段） | `CardActionPorts` | upgrade/restart actions 改为捕获显式注入的 `Upgrades`、`BackendUpgrades` owners；`upgrade.dev` 与工厂其余依赖仍待拆分 |
+| 16（分阶段） | `CardActionPorts` | server-request actions 的 owner 参数显式化；当时仍经统一 callback wrapper 捕获 App，捕获边界在步骤 19 修正 |
+| 17（分阶段） | `CardActionPorts` | review form 与 Claude plan-approve actions 的 owners 显式化；当时仍经统一 callback wrapper 捕获 App，捕获边界在步骤 19 修正 |
+| 18（分阶段） | `CardActionPorts` | upgrade/restart actions 的 owners 显式化；当时仍经统一 callback wrapper 捕获 App，捕获边界在步骤 19 修正 |
+| 19 | `CardActionPorts` | 将 owner-only handlers 与 App handlers 分开绑定；前者的 handler 类型和回调闭包均不接收或捕获 App |
+| 20（分阶段） | `CardActionPorts` | normalization 与 backend-switch callbacks 改为 composition 传入的窄依赖；Feishu callback dispatcher 与 App handler context 分型，剩余 App-handler families 仍待拆分 |
 
 在最初纳入分析的 29 个工厂中，前两个是仅有的**立即求值、不捕获**工厂；当时
 步骤 3-5 也沿用这条路径：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -199,7 +201,7 @@ interaction 分支。`*App` 引用预算由 506 降至 503，惰性读取预算�
 
 步骤 16 先拆 server-request handler family：工具输入、命令/文件/permissions approval、
 MCP elicitation form/url 的 callback handler 直接绑定 composition 提供的 `ServerRequests`
-service，不再经 `cardActionService` 读取 `App` 上的 binding。CardActions 的构造相应移到
+service，减少 handler 对 `App` binding accessor 的依赖。CardActions 的构造相应移到
 composition 和 fixture 的后段，保证 owner 已就绪。handler 仍委托原 `serverrequest.Service`，
 不改变 payload、pending 状态写入或 reply/resolved 边界；对照 SM-09/10/11/22/23。handler
 名称唯一性与 callback 路由用例通过。`CardActionPorts` 的其他配置、backend-switch 与 handler
@@ -209,13 +211,22 @@ composition 和 fixture 的后段，保证 owner 已就绪。handler 仍委托�
 步骤 17 继续将 `review.base.select`、`review.commit.select`、`review.form.submit` 与
 `pending_form.plan_approve` 从通用 callback 上下文移出，分别注入 `ReviewCommands` 和
 `ClaudeSupport` owner。composition 在 review commands 构造完成后创建 CardActions；处理逻辑
-仍委托现有 owner，action names 与返回行为不变。其余 pending action、菜单/workspace/
-maintenance handlers 以及归一化和 backend-switch 策略仍保留 App 依赖，预算保持 503/34。
+仍委托现有 owner，action names 与返回行为不变。该阶段其余 pending action、菜单/workspace/
+maintenance handlers 及 callback policy 仍保留 App 依赖；后续步骤继续拆分这些依赖，预算保持 503/34。
 
 步骤 18 将 upgrade confirm/cancel/local-pick 与 Codex/Claude upgrade/restart callbacks
-直接绑定 `Upgrades`、`BackendUpgrades` owners；`upgrade.dev` 仍经 menu action helper 处理。
-操作仍由原 upgrade services 执行，callback 的确认和异步维护边界不变。CardActionPorts 的
-其他 handler families 与配置/切换依赖仍未迁移，预算保持 503/34。
+的 owner 参数改为 `Upgrades`、`BackendUpgrades`；`upgrade.dev` 仍经 menu action helper
+处理。操作仍由原 upgrade services 执行，callback 的确认和异步维护边界不变。
+
+复核发现步骤 16-18 虽然显式传入了 service owners，但当时所有 handler 共用的绑定闭包仍
+捕获 `App` 并构造 `cardActionService`，所以这些 action 还没有实现运行时的 App 解耦。步骤 19
+将 handler 分为两种类型：需要 App helper 的 handler 接收 `cardActionService`，owner-only
+handler 只接收 `*feishu.CardAction`。两类 handler 使用独立 binder；owner-only binder 的闭包
+只捕获其 handler/owner，不引用 App。步骤 20 再将 session-key normalizer 改为只捕获 frontend ID
+的纯函数，将 backend-switch guard 直接绑定 runtime transition owner，并把只持有 application
+card-action service 的 `cardActionDispatcher` 与持有 App 的 handler context 分型。因此 owner-only
+callbacks 的完整调度路径不再持有 App。菜单、workspace、`upgrade.dev` 与本地 pending handlers
+仍使用 App helper；预算保持 503/34。
 
 ## 方法
 

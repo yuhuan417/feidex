@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"feidex/internal/adapter/feishu/pendingforms"
-	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
@@ -149,7 +148,7 @@ func TestAsyncUserInputAnswerAcknowledgesBeforeSteerAndRejectsDuplicates(t *test
 		return nil
 	}
 	resp, err := callActionWithTimeout(t, func() (*callback.CardActionTriggerResponse, error) {
-		return pendingCardActionHandlers(nil, appreviewcmd.ReviewFormService{})["async_user_input.answer"](cardActionService{app: a}, asyncAnswerAction(pending))
+		return pendingCardActionHandlers()["async_user_input.answer"](cardActionService{app: a}, asyncAnswerAction(pending))
 	})
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "info" || resp.Card != nil {
 		t.Fatalf("callback = %+v, %v; want fast toast only", resp, err)
