@@ -1077,3 +1077,42 @@ func importsUnder(root, relative string, banned []string) ([]string, error) {
 	sort.Strings(violations)
 	return violations, err
 }
+
+// TestFeishuAppAggregateDoesNotGrow pins the remaining *App coupling in
+// internal/feishuapp. The package is the transitional home of the Feishu
+// frontend implementation; the migration that removes the aggregate proceeds
+// one capability at a time (see
+// docs/feishuapp-app-aggregate-removal.md and
+// docs/feishuapp-construction-cycle-breaking.md).
+//
+// The budget only ratchets down. Converting a function or struct to take the
+// narrow values it uses should lower the number here in the same commit; if a
+// change needs a higher number, it is adding coupling rather than removing it.
+func TestFeishuAppAggregateDoesNotGrow(t *testing.T) {
+	const budget = 541
+
+	root := repositoryRoot(t)
+	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, path := range entries {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		count += strings.Count(string(data), "*App")
+	}
+	if count > budget {
+		t.Fatalf("internal/feishuapp has %d *App references, budget is %d; "+
+			"narrow the new code to the values it uses instead of adding coupling", count, budget)
+	}
+	if count < budget {
+		t.Fatalf("internal/feishuapp has %d *App references but the budget is still %d; "+
+			"lower the budget in the same commit", count, budget)
+	}
+}
