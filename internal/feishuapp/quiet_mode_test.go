@@ -14,7 +14,7 @@ import (
 func renderQuietModeMenuCardForTest(a *App, sessionKey string) map[string]any {
 	return renderQuietModeMenuCard(
 		quietmode.Mode(a.configView().feishuConfig()), sessionKey,
-		planModeTitleForSession(a, sessionKey, "Quiet Mode"), a.feishu,
+		planModeTitleForSession(a.State(), a != nil, sessionKey, "Quiet Mode"), a.feishu,
 	)
 }
 

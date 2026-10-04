@@ -85,7 +85,7 @@ func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {
 		return fmt.Errorf("usage: /help")
 	}
 	sessionKey := a.configView().makeSessionKey(msg)
-	card := renderHelpCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, "帮助说明"), a.feishu, a.bindings.BindingCommands.scope, sessionKey)
+	card := renderHelpCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "帮助说明"), a.feishu, a.bindings.BindingCommands.scope, sessionKey)
 	return replyCardEffect(a, msg, card)
 }
 

@@ -24,7 +24,7 @@ func BuildUpgrades(app *App, workspaceConfiguration *workspacecmd.ConfigService)
 		},
 		RenderSystemMenuCard: func(sessionKey string) map[string]any {
 			spec, _ := menuGroupSpec("menu.group.system")
-			return renderSystemMenuCardData(app.configView().configuredBackend(), planModeTitleForSession(app, sessionKey, spec.Label), app.feishu, sessionKey)
+			return renderSystemMenuCardData(app.configView().configuredBackend(), planModeTitleForSession(app.State(), app != nil, sessionKey, spec.Label), app.feishu, sessionKey)
 		},
 	}
 

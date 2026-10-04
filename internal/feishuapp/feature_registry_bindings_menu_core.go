@@ -22,7 +22,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			if actionName != "menu.root" {
 				return nil, false
 			}
-			return renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, "主菜单"), a.feishu, sessionKey), true
+			return renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "主菜单"), a.feishu, sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.root" {
@@ -38,7 +38,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 				return nil, false
 			}
 			spec, _ := menuGroupSpec("menu.tools")
-			return renderToolsMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, spec.Label), a.feishu, sessionKey), true
+			return renderToolsMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, spec.Label), a.feishu, sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.tools" {
@@ -69,7 +69,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 				return nil, false
 			}
 			spec, _ := menuGroupSpec("menu.group.system")
-			return renderSystemMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, spec.Label), a.feishu, sessionKey), true
+			return renderSystemMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, spec.Label), a.feishu, sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.group.system" {
@@ -92,7 +92,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 				return nil, false
 			}
 			spec, _ := menuGroupSpec("menu.group.backend")
-			return renderBackendMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, spec.Label), a.feishu, sessionKey), true
+			return renderBackendMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, spec.Label), a.feishu, sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := actionSessionKey(action)

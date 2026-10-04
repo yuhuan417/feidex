@@ -64,7 +64,7 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 			return patchCardEffect(context.Background(), a, messageID, card)
 		},
 		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
-			return contentCardTitleForSession(a, sessionKey, workspaceID, title)
+			return contentCardTitleForSession(a.State(), a != nil, sessionKey, workspaceID, title)
 		},
 
 		// Backend adapter factory
@@ -181,7 +181,7 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 		if body == "" {
 			body = "该请求已取消。"
 		}
-		title := contentCardTitleForSession(a, pending.SessionKey, "", "计划确认已取消")
+		title := contentCardTitleForSession(a.State(), a != nil, pending.SessionKey, "", "计划确认已取消")
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消"},
 			Card:  rawCard(a.feishu.SimpleStatusCard(title, "grey", body, nil)),

@@ -14,7 +14,7 @@ import (
 func (s cardActionService) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已返回命令菜单"},
-		Card:  rawCard(renderCommandMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app, sessionKey, "主菜单"), s.app.feishu, sessionKey)),
+		Card:  rawCard(renderCommandMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, "主菜单"), s.app.feishu, sessionKey)),
 	}, nil
 }
 
@@ -22,7 +22,7 @@ func (s cardActionService) completeMenuTools(action *feishu.CardAction, sessionK
 	spec, _ := menuGroupSpec("menu.tools")
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开常用工具"},
-		Card:  rawCard(renderToolsMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app, sessionKey, spec.Label), s.app.feishu, sessionKey)),
+		Card:  rawCard(renderToolsMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, spec.Label), s.app.feishu, sessionKey)),
 	}, nil
 }
 
@@ -35,7 +35,7 @@ func (s cardActionService) completeMenuGroupSystem(action *feishu.CardAction, se
 	spec, _ := menuGroupSpec("menu.group.system")
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开 system"},
-		Card:  rawCard(renderSystemMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app, sessionKey, spec.Label), s.app.feishu, sessionKey)),
+		Card:  rawCard(renderSystemMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, spec.Label), s.app.feishu, sessionKey)),
 	}, nil
 }
 
@@ -110,7 +110,7 @@ func (s cardActionService) completeQuietSet(action *feishu.CardAction, mode conf
 		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 模式为 " + quietmode.StatusText(mode)},
 		Card: rawCard(renderQuietModeMenuCard(
 			quietmode.Mode(configView.feishuConfig()), sessionKey,
-			planModeTitleForSession(s.app, sessionKey, "Quiet Mode"), s.app.feishu,
+			planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, "Quiet Mode"), s.app.feishu,
 		)),
 	}, nil
 }

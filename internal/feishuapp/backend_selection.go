@@ -60,7 +60,7 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 			},
 			BuildMenuCard: func(sessionKey string) map[string]any {
 				spec, _ := menuGroupSpec("menu.group.backend")
-				return renderBackendMenuCardData(app.configView().configuredBackend(), planModeTitleForSession(app, sessionKey, spec.Label), app.feishu, sessionKey)
+				return renderBackendMenuCardData(app.configView().configuredBackend(), planModeTitleForSession(app.State(), app != nil, sessionKey, spec.Label), app.feishu, sessionKey)
 			},
 			BuildCardBody: func(action, body string) string {
 				return menuCardBody(action, body)

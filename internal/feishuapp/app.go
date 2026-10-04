@@ -190,7 +190,7 @@ func replyErrorWith(contextFn func() context.Context, frontend identity.Frontend
 
 func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
 	sessionKey := a.configView().makeSessionKey(msg)
-	card := renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, "主菜单"), a.feishu, sessionKey)
+	card := renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "主菜单"), a.feishu, sessionKey)
 	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},

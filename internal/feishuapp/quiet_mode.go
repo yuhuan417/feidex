@@ -79,7 +79,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			return nil
 		}
 		sessionKey := a.configView().makeSessionKey(msg)
-		card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a, sessionKey, "Quiet Mode"), a.feishu)
+		card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a.State(), a != nil, sessionKey, "Quiet Mode"), a.feishu)
 		return replyCardEffect(a, msg, card)
 	}
 	arg := strings.TrimSpace(args[0])
@@ -90,7 +90,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 				return nil
 			}
 			sessionKey := a.configView().makeSessionKey(msg)
-			card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a, sessionKey, "Quiet Mode"), a.feishu)
+			card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a.State(), a != nil, sessionKey, "Quiet Mode"), a.feishu)
 			return replyCardEffect(a, msg, card)
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))

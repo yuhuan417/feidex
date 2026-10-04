@@ -822,6 +822,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 164 删除没有调用方的 `App.PlanModeTitleForSession` 和 `App.ContentCardTitleForSession` 兼容方法。生产调用继续使用现有纯函数与 state-based title renderer；标题生成逻辑不变。生产 `*App` 引用由 232 降至 230，收 `*App` 的顶层函数由 101 降至 99，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
 
+步骤 165 将 plan/content card title helpers 改为接收 frontend state provider 与 config-enabled 标志；调用方使用已持有的 scoped state。nil App 时 config-enabled 仍为 false，title adapter 的空配置行为不变。生产 `*App` 引用由 230 降至 227，收 `*App` 的顶层函数由 99 降至 96，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

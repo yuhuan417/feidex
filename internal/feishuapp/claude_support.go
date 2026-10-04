@@ -69,7 +69,7 @@ func BuildClaudeSupport(a *App) *claudesupport.Service {
 		PrepareMentionText: apputil.PrependAttentionMentionMarkdown,
 		RenderFormCard:     pendingforms.RenderToolUserInputFormCard,
 		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
-			return contentCardTitleForSession(a, sessionKey, workspaceID, title)
+			return contentCardTitleForSession(a.State(), a != nil, sessionKey, workspaceID, title)
 		},
 		BackendClaude: domainbackend.BackendClaude,
 		ResolvePlanFeedback: func(pendingID, feedback string) error {

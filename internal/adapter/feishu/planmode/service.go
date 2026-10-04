@@ -238,10 +238,14 @@ func RenderPlanModeStatusText(mode *conversation.SessionCollaborationMode) strin
 }
 
 func PlanModeForSession(a Dependencies, sessionKey string) *conversation.SessionCollaborationMode {
-	if a.ConfigProvider == nil || strings.TrimSpace(sessionKey) == "" {
+	return PlanModeForSessionFromState(a.StateProvider, a.ConfigProvider != nil, sessionKey)
+}
+
+func PlanModeForSessionFromState(state SessionStateProvider, enabled bool, sessionKey string) *conversation.SessionCollaborationMode {
+	if !enabled || state == nil || strings.TrimSpace(sessionKey) == "" {
 		return nil
 	}
-	sess := a.State().Session(sessionKey)
+	sess := state.Session(sessionKey)
 	if sess == nil {
 		return nil
 	}
@@ -249,12 +253,16 @@ func PlanModeForSession(a Dependencies, sessionKey string) *conversation.Session
 }
 
 func PlanModeTitleForSession(a Dependencies, sessionKey, title string) string {
+	return PlanModeTitleForSessionFromState(a.StateProvider, a.ConfigProvider != nil, sessionKey, title)
+}
+
+func PlanModeTitleForSessionFromState(state SessionStateProvider, enabled bool, sessionKey, title string) string {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		return ""
 	}
-	title = sessionWorkspaceTitleForSession(a, sessionKey, title)
-	mode := PlanModeForSession(a, sessionKey)
+	title = ContentCardTitleForSessionFromState(state, enabled, sessionKey, "", title)
+	mode := PlanModeForSessionFromState(state, enabled, sessionKey)
 	if mode == nil || !strings.EqualFold(mode.Mode, "plan") {
 		return title
 	}
@@ -345,22 +353,6 @@ func titlePrefixAlreadyPresent(prefixes []string, candidate string) bool {
 		}
 	}
 	return false
-}
-
-func sessionWorkspaceTitleForSession(a Dependencies, sessionKey, title string) string {
-	title = strings.TrimSpace(title)
-	if title == "" || a.ConfigProvider == nil || strings.TrimSpace(sessionKey) == "" {
-		return title
-	}
-	sess := a.State().Session(sessionKey)
-	if sess == nil {
-		return title
-	}
-	ws := strings.TrimSpace(sess.WorkspaceID)
-	if ws == "" {
-		return title
-	}
-	return prependTitlePrefix(title, "["+ws+"]")
 }
 
 func prependTitlePrefix(title, prefix string) string {
