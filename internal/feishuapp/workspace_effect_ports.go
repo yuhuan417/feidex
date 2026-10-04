@@ -17,6 +17,8 @@ func (r workspaceEffectRuntime) Replay(ctx context.Context, id string) error {
 }
 func WorkspaceEffectRuntime(a *App) workspace.EffectRuntime { return workspaceEffectRuntime{app: a} }
 
-func BindingReplayPorts(a *App) (*runtime.SessionActors, runtime.EffectRunner) {
-	return a.sessionActorRuntime(), newEffectRunner(a.runtimeOwner)
+// BindingReplayPorts resolves its two inputs eagerly; it needs the session
+// actors and the runtime owner, not the frontend aggregate.
+func BindingReplayPorts(actors *runtime.SessionActors, runtimeOwner *runtime.FrontendOwner) (*runtime.SessionActors, runtime.EffectRunner) {
+	return actors, newEffectRunner(runtimeOwner)
 }

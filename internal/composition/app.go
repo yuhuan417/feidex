@@ -205,7 +205,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: bindings.WorkspaceCreation.Lifecycle, Runtime: feishuapp.WorkspaceEffectRuntime(frontend), Conversations: bindings.Conversations, Context: frontend.Context}
 	bindings.WorkspaceWorkflow.Effects = bindings.WorkspaceEffects
 	bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: frontend.State(), Creation: bindings.WorkspaceCreation, Planning: bindings.WorkspacePlanning, Effects: bindings.WorkspaceEffects}
-	actors, replayRunner := feishuapp.BindingReplayPorts(frontend)
+	actors, replayRunner := feishuapp.BindingReplayPorts(scope.RuntimeOwner.SessionActors, scope.RuntimeOwner)
 	bindings.BindingReplay = runtime.BindingReplay{Service: bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	bindings.ConversationQuery = conversation.Query{Repository: frontend.State()}
 	bindings.Notifications = frontendapp.Notifications{Repository: frontend.State(), Sender: feishuapp.NotificationSender(frontend), Context: frontend.Context}

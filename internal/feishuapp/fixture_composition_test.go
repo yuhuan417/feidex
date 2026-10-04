@@ -191,7 +191,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(a), Conversations: a.bindings.Conversations, Context: a.Context}
 	a.bindings.WorkspaceWorkflow.Effects = a.bindings.WorkspaceEffects
 	a.bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(a.FrontendID()), Repository: a.State(), Creation: a.bindings.WorkspaceCreation, Planning: a.bindings.WorkspacePlanning, Effects: a.bindings.WorkspaceEffects}
-	actors, replayRunner := BindingReplayPorts(a)
+	actors, replayRunner := BindingReplayPorts(a.sessionActorRuntime(), a.runtimeOwner)
 	a.bindings.BindingReplay = runtime.BindingReplay{Service: a.bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	a.bindings.ConversationQuery = conversation.Query{Repository: a.State()}
 	a.bindings.Notifications = frontendapp.Notifications{Repository: a.State(), Sender: NotificationSender(a), Context: a.Context}
