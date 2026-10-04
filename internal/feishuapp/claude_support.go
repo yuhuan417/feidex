@@ -13,6 +13,7 @@ import (
 
 	"feidex/internal/adapter/feishu/claudesupport"
 	"feidex/internal/adapter/feishu/pendingforms"
+	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/feishu"
 	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/state"
@@ -150,11 +151,10 @@ func completePlanApprove(claudesupportDep *claudesupport.Service, action *feishu
 	return resp, nil
 }
 
-func completePlanReject(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func completePlanReject(claude *claudesupport.Service, requests *serverrequest.Service, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID, _ := action.ActionValue["request_id"].(string)
-	svc := a.bindings.ClaudeSupport
-	result, err := svc.CompletePlanReject(requestID, action.UserID, func(pending *state.PendingRequest) error {
-		return a.ServerRequestService().AdapterForPending(pending).CancelPending(pending)
+	result, err := claude.CompletePlanReject(requestID, action.UserID, func(pending *state.PendingRequest) error {
+		return requests.AdapterForPending(pending).CancelPending(pending)
 	})
 	if err != nil {
 		return nil, err

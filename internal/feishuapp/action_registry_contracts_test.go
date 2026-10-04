@@ -24,7 +24,7 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		handlers map[string]cardActionPortHandler
 	}{
 		{name: "maintenance-ports", handlers: maintenancePortCardActionHandlers(appupgradecmd.UpgradeService{}, backendUpgradeService{}, nil)},
-		{name: "pending-ports", handlers: pendingPortCardActionHandlers(nil, appreviewcmd.ReviewFormService{})},
+		{name: "pending-ports", handlers: pendingPortCardActionHandlers(nil, nil, appreviewcmd.ReviewFormService{})},
 		{name: "workspace-delete-ports", handlers: workspaceDeletePortCardActionHandlers(workspacecmd.WorkspaceDeleteActions{})},
 		{name: "history-ports", handlers: historyCardActionHandlers(history.Service{})},
 		{name: "server-request-ports", handlers: serverRequestCardActionHandlers(nil)},

@@ -3,6 +3,7 @@ package feishuapp
 import (
 	claudesupport "feidex/internal/adapter/feishu/claudesupport"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
+	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -19,9 +20,6 @@ func pendingCardActionHandlers() map[string]cardActionHandler {
 		"pending_form.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completePendingFormCancelDispatch(s.app, action)
 		},
-		"pending_form.plan_reject": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePlanReject(s.app, action)
-		},
 		codexPlanModeExitImplementCurrentAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completeCodexPlanModeExit(s.app, action, codexPlanModeExitImplementCurrentAction)
 		},
@@ -34,8 +32,11 @@ func pendingCardActionHandlers() map[string]cardActionHandler {
 	}
 }
 
-func pendingPortCardActionHandlers(claude *claudesupport.Service, review appreviewcmd.ReviewFormService) map[string]cardActionPortHandler {
+func pendingPortCardActionHandlers(requests *serverrequest.Service, claude *claudesupport.Service, review appreviewcmd.ReviewFormService) map[string]cardActionPortHandler {
 	return map[string]cardActionPortHandler{
+		"pending_form.plan_reject": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return completePlanReject(claude, requests, action)
+		},
 		"pending_form.plan_approve": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completePlanApprove(claude, action)
 		},

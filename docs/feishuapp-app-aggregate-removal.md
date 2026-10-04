@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 222 |
-| 收 `*App` 的顶层函数 | 92 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 221 |
+| 收 `*App` 的顶层函数 | 91 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -831,6 +831,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 168 将 path-picker 的 dropdown/up/open/select/confirm/cancel callbacks 从 App-bound workspace handler map 移入独立的 `pathPickerActionService`，由 composition 显式提供 scoped state、forms、picker、workspace planning/presentation、upgrade/debug owners 和 status-card renderer。下载确认委托给既有 Debug owner；测试 fixture 仍通过 test-only wrapper 复用原场景。path validation、pending owner 检查、draft/status 写入及确认分支不变；不涉及 app-server lifecycle。生产 `*App` 引用由 225 降至 224，收 `*App` 的顶层函数由 95 降至 94，App-bearing 结构体保持 1，App-bearing `*Ports` 工厂保持 1，lazy binding-read 保持 0。
 
 步骤 169 删除 `commandCompact(*App, ...)` 与 `runMenuCompactAction(*App, ...)` 两个薄桥接。compact command handler 直接从当前 frontend 取得 `BackendActions` 与 `Compaction` owners，菜单 callback 也直接调用这两个 owners；参数校验与 compact RPC/通知行为不变。生产 `*App` 引用由 224 降至 222，收 `*App` 的顶层函数由 94 降至 92，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持。
+
+步骤 170 将 `pending_form.plan_reject` 移入 App-free pending handler map，显式注入 Claude support 与 server-request owners。拒绝仍先调用对应 backend adapter 的 `CancelPending`，成功后再 finalize pending 并渲染原状态卡；owner 校验、失败 toast 与 pending 状态边界不变。对照状态机审计的 pending interaction 约束，本次仅改变依赖传递。生产 `*App` 引用由 222 降至 221，收 `*App` 的顶层函数由 92 降至 91，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持。
 
 ## 方法
 
