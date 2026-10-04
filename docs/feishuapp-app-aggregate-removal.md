@@ -820,6 +820,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 163 删除 `renderClaudeSessionPermissionMenuCard(*App, ...)` 转发函数及 `App.RenderClaudeSessionPermissionMenuCard` 兼容方法。会话权限 renderer 在 thread-menu composition 中一次构造并注入，命令入口直接用显式 config/backend/session 输入构造 renderer；permission options 与展示保持不变。生产 `*App` 引用由 234 降至 232，App-taking 顶层函数由 102 降至 101，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
 
+步骤 164 删除没有调用方的 `App.PlanModeTitleForSession` 和 `App.ContentCardTitleForSession` 兼容方法。生产调用继续使用现有纯函数与 state-based title renderer；标题生成逻辑不变。生产 `*App` 引用由 232 降至 230，收 `*App` 的顶层函数由 101 降至 99，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

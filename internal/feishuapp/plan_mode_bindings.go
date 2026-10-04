@@ -35,16 +35,8 @@ const (
 	codexPlanModeExitFollowupKind           = planmode.ExitFollowupKind
 )
 
-func (a *App) PlanModeTitleForSession(sessionKey, title string) string {
-	return planModeTitleForSession(a, sessionKey, title)
-}
-
 func planModeTitleForSession(a *App, sessionKey, title string) string {
 	return planmode.PlanModeTitleForSession(planPresentationContext(a), sessionKey, title)
-}
-
-func (a *App) ContentCardTitleForSession(sessionKey, workspaceID, title string) string {
-	return contentCardTitleForSession(a, sessionKey, workspaceID, title)
 }
 
 func contentCardTitleForSubmission(state planmode.SessionStateProvider, sub *domainsubmission.Submission, title string) string {
