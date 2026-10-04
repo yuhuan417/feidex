@@ -100,7 +100,7 @@ func (s cardActionService) completeMenuUsage(action *feishu.CardAction, sessionK
 
 func (s cardActionService) completeQuietSet(action *feishu.CardAction, mode config.QuietMode) (*callback.CardActionTriggerResponse, error) {
 	sessionKey, _ := action.ActionValue["session_key"].(string)
-	if err := updateQuietMode(s.app, mode); err != nil {
+	if err := updateQuietMode(s.app.bindings.RuntimeSettings, mode); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{

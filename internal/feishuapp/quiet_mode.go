@@ -6,6 +6,7 @@ import (
 
 	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/adapter/feishu/turnitem"
+	"feidex/internal/application/runtimeconfig"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
@@ -59,15 +60,15 @@ func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
 	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "Quiet Mode"), "blue", menuCardBody("menu.quiet", strings.Join(lines, "\n")), buttons)
 }
 
-func updateQuietMode(a *App, mode config.QuietMode) error {
-	if a == nil || a.cfg == nil {
+func updateQuietMode(settings runtimeconfig.Service, mode config.QuietMode) error {
+	if settings.Repository == nil {
 		return fmt.Errorf("nil config")
 	}
 	normalized, err := config.ParseQuietMode(mode)
 	if err != nil {
 		return err
 	}
-	return a.bindings.RuntimeSettings.SetQuietMode(normalized.String())
+	return settings.SetQuietMode(normalized.String())
 }
 
 func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
@@ -98,7 +99,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			if msg == nil {
 				return nil
 			}
-			if err := updateQuietMode(a, mode); err != nil {
+			if err := updateQuietMode(a.bindings.RuntimeSettings, mode); err != nil {
 				return err
 			}
 			return replyTextEffect(a, msg, "Quiet Mode 已切换为 `"+quietmode.StatusText(mode)+"`。")

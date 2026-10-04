@@ -106,7 +106,7 @@ func TestUpdateQuietModePersistsConfig(t *testing.T) {
 		t.Fatalf("save config: %v", err)
 	}
 	a := prepareTestApp(&App{cfg: cfg, cfgPath: cfgPath})
-	if err := updateQuietMode(a, config.QuietModeNormal); err != nil {
+	if err := updateQuietMode(a.bindings.RuntimeSettings, config.QuietModeNormal); err != nil {
 		t.Fatalf("updateQuietMode: %v", err)
 	}
 	if a.cfg.Feishu.Quiet != config.QuietModeNormal {
