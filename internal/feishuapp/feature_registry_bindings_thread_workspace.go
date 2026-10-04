@@ -137,7 +137,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				svc := s.app.bindings.BindingCommands
 				switch actionName {
 				case "menu.model_auxiliary":
-					msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+					msg := commandMessageFromAction(s.app.bindings.BindingCommands.scope, action, sessionKey, "/model")
 					binding, err := svc.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -162,7 +162,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					}
 					return svc.completeBindingAuxiliaryModelSet(action, sessionKey, role, value)
 				case "menu.model":
-					msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+					msg := commandMessageFromAction(s.app.bindings.BindingCommands.scope, action, sessionKey, "/model")
 					binding, err := svc.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -330,7 +330,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				svc := s.app.bindings.BindingCommands
 				switch actionName {
 				case "menu.fast":
-					msg := commandMessageFromAction(s.app, action, sessionKey, "/fast config")
+					msg := commandMessageFromAction(s.app.bindings.BindingCommands.scope, action, sessionKey, "/fast config")
 					binding, err := svc.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 					if err != nil {
 						return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil

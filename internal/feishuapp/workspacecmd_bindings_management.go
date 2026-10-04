@@ -23,6 +23,7 @@ func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presen
 	}
 
 	st := a.State()
+	bindingScope := a.bindings.BindingCommands.scope
 	threadMarker := liveThreadMarker{
 		tracker: a.runtimeOwner.LiveThreads, state: st,
 		announcement: a.bindings.AnnouncementQuery, refreshes: a.runtimeOwner.Announcements,
@@ -60,7 +61,7 @@ func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presen
 			},
 			CommandActionFromMessage: commandActionFromMessage,
 			CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
-				return commandMessageFromAction(a, action, sessionKey, rawCommand)
+				return commandMessageFromAction(bindingScope, action, sessionKey, rawCommand)
 			},
 		},
 		Formatting: appworkspacecmd.FormattingDeps{

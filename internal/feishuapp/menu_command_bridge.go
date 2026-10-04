@@ -46,7 +46,7 @@ func replyCommandActionResponse(a *App, msg *feishu.InboundMessage, resp *callba
 	return nil
 }
 
-func commandMessageFromAction(a *App, action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
+func commandMessageFromAction(scope bindingSessionScope, action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
 	msg := &feishu.InboundMessage{
 		SessionKey: strings.TrimSpace(sessionKey),
 		MessageID:  strings.TrimSpace(action.MessageID),
@@ -67,13 +67,13 @@ func commandMessageFromAction(a *App, action *feishu.CardAction, sessionKey, raw
 	if msg.UserID == "" {
 		msg.UserID = sessionUserID
 	}
-	if sess := a.State().Session(sessionKey); sess != nil {
+	if sess := scope.state.Session(sessionKey); sess != nil {
 		msg.ChatID = textutil.FirstNonEmpty(msg.ChatID, strings.TrimSpace(sess.ChatID))
 		msg.ChatType = textutil.FirstNonEmpty(msg.ChatType, strings.TrimSpace(sess.ChatType))
 		msg.UserID = textutil.FirstNonEmpty(msg.UserID, strings.TrimSpace(sess.OwnerUserID))
 	}
 	if msg.ChatType == "" || msg.ChatID == "" {
-		inferredChatType, inferredChatID := a.bindings.BindingCommands.scope.chat(sessionKey)
+		inferredChatType, inferredChatID := scope.chat(sessionKey)
 		msg.ChatType = textutil.FirstNonEmpty(msg.ChatType, inferredChatType)
 		msg.ChatID = textutil.FirstNonEmpty(msg.ChatID, inferredChatID)
 	}
@@ -87,7 +87,7 @@ func runCommandFromCardAction(a *App, action *feishu.CardAction, sessionKey, raw
 	if action == nil {
 		return "", nil, nil
 	}
-	msg := commandMessageFromAction(a, action, sessionKey, rawCommand)
+	msg := commandMessageFromAction(a.bindings.BindingCommands.scope, action, sessionKey, rawCommand)
 	if capture, ok := a.feishu.(appfeishuwrap.CommandCaptureFeishuClient); ok {
 		return capture.CaptureCommandOutput(strings.TrimSpace(action.MessageID), func() error {
 			return HandleInboundCommand(a, msg, rawCommand)

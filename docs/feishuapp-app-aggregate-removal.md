@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 242 |
-| 收 `*App` 的顶层函数 | 110 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 241 |
+| 收 `*App` 的顶层函数 | 109 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
-| **持有 `*App` 字段的结构体** | **3** |
+| **持有 `*App` 字段的结构体** | **2** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 0。`*App`
@@ -809,6 +809,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 157 将 MCP 构造从 `BuildMCP(*App)` / `mcpDependenciesForApp(*App)` 改为 `MCPPortInputs`、`MCPPorts` 与 composition 显式组装。MCP state provider 使用 frontend-scoped `Session/Sessions/Submission` API；跨 frontend session 不会进入当前 MCP 服务。Started turn item、submission lookup、附件 sender 和 reply policy 仍由原 owners 提供。生产 `*App` 引用预算由 246 降至 244，收 `*App` 的顶层函数由 113 降至 111，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 保持 0。
 
 步骤 158 将 19 个 menu-action handler 移到既有 `cardActionService` callback context，所有 production callsites 直接调用当前 handler context，删除重复的 `menuActionService{app:*App}` 和 `newMenuActionService(*App)`。异步 callback、升级命令、卡片渲染与返回内容保持不变。App 引用预算由 244 降至 242，App-taking 函数由 111 降至 110，App-bearing 结构体由 3 降至 2，App-bearing `*Ports` 工厂保持 1，lazy binding-read 保持 0。
+
+步骤 159 将 `commandMessageFromAction` 的状态和会话推断依赖改为显式 `bindingSessionScope`，绑定命令复用 service 已持有的 scope，workspace/review/backend action adapters 在构造时捕获 scope 值。session key 解析、state 回退和 group session 推断顺序不变。生产 `*App` 引用由 242 降至 241，App-taking 顶层函数由 110 降至 109，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
 
 ## 方法
 

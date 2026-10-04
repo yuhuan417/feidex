@@ -332,7 +332,7 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	modelID = clearableArg(modelID)
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+	msg := commandMessageFromAction(s.scope, action, sessionKey, "/model")
 	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -353,7 +353,7 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	effort = clearableArg(effort)
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/model effort")
+	msg := commandMessageFromAction(s.scope, action, sessionKey, "/model effort")
 	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -377,7 +377,7 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "unsupported service tier"}}, nil
 		}
 	}
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/fast")
+	msg := commandMessageFromAction(s.scope, action, sessionKey, "/fast")
 	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -394,7 +394,7 @@ func (s bindingService) completeBindingServiceTierSet(action *feishu.CardAction,
 }
 
 func (s bindingService) completeBindingSimpleOverride(action *feishu.CardAction, sessionKey, fieldName, value string) (*callback.CardActionTriggerResponse, error) {
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace "+fieldName)
+	msg := commandMessageFromAction(s.scope, action, sessionKey, "/workspace "+fieldName)
 	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil

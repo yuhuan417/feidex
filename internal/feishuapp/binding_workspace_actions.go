@@ -33,7 +33,7 @@ func (s bindingService) isGroupWorkspacePending(action *feishu.CardAction, kind 
 }
 
 func (s bindingService) completeBindingWorkspaceSettingMenu(action *feishu.CardAction, sessionKey, fieldName string) (*callback.CardActionTriggerResponse, error) {
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace "+fieldName)
+	msg := commandMessageFromAction(s.scope, action, sessionKey, "/workspace "+fieldName)
 	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -192,7 +192,7 @@ func (s bindingService) completeBindingWorkspaceNewSubmit(action *feishu.CardAct
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "工作区创建请求已过期"}}, nil
 	}
 	payload := appworkspacecmd.MergeNewFormValues(appworkspacecmd.NewPayloadFromPending(pending), action.FormValue)
-	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace new")
+	msg := commandMessageFromAction(s.scope, action, pending.SessionKey, "/workspace new")
 	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return nil, err
@@ -228,7 +228,7 @@ func (s bindingService) completeBindingWorkspaceCloneSubmit(action *feishu.CardA
 		parentDir = mgmt.Deps.Planning.DefaultWorkspaceCloneParent(nil)
 	}
 	payload.SelectedParentDir = parentDir
-	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace clone")
+	msg := commandMessageFromAction(s.scope, action, pending.SessionKey, "/workspace clone")
 	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return nil, err
@@ -320,7 +320,7 @@ func (s bindingService) completeBindingWorkspaceWorktreeSubmit(action *feishu.Ca
 			Card:  rawCard(s.app.bindings.WorkspacePresentation.RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, snapshot)),
 		}, nil
 	}
-	msg := commandMessageFromAction(s.app, action, pending.SessionKey, "/workspace new worktree")
+	msg := commandMessageFromAction(s.scope, action, pending.SessionKey, "/workspace new worktree")
 	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return nil, err

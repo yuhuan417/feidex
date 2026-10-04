@@ -44,6 +44,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		return appreviewcmd.Dependencies{}
 	}
 	submissions := a.bindings.Submissions
+	bindingScope := a.bindings.BindingCommands.scope
 	pendingQueue := a.bindings.PendingQueue
 	queuedNotice := a.bindings.OutboundCards
 	return appreviewcmd.Dependencies{
@@ -55,7 +56,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
 		MenuCardBodyFn: menuCardBody, ActionStringValueFn: actionStringValue,
 		CommandMessageFromActionFn: func(x *feishu.CardAction, s, r string) *feishu.InboundMessage {
-			return commandMessageFromAction(a, x, s, r)
+			return commandMessageFromAction(bindingScope, x, s, r)
 		},
 		SessionHasActiveWorkFn: sessionHasActiveWork, SessionHasInFlightSubmissionFn: conversation.HasInFlightSubmission,
 		StartNextSubmissionFn:           func(s string) error { return startNextSubmission(submissions, s) },

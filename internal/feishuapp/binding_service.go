@@ -241,7 +241,7 @@ func (s bindingService) completeBindingUse(action *feishu.CardAction, sessionKey
 	if action == nil {
 		return nil, nil
 	}
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/workspace use")
+	msg := commandMessageFromAction(s.scope, action, sessionKey, "/workspace use")
 	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil

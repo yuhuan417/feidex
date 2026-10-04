@@ -411,7 +411,7 @@ func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardActi
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	value = clearableArg(value)
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+	msg := commandMessageFromAction(s.scope, action, sessionKey, "/model")
 	_, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
@@ -445,7 +445,7 @@ func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, ses
 	if err := service.UpdateClaudeModelOptionsConfig(value, add); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	msg := commandMessageFromAction(s.app, action, sessionKey, "/model")
+	msg := commandMessageFromAction(s.scope, action, sessionKey, "/model")
 	binding, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
