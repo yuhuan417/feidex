@@ -88,7 +88,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"workspace": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					if groupBindingScopeActive(a, msg) {
+					if groupBindingScopeActive(msg) {
 						return a.bindings.BindingCommands.commandWorkspace(msg, args)
 					}
 					return commandWorkspaceProfileAware(a, msg, args)
@@ -113,7 +113,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"model": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					if groupBindingScopeActive(a, msg) {
+					if groupBindingScopeActive(msg) {
 						return a.bindings.BindingCommands.commandModel(msg, args)
 					}
 					return commandModelProfileAware(a, msg, args)
@@ -121,7 +121,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			},
 			"effort": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					if groupBindingScopeActive(a, msg) {
+					if groupBindingScopeActive(msg) {
 						return a.bindings.BindingCommands.commandEffort(msg, args)
 					}
 					return commandEffortProfileAware(a.bindings.ModelCommands, msg, args)
@@ -314,7 +314,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"fast": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					if groupBindingScopeActive(a, msg) {
+					if groupBindingScopeActive(msg) {
 						return a.bindings.BindingCommands.commandFast(msg, args)
 					}
 					return commandFastProfileAware(a, msg, args)

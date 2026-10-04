@@ -24,7 +24,7 @@ func isGroupMessage(msg *feishu.InboundMessage) bool {
 	return msg != nil && strings.TrimSpace(msg.ChatType) == "group" && strings.TrimSpace(msg.ChatID) != ""
 }
 
-func groupBindingScopeActive(a *App, msg *feishu.InboundMessage) bool {
+func groupBindingScopeActive(msg *feishu.InboundMessage) bool {
 	return isGroupMessage(msg)
 }
 

@@ -233,6 +233,11 @@ callbacks 的完整调度路径不再持有 App。菜单、workspace、`upgrade.
 已组合的 `bindings.CardActions` 放进 `cardActionDispatcher`；nil action 快速返回空响应，不再
 为了这个边界对象绕回 App。`*App` 引用预算由 503 降至 502，惰性读取预算保持 34。
 
+步骤 22 将 `groupBindingScopeActive` 改为只接收 inbound message。该 helper 只根据
+`ChatType`/`ChatID` 判断是否为群消息，原 `*App` 参数未被使用；四个 workspace/model/fast
+命令调用点同步移除该实参。未改变群绑定命令与单聊 profile-aware 命令的分流。架构预算由
+502 降至 501；此改动不触及 app-server lifecycle 或 pending request 状态。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、
