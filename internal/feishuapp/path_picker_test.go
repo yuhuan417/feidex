@@ -23,6 +23,20 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+func completePathPickerAction(a *App, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
+	return completePathPickerActionWithService(pathPickerActionService{
+		state: a.State(), forms: a.bindings.Forms, picker: a.bindings.PathPicker,
+		planning: a.bindings.WorkspacePlanning, workspaceCards: a.bindings.WorkspacePresentation,
+		upgrades: a.bindings.Upgrades, debug: a.bindings.Debug,
+		simpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+			if client := a.Feishu(); client != nil {
+				return client.SimpleStatusCard(title, color, body, buttons)
+			}
+			return nil
+		},
+	}, action, actionName)
+}
+
 func TestPathPickerDropdownFlowSelectsFile(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	root := a.cfg.Workspaces[0].Cwd

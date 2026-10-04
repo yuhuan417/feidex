@@ -26,7 +26,7 @@ type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService) appcardaction.Dependencies {
+func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService, pathPicker PathPickerActionInputs) appcardaction.Dependencies {
 	appHandlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
 		workspaceCardActionHandlers(),
@@ -39,6 +39,7 @@ func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedR
 		workspaceDeletePortCardActionHandlers(workspaceDeleteActions),
 		historyCardActionHandlers(historyService),
 		serverRequestCardActionHandlers(serverRequests),
+		pathPickerActionHandlers(pathPicker),
 	)
 	bound := bindAppCardActionHandlers(cardActionService{app: app}, appHandlers)
 	for name, handler := range bindCardActionPortHandlers(portHandlers) {

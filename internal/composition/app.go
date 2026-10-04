@@ -559,7 +559,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		bindings.WorkspaceConfiguration.WorkspaceDeleteActions(),
 		bindings.History,
 		bindings.ServerRequests, bindings.ClaudeSupport, bindings.ReviewCommands,
-		bindings.Upgrades, bindings.BackendUpgrades,
+		bindings.Upgrades, bindings.BackendUpgrades, feishuapp.PathPickerActionInputs{
+			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
+			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,
+			Upgrades: bindings.Upgrades, Debug: bindings.Debug,
+			SimpleStatusCard: frontend.Feishu().SimpleStatusCard,
+		},
 	))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
 	*autoRetryRuntimeDeps = frontend.BackendRuntimeDeps()

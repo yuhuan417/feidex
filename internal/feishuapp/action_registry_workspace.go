@@ -164,24 +164,6 @@ func workspaceCardActionHandlers() map[string]cardActionHandler {
 		"thread.resume.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return s.app.bindings.ThreadMenu.CompleteThreadResume(action, actionSessionKey(action), strings.TrimSpace(action.Option))
 		},
-		"path_picker.dropdown": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePathPickerAction(s.app, action, "path_picker.dropdown")
-		},
-		"path_picker.up": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePathPickerAction(s.app, action, "path_picker.up")
-		},
-		"path_picker.open": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePathPickerAction(s.app, action, "path_picker.open")
-		},
-		"path_picker.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePathPickerAction(s.app, action, "path_picker.select")
-		},
-		"path_picker.confirm": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePathPickerAction(s.app, action, "path_picker.confirm")
-		},
-		"path_picker.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePathPickerAction(s.app, action, "path_picker.cancel")
-		},
 	}
 
 }

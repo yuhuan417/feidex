@@ -828,6 +828,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 167 将 `bindingService` 改为接收 `BindingCommandInputs`：config/state/session scope、routing/model/workspace owners、Feishu card renderer、effect runner、异步 lifecycle admission 与 group-primary callbacks 均由 composition 显式提供。`bindingService` 不再持有 App；workspace manager 的反向构造边已拆，因此 binding owner 在依赖就绪后构造。群绑定、model 菜单和 clone/worktree 回调仍委托相同的 application/runtime owners，异步任务仍经过 frontend lifecycle admission。生产 `*App` 引用由 227 降至 225，收 `*App` 的顶层函数由 96 降至 95，App-bearing 结构体由 2 降至 1，App-bearing `*Ports` 工厂保持 1，lazy binding-read 保持 0。
 
+步骤 168 将 path-picker 的 dropdown/up/open/select/confirm/cancel callbacks 从 App-bound workspace handler map 移入独立的 `pathPickerActionService`，由 composition 显式提供 scoped state、forms、picker、workspace planning/presentation、upgrade/debug owners 和 status-card renderer。下载确认委托给既有 Debug owner；测试 fixture 仍通过 test-only wrapper 复用原场景。path validation、pending owner 检查、draft/status 写入及确认分支不变；不涉及 app-server lifecycle。生产 `*App` 引用由 225 降至 224，收 `*App` 的顶层函数由 95 降至 94，App-bearing 结构体保持 1，App-bearing `*Ports` 工厂保持 1，lazy binding-read 保持 0。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

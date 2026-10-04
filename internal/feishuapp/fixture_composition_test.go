@@ -497,7 +497,17 @@ func prepareTestApp(a *App) *App {
 		a.bindings.WorkspaceConfiguration.WorkspaceDeleteActions(),
 		a.bindings.History,
 		a.bindings.ServerRequests, a.bindings.ClaudeSupport, a.bindings.ReviewCommands,
-		a.bindings.Upgrades, a.bindings.BackendUpgrades,
+		a.bindings.Upgrades, a.bindings.BackendUpgrades, PathPickerActionInputs{
+			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
+			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,
+			Upgrades: a.bindings.Upgrades, Debug: a.bindings.Debug,
+			SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+				if client := a.Feishu(); client != nil {
+					return client.SimpleStatusCard(title, color, body, buttons)
+				}
+				return nil
+			},
+		},
 	))
 	dispatcher := newInputDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher

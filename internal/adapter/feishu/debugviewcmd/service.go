@@ -749,6 +749,10 @@ func NewDownloadPathPickerPayload(ws *config.Workspace) (PathPickerPayload, erro
 	}, nil
 }
 
+func (s DebugService) CompleteDownloadFileConfirm(action *feishu.CardAction, pending *state.PendingRequest, payload PathPickerPayload, selectedPath string) (*callback.CardActionTriggerResponse, error) {
+	return CompleteDownloadFileConfirm(s.app, action, pending, payload, selectedPath)
+}
+
 // CompleteDownloadFileConfirm handles the download file confirm card action.
 func CompleteDownloadFileConfirm(a Dependencies, action *feishu.CardAction, pending *state.PendingRequest, payload PathPickerPayload, selectedPath string) (*callback.CardActionTriggerResponse, error) {
 	if pending == nil {

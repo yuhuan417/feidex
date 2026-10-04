@@ -28,6 +28,7 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		{name: "workspace-delete-ports", handlers: workspaceDeletePortCardActionHandlers(workspacecmd.WorkspaceDeleteActions{})},
 		{name: "history-ports", handlers: historyCardActionHandlers(history.Service{})},
 		{name: "server-request-ports", handlers: serverRequestCardActionHandlers(nil)},
+		{name: "path-picker-ports", handlers: pathPickerActionHandlers(PathPickerActionInputs{})},
 	}
 	appMaps := make([]map[string]cardActionHandler, 0, len(appSets))
 	for _, set := range appSets {
