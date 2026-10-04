@@ -23,13 +23,6 @@ func sessionInflightAllowsAdditional(mode sessionInflightMode) bool {
 	return domainbackend.SessionInflightAllowsAdditional(mode)
 }
 
-func setRuntimeBackend(a *App, backend string) {
-	if a == nil {
-		return
-	}
-	a.SetBackend(backend)
-}
-
 func configuredSessionInflightMode(backend func() string) sessionInflightMode {
 	if backend == nil {
 		return sessionInflightSingle

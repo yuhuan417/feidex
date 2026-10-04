@@ -98,12 +98,12 @@ func installBackendRuntime(a *App, h *backendruntime.BackendHandle) {
 		return
 	}
 	if h == nil {
-		setRuntimeBackend(a, "")
+		a.SetBackend("")
 		replaceCodexClient(a.bindings.CodexRecovery, nil)
 		a.runtimeView().setClaudeCore(nil)
 		return
 	}
-	setRuntimeBackend(a, h.Backend)
+	a.SetBackend(h.Backend)
 	replaceCodexClient(a.bindings.CodexRecovery, h.Codex)
 	a.runtimeView().setClaudeCore(h.Claude)
 }

@@ -12,7 +12,7 @@ func (a *App) Prepare(ctx context.Context) error {
 		a.runtimeView().ensureRuntimeOwner().Lifecycle.Cancel()
 		return err
 	}
-	if err := startBackend(a, a.Context()); err != nil {
+	if err := startPreparedBackendRuntime(a, a.Context(), currentBackendRuntimeHandle(a)); err != nil {
 		a.runtimeView().ensureRuntimeOwner().Lifecycle.Cancel()
 		return err
 	}
