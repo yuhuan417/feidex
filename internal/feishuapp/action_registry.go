@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/application"
 	appcardaction "feidex/internal/application/cardaction"
 	"feidex/internal/feishu"
@@ -13,22 +14,27 @@ import (
 )
 
 type cardActionService struct {
-	app      *App
-	handlers map[string]cardActionHandler
-	inner    appcardaction.Service
+	app   *App
+	inner appcardaction.Service
 }
 
 func newCardActionService(app *App) cardActionService {
-	return cardActionService{app: app, handlers: cardActionHandlers(), inner: app.bindings.CardActions}
+	return cardActionService{app: app, inner: app.bindings.CardActions}
 }
 
-func CardActionPorts(app *App) appcardaction.Dependencies {
-	handlers := cardActionHandlers()
+func CardActionPorts(app *App, serverRequests *serverrequest.Service) appcardaction.Dependencies {
+	handlers := mergeCardActionHandlerSets(
+		menuCardActionHandlers(),
+		workspaceCardActionHandlers(),
+		maintenanceCardActionHandlers(),
+		pendingCardActionHandlers(),
+		serverRequestCardActionHandlers(serverRequests),
+	)
 	bound := make(map[string]appcardaction.Handler, len(handlers))
 	for name, handler := range handlers {
 		h := handler
 		bound[name] = func(action application.CardAction) (any, error) {
-			response, err := h(cardActionService{app: app, handlers: handlers}, fromApplicationCardAction(action))
+			response, err := h(cardActionService{app: app}, fromApplicationCardAction(action))
 			return response, err
 		}
 	}
@@ -102,13 +108,46 @@ type cardActionHandler func(s cardActionService, action *feishu.CardAction) (*ca
 // Do not put clone/download/fetch/review/upgrade or other blocking workflows
 // directly in these handlers.
 
-func cardActionHandlers() map[string]cardActionHandler {
-	return mergeCardActionHandlerSets(
-		menuCardActionHandlers(),
-		workspaceCardActionHandlers(),
-		maintenanceCardActionHandlers(),
-		pendingCardActionHandlers(),
-	)
+func serverRequestCardActionHandlers(service *serverrequest.Service) map[string]cardActionHandler {
+	return map[string]cardActionHandler{
+		"user_input.answer": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteUserInputAnswer(action)
+		},
+		"user_input.toggle_multi": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteUserInputMultiToggle(action)
+		},
+		"elicitation_form.answer": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteElicitationFormAnswer(action)
+		},
+		"elicitation_form.toggle_multi": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteElicitationMultiToggle(action)
+		},
+		"approval.command.accept":             serverRequestApprovalAction(service, "approval.command.accept"),
+		"approval.command.accept_session":     serverRequestApprovalAction(service, "approval.command.accept_session"),
+		"approval.command.decline":            serverRequestApprovalAction(service, "approval.command.decline"),
+		"approval.command.cancel":             serverRequestApprovalAction(service, "approval.command.cancel"),
+		"approval.file.accept":                serverRequestApprovalAction(service, "approval.file.accept"),
+		"approval.file.accept_session":        serverRequestApprovalAction(service, "approval.file.accept_session"),
+		"approval.file.decline":               serverRequestApprovalAction(service, "approval.file.decline"),
+		"approval.file.cancel":                serverRequestApprovalAction(service, "approval.file.cancel"),
+		"approval.permissions.accept_turn":    serverRequestApprovalAction(service, "approval.permissions.accept_turn"),
+		"approval.permissions.accept_session": serverRequestApprovalAction(service, "approval.permissions.accept_session"),
+		"elicitation_url.accept":              serverRequestElicitationAction(service, "elicitation_url.accept"),
+		"elicitation_url.decline":             serverRequestElicitationAction(service, "elicitation_url.decline"),
+		"elicitation_url.cancel":              serverRequestElicitationAction(service, "elicitation_url.cancel"),
+	}
+}
+
+func serverRequestApprovalAction(service *serverrequest.Service, name string) cardActionHandler {
+	return func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return service.CompleteApprovalAction(action, name)
+	}
+}
+
+func serverRequestElicitationAction(service *serverrequest.Service, name string) cardActionHandler {
+	return func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		return service.CompleteElicitationURLAction(action, name)
+	}
 }
 
 func mergeCardActionHandlerSets(sets ...map[string]cardActionHandler) map[string]cardActionHandler {

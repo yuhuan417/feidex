@@ -11,7 +11,13 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		{name: "workspace", handlers: workspaceCardActionHandlers()},
 		{name: "maintenance", handlers: maintenanceCardActionHandlers()},
 		{name: "pending", handlers: pendingCardActionHandlers()},
+		{name: "server-request", handlers: serverRequestCardActionHandlers(nil)},
 	}
+	merged := make([]map[string]cardActionHandler, 0, len(sets))
+	for _, set := range sets {
+		merged = append(merged, set.handlers)
+	}
+	allHandlers := mergeCardActionHandlerSets(merged...)
 
 	seen := map[string]string{}
 	total := 0
@@ -22,12 +28,12 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 				t.Fatalf("duplicate card action %q in %s and %s", actionName, previous, set.name)
 			}
 			seen[actionName] = set.name
-			if _, ok := cardActionHandlers()[actionName]; !ok {
+			if _, ok := allHandlers[actionName]; !ok {
 				t.Fatalf("merged cardActionHandlers missing %q from %s", actionName, set.name)
 			}
 		}
 	}
-	if len(cardActionHandlers()) != total {
-		t.Fatalf("merged cardActionHandlers size = %d, want %d unique handlers", len(cardActionHandlers()), total)
+	if len(allHandlers) != total {
+		t.Fatalf("merged card action handlers size = %d, want %d unique handlers", len(allHandlers), total)
 	}
 }

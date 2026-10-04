@@ -102,7 +102,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
 	bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: frontend.State(), Backend: func() string { return feishuapp.BackendKind(frontend) }, Context: frontend.Context, Run: feishuapp.SessionTaskRunner(frontend), Effects: feishuapp.NewEffectRunner(frontend)}}
 	bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: scoped.WorkspaceSelections{Store: frontend.State()}, DefaultWorkspaceID: feishuapp.DefaultWorkspaceID(frontend)}
-	bindings.CardActions = cardaction.NewService(feishuapp.CardActionPorts(frontend))
 	bindings.SubmissionLookup = submission.SubmissionLookupService{State: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings}
 	bindings.SubmissionStatus = submission.StatusService{Lookup: bindings.SubmissionLookup, Repository: frontend.State()}
 	bindings.InteractionLifecycle = interaction.LifecycleService{Repository: frontend.State(), Frontend: frontend.FrontendID(), Presentation: feishuapp.InteractionExpiryPresentation(frontend)}
@@ -323,6 +322,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}
 	scope.RuntimeOwner.MCP = runtime.NewResource(bindings.MCP)
 	scope.RuntimeOwner.Announcements = runtime.NewCoalescedRefresh(&scope.RuntimeOwner.Lifecycle, 2*time.Second, 15*time.Second, feishuapp.GroupAnnouncementRefresh(frontend))
+	bindings.CardActions = cardaction.NewService(feishuapp.CardActionPorts(frontend, bindings.ServerRequests))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
 	if err := feishuapp.CanonicalizeStoredSessionKeys(frontend); err != nil {
 		return nil, err

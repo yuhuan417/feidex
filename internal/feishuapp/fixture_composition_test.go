@@ -89,7 +89,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: a.State(), Backend: func() string { return a.configView().configuredBackend() }, Context: a.Context, Run: SessionTaskRunner(a), Effects: newEffectRunner(a.runtimeOwner)}}
 	a.bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(a.FrontendID()), Repository: scoped.WorkspaceSelections{Store: a.State()}, DefaultWorkspaceID: DefaultWorkspaceID(a)}
 	a.bindings.GoalManagement = &goal.Management{Tracker: a.bindings.Goals, Context: a.Context, Gateway: func() (goal.Gateway, error) { return RequireCodexGoalGateway(a) }}
-	a.bindings.CardActions = cardaction.NewService(CardActionPorts(a))
 	a.bindings.SubmissionLookup = submission.SubmissionLookupService{State: a.State(), Runtime: a.runtimeOwner.TurnBindings}
 	a.bindings.SubmissionStatus = submission.StatusService{Lookup: a.bindings.SubmissionLookup, Repository: a.State()}
 	a.bindings.InteractionLifecycle = interaction.LifecycleService{Repository: a.State(), Frontend: a.FrontendID(), Presentation: InteractionExpiryPresentation(a)}
@@ -296,6 +295,7 @@ func prepareTestApp(a *App) *App {
 	planSource, planCatalog, planWorkspaces := PlanPorts(a.Config(), a.ConfigMu(), a.bindings.ModelSnapshots, a.runtimeOwner)
 	*a.bindings.Plan = planapp.Service{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Repository: a.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: a.Context}, Conversations: a.bindings.Conversations, Workspaces: planWorkspaces, Queue: a.bindings.Submissions}
 	a.bindings.ReviewCommands = BuildReviewCommands(a)
+	a.bindings.CardActions = cardaction.NewService(CardActionPorts(a, a.bindings.ServerRequests))
 	dispatcher := newInputDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher
 	if a.runtimeOwner.Announcements == nil {

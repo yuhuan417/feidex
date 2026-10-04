@@ -123,6 +123,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 13 | `BackendMaintenancePorts` | 改为显式接收配置/锁、maintenance state、Codex upgrade 与 Claude maintenance owner、渲染和 patch ports；runtime callback 仍观察 Claude service 的更新字段 |
 | 14 | `GoalCommandPorts` | 移除 App-bearing 工厂与 outbound/renderer；composition 显式组装 `goalcmd.Dependencies`，outbound adapter 仅持有 frontend ID 与 effect runner |
 | 15 | `BackendEventPorts` | 移除 App-bearing presenter 与 ports 工厂；composition 直接连接 backendevents owners，并为 interaction presenter 注入 submission/workspace/item-context/server-request/Codex error capabilities |
+| 16（分阶段） | `CardActionPorts` | server-request actions 改为捕获显式注入的 `ServerRequests` owner；其余菜单、workspace、maintenance 与本地 pending handlers 仍待拆分，尚未完成工厂解耦 |
 
 在最初纳入分析的 29 个工厂中，前两个是仅有的**立即求值、不捕获**工厂；当时
 步骤 3-5 也沿用这条路径：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -193,6 +194,15 @@ client。对照 SM-09/10/11/22/23：approval、user-input、elicitation、reject
 request token/error code 均不变；turn lifecycle、item、compaction、usage、goal 与
 resolved/resume owner 继续由原 service 处理。`backend_events_ports_test.go` 覆盖上述
 interaction 分支。`*App` 引用预算由 506 降至 503，惰性读取预算保持 34。
+
+步骤 16 先拆 server-request handler family：工具输入、命令/文件/permissions approval、
+MCP elicitation form/url 的 callback handler 直接绑定 composition 提供的 `ServerRequests`
+service，不再经 `cardActionService` 读取 `App` 上的 binding。CardActions 的构造相应移到
+composition 和 fixture 的后段，保证 owner 已就绪。handler 仍委托原 `serverrequest.Service`，
+不改变 payload、pending 状态写入或 reply/resolved 边界；对照 SM-09/10/11/22/23。handler
+名称唯一性与 callback 路由用例通过。`CardActionPorts` 的其他配置、backend-switch 与 handler
+依赖仍在，因此此步骤是 family 级拆分，不代表工厂已解耦；`*App` 与惰性读取预算分别保持
+503、34。
 
 ## 方法
 
