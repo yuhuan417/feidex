@@ -187,6 +187,8 @@ func prepareTestApp(a *App) *App {
 	*a.bindings.GoalCommands = goalcmd.NewService(GoalCommandPorts(a))
 	a.bindings.Interactions.Deps = InteractionPorts(a.State(), a.bindings.SubmissionLookup)
 	a.bindings.InteractionDelivery = &interaction.DeliveryService{Repository: a.State()}
+	review := reviewapp.NewService(ReviewPorts(a))
+	a.bindings.Review = &review
 	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(a, a.bindings.Plan, a.bindings.TurnPresentation))
 	*a.bindings.Turns = turn.NewService(TurnPorts(a, a.bindings.TurnPresentation))
 	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(a, a.bindings.Turns))
@@ -214,8 +216,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ThreadMenu = BuildThreadMenu(a)
 	planSource, planCatalog, planWorkspaces := PlanPorts(a)
 	*a.bindings.Plan = planapp.Service{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Repository: a.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: a.Context}, Conversations: a.bindings.Conversations, Workspaces: planWorkspaces, Queue: a.bindings.Submissions}
-	review := reviewapp.NewService(ReviewPorts(a))
-	a.bindings.Review = &review
 	a.bindings.ReviewCommands = BuildReviewCommands(a)
 	dispatcher := newInputDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher

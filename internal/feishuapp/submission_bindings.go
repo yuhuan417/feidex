@@ -158,6 +158,12 @@ func (a claudeClientAdapter) CanRetryFreshSession(sessionKey string) bool {
 }
 
 func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstream.Service) appsubmission.Dependencies {
+	// Read the sibling services once, at construction time, so the dependency
+	// is visible instead of hidden in the closures below.
+	pendingQueue := a.bindings.PendingQueue
+	turnStarter := a.bindings.TurnStarter
+	review := a.bindings.Review
+	conversationConfiguration := a.bindings.ConversationConfiguration
 	return appsubmission.Dependencies{
 		PlanConfirmation: plan,
 		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
@@ -222,29 +228,29 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			logSessionState(event, sessionKey, sess)
 		},
 		MarkSubmissionQueuedReactions: func(sub *domainsubmission.Submission) {
-			a.bindings.PendingQueue.MarkSubmissionQueuedReactions(sub)
+			pendingQueue.MarkSubmissionQueuedReactions(sub)
 		},
 		MarkSubmissionRunningReactions: func(sub *domainsubmission.Submission) {
-			a.bindings.PendingQueue.MarkSubmissionRunningReactions(sub)
+			pendingQueue.MarkSubmissionRunningReactions(sub)
 		},
 		ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
-			a.bindings.PendingQueue.ClearSubmissionProcessingReactions(sub)
+			pendingQueue.ClearSubmissionProcessingReactions(sub)
 		},
 		IsReviewSubmission: func(sub *domainsubmission.Submission) bool {
 			return appreviewcmd.IsReviewSubmission(sub)
 		},
 		StartSubmissionTurn: func(ctx context.Context, sessionKey, threadID string, sub *domainsubmission.Submission, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode string) (string, error) {
-			return a.bindings.TurnStarter.Start(ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode)
+			return turnStarter.Start(ctx, sessionKey, threadID, sub, cwd, approvalPolicy, sandboxMode, serviceTier, model, reasoningEffort, multiAgentMode)
 		},
 		StartSubmissionReview: func(ctx context.Context, threadID string, sub *domainsubmission.Submission) (string, error) {
-			return a.bindings.Review.StartSubmission(ctx, threadID, sub)
+			return review.StartSubmission(ctx, threadID, sub)
 		},
 		StartConversation: func(ctx context.Context, ws *config.Workspace, sess *conversation.Session, sub *domainsubmission.Submission, model string) (appsubmission.ConversationStarted, error) {
 			client, err := a.runtimeView().requireCodexClient()
 			if err != nil {
 				return appsubmission.ConversationStarted{}, err
 			}
-			return codexadapter.StartConversation(ctx, client, a.bindings.ConversationConfiguration.ThreadStart(conversationapp.Request{Workspace: ws, Session: sess, Model: model}), sub.ModelConfig)
+			return codexadapter.StartConversation(ctx, client, conversationConfiguration.ThreadStart(conversationapp.Request{Workspace: ws, Session: sess, Model: model}), sub.ModelConfig)
 		},
 		DeleteTurnArtifacts: a.State().DeleteTurnArtifacts,
 		ClaudePrompt:        claudeadapter.BuildPrompt,
