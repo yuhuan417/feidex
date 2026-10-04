@@ -271,7 +271,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				}
 				return s.app.bindings.ModelCommands.CompleteClaudeAuxiliaryModelSet(action, "small", value)
 			case "menu.model":
-				return newMenuActionService(s.app).completeMenuModel(action, sessionKey)
+				return s.completeMenuModel(action, sessionKey)
 			case "model.config.set_model":
 				return s.app.bindings.BackendConfiguration.CompleteGlobalModelSet(action, actionStringValue(action, "model_id"))
 			case "model.config.select_model":
@@ -345,9 +345,9 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			}
 			switch actionName {
 			case "menu.fast":
-				return newMenuActionService(s.app).completeMenuFast(action, sessionKey)
+				return s.completeMenuFast(action, sessionKey)
 			case "service_tier.set":
-				return newMenuActionService(s.app).completeServiceTierSet(action, sessionKey, actionStringValue(action, "thread_id"), actionStringValue(action, "service_tier"))
+				return s.completeServiceTierSet(action, sessionKey, actionStringValue(action, "thread_id"), actionStringValue(action, "service_tier"))
 			default:
 				return nil, nil
 			}

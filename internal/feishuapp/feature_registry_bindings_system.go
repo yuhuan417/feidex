@@ -51,7 +51,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if actionName != "menu.status" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuStatus(action, actionSessionKey(action))
+			return s.completeMenuStatus(action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.help"] = featureBinding{
@@ -66,7 +66,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if actionName != "menu.help" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuHelp(action, actionSessionKey(action))
+			return s.completeMenuHelp(action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.codex_upgrade"] = featureBinding{
@@ -137,7 +137,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			if actionName != "menu.upgrade" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuUpgrade(action)
+			return s.completeMenuUpgrade(action)
 		},
 	}
 }

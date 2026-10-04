@@ -10,7 +10,7 @@ import (
 func maintenanceCardActionHandlers() map[string]cardActionHandler {
 	return map[string]cardActionHandler{
 		"upgrade.dev": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return newMenuActionService(s.app).completeUpgradeDev(action)
+			return s.completeUpgradeDev(action)
 		},
 	}
 }

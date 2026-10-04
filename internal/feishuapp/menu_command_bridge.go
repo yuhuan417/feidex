@@ -127,5 +127,5 @@ func renderMenuCommandFallback(a *App, actionName, sessionKey string) (map[strin
 	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
 		return nil, false
 	}
-	return newMenuActionService(a).renderMenuNodeCard(actionName, sessionKey)
+	return (cardActionService{app: a}).renderMenuNodeCard(actionName, sessionKey)
 }

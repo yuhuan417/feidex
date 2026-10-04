@@ -28,7 +28,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			if actionName != "menu.root" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuRoot(action, actionSessionKey(action))
+			return s.completeMenuRoot(action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.tools"] = featureBinding{
@@ -43,7 +43,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			if actionName != "menu.tools" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuTools(action, actionSessionKey(action))
+			return s.completeMenuTools(action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.group.model"] = featureBinding{
@@ -58,7 +58,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			if actionName != "menu.group.model" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuGroupModel(action, actionSessionKey(action))
+			return s.completeMenuGroupModel(action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.group.system"] = featureBinding{
@@ -73,7 +73,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			if actionName != "menu.group.system" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuGroupSystem(action, actionSessionKey(action))
+			return s.completeMenuGroupSystem(action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.group.backend"] = featureBinding{
@@ -97,7 +97,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			case "menu.group.backend":
 				return s.app.bindings.BackendSelection.CompleteMenuBackend(action, sessionKey)
 			case "menu.backend", "menu.backend.switch":
-				return newMenuActionService(s.app).completeMenuBackendSwitch(action, sessionKey)
+				return s.completeMenuBackendSwitch(action, sessionKey)
 			case "menu.auto_retry":
 				return completeMenuCommand(s.app, action, sessionKey, "/backend retry", "menu.group.backend")
 			case "backend.select":

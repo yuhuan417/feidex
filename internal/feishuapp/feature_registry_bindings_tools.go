@@ -32,7 +32,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.review":
-				return newMenuActionService(s.app).completeMenuReview(action, sessionKey)
+				return s.completeMenuReview(action, sessionKey)
 			case "menu.review.uncommitted":
 				return appreviewcmd.CompleteMenuReviewUncommitted(newReviewAppAdapter(s.app), action, sessionKey)
 			case "menu.review.base":
@@ -57,9 +57,9 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			switch actionName {
 			case "menu.quiet":
-				return newMenuActionService(s.app).completeMenuQuiet(action, actionSessionKey(action))
+				return s.completeMenuQuiet(action, actionSessionKey(action))
 			case "quiet.set":
-				return newMenuActionService(s.app).completeQuietSet(action, config.QuietMode(actionStringValue(action, "mode")))
+				return s.completeQuietSet(action, config.QuietMode(actionStringValue(action, "mode")))
 			default:
 				return nil, nil
 			}
@@ -138,7 +138,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.compact" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuCompact(action, actionSessionKey(action))
+			return s.completeMenuCompact(action, actionSessionKey(action))
 		},
 	}
 	bindings["menu.download"] = featureBinding{
@@ -168,7 +168,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.history":
-				return newMenuActionService(s.app).completeMenuHistory(action, sessionKey)
+				return s.completeMenuHistory(action, sessionKey)
 			default:
 				return nil, nil
 			}
@@ -222,7 +222,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			if actionName != "menu.usage" {
 				return nil, nil
 			}
-			return newMenuActionService(s.app).completeMenuUsage(action, actionSessionKey(action))
+			return s.completeMenuUsage(action, actionSessionKey(action))
 		},
 	}
 }
