@@ -14,14 +14,15 @@ import (
 func (s cardActionService) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已返回命令菜单"},
-		Card:  rawCard(renderCommandMenuCard(s.app, sessionKey)),
+		Card:  rawCard(renderCommandMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app, sessionKey, "主菜单"), s.app.feishu, sessionKey)),
 	}, nil
 }
 
 func (s cardActionService) completeMenuTools(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	spec, _ := menuGroupSpec("menu.tools")
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开常用工具"},
-		Card:  rawCard(renderToolsMenuCard(s.app, sessionKey)),
+		Card:  rawCard(renderToolsMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app, sessionKey, spec.Label), s.app.feishu, sessionKey)),
 	}, nil
 }
 
@@ -31,9 +32,10 @@ func (s cardActionService) completeMenuGroupModel(action *feishu.CardAction, ses
 }
 
 func (s cardActionService) completeMenuGroupSystem(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	spec, _ := menuGroupSpec("menu.group.system")
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "已打开 system"},
-		Card:  rawCard(renderSystemMenuCard(s.app, sessionKey)),
+		Card:  rawCard(renderSystemMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app, sessionKey, spec.Label), s.app.feishu, sessionKey)),
 	}, nil
 }
 

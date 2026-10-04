@@ -59,7 +59,8 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 				return app.Feishu().SimpleStatusCard(title, color, body, buttons)
 			},
 			BuildMenuCard: func(sessionKey string) map[string]any {
-				return renderBackendMenuCard(app, sessionKey)
+				spec, _ := menuGroupSpec("menu.group.backend")
+				return renderBackendMenuCardData(app.configView().configuredBackend(), planModeTitleForSession(app, sessionKey, spec.Label), app.feishu, sessionKey)
 			},
 			BuildCardBody: func(action, body string) string {
 				return menuCardBody(action, body)

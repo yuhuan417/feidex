@@ -20,7 +20,7 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 			if actionName != "menu.current_bot" {
 				return nil, false
 			}
-			return renderCommandMenuCard(a, sessionKey), true
+			return renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, "主菜单"), a.feishu, sessionKey), true
 		},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if actionName != "menu.current_bot" {
@@ -29,7 +29,7 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 			sessionKey := actionSessionKey(action)
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "info", Content: "已返回命令菜单"},
-				Card:  rawCard(renderCommandMenuCard(s.app, sessionKey)),
+				Card:  rawCard(renderCommandMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app, sessionKey, "主菜单"), s.app.feishu, sessionKey)),
 			}, nil
 		},
 	}

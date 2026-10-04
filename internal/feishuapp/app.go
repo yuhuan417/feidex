@@ -189,7 +189,8 @@ func replyErrorWith(contextFn func() context.Context, frontend identity.Frontend
 }
 
 func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
-	card := renderCommandMenuCard(a, a.configView().makeSessionKey(msg))
+	sessionKey := a.configView().makeSessionKey(msg)
+	card := renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, "主菜单"), a.feishu, sessionKey)
 	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
@@ -197,8 +198,4 @@ func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
 		View:           feishuoutbound.Card(card),
 		InThread:       a.configView().replyInThreadEnabled(),
 	}})
-}
-
-func renderCommandMenuCard(a *App, sessionKey string) map[string]any {
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "主菜单"), "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(a.configView().configuredBackend(), sessionKey))
 }

@@ -84,32 +84,39 @@ func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /help")
 	}
-	card := renderHelpCard(a, a.configView().makeSessionKey(msg))
+	sessionKey := a.configView().makeSessionKey(msg)
+	card := renderHelpCardData(a.configView().configuredBackend(), planModeTitleForSession(a, sessionKey, "帮助说明"), a.feishu, a.bindings.BindingCommands.scope, sessionKey)
 	return replyCardEffect(a, msg, card)
 }
 
-func renderToolsMenuCard(a *App, sessionKey string) map[string]any {
+func renderCommandMenuCardData(backend, title string, renderer bindingCardRenderer, sessionKey string) map[string]any {
+	return renderer.SimpleStatusCard(title, "blue", menuCardBody("menu.root", "选择功能分组。"), renderRootMenuButtons(backend, sessionKey))
+}
+
+func renderToolsMenuCardData(backend, title string, renderer bindingCardRenderer, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.tools")
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(a.configView().configuredBackend(), spec.Action, sessionKey))
+	return renderer.SimpleStatusCard(title, "blue", menuCardBody(spec.Action, spec.Description), renderGroupMenuButtons(backend, spec.Action, sessionKey))
 }
 
-func renderSystemMenuCard(a *App, sessionKey string) map[string]any {
+func renderSystemMenuCardData(backend, title string, renderer bindingCardRenderer, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.system")
-	backend := textutil.FirstNonEmpty(a.configView().configuredBackend(), "unset")
+	configuredBackend := backend
+	backend = textutil.FirstNonEmpty(backend, "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`\n当前 slog 日志级别: " + appdebugview.RenderRuntimeLogLevelValue() + "\n当前版本: `" + currentVersion() + "`"
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForBackend(a.configView().configuredBackend(), spec.Action, body), renderGroupMenuButtons(a.configView().configuredBackend(), spec.Action, sessionKey))
+	return renderer.SimpleStatusCard(title, "blue", menuCardBodyForBackend(configuredBackend, spec.Action, body), renderGroupMenuButtons(configuredBackend, spec.Action, sessionKey))
 }
 
-func renderBackendMenuCard(a *App, sessionKey string) map[string]any {
+func renderBackendMenuCardData(backend, title string, renderer bindingCardRenderer, sessionKey string) map[string]any {
 	spec, _ := menuGroupSpec("menu.group.backend")
-	backend := textutil.FirstNonEmpty(a.configView().configuredBackend(), "unset")
+	configuredBackend := backend
+	backend = textutil.FirstNonEmpty(backend, "unset")
 	body := spec.Description + "\n\n当前 backend: `" + backend + "`"
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, spec.Label), "blue", menuCardBodyForBackend(a.configView().configuredBackend(), spec.Action, body), renderGroupMenuButtons(a.configView().configuredBackend(), spec.Action, sessionKey))
+	return renderer.SimpleStatusCard(title, "blue", menuCardBodyForBackend(configuredBackend, spec.Action, body), renderGroupMenuButtons(configuredBackend, spec.Action, sessionKey))
 }
 
-func renderHelpCard(a *App, sessionKey string) map[string]any {
+func renderHelpCardData(backend, title string, renderer bindingCardRenderer, scope bindingSessionScope, sessionKey string) map[string]any {
 	buttons := []feishu.Button{
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
 	}
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "帮助说明"), "blue", menuCardBody("menu.help", renderHelpBodyForSession(a.bindings.BindingCommands.scope, a.configView().configuredBackend(), sessionKey)), buttons)
+	return renderer.SimpleStatusCard(title, "blue", menuCardBody("menu.help", renderHelpBodyForSession(scope, backend, sessionKey)), buttons)
 }
