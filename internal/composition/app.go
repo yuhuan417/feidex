@@ -322,7 +322,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}
 	scope.RuntimeOwner.MCP = runtime.NewResource(bindings.MCP)
 	scope.RuntimeOwner.Announcements = runtime.NewCoalescedRefresh(&scope.RuntimeOwner.Lifecycle, 2*time.Second, 15*time.Second, feishuapp.GroupAnnouncementRefresh(frontend))
-	bindings.CardActions = cardaction.NewService(feishuapp.CardActionPorts(frontend, bindings.ServerRequests))
+	bindings.CardActions = cardaction.NewService(feishuapp.CardActionPorts(frontend, bindings.ServerRequests, bindings.ClaudeSupport, bindings.ReviewCommands))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
 	if err := feishuapp.CanonicalizeStoredSessionKeys(frontend); err != nil {
 		return nil, err

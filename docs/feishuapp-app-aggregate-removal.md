@@ -124,6 +124,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 14 | `GoalCommandPorts` | 移除 App-bearing 工厂与 outbound/renderer；composition 显式组装 `goalcmd.Dependencies`，outbound adapter 仅持有 frontend ID 与 effect runner |
 | 15 | `BackendEventPorts` | 移除 App-bearing presenter 与 ports 工厂；composition 直接连接 backendevents owners，并为 interaction presenter 注入 submission/workspace/item-context/server-request/Codex error capabilities |
 | 16（分阶段） | `CardActionPorts` | server-request actions 改为捕获显式注入的 `ServerRequests` owner；其余菜单、workspace、maintenance 与本地 pending handlers 仍待拆分，尚未完成工厂解耦 |
+| 17（分阶段） | `CardActionPorts` | review form 与 Claude plan-approve actions 改为捕获显式注入的 `ReviewCommands`、`ClaudeSupport` owners；pending handlers 其余 App helper 仍待迁移 |
 
 在最初纳入分析的 29 个工厂中，前两个是仅有的**立即求值、不捕获**工厂；当时
 步骤 3-5 也沿用这条路径：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -203,6 +204,12 @@ composition 和 fixture 的后段，保证 owner 已就绪。handler 仍委托�
 名称唯一性与 callback 路由用例通过。`CardActionPorts` 的其他配置、backend-switch 与 handler
 依赖仍在，因此此步骤是 family 级拆分，不代表工厂已解耦；`*App` 与惰性读取预算分别保持
 503、34。
+
+步骤 17 继续将 `review.base.select`、`review.commit.select`、`review.form.submit` 与
+`pending_form.plan_approve` 从通用 callback 上下文移出，分别注入 `ReviewCommands` 和
+`ClaudeSupport` owner。composition 在 review commands 构造完成后创建 CardActions；处理逻辑
+仍委托现有 owner，action names 与返回行为不变。其余 pending action、菜单/workspace/
+maintenance handlers 以及归一化和 backend-switch 策略仍保留 App 依赖，预算保持 503/34。
 
 ## 方法
 

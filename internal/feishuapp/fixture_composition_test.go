@@ -295,7 +295,7 @@ func prepareTestApp(a *App) *App {
 	planSource, planCatalog, planWorkspaces := PlanPorts(a.Config(), a.ConfigMu(), a.bindings.ModelSnapshots, a.runtimeOwner)
 	*a.bindings.Plan = planapp.Service{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Repository: a.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: a.Context}, Conversations: a.bindings.Conversations, Workspaces: planWorkspaces, Queue: a.bindings.Submissions}
 	a.bindings.ReviewCommands = BuildReviewCommands(a)
-	a.bindings.CardActions = cardaction.NewService(CardActionPorts(a, a.bindings.ServerRequests))
+	a.bindings.CardActions = cardaction.NewService(CardActionPorts(a, a.bindings.ServerRequests, a.bindings.ClaudeSupport, a.bindings.ReviewCommands))
 	dispatcher := newInputDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher
 	if a.runtimeOwner.Announcements == nil {

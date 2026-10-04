@@ -1,12 +1,14 @@
 package feishuapp
 
 import (
+	claudesupport "feidex/internal/adapter/feishu/claudesupport"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func pendingCardActionHandlers() map[string]cardActionHandler {
+func pendingCardActionHandlers(claude *claudesupport.Service, review appreviewcmd.ReviewFormService) map[string]cardActionHandler {
 	return map[string]cardActionHandler{
 		"async_user_input.answer": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completeAsyncUserInput(s.app, action, false)
@@ -17,8 +19,8 @@ func pendingCardActionHandlers() map[string]cardActionHandler {
 		"pending_form.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completePendingFormCancelDispatch(s.app, action)
 		},
-		"pending_form.plan_approve": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePlanApprove(s.app.bindings.ClaudeSupport, action)
+		"pending_form.plan_approve": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return completePlanApprove(claude, action)
 		},
 		"pending_form.plan_reject": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completePlanReject(s.app, action)
@@ -32,14 +34,14 @@ func pendingCardActionHandlers() map[string]cardActionHandler {
 		codexPlanModeExitStayAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completeCodexPlanModeExit(s.app, action, codexPlanModeExitStayAction)
 		},
-		"review.base.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return s.app.bindings.ReviewCommands.CompleteReviewBaseSelect(action)
+		"review.base.select": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return review.CompleteReviewBaseSelect(action)
 		},
-		"review.commit.select": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return s.app.bindings.ReviewCommands.CompleteReviewCommitSelect(action)
+		"review.commit.select": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return review.CompleteReviewCommitSelect(action)
 		},
-		"review.form.submit": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return s.app.bindings.ReviewCommands.CompleteReviewFormSubmit(action)
+		"review.form.submit": func(_ cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return review.CompleteReviewFormSubmit(action)
 		},
 	}
 

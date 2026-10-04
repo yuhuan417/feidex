@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	claudesupport "feidex/internal/adapter/feishu/claudesupport"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/application"
 	appcardaction "feidex/internal/application/cardaction"
@@ -22,12 +24,12 @@ func newCardActionService(app *App) cardActionService {
 	return cardActionService{app: app, inner: app.bindings.CardActions}
 }
 
-func CardActionPorts(app *App, serverRequests *serverrequest.Service) appcardaction.Dependencies {
+func CardActionPorts(app *App, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService) appcardaction.Dependencies {
 	handlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
 		workspaceCardActionHandlers(),
 		maintenanceCardActionHandlers(),
-		pendingCardActionHandlers(),
+		pendingCardActionHandlers(claudeSupport, reviewCommands),
 		serverRequestCardActionHandlers(serverRequests),
 	)
 	bound := make(map[string]appcardaction.Handler, len(handlers))

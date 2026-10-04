@@ -1,6 +1,10 @@
 package feishuapp
 
-import "testing"
+import (
+	"testing"
+
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
+)
 
 func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 	sets := []struct {
@@ -10,7 +14,7 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		{name: "menu", handlers: menuCardActionHandlers()},
 		{name: "workspace", handlers: workspaceCardActionHandlers()},
 		{name: "maintenance", handlers: maintenanceCardActionHandlers()},
-		{name: "pending", handlers: pendingCardActionHandlers()},
+		{name: "pending", handlers: pendingCardActionHandlers(nil, appreviewcmd.ReviewFormService{})},
 		{name: "server-request", handlers: serverRequestCardActionHandlers(nil)},
 	}
 	merged := make([]map[string]cardActionHandler, 0, len(sets))
