@@ -12,10 +12,6 @@ import (
 	appcards "feidex/internal/adapter/feishu/cards"
 )
 
-func sendFinalMessages(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, inThread bool) []string {
-	return sendFinalMessagesWithFooter(a, ctx, sub, text, nil, inThread)
-}
-
 func (d replyChunkDelivery) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
 	if !d.ready || sub == nil {
 		return ""
@@ -54,18 +50,6 @@ func (d replyChunkDelivery) SendEmptyFinalCardWithReuse(ctx context.Context, sub
 		_ = d.outbound.SendText(ctx, chatID, fallbackText)
 	}
 	return ""
-}
-
-func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool) []string {
-	results := sendFinalMessagesWithFooterAndReuse(newOutboundCardService(a).replyChunks, ctx, sub, text, footerLines, inThread, nil)
-	if len(results) == 0 {
-		return nil
-	}
-	ids := make([]string, 0, len(results))
-	for _, result := range results {
-		ids = append(ids, result.MessageID)
-	}
-	return ids
 }
 
 func sendFinalMessagesWithFooterAndReuse(delivery replyChunkDelivery, ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk {

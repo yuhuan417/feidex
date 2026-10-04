@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 375 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 373 |
 | 收 `*App` 的顶层函数 | 224 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **21** |
@@ -657,6 +657,12 @@ App-bearing 结构体由 23 降至 21；InboundPorts 的 `a.X`/bindings/helpers/
 该 owner。quiet-mode、attention mention、footer、reuse patch、message-link 及卡片/文本/chat fallback 均由原
 delivery owner 覆盖，删除的实现与 owner 行为一致。生产 `*App` 引用由 377 降至 375，收 `*App` 的函数由 226
 降至 224，App-bearing 结构体保持 21；工厂依赖表未增加，lazy binding-read 预算仍为 12。
+
+步骤 90 删除已无生产调用点的 `sendFinalMessages(*App, ...)` 与
+`sendFinalMessagesWithFooter(*App, ...)` wrapper；final delivery 测试直接调用现有
+`replyChunkDelivery.SendFinalMessagesWithFooter`，覆盖拆卡、footer、attention mention 与不可用 owner 的空结果。
+线上路径此前已由 turn/Claude delivery owner 直接调用 `replyChunkDelivery`，行为不变。生产 `*App` 引用由
+375 降至 373，收 `*App` 的函数由 224 降至 222，App-bearing 结构体保持 21；lazy binding-read 预算仍为 12。
 
 ## 方法
 

@@ -41,7 +41,7 @@ func TestSendFinalMessagesWithFooterSplitsReplyCardsByTableLimit(t *testing.T) {
 		markdownTestTable("t6"),
 	}, "\n")
 
-	got := sendFinalMessagesWithFooter(a, context.Background(), sub, text, []string{"footer line"}, false)
+	got := newOutboundCardService(a).replyChunks.SendFinalMessagesWithFooter(context.Background(), sub, text, []string{"footer line"}, false, "")
 	if len(got) != 2 || got[0] != "card-1" || got[1] != "card-2" {
 		t.Fatalf("sendFinalMessagesWithFooter() ids = %#v, want two split card ids", got)
 	}
@@ -91,7 +91,7 @@ func TestSendFinalMessagesWithFooterSkipsAttentionWhenQueuePending(t *testing.T)
 		t.Fatalf("UpdateSession() error = %v", err)
 	}
 
-	got := sendFinalMessagesWithFooter(a, context.Background(), sub, "final answer", nil, false)
+	got := newOutboundCardService(a).replyChunks.SendFinalMessagesWithFooter(context.Background(), sub, "final answer", nil, false, "")
 	if len(got) != 1 || got[0] != "card-1" {
 		t.Fatalf("sendFinalMessagesWithFooter() ids = %#v, want single final card", got)
 	}
@@ -159,7 +159,7 @@ func TestSendFinalMessagesWithFooterSplitsLargePayload(t *testing.T) {
 		longParagraph,
 	}, "\n")
 
-	got := sendFinalMessagesWithFooter(a, context.Background(), sub, text, []string{"footer"}, false)
+	got := newOutboundCardService(a).replyChunks.SendFinalMessagesWithFooter(context.Background(), sub, text, []string{"footer"}, false, "")
 	if len(got) < 2 {
 		t.Fatalf("sendFinalMessagesWithFooter() ids = %#v, want payload-driven split", got)
 	}

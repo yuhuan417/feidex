@@ -1,6 +1,7 @@
 package feishuapp
 
 import (
+	"context"
 	"feidex/internal/config"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
@@ -43,11 +44,10 @@ func TestResolveInboundAttachmentsUsesForwardedMessageID(t *testing.T) {
 }
 
 func TestDeliveryHelpers(t *testing.T) {
-	var a *App
-	if got := sendFinalMessages(a, nil, nil, "ignored", false); got != nil {
-		t.Fatalf("sendFinalMessages(nil app) = %+v, want nil", got)
+	if got := (replyChunkDelivery{}).SendFinalMessagesWithFooter(context.Background(), nil, "ignored", nil, false, ""); len(got) != 0 {
+		t.Fatalf("zero-value replyChunkDelivery final messages = %+v, want none", got)
 	}
-	a = prepareTestApp(&App{cfg: config.Default()})
+	a := prepareTestApp(&App{cfg: config.Default()})
 	if got := sendReplyMessages(a, nil, &domainsubmission.Submission{}, "ignored", false, "final_message"); got != nil {
 		t.Fatalf("sendReplyMessages(without feishu) = %+v, want nil", got)
 	}
