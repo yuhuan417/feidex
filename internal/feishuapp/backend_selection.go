@@ -139,7 +139,7 @@ func prepareRuntimeForApp(app *App, ctx context.Context, target string) (*backen
 	}
 	return &backend.BackendRuntimeHandle{
 		Close:   h.Close,
-		Install: func() { installBackendRuntime(app, h) },
+		Install: func() { installBackendRuntime(app.BackendRuntimeDeps(), h) },
 	}, nil
 }
 
@@ -153,7 +153,7 @@ func snapshotRuntimeForApp(app *App) *backend.BackendRuntimeHandle {
 	}
 	return &backend.BackendRuntimeHandle{
 		Close:   h.Close,
-		Install: func() { installBackendRuntime(app, h) },
+		Install: func() { installBackendRuntime(app.BackendRuntimeDeps(), h) },
 	}
 }
 

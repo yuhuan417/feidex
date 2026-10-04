@@ -435,7 +435,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		if err != nil {
 			return nil, err
 		}
-		feishuapp.InstallBackendRuntime(frontend, handle)
+		feishuapp.InstallBackendRuntime(frontend.BackendRuntimeDeps(), handle)
 	}
 	feishuapp.InstallFeishuPolicies(frontend)
 	transport, ok := scope.FeishuTransport.(app.HandlerSet)

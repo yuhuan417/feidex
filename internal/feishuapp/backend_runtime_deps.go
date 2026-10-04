@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
 	"feidex/internal/application/backendfailure"
 	"feidex/internal/application/backendmaintenance"
@@ -41,6 +42,7 @@ type BackendRuntimeDeps struct {
 	backendFailure       *backendfailure.BackendFailureService
 	mcp                  *feidexMCPService
 	store                *state.Store
+	stateView            *appstate.Store
 	claudeFactory        func(config.ClaudeConfig) ClaudeCore
 }
 
@@ -74,6 +76,7 @@ func (a *App) BackendRuntimeDeps() BackendRuntimeDeps {
 		d.mcp = a.bindings.MCP
 		d.claudeFactory = a.bindings.ClaudeFactory
 		d.store = a.store
+		d.stateView = a.stateView
 	}
 	return d
 }

@@ -47,9 +47,9 @@ func BuildBackendRuntimeHandle(deps BackendRuntimeDeps, target string) (*Backend
 	return buildBackendRuntimeHandle(deps, target)
 }
 
-func InstallBackendRuntime(a *App, handle *BackendRuntimeHandle) {
+func InstallBackendRuntime(deps BackendRuntimeDeps, handle *BackendRuntimeHandle) {
 	if handle != nil {
-		installBackendRuntime(a, handle)
+		installBackendRuntime(deps, handle)
 	}
 }
 

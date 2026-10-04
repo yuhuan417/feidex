@@ -38,7 +38,7 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 		if err != nil {
 			return nil, err
 		}
-		InstallBackendRuntime(a, handle)
+		InstallBackendRuntime(a.BackendRuntimeDeps(), handle)
 	}
 	InstallFeishuPolicies(a)
 	a.feishu.SetHandlers(a.HandleFeishuMessage, a.HandleCardAction, a.HandleFeishuRecall, a.HandleFeishuReaction)

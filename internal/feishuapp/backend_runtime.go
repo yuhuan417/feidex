@@ -87,19 +87,27 @@ func currentBackendRuntimeHandle(backend string, view runtimeView) *backendrunti
 	}
 }
 
-func installBackendRuntime(a *App, h *backendruntime.BackendHandle) {
-	if a == nil {
+func installBackendRuntime(deps BackendRuntimeDeps, h *backendruntime.BackendHandle) {
+	owner := deps.runtime.ensureRuntimeOwner()
+	if owner == nil {
 		return
 	}
+	backend := ""
+	var codex CodexClient
+	var claude ClaudeCore
 	if h == nil {
-		a.SetBackend("")
-		replaceCodexClient(a.bindings.CodexRecovery, nil)
-		a.runtimeView().setClaudeCore(nil)
-		return
+		backend = ""
+	} else {
+		backend = h.Backend
+		codex = h.Codex
+		claude = h.Claude
 	}
-	a.SetBackend(h.Backend)
-	replaceCodexClient(a.bindings.CodexRecovery, h.Codex)
-	a.runtimeView().setClaudeCore(h.Claude)
+	owner.SetBackend(normalizeRuntimeBackend(backend))
+	if deps.stateView != nil {
+		deps.stateView.SetBackend(owner.Backend())
+	}
+	replaceCodexClient(deps.codexRecovery, codex)
+	deps.runtime.setClaudeCore(claude)
 }
 
 func buildBackendRuntimeHandle(deps BackendRuntimeDeps, target string) (*backendruntime.BackendHandle, error) {
