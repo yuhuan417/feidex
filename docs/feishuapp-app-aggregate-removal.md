@@ -28,9 +28,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 515 |
-| 收 `*App` 的顶层函数 | 313 |
-| 收 `*App` 的 `*Ports` 工厂 | 21 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 514 |
+| 收 `*App` 的顶层函数 | 312 |
+| 收 `*App` 的 `*Ports` 工厂 | 20 |
 | **持有 `*App` 字段的结构体** | **70** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -72,10 +72,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `claudeTurnStreamPort` |
 | 1 | `conversationRuntimeControl` |
 
-以及「已经只剩 helper、没有结构体依赖」的 4 个工厂：
+以及「已经只剩 helper、没有结构体依赖」的 3 个工厂：
 
-`CodexUpgradePorts`(0 helper)、`ConversationRecoveryPorts`(0)、
-`StartupRecoveryPorts`(3)、`CodexRecoveryPorts`(6)。
+`CodexUpgradePorts`(0 helper)、`StartupRecoveryPorts`(3)、
+`CodexRecoveryPorts`(6)。
 
 ### 第一优先：按结构体扇入施工
 
@@ -100,7 +100,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 |---|---|---|---|---|
 | 3 | `CardActionPorts` | 2 | 0 | 1 |
 | 5 | `BackendMaintenancePorts` | 2 | 1 | 2 |
-| 6 | `ConversationRecoveryPorts` | 6 | 0 | 0 |
 | 7 | `CodexUpgradePorts` | 7 | 0 | 0 |
 | 10 | `ConversationControlPorts` | 7 | 2 | 1 |
 | 12 | `BackendEventPorts` | 7 | 4 | 1 |
@@ -147,6 +146,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 8 | `CompactionPorts` | 显式接收 context、scoped store、runtime owner、frontend ID 与通知开关；client 查询和通知闭包不再捕获 `App` |
 | 9 | `ContinuationPorts` / `resolveInboundAttachments` | 显式接收配置、配置锁、context、scoped store、runtime owner、submission queue、frontend 身份与 Feishu client；状态方法值和附件下载不再捕获 `App` |
 | 10 | `ClaudeMaintenancePorts` | 显式接收配置、配置锁、context、runtime owner、frontend 配置索引与 Claude core factory；运行时选择与配置仍动态读取 |
+| 11 | `ConversationRecoveryPorts` | 显式接收 scoped repository、conversation service、配置视图、runtime owner、Codex recovery 与 conversation configuration；恢复 endpoint 仍捕获当前 client 并校验其有效性 |
 
 前两个是 29 个里仅有的**立即求值、不捕获**的工厂。步骤 3-5 走的是同一
 条路：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -174,6 +174,13 @@ workspace workdir 选择；active/current/create 继续查询 runtime owner，cr
 从配置锁下读取最新 Claude 配置后调用注入的 factory。`claude_maintenance_ports_test.go`
 覆盖 backend 切换、core 替换和配置更新。维护流程的 smoke → active 检查 → runtime
 刷新顺序不变；惰性读取预算由 38 降至 37。
+
+步骤 11 保留 Claude lazy resume 和 Codex 捕获当前 client 的恢复端点；Codex endpoint
+只有在 transport 未处于 recovery 且 client 仍是 frontend 当前 client 时才有效。
+`conversation_recovery_ports_test.go` 覆盖 backend 选择、恢复中的状态、client 替换和
+Codex `thread/resume` gateway。对照 SM-03：启动恢复仍由现有 Conversation Recovery
+用例按原顺序执行 resume、失败后的 fresh start 与状态绑定；本次仅显式化 owner 注入。
+惰性读取预算保持 37。
 
 ## 方法
 

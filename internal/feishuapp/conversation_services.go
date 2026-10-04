@@ -13,7 +13,10 @@ import (
 	domainbackend "feidex/internal/domain/backend"
 	domain "feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
+	frontendruntime "feidex/internal/runtime"
+	appcodexruntime "feidex/internal/runtime/codex"
 	"strings"
+	"sync"
 )
 
 func ConversationPorts(a *App) conversation.Dependencies {
@@ -75,16 +78,27 @@ func interruptConversation(a *App, ctx context.Context, key string, sess *domain
 	}
 	return err
 }
-func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
-	// Read once at construction so the dependency is visible.
-	codexRecovery := a.bindings.CodexRecovery
-	conversationConfiguration := a.bindings.ConversationConfiguration
-
-	return conversation.RecoveryDependencies{Repository: a.State(), Conversations: a.bindings.Conversations, Workspaces: planWorkspaces{view: a.configView()}, Capture: func() (conversation.RecoveryEndpoint, error) {
-		if a.configView().configuredBackend() == domainbackend.BackendClaude {
+func ConversationRecoveryPorts(
+	cfg *config.Config,
+	mu *sync.RWMutex,
+	frontendConfigIndex int,
+	repository conversation.StartupRepository,
+	conversations *conversation.Service,
+	owner *frontendruntime.FrontendOwner,
+	codexRecovery appcodexruntime.RecoveryService,
+	conversationConfiguration codexadapter.ConversationConfiguration,
+) conversation.RecoveryDependencies {
+	view := frontendConfigView{cfg: cfg, mu: mu, frontendConfigIndex: frontendConfigIndex}
+	runtime := runtimeView{owner: owner}
+	return conversation.RecoveryDependencies{Repository: repository, Conversations: conversations, Workspaces: planWorkspaces{view: view}, Capture: func() (conversation.RecoveryEndpoint, error) {
+		currentView := view
+		if owner != nil {
+			currentView.backend = owner.Backend()
+		}
+		if currentView.configuredBackend() == domainbackend.BackendClaude {
 			return conversation.RecoveryEndpoint{LazyResume: true}, nil
 		}
-		client, err := a.runtimeView().requireCodexClient()
+		client, err := runtime.requireCodexClient()
 		if err != nil {
 			return conversation.RecoveryEndpoint{}, err
 		}
@@ -93,7 +107,7 @@ func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
 			Configuration: conversationConfiguration,
 		}
 		return conversation.RecoveryEndpoint{Gateway: gateway, Current: func() bool {
-			return !codexRuntimeRecovering(codexRecovery) && a.runtimeView().currentCodexClient() == client
+			return !codexRuntimeRecovering(codexRecovery) && runtime.currentCodexClient() == client
 		}}, nil
 	}}
 }

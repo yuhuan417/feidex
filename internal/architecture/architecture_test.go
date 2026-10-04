@@ -1089,7 +1089,7 @@ func importsUnder(root, relative string, banned []string) ([]string, error) {
 // narrow values it uses should lower the number here in the same commit; if a
 // change needs a higher number, it is adding coupling rather than removing it.
 func TestFeishuAppAggregateDoesNotGrow(t *testing.T) {
-	const budget = 515
+	const budget = 514
 
 	root := repositoryRoot(t)
 	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))

@@ -210,7 +210,10 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BindingReplay = runtime.BindingReplay{Service: a.bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	a.bindings.ConversationQuery = conversation.Query{Repository: a.State()}
 	a.bindings.Notifications = frontendapp.Notifications{Repository: a.State(), Sender: NotificationSender(a), Context: a.Context}
-	a.bindings.ConversationRecovery = conversation.NewRecovery(ConversationRecoveryPorts(a))
+	a.bindings.ConversationRecovery = conversation.NewRecovery(ConversationRecoveryPorts(
+		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),
+		a.bindings.Conversations, a.runtimeOwner, a.bindings.CodexRecovery, a.bindings.ConversationConfiguration,
+	))
 	controls := conversation.NewControls(ConversationControlPorts(a))
 	a.bindings.ConversationControls = &controls
 	a.bindings.ThreadMenu = BuildThreadMenu(a)

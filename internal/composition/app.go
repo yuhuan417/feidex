@@ -231,7 +231,10 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BindingReplay = runtime.BindingReplay{Service: bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	bindings.ConversationQuery = conversation.Query{Repository: frontend.State()}
 	bindings.Notifications = frontendapp.Notifications{Repository: frontend.State(), Sender: feishuapp.NotificationSender(frontend), Context: frontend.Context}
-	bindings.ConversationRecovery = conversation.NewRecovery(feishuapp.ConversationRecoveryPorts(frontend))
+	bindings.ConversationRecovery = conversation.NewRecovery(feishuapp.ConversationRecoveryPorts(
+		frontend.Config(), frontend.ConfigMu(), frontend.FrontendConfigIndex(), frontend.State(),
+		bindings.Conversations, scope.RuntimeOwner, bindings.CodexRecovery, bindings.ConversationConfiguration,
+	))
 	controls := conversation.NewControls(feishuapp.ConversationControlPorts(frontend))
 	bindings.ConversationControls = &controls
 	bindings.ThreadMenu = feishuapp.BuildThreadMenu(frontend)
