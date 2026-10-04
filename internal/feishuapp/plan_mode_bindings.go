@@ -148,7 +148,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		StateProvider:          a.State(),
 		Outbound:               newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)),
 		CardRenderer:           simpleStatusCardRenderer{client: a.feishu},
-		CodexClientProvider:    func() (planmode.CodexClient, error) { return requireCodexGateway(a) },
+		CodexClientProvider:    func() (planmode.CodexClient, error) { return a.runtimeView().requireCodexGateway() },
 		MakeSessionKeyFn:       func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		ReplyInThreadEnabledFn: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
 		SessionHasActiveWorkFn: sessionHasActiveWork,

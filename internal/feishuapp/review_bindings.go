@@ -49,7 +49,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
 		ContextProvider:        a,
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
-		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return requireCodexGateway(a) },
+		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return a.runtimeView().requireCodexGateway() },
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
 		MenuCardBodyFn: menuCardBody, ActionStringValueFn: actionStringValue,
 		CommandMessageFromActionFn: func(x *feishu.CardAction, s, r string) *feishu.InboundMessage {
@@ -136,7 +136,7 @@ func (d reviewDispatcher) Notify(ctx context.Context, sub *domainsubmission.Subm
 	d.queuedNotice.sendSubmissionQueuedNotice(ctx, sub)
 }
 func ReviewPorts(a *App) reviewapp.Dependencies {
-	return reviewapp.Dependencies{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Options: reviewOptions{app: a}, Gateway: func() (reviewapp.Gateway, error) { return requireCodexGateway(a) }, Repository: a.State(), Resolver: reviewTargetResolver{app: a}, Dispatcher: reviewDispatcher{app: a, queuedNotice: newOutboundCardService(a)}}
+	return reviewapp.Dependencies{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Options: reviewOptions{app: a}, Gateway: func() (reviewapp.Gateway, error) { return a.runtimeView().requireCodexGateway() }, Repository: a.State(), Resolver: reviewTargetResolver{app: a}, Dispatcher: reviewDispatcher{app: a, queuedNotice: newOutboundCardService(a)}}
 }
 
 type reviewOptions struct{ app *App }

@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 373 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 372 |
 | 收 `*App` 的顶层函数 | 224 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **21** |
@@ -663,6 +663,12 @@ delivery owner 覆盖，删除的实现与 owner 行为一致。生产 `*App` �
 `replyChunkDelivery.SendFinalMessagesWithFooter`，覆盖拆卡、footer、attention mention 与不可用 owner 的空结果。
 线上路径此前已由 turn/Claude delivery owner 直接调用 `replyChunkDelivery`，行为不变。生产 `*App` 引用由
 375 降至 373，收 `*App` 的函数由 224 降至 222，App-bearing 结构体保持 21；lazy binding-read 预算仍为 12。
+
+步骤 91 删除只转调 `a.runtimeView().requireCodexGateway()` 的 `requireCodexGateway(*App)`，将动态 Codex
+gateway 查询改为调用点直接使用 runtime view。client 替换、移除和未初始化时的错误行为由既有 runtime-view 与
+Plan/Review/ModelConfig/Turn 测试覆盖；对照 SM-03/04，仅改变 gateway accessor 的依赖传递，thread/turn 请求
+顺序不变。生产 `*App` 引用由 373 降至 372，收 `*App` 的函数由 222 降至 221，App-bearing 结构体保持 21；
+lazy binding-read 预算仍为 12。
 
 ## 方法
 

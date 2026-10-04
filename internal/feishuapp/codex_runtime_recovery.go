@@ -3,7 +3,6 @@ package feishuapp
 import (
 	"context"
 	"encoding/json"
-	codexadapter "feidex/internal/adapter/backend/codex"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"strings"
@@ -84,8 +83,4 @@ func replyCodexError(a *App, requestID json.RawMessage, code int, message string
 
 func beginCodexAutoThreadRecoveryScope(codexrecovery appcodexruntime.RecoveryService) func() {
 	return codexrecovery.BeginAutoThreadRecoveryScope()
-}
-
-func requireCodexGateway(a *App) (codexadapter.Gateway, error) {
-	return a.runtimeView().requireCodexGateway()
 }

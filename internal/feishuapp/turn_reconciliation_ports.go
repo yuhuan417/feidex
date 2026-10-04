@@ -23,7 +23,7 @@ func (p turnReconciliationGateway) Available() bool {
 	return p.app.configView().configuredBackend() == "codex" && p.app.runtimeView().currentCodexClient() != nil
 }
 func (p turnReconciliationGateway) ReadThreadTurns(ctx context.Context, threadID string) (backendops.ThreadTurns, error) {
-	gateway, err := requireCodexGateway(p.app)
+	gateway, err := p.app.runtimeView().requireCodexGateway()
 	if err != nil {
 		return backendops.ThreadTurns{}, err
 	}

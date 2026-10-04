@@ -52,7 +52,9 @@ func goalTrackerForApp(tracker *goalapp.Tracker) *goalapp.Tracker {
 	return tracker
 }
 
-func RequireCodexGoalGateway(a *App) (goalapp.Gateway, error) { return requireCodexGateway(a) }
+func RequireCodexGoalGateway(a *App) (goalapp.Gateway, error) {
+	return a.runtimeView().requireCodexGateway()
+}
 
 func GoalCommandSessionKey(frontendID string, msg *feishu.InboundMessage) string {
 	return (frontendConfigView{frontendID: frontendID}).makeSessionKey(msg)

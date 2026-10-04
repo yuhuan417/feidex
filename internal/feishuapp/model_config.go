@@ -42,7 +42,7 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 			return replyCardWithIDEffect(ctx, app, msgID, card, replyInThread)
 		},
 		RequireCodexClient: func() (modelconfig.CodexClient, error) {
-			return requireCodexGateway(app)
+			return app.runtimeView().requireCodexGateway()
 		},
 		MakeSessionKey: func(msg *feishu.InboundMessage) string {
 			return app.configView().makeSessionKey(msg)

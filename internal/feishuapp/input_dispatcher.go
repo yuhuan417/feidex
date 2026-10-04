@@ -146,7 +146,7 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 		if string(e.Frontend) != a.FrontendID() {
 			return backendops.TurnResult{}, fmt.Errorf("turn effect frontend mismatch")
 		}
-		client, err := requireCodexGateway(a)
+		client, err := a.runtimeView().requireCodexGateway()
 		if err != nil {
 			return backendops.TurnResult{}, err
 		}
@@ -171,7 +171,7 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 		}
 		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		gateway, err := requireCodexGateway(a)
+		gateway, err := a.runtimeView().requireCodexGateway()
 		if err != nil {
 			return err
 		}
