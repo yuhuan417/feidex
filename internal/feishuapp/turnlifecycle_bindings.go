@@ -22,7 +22,7 @@ func (a *App) TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID s
 }
 
 func (a *App) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
-	return newOutboundCardService(a).replyChunks.SendEmptyFinalCardWithReuse(ctx, sub, footerLines, reuseMessageID)
+	return a.bindings.OutboundCards.replyChunks.SendEmptyFinalCardWithReuse(ctx, sub, footerLines, reuseMessageID)
 }
 
 func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, reuseMessageID string) []string {
@@ -30,7 +30,7 @@ func (a *App) SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmiss
 	if reuseMessageID != "" {
 		reuseIDs = []string{reuseMessageID}
 	}
-	results := sendFinalMessagesWithFooterAndReuse(newOutboundCardService(a).replyChunks, ctx, sub, text, footerLines, replyInThreadForSubmission(sub), reuseIDs)
+	results := sendFinalMessagesWithFooterAndReuse(a.bindings.OutboundCards.replyChunks, ctx, sub, text, footerLines, replyInThreadForSubmission(sub), reuseIDs)
 	ids := make([]string, 0, len(results))
 	for _, result := range results {
 		ids = append(ids, result.MessageID)

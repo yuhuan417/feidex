@@ -45,7 +45,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 	}
 	submissions := a.bindings.Submissions
 	pendingQueue := a.bindings.PendingQueue
-	queuedNotice := newOutboundCardService(a)
+	queuedNotice := a.bindings.OutboundCards
 	return appreviewcmd.Dependencies{
 		UseCase:        a.bindings.Review,
 		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),

@@ -322,6 +322,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
 		TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,
 	})
+	bindings.OutboundCards = reviewCards
 	review := reviewapp.NewService(feishuapp.ReviewPorts(feishuapp.ReviewPortInputs{
 		Runtime: frontend.BackendRuntimeDeps(), Forms: bindings.Forms, Delivery: bindings.InteractionDelivery,
 		Context: frontend.Context, Repository: frontend.State(), Submissions: bindings.Submissions,
@@ -353,14 +354,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// and conversation service are assembled later in this function.
 	turnPlanMode := &planmode.Dependencies{}
 	runtimeDeps := frontend.BackendRuntimeDeps()
-	turnCards := feishuapp.NewOutboundCardService(feishuapp.OutboundCardInputs{
-		RuntimeDeps: runtimeDeps, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
-		InteractionDelivery: bindings.InteractionDelivery, TurnPresentation: bindings.TurnPresentation,
-		Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
-		TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,
-	})
 	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(feishuapp.TurnPortInputs{
-		Runtime: runtimeDeps, TurnPresentation: bindings.TurnPresentation, Cards: turnCards,
+		Runtime: runtimeDeps, TurnPresentation: bindings.TurnPresentation, Cards: bindings.OutboundCards,
 		TurnMetadata: bindings.TurnMetadata, Continuation: bindings.Continuation,
 		PendingQueue: bindings.PendingQueue, Submissions: bindings.Submissions, AutoRetry: bindings.AutoRetry,
 		SubmissionCleanup: bindings.SubmissionCleanup, Compaction: bindings.Compaction,
@@ -370,7 +365,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(feishuapp.TurnPresentationPortInputs{
 		Runtime: runtimeDeps, Turns: bindings.Turns, TurnPresentation: bindings.TurnPresentation,
 		Tracker: bindings.TurnStreams, Finder: bindings.SubmissionLookup, Items: bindings.TurnItems,
-		Compaction: bindings.Compaction, SubmissionStatus: bindings.SubmissionStatus, Cards: turnCards,
+		Compaction: bindings.Compaction, SubmissionStatus: bindings.SubmissionStatus, Cards: bindings.OutboundCards,
 	}))
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend.BackendRuntimeDeps()), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
 	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex()), scope.RuntimeOwner.ClaudeCore), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}

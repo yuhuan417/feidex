@@ -309,6 +309,7 @@ func prepareTestApp(a *App) *App {
 		Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
 		TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,
 	})
+	a.bindings.OutboundCards = reviewCards
 	review := reviewapp.NewService(ReviewPorts(ReviewPortInputs{
 		Runtime: a.BackendRuntimeDeps(), Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery,
 		Context: a.Context, Repository: a.State(), Submissions: a.bindings.Submissions,
@@ -338,14 +339,8 @@ func prepareTestApp(a *App) *App {
 	}))
 	turnPlanMode := &planmode.Dependencies{}
 	runtimeDeps := a.BackendRuntimeDeps()
-	turnCards := NewOutboundCardService(OutboundCardInputs{
-		RuntimeDeps: runtimeDeps, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
-		InteractionDelivery: a.bindings.InteractionDelivery, TurnPresentation: a.bindings.TurnPresentation,
-		Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
-		TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,
-	})
 	*a.bindings.Turns = turn.NewService(TurnPorts(TurnPortInputs{
-		Runtime: runtimeDeps, TurnPresentation: a.bindings.TurnPresentation, Cards: turnCards,
+		Runtime: runtimeDeps, TurnPresentation: a.bindings.TurnPresentation, Cards: a.bindings.OutboundCards,
 		TurnMetadata: a.bindings.TurnMetadata, Continuation: a.bindings.Continuation,
 		PendingQueue: a.bindings.PendingQueue, Submissions: a.bindings.Submissions, AutoRetry: a.bindings.AutoRetry,
 		SubmissionCleanup: a.bindings.SubmissionCleanup, Compaction: a.bindings.Compaction,
@@ -355,7 +350,7 @@ func prepareTestApp(a *App) *App {
 	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(TurnPresentationPortInputs{
 		Runtime: runtimeDeps, Turns: a.bindings.Turns, TurnPresentation: a.bindings.TurnPresentation,
 		Tracker: a.bindings.TurnStreams, Finder: a.bindings.SubmissionLookup, Items: a.bindings.TurnItems,
-		Compaction: a.bindings.Compaction, SubmissionStatus: a.bindings.SubmissionStatus, Cards: turnCards,
+		Compaction: a.bindings.Compaction, SubmissionStatus: a.bindings.SubmissionStatus, Cards: a.bindings.OutboundCards,
 	}))
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a.BackendRuntimeDeps()), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}
 	a.bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: ClaudeSessionStopped(ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()), a.runtimeOwner.ClaudeCore), Session: a.State().Session, Finish: a.bindings.Turns.FinishTurn}

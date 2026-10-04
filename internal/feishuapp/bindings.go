@@ -83,6 +83,7 @@ type Bindings struct {
 	BindingCommands            bindingService
 	BackendUpgrades            backendUpgradeService
 	UpgradePresentation        upgradeRenderService
+	OutboundCards              OutboundCardService
 	Upgrades                   appupgradecmd.UpgradeService
 	ReviewCommands             appreviewcmd.ReviewFormService
 	Maintenance                backendmaintenance.MaintenanceStateService
