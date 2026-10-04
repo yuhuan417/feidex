@@ -86,8 +86,12 @@ func (s backendUpgradeService) refreshCodexRuntimeAfterMaintenance(ctx context.C
 
 func (s backendUpgradeService) startCodexRestartFromMessage(msg *feishu.InboundMessage) error {
 	return startMaintenanceRestartFromMessage(
-		s.app,
+		s.app.configView(),
 		msg,
+		func(ctx context.Context, parent string, card map[string]any, inThread bool) (string, error) {
+			return replyCardWithIDEffect(ctx, s.app, parent, card, inThread)
+		},
+		s.app.configView().replyInThreadEnabled(),
 		s.app.bindings.BackendMaintenance["codex"].BeginRestart,
 		func(messageID, sessionKey string) {
 			_ = s.app.bindings.MaintenanceRunners["codex"].Start(backendmaintenance.Operation{MessageID: messageID, SessionKey: sessionKey, Restart: true})

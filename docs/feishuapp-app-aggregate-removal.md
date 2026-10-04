@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 267 |
-| 收 `*App` 的顶层函数 | 133 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 266 |
+| 收 `*App` 的顶层函数 | 132 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **4** |
 
@@ -778,6 +778,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 140 将 `StartupRecoveryPorts(*App, ...)` 改为接收 runtime snapshot、`StartupState`、cleanup/restore callbacks 与 frontend-scoped effect text sender。backend configured 检查和启动恢复 scope 在执行时查询当前 frontend runtime/config，session filtering、RecoveryMu、live-thread reset、状态重置、attachment cleanup、conversation restore 与 ready notification 顺序不变。对照 SM-03 与启动恢复测试：恢复仍先清空 live-thread 标记，再按当前 backend scope 执行 restore；仅调整 dependencies。删除由迁移失去调用方的 App-bound `sendTextEffect`。生产 `*App` 引用预算由 270 降至 268，收 `*App` 的顶层函数由 136 降至 134，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 3 降至 2，lazy binding-read 预算保持 0；`StartupRecoveryPorts` 的 App 传递依赖归零。
 
 步骤 141 将 `ReviewPorts(*App)` 改为接收 `ReviewPortInputs`，显式传入 runtime snapshot、forms/delivery、frontend context/state、submission queue、pending queue 与 outbound cards；Codex gateway 在调用时继续查询当前 frontend runtime。review target 解析和队列/卡片通知仍由原 owner 执行。对照 SM-14：只改变 review dependencies，不改变 `review/start`、target resolution 或 submission queue 生命周期。生产 `*App` 引用预算由 268 降至 267，收 `*App` 的顶层函数由 134 降至 133，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 2 降至 1，lazy binding-read 预算保持 0；`ReviewPorts` 的 App 传递依赖归零。
+
+步骤 142 将 `startMaintenanceRestartFromMessage` 改为接收 frontend config view、线程回复策略与显式 reply port，不再把 `*App` 传入通用维护重启 helper。Claude/Codex 重启仍使用相同的 session key、回复位置和 maintenance service；维护 operation 的开始、运行与失败收口顺序不变。生产 `*App` 引用预算由 267 降至 266，收 `*App` 的顶层函数由 133 降至 132，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂保持 1，lazy binding-read 预算保持 0。
 
 ## 方法
 
