@@ -4,6 +4,7 @@ import (
 	"context"
 	"feidex/internal/adapter/feishu/mcpbridge"
 	"feidex/internal/adapter/feishu/turnitem"
+	"feidex/internal/config"
 	domainsubmission "feidex/internal/domain/submission"
 	frontendruntime "feidex/internal/runtime"
 	"net/http"
@@ -28,13 +29,6 @@ func startMCPService(a *App, ctx context.Context) error {
 	return nil
 }
 
-func currentMCPPublication(a *App) mcpbridge.Publication {
-	if a == nil {
-		return mcpbridge.Publication{}
-	}
-	return currentMCPPublicationFor(a.runtimeOwner, a.bindings.MCP)
-}
-
 // currentMCPPublicationFor needs only the runtime owner and the MCP service.
 func currentMCPPublicationFor(owner *frontendruntime.FrontendOwner, mcp *feidexMCPService) mcpbridge.Publication {
 	if owner == nil || owner.MCP == nil || !owner.MCP.Started() || mcp == nil {
@@ -55,11 +49,11 @@ func BuildMCP(a *App) (*feidexMCPService, error) {
 	}, nil
 }
 
-func prepareClaudeMCPConfig(a *App, sessionKey string) (string, []string, func(), error) {
-	if a == nil || a.cfg == nil {
+func prepareClaudeMCPConfig(cfg *config.Config, owner *frontendruntime.FrontendOwner, mcp *feidexMCPService, sessionKey string) (string, []string, func(), error) {
+	if cfg == nil {
 		return "", nil, nil, nil
 	}
-	return mcpbridge.PrepareClaudeConfig(a.cfg.DataDir, currentMCPPublication(a), sessionKey)
+	return mcpbridge.PrepareClaudeConfig(cfg.DataDir, currentMCPPublicationFor(owner, mcp), sessionKey)
 }
 
 func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {

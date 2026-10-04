@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 385 |
-| 收 `*App` 的顶层函数 | 230 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 383 |
+| 收 `*App` 的顶层函数 | 228 |
 | 收 `*App` 的 `*Ports` 工厂 | 12 |
 | **持有 `*App` 字段的结构体** | **24** |
 
@@ -81,7 +81,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 11 | `InboundPorts` | 5 | 2 | 4 |
 | 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
 | 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
-| 7 | `ClaudeRuntimePorts` | 5 | 2 | 0 |
+| 6 | `ClaudeRuntimePorts` | 5 | 1 | 0 |
 | 7 | `TurnPorts` | 2 | 3 | 2 |
 | 6 | `BackendFailurePorts` | 3 | 3 | 0 |
 | 6 | `GoalContinuationPorts` | 5 | 0 | 1 |
@@ -629,6 +629,12 @@ message 身份，reply 失败后仍尝试向原 chat 独立发送。通知的 st
 turn terminal 确认或 stream-final 标记顺序。生产 `*App` 引用由 386 降至 385，收 `*App` 的函数由 231 降至
 230；`ClaudeRuntimePorts` direct/helper/structs 由 5/3/0 降至 5/2/0，App-bearing 工厂与结构体数保持 12、24，
 lazy binding-read 预算保持 12。
+
+步骤 86 将 `prepareClaudeMCPConfig(*App, ...)` 改为显式接收 config、frontend runtime owner 与 MCP service，并
+删除只供其使用的 `currentMCPPublication(*App)`。runtime owner 的 MCP started 状态仍在 callback 执行时查询，
+配置 nil 时仍返回空结果；Claude factory 闭包捕获的是构造期快照。生产 `*App` 引用由 385 降至 383，收 `*App`
+的函数由 230 降至 228；`ClaudeRuntimePorts` direct/helper/structs 由 5/2/0 降至 5/1/0，App-bearing 工厂与
+结构体数保持 12、24，lazy binding-read 预算保持 12。
 
 ## 方法
 

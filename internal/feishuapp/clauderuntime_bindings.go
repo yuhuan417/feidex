@@ -33,6 +33,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	submissionLookup := app.bindings.SubmissionLookup
 	modelSnapshots := app.bindings.ModelSnapshots
 	modelAcknowledgements := app.bindings.ModelAcknowledgements
+	mcpService := app.bindings.MCP
 	claudeSupport := app.bindings.ClaudeSupport
 	interactionLifecycle := app.bindings.InteractionLifecycle
 	itemContext := app.bindings.ItemContext
@@ -46,6 +47,8 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 	conversations := app.bindings.Conversations
 	sessionActors := app.runtimeOwner.SessionActors
 	runtimeDeps := app.BackendRuntimeDeps()
+	runtimeOwner := app.runtimeOwner
+	appConfig := app.cfg
 	contextFn := app.runtimeOwner.Lifecycle.Context
 	cards := newOutboundCardService(app)
 	backgroundTasks := claudeBackgroundTaskNotifier{
@@ -196,7 +199,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 			},
 		},
 		PrepareClaudeMCPConfig: func(sessionKey string) (string, []string, func(), error) {
-			return prepareClaudeMCPConfig(app, sessionKey)
+			return prepareClaudeMCPConfig(appConfig, runtimeOwner, mcpService, sessionKey)
 		},
 		ModelSettings: func(sessionKey string) domainmodelconfig.Snapshot {
 			sess := app.State().Session(app.configView().normalizeSessionKey(sessionKey))
