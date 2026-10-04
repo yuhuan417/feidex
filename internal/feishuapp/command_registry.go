@@ -41,8 +41,8 @@ func renderHelpBodyFromRegistry(backend string) string {
 	return renderHelpBodyFromRegistryScoped(backend, false)
 }
 
-func renderHelpBodyForSession(a *App, backend, sessionKey string) string {
-	return renderHelpBodyFromRegistryScoped(backend, groupBindingSessionScopeActive(a.bindings.BindingCommands.scope, sessionKey))
+func renderHelpBodyForSession(scope bindingSessionScope, backend, sessionKey string) string {
+	return renderHelpBodyFromRegistryScoped(backend, groupBindingSessionScopeActive(scope, sessionKey))
 }
 
 func renderHelpBodyFromRegistryScoped(backend string, groupScoped bool) string {

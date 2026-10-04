@@ -1179,7 +1179,7 @@ func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: defaultBindingID("bot-a", "group", "chat-help"), FrontendID: "bot-a", ChatType: "group", ChatID: "chat-help", WorkspaceID: "default", Status: state.AgentBindingStatusActive.String()}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	groupHelp := renderHelpBodyForSession(a, domainbackend.BackendCodex, groupKey)
+	groupHelp := renderHelpBodyForSession(a.bindings.BindingCommands.scope, domainbackend.BackendCodex, groupKey)
 	for _, banned := range []string{"/" + "bind", "binding", "Binding", "component", "/workspace delete", "/model plan"} {
 		if strings.Contains(groupHelp, banned) {
 			t.Fatalf("group help should hide %q, got %q", banned, groupHelp)
@@ -1191,7 +1191,7 @@ func TestGroupHelpScopesWorkspaceAndModelWithoutBindingTerms(t *testing.T) {
 		}
 	}
 
-	p2pHelp := renderHelpBodyForSession(a, domainbackend.BackendCodex, "feishu:frontend:bot-a:chat:p2p-help")
+	p2pHelp := renderHelpBodyForSession(a.bindings.BindingCommands.scope, domainbackend.BackendCodex, "feishu:frontend:bot-a:chat:p2p-help")
 	for _, want := range []string{"直接设置 Bot 默认 model。", "/workspace delete ID", "/model plan"} {
 		if !strings.Contains(p2pHelp, want) {
 			t.Fatalf("p2p help changed unexpectedly: %q, want %q", p2pHelp, want)
