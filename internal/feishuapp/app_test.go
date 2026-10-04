@@ -1021,7 +1021,7 @@ func TestProcessMessageBlockedWhileBackendSwitching(t *testing.T) {
 		UserID:    "user-1",
 		Text:      "hello",
 	}
-	err := newFeishuEventRouter(a).processMessage(msg)
+	err := newFeishuEventRouterForTest(a).processMessage(msg)
 	if err == nil || !strings.Contains(err.Error(), "当前正在切换到 Codex backend") {
 		t.Fatalf("processMessage() error = %v, want backend switch block", err)
 	}

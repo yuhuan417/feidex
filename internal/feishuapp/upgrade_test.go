@@ -176,7 +176,7 @@ func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
 	}
 
-	router := newFeishuEventRouter(a)
+	router := newFeishuEventRouterForTest(a)
 	err := router.processMessage(&feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "hello"})
 	if err == nil || !strings.Contains(err.Error(), "Codex 正在维护中") {
 		t.Fatalf("processMessage(non-local) error = %v, want maintenance block", err)
@@ -872,7 +872,7 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 		t.Fatalf("handleCommand(/quiet) error = %v, want maintenance block", err)
 	}
 
-	router := newFeishuEventRouter(a)
+	router := newFeishuEventRouterForTest(a)
 	err := router.processMessage(&feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "hello"})
 	if err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
 		t.Fatalf("processMessage(non-local) error = %v, want maintenance block", err)

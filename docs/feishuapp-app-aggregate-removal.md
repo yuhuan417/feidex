@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 429 |
-| 收 `*App` 的顶层函数 | 269 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 427 |
+| 收 `*App` 的顶层函数 | 268 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **29** |
+| **持有 `*App` 字段的结构体** | **28** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -495,6 +495,12 @@ frontend identity 与 effect runner；失效卡标题仍按原 session state 添
 effect runner。投递使用 Notifications 调用方提供的 lifecycle context 并保留原 5 秒 timeout；
 空目标/内容仍跳过，加急失败仍只记录警告。生产 `*App` 引用预算由 432 降至 429，收 `*App` 的
 函数由 271 降至 269，持有 App 字段的结构体由 30 降至 29；lazy binding-read 预算保持 13。
+
+步骤 64 将 `feishuEventRouter` 改为显式持有启动时间、inbound service、消息 deduper、traffic
+counter 与失败回复能力。dispatcher 组合失败回复时只捕获 frontend runtime owner、frontend ID
+和配置值；消息过期检查、去重 claim/release/mark-done、流量计数、recall/reaction 丢弃行为与
+错误 effect 均保持原有顺序和生命周期。生产 `*App` 引用由 429 降至 427，收 `*App` 的函数由
+269 降至 268，持有 App 字段的结构体由 29 降至 28；lazy binding-read 预算保持 13。
 
 ## 方法
 

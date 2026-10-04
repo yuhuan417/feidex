@@ -24,7 +24,22 @@ import (
 // Composition explicitly binds input families to owners. Backend event
 // decoding has already completed when Dispatch is called.
 func newInputDispatcher(a *App) application.Dispatcher {
-	router := newFeishuEventRouter(a)
+	owner := a.runtimeOwner
+	frontendID := identity.FrontendID(a.FrontendID())
+	runner := newEffectRunner(owner)
+	inThread := a.configView().replyInThreadEnabled()
+	router := newFeishuEventRouter(a.started, a.bindings.Inbound, owner.InboundDeduper, owner, func(msg *feishu.InboundMessage, err error) {
+		if msg == nil || err == nil {
+			return
+		}
+		_ = runner.Run(owner.Lifecycle.Context(), []application.Effect{application.SendMessage{
+			Frontend:       frontendID,
+			Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
+			ReplyMessageID: msg.MessageID,
+			Text:           "执行失败: " + err.Error(),
+			InThread:       inThread,
+		}})
+	})
 	cardActions := cardActionDispatcher{inner: a.bindings.CardActions}
 	backendEvents := a.bindings.BackendEvents
 	return application.NewDispatcher(identity.FrontendID(a.FrontendID()), application.Handlers{

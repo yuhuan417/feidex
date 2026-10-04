@@ -159,7 +159,7 @@ func TestRunDriveArtifactGCQueuesPermissionIssueWithoutKnownChatsUntilNextMessag
 		t.Fatalf("frontendCardNotifications() = %+v", got)
 	}
 
-	router := newFeishuEventRouter(a)
+	router := newFeishuEventRouterForTest(a)
 	if err := router.processMessage(&feishu.InboundMessage{
 		MessageID: "m-1",
 		ChatID:    "chat-next",

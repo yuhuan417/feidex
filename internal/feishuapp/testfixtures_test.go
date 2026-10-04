@@ -29,6 +29,12 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+func newFeishuEventRouterForTest(a *App) *feishuEventRouter {
+	return newFeishuEventRouter(a.started, a.bindings.Inbound, a.runtimeOwner.InboundDeduper, a.runtimeOwner, func(msg *feishu.InboundMessage, err error) {
+		_ = replyError(a, msg, err)
+	})
+}
+
 // downloadFeishuStub records the message IDs it was asked to download and
 // returns a fixed local path for each.
 type downloadFeishuStub struct {
