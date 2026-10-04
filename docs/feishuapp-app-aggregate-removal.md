@@ -28,9 +28,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 275 |
-| 收 `*App` 的顶层函数 | 141 |
-| 收 `*App` 的 `*Ports` 工厂 | 5 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 274 |
+| 收 `*App` 的顶层函数 | 140 |
+| 收 `*App` 的 `*Ports` 工厂 | 4 |
 | **持有 `*App` 字段的结构体** | **4** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -77,7 +77,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | `a.X` | bindings | helpers | structs |
 |---|---|---|---|---|---|
-| 10 | `CodexRecoveryPorts` | 7 | 1 | 2 | 0 |
 | 10 | `TurnPresentationPorts` | 3 | 5 | 2 | 0 |
 | 9 | `StartupRecoveryPorts` | 7 | 1 | 1 | 0 |
 | 8 | `ReviewPorts` | 3 | 4 | 1 | 0 |
@@ -773,6 +772,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 136 将 `TurnPorts(*App, ...)` 改为 `TurnPorts(TurnPortInputs)`，turn lifecycle、queue、retry、cleanup、runtime、card delivery 与 continuation owners 在 composition 显式传入；plan-mode completion dependencies 在 `Plan` 与 `Conversations` 服务装配完成后写入共享的 capability 值，避免 factory 闭包延迟读取 bindings。session 异步工作仍经过 frontend lifecycle admission 和同一 session actor，队列恢复仍在 completion cleanup 后调度；plan-exit follow-up 保留 parent/reuse、message-link 和缺少 Feishu client 时的失败行为。新显式 outbound/link adapter 替代后删除三个已无调用方的 App helper。对照 SM-03/04/06/08/14/25/26：未改变 thread/turn 绑定、终态边界、review/compact/goal continuation 分流、异步问题处理或 turn 完成后的队列顺序。自动重试队列优先级测试继续覆盖 retry 清理后同 session 与 group queue 的恢复。生产 `*App` 引用预算由 280 降至 276，收 `*App` 的顶层函数由 146 降至 142，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 7 降至 6，lazy binding-read 预算保持 0；`TurnPorts` 的 App 传递依赖归零。
 
 步骤 137 将 `BackendFailurePorts(*App)` 改为接收 `BackendFailurePortInputs`，由 composition 显式传入 runtime、turn/compaction、interaction、retry、cleanup、queue、card 与 async owners；failure adapter 不再读取 bindings 或捕获 App。后台任务仍通过 frontend lifecycle admission 和同一 session actor 执行。对照 SM-04/06/07：失败上下文记录不触发终态，仍由 `turn/completed(failed)` 收口；interrupt 与 compaction 生命周期不变。生产 `*App` 引用预算由 276 降至 275，收 `*App` 的顶层函数由 142 降至 141，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 6 降至 5，lazy binding-read 预算保持 0；`BackendFailurePorts` 的 App 传递依赖归零。
+
+步骤 138 将 `CodexRecoveryPorts(*App, ...)` 改为接收 `CodexRecoveryPortInputs`，runtime state、frontend identity/config、scoped session state、lifecycle admission 与 session actors 通过显式 runtime snapshot 提供；submission queue 和异步 runner 也显式注入。BackendFailure 尚在稍后构造，因此 recovery 的失败回调使用 composition 局部 owner 槽位；StartupRecovery callback 使用局部 function 槽位，均不捕获 App 或 bindings 容器。对照 SM-03：只调整恢复依赖装配；恢复完成后先恢复 frontend runtime state，再按原 session actor 顺序启动 queued submission，thread/session 隔离和 client promotion 边界不变。`depmap --bindings` 中的惰性读取 SCC 从 CodexRecovery、ConversationRecovery、MaintenanceCommands、StartupRecovery 四节点降为仅 MaintenanceCommands 与 StartupRecovery 两节点。生产 `*App` 引用预算由 275 降至 274，收 `*App` 的顶层函数由 141 降至 140，App-bearing 结构体保持 4，App-bearing `*Ports` 工厂由 5 降至 4，lazy binding-read 预算保持 0；`CodexRecoveryPorts` 的 App 传递依赖归零。
 
 ## 方法
 

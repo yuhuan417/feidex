@@ -3,9 +3,12 @@ package feishuapp
 import (
 	"context"
 	"encoding/json"
+	"strings"
+
+	"feidex/internal/application/backendfailure"
+	"feidex/internal/application/submission"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
-	"strings"
 
 	appcodexruntime "feidex/internal/runtime/codex"
 )
@@ -19,52 +22,69 @@ func recoveryState(view runtimeView) *appcodexruntime.RecoveryState {
 	return owner.CodexRecovery
 }
 
-// CodexRecoveryPorts takes the two entry points it needs from services that
-// are constructed after it, so the recovery/upgrade group is a DAG.
-func CodexRecoveryPorts(a *App,
-	startVerifiedCodexClient func(context.Context) (appcodexruntime.CodexClient, error),
-	recoverFrontend func(),
-) appcodexruntime.RecoveryDependencies {
-	submissions := a.bindings.Submissions
-	liveThreads := a.runtimeOwner.LiveThreads
+// CodexRecoveryPorts takes callbacks for owners constructed after recovery so
+// the recovery/upgrade group remains a DAG.
+type CodexRecoveryPortInputs struct {
+	Runtime                  BackendRuntimeDeps
+	Submissions              *submission.SubmissionQueueService
+	AsyncRunner              func(func())
+	BackendFailure           func() *backendfailure.BackendFailureService
+	StartVerifiedCodexClient func(context.Context) (appcodexruntime.CodexClient, error)
+	RecoverFrontendRuntime   func()
+}
+
+func CodexRecoveryPorts(inputs CodexRecoveryPortInputs) appcodexruntime.RecoveryDependencies {
+	runtimeDeps := inputs.Runtime
+	owner := runtimeDeps.runtime.owner
+	if owner == nil {
+		return appcodexruntime.RecoveryDependencies{}
+	}
+	stateStore := runtimeDeps.stateView
+	liveThreads := owner.LiveThreads
+	view := runtimeDeps.view
 	return appcodexruntime.RecoveryDependencies{
-		State:     recoveryState(a.runtimeView()),
-		Context:   a.Context,
-		RunAsync:  func(fn func()) { runAsync(a, fn) },
+		State:     recoveryState(runtimeDeps.runtime),
+		Context:   owner.Lifecycle.Context,
+		RunAsync:  func(fn func()) { owner.Lifecycle.Run(fn, inputs.AsyncRunner) },
 		ClearLive: liveThreads.Reset,
 		FailActiveWork: func(cause error) {
 			message := "Codex 后端异常退出。"
 			if detail := strings.TrimSpace(errorText(cause)); detail != "" {
 				message = "Codex 后端异常退出：" + detail
 			}
-			failBackendActiveWork(a.BackendRuntimeDeps(), domainbackend.BackendCodex, "", "", message)
+			if runtimeDeps.store == nil || inputs.BackendFailure == nil {
+				return
+			}
+			if failure := inputs.BackendFailure(); failure != nil {
+				failure.FailBackendActiveWork(domainbackend.BackendCodex, "", "", message)
+			}
 		},
-		StartVerifiedCodexClient: startVerifiedCodexClient,
+		StartVerifiedCodexClient: inputs.StartVerifiedCodexClient,
 		FrontendID: func() string {
-			return a.frontendID
+			return runtimeDeps.frontendID
 		},
 		IsBackendActive: func() bool {
-			return a.configView().configuredBackend() == domainbackend.BackendCodex
+			return runtimeDeps.currentBackend().view.configuredBackend() == domainbackend.BackendCodex
 		},
-		RecoverFrontendRuntimeState: recoverFrontend,
+		RecoverFrontendRuntimeState: inputs.RecoverFrontendRuntime,
 		SessionKeysForRecovery: func() []string {
 			var keys []string
-			for _, sess := range a.State().Sessions() {
-				if sess != nil && a.configView().sessionBelongsToFrontend(sess.Key) {
+			for _, sess := range stateStore.Sessions() {
+				if sess != nil && view.sessionBelongsToFrontend(sess.Key) {
 					keys = append(keys, strings.TrimSpace(sess.Key))
 				}
 			}
 			return keys
 		},
 		SessionShouldStartNextSubmissionAsync: func(sessionKey string) bool {
-			sess := a.State().Session(sessionKey)
+			sess := stateStore.Session(sessionKey)
 			return conversation.ShouldStartNextSubmission(sess)
 		},
 		StartNextSubmissionAsync: func(sessionKey, reason string) {
-			submissions.StartNextSubmissionAsync(sessionKey, reason)
+			inputs.Submissions.StartNextSubmissionAsync(sessionKey, reason)
 		},
 		RunSessionAsync: func(sessionKey string, fn func()) {
-			runSessionAsync(a, sessionKey, fn)
+			owner.Lifecycle.Run(func() { runSessionOnActor(runtimeDeps.sessionActors, sessionKey, fn) }, inputs.AsyncRunner)
 		},
 	}
 }

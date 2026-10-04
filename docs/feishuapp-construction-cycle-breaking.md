@@ -71,35 +71,37 @@
 - **lazy**：`a.bindings.Y` 在 func literal 里读 —— 闭包运行时才发生，**不构成构造
   顺序约束**，但会挡住快照式的能力包
 
-实测结果（2026-10-04，93 条赋值语句，312 个收 `*App` 的顶层函数、约 230 个结构体
-方法）：
+实测结果（2026-10-05，93 条赋值语句，213 个收 `*App` 的函数）：
 
 | | 数量 | 环 |
 |---|---|---|
 | **构造期环（只算 eager）** | **0** | —— |
-| 含惰性读取的环 | 1 | `CodexRecovery ↔ ConversationRecovery ↔ MaintenanceCommands ↔ StartupRecovery` |
+| 含惰性读取的环 | 1 | `MaintenanceCommands ↔ StartupRecovery` |
 
 （写作时的 1 个 eager 环 `Plan ↔ Submissions ↔ TurnPresentation ↔ Turns` 已由
 `db4a1c2` 拆掉。）
 
-### 已经解决的两个
+### 当前依赖
 
-**环 3（`Inbound ↔ ForwardInputs`）** 和 **环 2（recovery 组）** 都已经通过注入
-入口函数值解决：它们的 eager 依赖现在全空，剩下的边全部是惰性的。
-
-逐个看环 2 的边就很清楚（2026-10-04 实测，闭包修正后的口径）：
+`Inbound ↔ ForwardInputs` 已没有跨 binding 依赖。recovery 组现在通过 composition
+局部的 owner/function 槽位连接稍后构造的 BackendFailure 与 StartupRecovery，不再让
+CodexRecovery 或 CodexUpgrade callback 读取 `bindings`。惰性环因此从 recovery 组退出，
+当前只剩 `MaintenanceCommands ↔ StartupRecovery`：
 
 ```
-CodexRecovery        eager→[]                  lazy→[CodexUpgrade StartupRecovery]
-CodexUpgrade         eager→[StartupRecovery]   lazy→[CodexRecovery]
+CodexRecovery        eager→[Submissions]       lazy→[]
+CodexUpgrade         eager→[]                  lazy→[]
 ConversationRecovery eager→[CodexRecovery]     lazy→[]
-StartupRecovery      eager→[]                  lazy→[ConversationRecovery MaintenanceCommands]
+StartupRecovery      eager→[ConversationRecovery] lazy→[MaintenanceCommands]
 MaintenanceCommands  eager→[StartupRecovery]   lazy→[]
+Inbound              eager→[]                  lazy→[]
+ForwardInputs        eager→[]                  lazy→[]
 ```
 
-环内所有 eager 边都是**正向**的（被读的 binding 更早赋值），所以构造期无环；
-把 eager 边一起算进去才成一个环，因为反向的那些全是惰性读取 —— 注入的闭包在
-composition 那一侧仍然读 `bindings.Z`，但那是延迟读取，不约束顺序。
+当前环内 eager 边 `MaintenanceCommands -> StartupRecovery` 与 lazy 边
+`StartupRecovery -> MaintenanceCommands` 仍以函数时序避开构造期环；剩余 lazy 读取
+也应继续按棘轮清理。恢复组改用窄槽位后，CodexRecovery 的延迟失败处理只查找
+BackendFailure owner，恢复完成回调只调用已赋值的 function slot。
 **判断环时必须区分 eager 与 lazy，否则会把已解决的当成未解决。**
 
 ### 当时唯一剩下的真环（已解决）

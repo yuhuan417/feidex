@@ -180,16 +180,25 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}))
 	bindings.FrontendQuery = frontendapp.Query{Repository: frontend.State(), Facts: feishuapp.FrontendFacts(scope.RuntimeOwner, bindings.Maintenance), Retrying: bindings.AutoRetry.HasBlockingAutoRetry}
 	var codexUpgrade codexruntime.UpgradeService
-	bindings.CodexRecovery = codexruntime.NewRecoveryService(feishuapp.CodexRecoveryPorts(frontend,
-		func(ctx context.Context) (codexruntime.CodexClient, error) {
+	var backendFailureOwner *backendfailure.BackendFailureService
+	var recoverFrontendRuntimeState func() error
+	recoverFrontend := func() {
+		if recoverFrontendRuntimeState != nil {
+			_ = recoverFrontendRuntimeState()
+		}
+	}
+	bindings.CodexRecovery = codexruntime.NewRecoveryService(feishuapp.CodexRecoveryPorts(feishuapp.CodexRecoveryPortInputs{
+		Runtime: frontend.BackendRuntimeDeps(), Submissions: bindings.Submissions, AsyncRunner: frontend.AsyncRunner(),
+		BackendFailure: func() *backendfailure.BackendFailureService { return backendFailureOwner },
+		StartVerifiedCodexClient: func(ctx context.Context) (codexruntime.CodexClient, error) {
 			return codexUpgrade.StartVerifiedCodexClient(ctx)
 		},
-		func() { bindings.StartupRecovery.RecoverFrontendRuntimeState() },
-	))
+		RecoverFrontendRuntime: recoverFrontend,
+	}))
 	codexUpgrade = codexruntime.NewUpgradeService(feishuapp.CodexUpgradePorts(
 		frontend.Config(), frontend.ConfigMu(), frontend.FrontendID(), frontend.FrontendConfigIndex(),
 		scope.RuntimeOwner, frontend.BackendRuntimeDeps(), bindings.CodexRecovery,
-		func() { _ = bindings.StartupRecovery.RecoverFrontendRuntimeState() },
+		recoverFrontend,
 		func(ctx context.Context) error { return codexUpgrade.CodexSmokeTest(ctx) },
 	))
 	bindings.CodexUpgrade = codexUpgrade
@@ -387,6 +396,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Submissions: bindings.Submissions, Cards: failureCards, AsyncRunner: frontend.AsyncRunner(),
 	}))
 	bindings.BackendFailure = &failure
+	backendFailureOwner = bindings.BackendFailure
 	// Inbound and ForwardInputs call each other at runtime, so neither can be
 	// built from the other's finished value. They are wired here instead: the
 	// two entry points are passed in after both exist.
@@ -423,6 +433,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend, func() {
 		bindings.MaintenanceCommands.CleanupExpiredAttachments()
 	}, bindings.ConversationRecovery.Restore))
+	recoverFrontendRuntimeState = bindings.StartupRecovery.RecoverFrontendRuntimeState
 	backendSwitch := backendselection.NewService(feishuapp.BackendSwitchPorts(feishuapp.BackendSwitchPortInputs{
 		RuntimeDeps: frontend.BackendRuntimeDeps(), Transition: &scope.RuntimeOwner.BackendTransition,
 		FrontendQuery: bindings.FrontendQuery, StartupRecovery: bindings.StartupRecovery,

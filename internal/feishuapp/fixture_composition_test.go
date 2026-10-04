@@ -160,16 +160,25 @@ func prepareTestApp(a *App) *App {
 	}))
 	a.bindings.FrontendQuery = frontendapp.Query{Repository: a.State(), Facts: FrontendFacts(a.runtimeOwner, a.bindings.Maintenance), Retrying: a.bindings.AutoRetry.HasBlockingAutoRetry}
 	var codexUpgrade codexruntime.UpgradeService
-	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(a,
-		func(ctx context.Context) (codexruntime.CodexClient, error) {
+	var backendFailureOwner *backendfailure.BackendFailureService
+	var recoverFrontendRuntimeState func() error
+	recoverFrontend := func() {
+		if recoverFrontendRuntimeState != nil {
+			_ = recoverFrontendRuntimeState()
+		}
+	}
+	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(CodexRecoveryPortInputs{
+		Runtime: a.BackendRuntimeDeps(), Submissions: a.bindings.Submissions, AsyncRunner: a.AsyncRunner(),
+		BackendFailure: func() *backendfailure.BackendFailureService { return backendFailureOwner },
+		StartVerifiedCodexClient: func(ctx context.Context) (codexruntime.CodexClient, error) {
 			return codexUpgrade.StartVerifiedCodexClient(ctx)
 		},
-		func() { a.bindings.StartupRecovery.RecoverFrontendRuntimeState() },
-	))
+		RecoverFrontendRuntime: recoverFrontend,
+	}))
 	codexUpgrade = codexruntime.NewUpgradeService(CodexUpgradePorts(
 		a.Config(), a.ConfigMu(), a.FrontendID(), a.FrontendConfigIndex(),
 		a.runtimeOwner, a.BackendRuntimeDeps(), a.bindings.CodexRecovery,
-		func() { _ = a.bindings.StartupRecovery.RecoverFrontendRuntimeState() },
+		recoverFrontend,
 		func(ctx context.Context) error { return codexUpgrade.CodexSmokeTest(ctx) },
 	))
 	a.bindings.CodexUpgrade = codexUpgrade
@@ -372,6 +381,7 @@ func prepareTestApp(a *App) *App {
 		Submissions: a.bindings.Submissions, Cards: failureCards, AsyncRunner: a.AsyncRunner(),
 	}))
 	a.bindings.BackendFailure = &failure
+	backendFailureOwner = a.bindings.BackendFailure
 	inboundService := &inbound.Service{}
 	forwardService := inbound.ForwardService{Gateway: ForwardGateway(a.feishu), Tasks: ForwardTasks(&a.runtimeOwner.Lifecycle, a.asyncRunner), Context: a.Context, Process: ForwardProcessor(a.runtimeOwner.SessionActors, SessionKeyBuilder(a.FrontendID()), func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a.runtimeOwner.Lifecycle.Context, a.FrontendID(), *a.runtimeOwner.EffectRunner)}
 	a.bindings.ForwardInputs = forwardService
@@ -402,6 +412,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a, func() {
 		a.bindings.MaintenanceCommands.CleanupExpiredAttachments()
 	}, a.bindings.ConversationRecovery.Restore))
+	recoverFrontendRuntimeState = a.bindings.StartupRecovery.RecoverFrontendRuntimeState
 	backendSwitch := backendselection.NewService(BackendSwitchPorts(BackendSwitchPortInputs{
 		RuntimeDeps: a.BackendRuntimeDeps(), Transition: &a.runtimeOwner.BackendTransition,
 		FrontendQuery: a.bindings.FrontendQuery, StartupRecovery: a.bindings.StartupRecovery,
