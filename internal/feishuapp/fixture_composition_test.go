@@ -346,7 +346,7 @@ func prepareTestApp(a *App) *App {
 	failure := backendfailure.NewBackendFailureService(BackendFailurePorts(a))
 	a.bindings.BackendFailure = &failure
 	inboundService := &inbound.Service{}
-	forwardService := inbound.ForwardService{Gateway: ForwardGateway(a.feishu), Tasks: ForwardTasks(&a.runtimeOwner.Lifecycle, a.asyncRunner), Context: a.Context, Process: ForwardProcessor(a, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a)}
+	forwardService := inbound.ForwardService{Gateway: ForwardGateway(a.feishu), Tasks: ForwardTasks(&a.runtimeOwner.Lifecycle, a.asyncRunner), Context: a.Context, Process: ForwardProcessor(a, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a.runtimeOwner.Lifecycle.Context, a.FrontendID(), *a.runtimeOwner.EffectRunner)}
 	a.bindings.ForwardInputs = forwardService
 	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(ConversationPortInputs{
 		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),

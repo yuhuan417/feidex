@@ -181,7 +181,18 @@ func replyError(a *App, msg *feishu.InboundMessage, err error) error {
 	if msg == nil || err == nil {
 		return nil
 	}
-	return newEffectRunner(a.runtimeOwner).Run(a.Context(), []application.Effect{application.SendMessage{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)}, ReplyMessageID: msg.MessageID, Text: "执行失败: " + err.Error(), InThread: a.configView().replyInThreadEnabled()}})
+	return replyErrorWith(a.Context, identity.FrontendID(a.FrontendID()), newEffectRunner(a.runtimeOwner), msg, err)
+}
+
+func replyErrorWith(contextFn func() context.Context, frontend identity.FrontendID, runner frontendruntime.EffectRunner, msg *feishu.InboundMessage, err error) error {
+	if msg == nil || err == nil {
+		return nil
+	}
+	ctx := context.Background()
+	if contextFn != nil {
+		ctx = contextFn()
+	}
+	return runner.Run(ctx, []application.Effect{application.SendMessage{Frontend: frontend, Chat: identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)}, ReplyMessageID: msg.MessageID, Text: "执行失败: " + err.Error()}})
 }
 
 func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {

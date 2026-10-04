@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 301 |
-| 收 `*App` 的顶层函数 | 181 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 300 |
+| 收 `*App` 的顶层函数 | 180 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
 | **持有 `*App` 字段的结构体** | **6** |
 
@@ -759,6 +759,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 125 将 `turnReconciliationGateway` 改为接收 `BackendRuntimeDeps`；backend 选择与 Codex client availability 仍在调用时从当前 frontend runtime 查询，thread turn 读取仍使用同一 Codex gateway。生产 `*App` 引用预算由 304 降至 302，收 `*App` 的顶层函数由 183 降至 182，App-bearing 结构体由 7 降至 6，lazy binding-read 预算保持 0。
 
 步骤 126 将 Claude stopped-session 查询改为接收 backend 与 Claude core suppliers；core 与 backend 仍在每次查询时动态取得，停止判定逻辑不变。生产 `*App` 引用预算由 302 降至 301，收 `*App` 的顶层函数由 182 降至 181，lazy binding-read 预算保持 0。
+
+步骤 127 将 `ForwardFailure` 改为接收 lifecycle context、frontend ID 与 effect runner，并抽出显式依赖的错误回复 helper；forward 处理失败仍使用原 frontend 的生命周期 context 与 Feishu effect runner。生产 `*App` 引用预算由 301 降至 300，收 `*App` 的顶层函数由 181 降至 180，lazy binding-read 预算保持 0。
 
 ## 方法
 

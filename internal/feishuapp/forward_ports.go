@@ -4,6 +4,7 @@ import (
 	"context"
 	"feidex/internal/application"
 	"feidex/internal/application/inbound"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
 )
@@ -27,8 +28,10 @@ func ForwardTasks(lifecycle *frontendruntime.FrontendRuntime, runner func(func()
 	return forwardTaskAdapter{lifecycle: lifecycle, runner: runner}
 }
 
-func ForwardFailure(a *App) func(*application.InboundMessage, error) {
-	return func(msg *application.InboundMessage, err error) { _ = replyError(a, msg, err) }
+func ForwardFailure(contextFn func() context.Context, frontendID string, runner frontendruntime.EffectRunner) func(*application.InboundMessage, error) {
+	return func(msg *application.InboundMessage, err error) {
+		_ = replyErrorWith(contextFn, identity.FrontendID(frontendID), runner, msg, err)
+	}
 }
 
 // ForwardProcessor takes the inbound entry point as a value rather than
