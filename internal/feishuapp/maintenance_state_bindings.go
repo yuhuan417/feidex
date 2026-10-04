@@ -11,7 +11,7 @@ type maintenanceRepository struct{ app *App }
 func (r maintenanceRepository) Sessions() []*conversation.Session {
 	var result []*conversation.Session
 	for _, sess := range r.app.State().Sessions() {
-		if sess != nil && sessionBelongsToFrontend(r.app, sess.Key) {
+		if sess != nil && r.app.configView().sessionBelongsToFrontend(sess.Key) {
 			result = append(result, sess)
 		}
 	}

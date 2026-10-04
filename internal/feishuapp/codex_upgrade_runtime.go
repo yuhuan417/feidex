@@ -26,7 +26,7 @@ func CodexUpgradePorts(a *App) appcodexruntime.UpgradeDependencies {
 			return a.cfg.Codex.ExperimentalAPI
 		},
 		IsBackendActive: func() bool {
-			return configuredBackend(a) == domainbackend.BackendCodex
+			return a.configView().configuredBackend() == domainbackend.BackendCodex
 		},
 		SmokeTest: func(ctx context.Context) error {
 			return a.bindings.CodexUpgrade.CodexSmokeTest(ctx)

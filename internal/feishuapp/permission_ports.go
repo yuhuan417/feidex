@@ -14,7 +14,7 @@ func PermissionFailure(a *App) threadsettings.PermissionFailure { return permiss
 
 func (p permissionPorts) ApplyPermission(ctx context.Context, key, mode string) error {
 	core := currentClaudeCore(p.app)
-	if core == nil || configuredBackend(p.app) != domainbackend.BackendClaude {
+	if core == nil || p.app.configView().configuredBackend() != domainbackend.BackendClaude {
 		return nil
 	}
 	return core.SetPermissionMode(ctx, key, mode)

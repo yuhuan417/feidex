@@ -417,7 +417,7 @@ func TestModelConfigGroupWritesDuringWorkPreservePending(t *testing.T) {
 	fake := &fakeClaudeCore{}
 	setClaudeCore(a, fake)
 	msg := &feishu.InboundMessage{ChatID: "group-model", ChatType: "group", UserID: "user", MessageID: "config"}
-	key := makeSessionKey(a, msg)
+	key := a.configView().makeSessionKey(msg)
 	seedActiveSubmission(t, a, key, "group-thread", "group-turn")
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{ID: "binding", ChatID: msg.ChatID, ChatType: "group", WorkspaceID: a.cfg.Workspaces[0].ID, Status: "active"}); err != nil {
 		t.Fatal(err)

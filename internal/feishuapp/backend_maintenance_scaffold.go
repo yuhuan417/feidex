@@ -70,9 +70,9 @@ func startMaintenanceRestartFromMessage[S any](
 	renderOperationCard func(sessionKey string, snapshot S) map[string]any,
 	finishFailed func(message string),
 ) error {
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	return appmaintenance.StartRestartFromMessage(msg, sessionKey,
 		func(ctx context.Context, parent string, card map[string]any, inThread bool) (string, error) {
 			return replyCardWithIDEffect(ctx, a, parent, card, inThread)
-		}, replyInThreadEnabled(a, msg.ChatType), begin, run, renderOperationCard, finishFailed)
+		}, a.configView().replyInThreadEnabled(), begin, run, renderOperationCard, finishFailed)
 }

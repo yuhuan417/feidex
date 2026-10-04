@@ -66,7 +66,7 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 			return errors.New(claudeUpgradeCommandUsage)
 		}
 	}
-	sessionKey := makeSessionKey(s.app, msg)
+	sessionKey := s.app.configView().makeSessionKey(msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	view, err := s.app.bindings.BackendUpgrades.loadClaudeUpgradeView(ctx, includeLatest)
@@ -75,14 +75,14 @@ func (s backendUpgradeService) commandClaude(msg *feishu.InboundMessage, args []
 	}
 	if !prepareUpgrade {
 		card := s.app.bindings.UpgradePresentation.renderUpgradeStatusCard(upgraderender.ClaudeSpec, sessionKey, view, includeLatest)
-		_, err = s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = s.replyCard(context.Background(), msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 		return err
 	}
 	card, pendingID, err := s.app.bindings.UpgradePresentation.prepareUpgradeCard(upgraderender.ClaudeSpec, claudeUpgradePendingKind, "claude-upgrade", sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	msgID, err := s.replyCard(context.Background(), msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 			return errors.New(codexUpgradeCommandUsage)
 		}
 	}
-	sessionKey := makeSessionKey(s.app, msg)
+	sessionKey := s.app.configView().makeSessionKey(msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	view, err := s.app.bindings.BackendUpgrades.loadCodexUpgradeView(ctx, includeLatest)
@@ -135,14 +135,14 @@ func (s backendUpgradeService) commandCodex(msg *feishu.InboundMessage, args []s
 	}
 	if !prepareUpgrade {
 		card := s.app.bindings.UpgradePresentation.renderUpgradeStatusCard(upgraderender.CodexSpec, sessionKey, view, includeLatest)
-		_, err = s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = s.replyCard(context.Background(), msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 		return err
 	}
 	card, pendingID, err := s.app.bindings.UpgradePresentation.prepareUpgradeCard(upgraderender.CodexSpec, codexUpgradePendingKind, "codex-upgrade", sessionKey, msg.UserID, view)
 	if err != nil {
 		return err
 	}
-	msgID, err := s.replyCard(context.Background(), msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	msgID, err := s.replyCard(context.Background(), msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 	if err != nil {
 		return err
 	}

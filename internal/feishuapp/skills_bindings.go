@@ -44,8 +44,8 @@ func SkillUseCasePorts(a *App) compositionkit.SkillDependencies {
 func BuildSkillCommands(a *App) *skillsadapter.Service {
 	return &skillsadapter.Service{
 		Service: a.bindings.Skills, Outbound: skillsOutbound{app: a},
-		MakeSessionKey:       func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
-		ReplyInThreadEnabled: func(chatType string) bool { return replyInThreadEnabled(a, chatType) },
+		MakeSessionKey:       func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
+		ReplyInThreadEnabled: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
 		FormatMenuBody:       menuCardBody, CommandLabel: commandLabel,
 		RunAsync: func(key string, work func()) bool {
 			return ensureRuntimeOwner(a).Lifecycle.Run(func() {

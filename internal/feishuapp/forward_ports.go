@@ -16,7 +16,7 @@ func ForwardFailure(a *App) func(*application.InboundMessage, error) {
 func ForwardProcessor(a *App) func(*application.InboundMessage) error {
 	return func(msg *application.InboundMessage) error {
 		var err error
-		runSession(a, makeSessionKey(a, msg), func() { err = a.bindings.Inbound.ProcessMessage(msg) })
+		runSession(a, a.configView().makeSessionKey(msg), func() { err = a.bindings.Inbound.ProcessMessage(msg) })
 		return err
 	}
 }

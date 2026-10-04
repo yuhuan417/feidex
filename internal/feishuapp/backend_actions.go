@@ -14,8 +14,8 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 		return appbackend.ActionService{}
 	}
 	return appbackend.NewActionService(appbackend.ActionDeps{
-		Backend:    func() string { return configuredBackend(app) },
-		SessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(app, msg) },
+		Backend:    func() string { return app.configView().configuredBackend() },
+		SessionKey: func(msg *feishu.InboundMessage) string { return app.configView().makeSessionKey(msg) },
 		Commands: appbackend.ActionCommandDeps{
 			CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
 				return commandMessageFromAction(app, action, sessionKey, rawCommand)
@@ -56,7 +56,7 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 				return replyTextByAnchorEffect(ctx, app, msgID, text, inThread)
 			},
 			ReplyInThreadEnabled: func(chatType string) bool {
-				return replyInThreadEnabled(app, chatType)
+				return app.configView().replyInThreadEnabled()
 			},
 		},
 	})

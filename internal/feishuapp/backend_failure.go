@@ -102,7 +102,7 @@ func BackendFailurePorts(a *App) backendfailure.FailureDeps {
 		},
 		Sessions: backendfailure.FailureSessionDeps{
 			SessionBelongsToFrontend: func(sessionKey string) bool {
-				return sessionBelongsToFrontend(a, sessionKey)
+				return a.configView().sessionBelongsToFrontend(sessionKey)
 			},
 		},
 		Runtime: backendfailure.FailureRuntimeDeps{

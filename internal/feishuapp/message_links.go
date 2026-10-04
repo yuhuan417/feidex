@@ -22,7 +22,7 @@ func recordMessageLinkForAnchor(a *App, messageID, kind string, anchor pendingCa
 		return
 	}
 	link := &state.MessageLink{
-		Backend:      configuredBackend(a),
+		Backend:      a.configView().configuredBackend(),
 		MessageID:    messageID,
 		SessionKey:   anchor.sessionKey,
 		SubmissionID: anchor.submissionID,

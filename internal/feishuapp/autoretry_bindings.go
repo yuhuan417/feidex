@@ -38,10 +38,10 @@ func AutoRetryView(a *App) retryview.Service {
 	view := retryview.Service{
 		Context: a.Context, Outbound: autoRetryOutbound{app: a}, Renderer: autoRetryCardRenderer{app: a}, MenuBody: menuCardBody,
 		Settings: func() retryview.Settings {
-			cfg := feishuConfig(a)
-			return retryview.Settings{FrontendID: a.FrontendID(), Backend: configuredBackend(a), Title: a.BackendDriver().Runtime().AutoRetryTitle(), Enabled: cfg != nil && cfg.AutoRetry}
+			cfg := a.configView().feishuConfig()
+			return retryview.Settings{FrontendID: a.FrontendID(), Backend: a.configView().configuredBackend(), Title: a.BackendDriver().Runtime().AutoRetryTitle(), Enabled: cfg != nil && cfg.AutoRetry}
 		},
-		SessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
+		SessionKey: func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		ReplyAction: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 			return replyCommandActionResponse(a, msg, resp)
 		},
@@ -58,7 +58,7 @@ func AutoRetryPorts(a *App, view retryview.Service) retry.Dependencies {
 			runtime := backendRuntime(a)
 			return runtime != nil && runtime.DeferQueuedSubmissionsDuringRecovery(backendRuntimeContextForApp(a))
 		},
-		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
+		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
 		Workspace:          func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
 		Starter:            func() retry.SubmissionStarter { return a.bindings.Submissions },
 		DispatchTimer: func(key string, seq uint64) {

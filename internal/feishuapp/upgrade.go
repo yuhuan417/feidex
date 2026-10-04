@@ -51,7 +51,7 @@ func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 			return sessionKey, ws
 		},
 		WorkspaceForSessionFunc: func(sessionKey string) *config.Workspace {
-			wsID := defaultWorkspaceID(app)
+			wsID := app.configView().defaultWorkspaceID()
 			if sess := app.State().Session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 				wsID = sess.WorkspaceID
 			}
@@ -69,10 +69,10 @@ func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 			return strings.TrimSpace(app.cfg.Daemon.ServiceName)
 		},
 		MakeSessionKeyFunc: func(msg *feishu.InboundMessage) string {
-			return makeSessionKey(app, msg)
+			return app.configView().makeSessionKey(msg)
 		},
 		ReplyInThreadFunc: func(chatType string) bool {
-			return replyInThreadEnabled(app, chatType)
+			return app.configView().replyInThreadEnabled()
 		},
 		MenuCardBodyFunc: func(action, body string) string {
 			return menuCardBody(action, body)

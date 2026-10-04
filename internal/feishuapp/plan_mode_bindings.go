@@ -122,7 +122,7 @@ func planActionReplyInThread(a *App, sessionKey string) bool {
 		return false
 	}
 	if sess := a.State().Session(sessionKey); sess != nil {
-		return replyInThreadEnabled(a, sess.ChatType)
+		return a.configView().replyInThreadEnabled()
 	}
 	return false
 }
@@ -143,8 +143,8 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		Outbound:               planModeOutbound{app: a},
 		CardRenderer:           planModeCardRenderer{app: a},
 		CodexClientProvider:    func() (planmode.CodexClient, error) { return requireCodexGateway(a) },
-		MakeSessionKeyFn:       func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
-		ReplyInThreadEnabledFn: func(chatType string) bool { return replyInThreadEnabled(a, chatType) },
+		MakeSessionKeyFn:       func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
+		ReplyInThreadEnabledFn: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
 		SessionHasActiveWorkFn: sessionHasActiveWork,
 		EffectivePlanSettingsFn: func(sess *conversation.Session) (string, string) {
 			settings := a.bindings.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
@@ -200,7 +200,7 @@ func (s planSettingsSource) Values(sess *conversation.Session) planapp.SettingsV
 type planWorkspaces struct{ app *App }
 
 func (w planWorkspaces) Get(id string) *config.Workspace { return config.FindWorkspace(w.app.cfg, id) }
-func (w planWorkspaces) DefaultID() string               { return defaultWorkspaceID(w.app) }
+func (w planWorkspaces) DefaultID() string               { return w.app.configView().defaultWorkspaceID() }
 func PlanPorts(a *App) (planapp.SettingsSource, func() (planapp.Catalog, error), planapp.Workspaces) {
 	return planSettingsSource{app: a}, func() (planapp.Catalog, error) { return requireCodexGateway(a) }, planWorkspaces{app: a}
 }

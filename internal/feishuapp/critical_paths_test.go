@@ -26,7 +26,7 @@ func TestCriticalPathApprovalResumeStartsQueuedFollowupAfterTurnCompletion(t *te
 		UserID:    "user-1",
 		Text:      "first task",
 	}
-	sessionKey := makeSessionKey(a, msg1)
+	sessionKey := a.configView().makeSessionKey(msg1)
 
 	var mu sync.Mutex
 	var methods []string
@@ -235,7 +235,7 @@ func TestApprovalRequestPayloadPrefersNestedRequestAndFallsBackCleanly(t *testin
 func seedActiveSubmissionForInboundMessage(t *testing.T, a *App, msg *feishu.InboundMessage, threadID, turnID string) (string, *domainsubmission.Submission) {
 	t.Helper()
 
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                sessionKey,
 		WorkspaceID:        a.cfg.Workspaces[0].ID,
@@ -277,7 +277,7 @@ func TestDelayedTurnStartedNotificationBindsPendingSubmissionAndStartsQueuedFoll
 		UserID:    "user-1",
 		Text:      "first task",
 	}
-	sessionKey := makeSessionKey(a, msg1)
+	sessionKey := a.configView().makeSessionKey(msg1)
 
 	var mu sync.Mutex
 	var methods []string
@@ -396,7 +396,7 @@ func TestTurnCompletedWithoutStartedNotificationFinishesPendingSubmissionAndStar
 		UserID:    "user-1",
 		Text:      "first task",
 	}
-	sessionKey := makeSessionKey(a, msg1)
+	sessionKey := a.configView().makeSessionKey(msg1)
 
 	var mu sync.Mutex
 	var methods []string

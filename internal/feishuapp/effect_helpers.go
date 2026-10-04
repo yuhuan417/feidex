@@ -22,7 +22,7 @@ func replyCardEffect(a *App, msg *feishu.InboundMessage, card map[string]any) er
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
 		View:           feishuoutbound.Card(card),
-		InThread:       replyInThreadEnabled(a, msg.ChatType),
+		InThread:       a.configView().replyInThreadEnabled(),
 	}})
 }
 
@@ -35,7 +35,7 @@ func replyTextEffect(a *App, msg *feishu.InboundMessage, text string) error {
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
 		Text:           text,
-		InThread:       replyInThreadEnabled(a, msg.ChatType),
+		InThread:       a.configView().replyInThreadEnabled(),
 	}})
 }
 

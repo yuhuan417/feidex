@@ -19,9 +19,9 @@ func BuildHistory(app *App) history.Service {
 	return compositionkit.NewHistory(compositionkit.HistoryDependencies{
 		Frontend: identity.FrontendID(app.FrontendID()),
 		Context:  app.Context, Outbound: historyOutbound{app: app},
-		Repository: app.State(), Backend: func() string { return configuredBackend(app) },
+		Repository: app.State(), Backend: func() string { return app.configView().configuredBackend() },
 		CodexClient:   func() codexadapter.RPCClient { return currentCodexClient(app) },
-		SessionKey:    func(msg *feishu.InboundMessage) string { return makeSessionKey(app, msg) },
-		ReplyInThread: func(chatType string) bool { return replyInThreadEnabled(app, chatType) },
+		SessionKey:    func(msg *feishu.InboundMessage) string { return app.configView().makeSessionKey(msg) },
+		ReplyInThread: func(chatType string) bool { return app.configView().replyInThreadEnabled() },
 	})
 }

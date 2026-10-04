@@ -237,8 +237,8 @@ func TestBindingUsesChatScopedGroupSessionKey(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
-	first := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", MessageID: "m-1"})
-	second := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", MessageID: "m-2", RootMessageID: "root-2"})
+	first := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", MessageID: "m-1"})
+	second := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", MessageID: "m-2", RootMessageID: "root-2"})
 	firstWant := "feishu:frontend:frontend-a:chat:chat-1"
 	secondWant := "feishu:frontend:frontend-a:chat:chat-1"
 	if first != firstWant || second != secondWant || first != second {

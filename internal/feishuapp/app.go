@@ -163,7 +163,7 @@ func (a *App) HandleCardAction(action *feishu.CardAction) (*callback.CardActionT
 }
 
 func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
-	return enqueueSubmissionWithSessionKey(a.bindings.Submissions, msg, makeSessionKey(a, msg), false)
+	return enqueueSubmissionWithSessionKey(a.bindings.Submissions, msg, a.configView().makeSessionKey(msg), false)
 }
 
 func enqueueSubmissionWithSessionKey(submissions *submission.SubmissionQueueService, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
@@ -181,20 +181,20 @@ func replyError(a *App, msg *feishu.InboundMessage, err error) error {
 	if msg == nil || err == nil {
 		return nil
 	}
-	return newEffectRunner(a.runtimeOwner).Run(a.Context(), []application.Effect{application.SendMessage{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)}, ReplyMessageID: msg.MessageID, Text: "执行失败: " + err.Error(), InThread: replyInThreadEnabled(a, msg.ChatType)}})
+	return newEffectRunner(a.runtimeOwner).Run(a.Context(), []application.Effect{application.SendMessage{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)}, ReplyMessageID: msg.MessageID, Text: "执行失败: " + err.Error(), InThread: a.configView().replyInThreadEnabled()}})
 }
 
 func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
-	card := renderCommandMenuCard(a, makeSessionKey(a, msg))
+	card := renderCommandMenuCard(a, a.configView().makeSessionKey(msg))
 	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
 		View:           feishuoutbound.Card(card),
-		InThread:       replyInThreadEnabled(a, msg.ChatType),
+		InThread:       a.configView().replyInThreadEnabled(),
 	}})
 }
 
 func renderCommandMenuCard(a *App, sessionKey string) map[string]any {
-	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "主菜单"), "blue", menuCardBodyForSession(a, sessionKey, "menu.root", "选择功能分组。"), renderRootMenuButtons(configuredBackend(a), sessionKey))
+	return a.feishu.SimpleStatusCard(planModeTitleForSession(a, sessionKey, "主菜单"), "blue", menuCardBodyForSession(a, sessionKey, "menu.root", "选择功能分组。"), renderRootMenuButtons(a.configView().configuredBackend(), sessionKey))
 }

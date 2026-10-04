@@ -17,7 +17,7 @@ import (
 )
 
 func ConversationPorts(a *App) conversation.Dependencies {
-	s := conversation.Dependencies{Context: a.Context, Backend: func() string { return configuredBackend(a) }, Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a.runtimeOwner), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context}, Live: sqLiveThreadAdapter{app: a}}
+	s := conversation.Dependencies{Context: a.Context, Backend: func() string { return a.configView().configuredBackend() }, Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a.runtimeOwner), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context}, Live: sqLiveThreadAdapter{app: a}}
 	s.ModelSettings = a.bindings.ModelSnapshots
 	s.Operations = a.State()
 	s.ThreadBinding = conversation.ThreadBindingDependencies{
@@ -45,13 +45,13 @@ func renderThreadsCard(a *App, key string, all bool) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if configuredBackend(a) == domainbackend.BackendClaude {
-		return threadview.RenderClaudeThreadsCard(key, sess, ws, configuredBackend(a), a.cfg.Claude, items, all)
+	if a.configView().configuredBackend() == domainbackend.BackendClaude {
+		return threadview.RenderClaudeThreadsCard(key, sess, ws, a.configView().configuredBackend(), a.cfg.Claude, items, all)
 	}
-	return threadview.RenderCodexThreadsCard(key, sess, *ws, configuredBackend(a), items, all)
+	return threadview.RenderCodexThreadsCard(key, sess, *ws, a.configView().configuredBackend(), items, all)
 }
 func forkReplyMessage(a *App, id string) string {
-	if configuredBackend(a) == domainbackend.BackendClaude {
+	if a.configView().configuredBackend() == domainbackend.BackendClaude {
 		if strings.TrimSpace(id) == "" {
 			return "prepared to fork current session. new Claude branch session will be created and switched on next message."
 		}
@@ -60,14 +60,14 @@ func forkReplyMessage(a *App, id string) string {
 	return "forked current thread and switched to new branch thread."
 }
 func renderConversationUsage(a *App, sess *domain.Session) string {
-	if configuredBackend(a) == domainbackend.BackendClaude {
+	if a.configView().configuredBackend() == domainbackend.BackendClaude {
 		return a.bindings.Usage.RenderClaudeUsageBody(sess)
 	}
 	return a.bindings.Usage.RenderCodexUsageBody(sess)
 }
 func interruptConversation(a *App, ctx context.Context, key string, sess *domain.Session) error {
 	err := a.bindings.Conversations.InterruptActiveTurn(ctx, key, sess)
-	if err != nil && sess != nil && configuredBackend(a) == domainbackend.BackendCodex {
+	if err != nil && sess != nil && a.configView().configuredBackend() == domainbackend.BackendCodex {
 		updated := reconcileCompletedCodexTurn(a.bindings.TurnReconciliation, sess.Key, sess)
 		if updated == nil || updated.ActiveTurnID != sess.ActiveTurnID {
 			return nil
@@ -77,7 +77,7 @@ func interruptConversation(a *App, ctx context.Context, key string, sess *domain
 }
 func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
 	return conversation.RecoveryDependencies{Repository: a.State(), Conversations: a.bindings.Conversations, Workspaces: planWorkspaces{app: a}, Capture: func() (conversation.RecoveryEndpoint, error) {
-		if configuredBackend(a) == domainbackend.BackendClaude {
+		if a.configView().configuredBackend() == domainbackend.BackendClaude {
 			return conversation.RecoveryEndpoint{LazyResume: true}, nil
 		}
 		client, err := requireCodexClient(a)

@@ -95,7 +95,7 @@ func TestWorkspaceUnbindReturnsGroupToOnboarding(t *testing.T) {
 	a.frontendID = "bot-unbind"
 	recomposeTestApp(a)
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-unbind", MessageID: "msg-unbind", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          defaultBindingID(a.frontendID, "group", msg.ChatID),
 		FrontendID:  a.frontendID,
@@ -453,7 +453,7 @@ func TestPendingBindingStoresAndReplaysOriginalGroupMessage(t *testing.T) {
 	if len(methods) != 0 {
 		t.Fatalf("pending binding should not start backend calls, got %+v", methods)
 	}
-	if sess := a.State().Session(makeSessionKey(a, original)); sess != nil {
+	if sess := a.State().Session(a.configView().makeSessionKey(original)); sess != nil {
 		t.Fatalf("pending binding should not create prompt session, got %+v", sess)
 	}
 	binding := agentBindingForChat(a, "group", "chat-pending")
@@ -490,7 +490,7 @@ func TestPendingBindingStoresAndReplaysOriginalGroupMessage(t *testing.T) {
 	if binding == nil || binding.Status != state.AgentBindingStatusActive.String() || binding.WorkspaceID != "default" || binding.PendingMessage != nil {
 		t.Fatalf("binding after replay = %+v", binding)
 	}
-	sess := a.State().Session(makeSessionKey(a, original))
+	sess := a.State().Session(a.configView().makeSessionKey(original))
 	if sess == nil || sess.BindingID != "binding-pending" || sess.WorkspaceID != "default" || sess.ActiveSubmissionID == "" {
 		t.Fatalf("session after replay = %+v", sess)
 	}
@@ -613,7 +613,7 @@ func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
 	if ws := findWorkspaceForTest(a, payload.WorkspaceID); ws == nil || strings.TrimSpace(ws.Cwd) != strings.TrimSpace(payload.TargetDir) {
 		t.Fatalf("created private worktree workspace = %+v, payload=%+v", ws, payload)
 	}
-	if selected := a.WorkspaceSelection().Resolve(msg.ChatType, msg.ChatID, msg.UserID, a.State().Session(makeSessionKey(a, msg))); selected != payload.WorkspaceID {
+	if selected := a.WorkspaceSelection().Resolve(msg.ChatType, msg.ChatID, msg.UserID, a.State().Session(a.configView().makeSessionKey(msg))); selected != payload.WorkspaceID {
 		t.Fatalf("p2p selected workspace = %q, want %q", selected, payload.WorkspaceID)
 	}
 }
@@ -661,7 +661,7 @@ func TestWorkspaceNewWorktreeSubmitActivatesOnlyCurrentGroupBinding(t *testing.T
 	if bindA == nil || bindB == nil || bindA.WorkspaceID == "" || bindB.WorkspaceID == "" || bindA.WorkspaceID == bindB.WorkspaceID {
 		t.Fatalf("group bindings should point at distinct worktree workspaces: a=%+v b=%+v", bindA, bindB)
 	}
-	if selected := defaultWorkspaceID(a); selected != "default" {
+	if selected := a.configView().defaultWorkspaceID(); selected != "default" {
 		t.Fatalf("group worktree submit should not switch global default workspace, got %q", selected)
 	}
 }

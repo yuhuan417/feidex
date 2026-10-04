@@ -55,7 +55,7 @@ func (a *App) Backend() string {
 
 // BackendDriver follows the frontend backend selected at execution time.
 func (a *App) BackendDriver() appbackend.Driver {
-	return appbackend.SelectedDriver{Selected: func() string { return configuredBackend(a) }}
+	return appbackend.SelectedDriver{Selected: func() string { return a.configView().configuredBackend() }}
 }
 
 // Claude returns the Claude core client.

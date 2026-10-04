@@ -86,7 +86,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if quietmode.Enabled(feishuConfig(a)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(a)), kind) {
+	if quietmode.Enabled(a.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(a.configView().feishuConfig()), kind) {
 		return nil
 	}
 	appState := a.State()

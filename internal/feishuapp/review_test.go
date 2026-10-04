@@ -27,7 +27,7 @@ func TestCommandReviewUncommittedCallsReviewStart(t *testing.T) {
 	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
@@ -74,7 +74,7 @@ func TestCommandReviewWithoutActiveThreadUsesGenericThreadStart(t *testing.T) {
 	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() {}\n")
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review-new", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -128,7 +128,7 @@ func TestCommandReviewBaseOpensBranchPicker(t *testing.T) {
 	repo := initReviewGitRepo(t, a.cfg.Workspaces[0].Cwd)
 
 	msg := &feishu.InboundMessage{MessageID: "msg-base", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
@@ -166,7 +166,7 @@ func TestCommandReviewCommitOpensRecentCommitPicker(t *testing.T) {
 	_, commits := initReviewGitRepoWithCommits(t, a.cfg.Workspaces[0].Cwd)
 
 	msg := &feishu.InboundMessage{MessageID: "msg-commit", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
@@ -197,7 +197,7 @@ func TestCommandReviewCommitOpensRecentCommitPicker(t *testing.T) {
 func TestCompleteReviewFormSubmitStartsCustomReview(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "msg-custom", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
@@ -315,7 +315,7 @@ func TestReviewTurnStartedNotificationDoesNotOverrideResponseTurnID(t *testing.T
 	writeFile(t, filepath.Join(repo, "main.go"), "package main\n\nfunc main() { println(\"changed\") }\n")
 
 	msg := &feishu.InboundMessage{MessageID: "msg-review", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 

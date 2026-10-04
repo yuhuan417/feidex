@@ -18,7 +18,7 @@ func commandFork(a *App, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil {
 		return nil
 	}
-	discarded, forkedID, err := startThreadFork(a, threadMenuEffectiveSessionKey(a, makeSessionKey(a, msg)))
+	discarded, forkedID, err := startThreadFork(a, threadMenuEffectiveSessionKey(a, a.configView().makeSessionKey(msg)))
 	if err != nil {
 		return err
 	}
@@ -36,12 +36,12 @@ func startThreadFork(a *App, sessionKey string) (int, string, error) {
 	appState := a.State()
 	sess := appState.Session(sessionKey)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
-		return 0, "", fmt.Errorf("%s，无法 fork", primaryConversationMissingLabel(configuredBackend(a)))
+		return 0, "", fmt.Errorf("%s，无法 fork", primaryConversationMissingLabel(a.configView().configuredBackend()))
 	}
 	if sessionHasActiveWork(sess) {
 		return 0, "", fmt.Errorf("当前任务仍在运行，请先等待结束或中断")
 	}
-	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), defaultWorkspaceID(a))
+	workspaceID := textutil.FirstNonEmpty(strings.TrimSpace(sess.WorkspaceID), a.configView().defaultWorkspaceID())
 	ws := config.FindWorkspace(a.cfg, workspaceID)
 	if ws == nil {
 		return 0, "", fmt.Errorf("workspace %q not found", workspaceID)
@@ -60,5 +60,5 @@ func startThreadFork(a *App, sessionKey string) (int, string, error) {
 
 func completeMenuFork(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	sessionKey = threadMenuEffectiveSessionKey(a, sessionKey)
-	return completeMenuCommand(a, action, sessionKey, primaryConversationSlash(configuredBackend(a))+" fork", "menu.thread")
+	return completeMenuCommand(a, action, sessionKey, primaryConversationSlash(a.configView().configuredBackend())+" fork", "menu.thread")
 }

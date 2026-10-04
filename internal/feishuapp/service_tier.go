@@ -19,7 +19,7 @@ func (o serviceTierOutbound) ReplyText(ctx context.Context, messageID, text stri
 }
 
 func BuildServiceTier(a *App) tier.Service {
-	return tier.Service{Service: a.bindings.ThreadSettings, Context: a.Context, Outbound: serviceTierOutbound{app: a}, SessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) }}
+	return tier.Service{Service: a.bindings.ThreadSettings, Context: a.Context, Outbound: serviceTierOutbound{app: a}, SessionKey: func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) }}
 }
 func renderServiceTierMenuCard(state *appstate.Store, key string) map[string]any {
 	return tier.RenderMenuCard(key, state.Session(key))

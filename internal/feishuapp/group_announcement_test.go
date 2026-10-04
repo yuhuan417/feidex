@@ -58,7 +58,7 @@ func seedGroupAnnouncementBinding(t *testing.T, a *App, chatID string) {
 
 func seedGroupAnnouncementSession(t *testing.T, a *App, chatID, threadID string) {
 	t.Helper()
-	key := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: chatID})
+	key := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: chatID})
 	if err := a.State().SaveSession(&conversation.Session{
 		Key:            key,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,

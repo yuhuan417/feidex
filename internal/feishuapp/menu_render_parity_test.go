@@ -21,8 +21,8 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 	recomposeTestApp(a)
 	p2pMsg := &feishu.InboundMessage{ChatID: "p2p-menu-parity", ChatType: "p2p", UserID: "user-1"}
 	groupMsg := &feishu.InboundMessage{ChatID: "group-menu-parity", ChatType: "group", UserID: "user-1", RootMessageID: "root-1"}
-	p2pKey := makeSessionKey(a, p2pMsg)
-	groupKey := makeSessionKey(a, groupMsg)
+	p2pKey := a.configView().makeSessionKey(p2pMsg)
+	groupKey := a.configView().makeSessionKey(groupMsg)
 	for _, sess := range []*conversation.Session{
 		{Key: p2pKey, ChatID: p2pMsg.ChatID, ChatType: p2pMsg.ChatType, WorkspaceID: "default", ActiveThreadID: "thread-p2p", ActiveThreadWorkspaceID: "default"},
 		{Key: groupKey, ChatID: groupMsg.ChatID, ChatType: groupMsg.ChatType, WorkspaceID: "default", ActiveThreadID: "thread-group", ActiveThreadWorkspaceID: "default"},

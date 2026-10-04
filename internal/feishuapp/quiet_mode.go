@@ -23,7 +23,7 @@ func renderQuietModeCard(a *App) map[string]any {
 }
 
 func renderQuietModeMenuCard(a *App, sessionKey string) map[string]any {
-	mode := quietmode.Mode(feishuConfig(a))
+	mode := quietmode.Mode(a.configView().feishuConfig())
 	lines := []string{
 		"当前模式: `" + quietmode.StatusText(mode) + "`",
 		"",
@@ -82,7 +82,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 		if msg == nil {
 			return nil
 		}
-		card := renderQuietModeMenuCard(a, makeSessionKey(a, msg))
+		card := renderQuietModeMenuCard(a, a.configView().makeSessionKey(msg))
 		return replyCardEffect(a, msg, card)
 	}
 	arg := strings.TrimSpace(args[0])
@@ -92,7 +92,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			if msg == nil {
 				return nil
 			}
-			card := renderQuietModeMenuCard(a, makeSessionKey(a, msg))
+			card := renderQuietModeMenuCard(a, a.configView().makeSessionKey(msg))
 			return replyCardEffect(a, msg, card)
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))

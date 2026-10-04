@@ -152,7 +152,7 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, "session-resume-1", "Resume Session", "please continue", time.Unix(100, 0))
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,

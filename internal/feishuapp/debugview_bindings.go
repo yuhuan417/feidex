@@ -59,13 +59,13 @@ func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 		ConfigProvider: app, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: debugOutbound{app: app}, FileSharing: app.bindings.FileSharing, CardRenderer: debugCardRenderer{app: app}, StateProvider: app.State(),
 		RuntimeStateProvider: debugRuntimeStateAdapter{app: app}, ConversationBackendProvider: debugConversationBackendAdapter{app: app},
 		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{app: app}, WorkspaceRenderProvider: debugWorkspaceRenderAdapter{app: app},
-		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(app, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(app, v) },
+		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return app.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return app.configView().replyInThreadEnabled() },
 		CompleteMenuCommandFn: func(a *feishu.CardAction, s, r, p string) (*callback.CardActionTriggerResponse, error) {
 			return completeMenuCommand(app, a, s, r, p)
 		},
 		MenuCardBodyFn: menuCardBody, MenuBreadcrumbLabelsFn: menuBreadcrumbLabels, CommandLabelFn: commandLabel,
 		CurrentThreadLabelFn: appthreadmenu.SessionCurrentThreadLabel, PrimaryConversationMissingLabelFn: primaryConversationMissingLabel,
-		DefaultWorkspaceIDFn: func() string { return defaultWorkspaceID(app) }, ConfigPathFn: func() string { return app.cfgPath },
+		DefaultWorkspaceIDFn: func() string { return app.configView().defaultWorkspaceID() }, ConfigPathFn: func() string { return app.cfgPath },
 	}
 }
 

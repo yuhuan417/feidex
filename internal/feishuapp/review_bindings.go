@@ -61,7 +61,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		ContextProvider:        a,
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
 		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return requireCodexGateway(a) },
-		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
+		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
 		MenuCardBodyFn: menuCardBody, ActionStringValueFn: actionStringValue,
 		CommandMessageFromActionFn: func(x *feishu.CardAction, s, r string) *feishu.InboundMessage {
 			return commandMessageFromAction(a, x, s, r)
@@ -104,7 +104,7 @@ type reviewWorkspaceProviderAdapter struct {
 
 func (a reviewWorkspaceProviderAdapter) ReviewWorkspaceForSessionKey(sessionKey string) *config.Workspace {
 	sess := a.app.State().Session(sessionKey)
-	workspaceID := defaultWorkspaceID(a.app)
+	workspaceID := a.app.configView().defaultWorkspaceID()
 	if sess != nil {
 		if wid := sess.WorkspaceID; wid != "" {
 			workspaceID = wid
@@ -114,7 +114,7 @@ func (a reviewWorkspaceProviderAdapter) ReviewWorkspaceForSessionKey(sessionKey 
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewDefaultWorkspaceID() string {
-	return defaultWorkspaceID(a.app)
+	return a.app.configView().defaultWorkspaceID()
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewFindWorkspace(workspaceID string) *config.Workspace {

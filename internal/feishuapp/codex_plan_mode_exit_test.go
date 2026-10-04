@@ -26,7 +26,7 @@ func TestCodexPlanModeExitPromptAfterPlanItemCompletion(t *testing.T) {
 		for _, card := range ff.replyCards {
 			titles = append(titles, cardHeaderTitle(t, card)+": "+cardMarkdownContent(t, card))
 		}
-		t.Fatalf("expected codex plan-mode exit pending request; backend=%q sess=%+v pending=%+v cards=%d titles=%q", configuredBackend(a), a.State().Session("sess-1"), a.State().PendingRequests(), len(ff.replyCards), titles)
+		t.Fatalf("expected codex plan-mode exit pending request; backend=%q sess=%+v pending=%+v cards=%d titles=%q", a.configView().configuredBackend(), a.State().Session("sess-1"), a.State().PendingRequests(), len(ff.replyCards), titles)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count = %d, want 1 final plan prompt only", len(ff.replyCards))

@@ -49,7 +49,7 @@ func TestHandleFeishuMessageWithoutConfiguredBackendPromptsSelection(t *testing.
 	if !strings.Contains(body, "当前 frontend 还没有设置 backend") || !strings.Contains(body, "`codex`") {
 		t.Fatalf("backend selection body = %q", body)
 	}
-	if sess := store.GetSession(makeSessionKey(a, msg)); sess != nil {
+	if sess := store.GetSession(a.configView().makeSessionKey(msg)); sess != nil {
 		t.Fatalf("unexpected session persisted while backend unset: %+v", sess)
 	}
 }

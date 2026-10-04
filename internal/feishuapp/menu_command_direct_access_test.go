@@ -20,7 +20,7 @@ import (
 func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -60,7 +60,7 @@ func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 func TestCommandThreadDirectResume(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -117,7 +117,7 @@ func TestCommandThreadDirectResume(t *testing.T) {
 func TestCommandWorkspaceDirectSandboxAndPolicy(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -161,7 +161,7 @@ func TestCommandWorkspaceDeleteRemovesConfigOnly(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: altDir})
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, WorkspaceID: "default"}); err != nil {
 		t.Fatalf("UpsertSession(current) error = %v", err)
 	}
@@ -200,7 +200,7 @@ func TestCommandWorkspaceDeleteRejectsCurrentWorkspace(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: altDir})
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{Key: sessionKey, WorkspaceID: "alt"}); err != nil {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
@@ -433,7 +433,7 @@ func TestCommandModelDirectSetClaudeModelRejectsConcurrentMessageTraffic(t *test
 func TestCommandHistoryDirectDetail(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,

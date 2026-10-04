@@ -13,10 +13,10 @@ import (
 
 func ContinuationPorts(a *App) continuation.Dependencies {
 	deps := continuation.Dependencies{
-		Backend:    func() string { return configuredBackend(a) },
-		FrontendID: a.FrontendID(), DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
+		Backend:    func() string { return a.configView().configuredBackend() },
+		FrontendID: a.FrontendID(), DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
 		Workspace:      func(id string) *config.Workspace { return config.FindWorkspace(a.cfg, id) },
-		MakeSessionKey: func(msg *feishu.InboundMessage) string { return makeSessionKey(a, msg) },
+		MakeSessionKey: func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 	}
 
 	// Wire the consumer-owned ports that need *App internals.

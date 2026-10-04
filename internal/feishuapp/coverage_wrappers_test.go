@@ -369,7 +369,7 @@ func TestAppStateStoreScopesPendingAndMessageLinksByFrontend(t *testing.T) {
 func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1", MessageID: "msg-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,

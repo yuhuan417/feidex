@@ -21,7 +21,7 @@ func NewStateView(a *App) *appstate.Store {
 	if a == nil {
 		return nil
 	}
-	view := appstate.NewScoped(a.store, a.FrontendID(), configuredBackend(a))
+	view := appstate.NewScoped(a.store, a.FrontendID(), a.configView().configuredBackend())
 	view.RevisionMutex = a.ConfigMu()
 	return view
 }
@@ -38,7 +38,7 @@ func NewDispatcher(a *App) application.Dispatcher { return newInputDispatcher(a)
 // when a frontend enters the runtime.
 func CanonicalizeStoredSessionKeys(a *App) error { return canonicalizeStoredSessionKeys(a) }
 
-func BackendKind(a *App) string { return configuredBackend(a) }
+func BackendKind(a *App) string { return a.configView().configuredBackend() }
 
 func BuildBackendRuntimeHandle(a *App, target string) (*BackendRuntimeHandle, error) {
 	return buildBackendRuntimeHandle(a, target)

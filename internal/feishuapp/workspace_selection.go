@@ -49,7 +49,7 @@ func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conv
 		return textutil.FirstNonEmpty(
 			resolveThreadWorkspaceID(sess, ""),
 			resolveWorkspaceSelectionForMessage(a.WorkspaceSelection(), msg, sess),
-			defaultWorkspaceID(a),
+			a.configView().defaultWorkspaceID(),
 		)
 	}
 	return textutil.FirstNonEmpty(
@@ -60,7 +60,7 @@ func resolveSubmissionWorkspaceID(a *App, msg *feishu.InboundMessage, sess *conv
 			}
 			return sess.WorkspaceID
 		}()),
-		defaultWorkspaceID(a),
+		a.configView().defaultWorkspaceID(),
 	)
 }
 
@@ -97,4 +97,6 @@ func (a *App) WorkspaceSelection() workspace.SelectionService {
 	return a.bindings.WorkspaceSelection
 }
 
-func DefaultWorkspaceID(a *App) func() string { return func() string { return defaultWorkspaceID(a) } }
+func DefaultWorkspaceID(a *App) func() string {
+	return func() string { return a.configView().defaultWorkspaceID() }
+}

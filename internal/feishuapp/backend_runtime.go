@@ -15,7 +15,7 @@ func backendRuntimeContextForApp(a *App) backendruntime.BackendContext {
 		return backendruntime.BackendContext{}
 	}
 	ctx := backendruntime.BackendContext{
-		Backend:    configuredBackend(a),
+		Backend:    a.configView().configuredBackend(),
 		FrontendID: a.frontendID,
 		Cfg:        a.cfg,
 		// Do not ask RecoveryService for its current client while recovery is
@@ -55,7 +55,7 @@ func backendRuntimeContextForApp(a *App) backendruntime.BackendContext {
 	ctx.CodexMaintenanceActive = func() bool { return a.bindings.Maintenance.CodexMaintenanceActive() }
 	ctx.ClaudeMaintenanceActive = func() bool { return a.bindings.Maintenance.ClaudeMaintenanceActive() }
 	ctx.MaintenanceBlocksCommand = func(raw string) error {
-		if configuredBackend(a) == domainbackend.BackendClaude {
+		if a.configView().configuredBackend() == domainbackend.BackendClaude {
 			return a.bindings.Maintenance.ClaudeMaintenanceBlocksCommand(raw)
 		}
 		return a.bindings.Maintenance.CodexMaintenanceBlocksCommand(raw)
@@ -65,7 +65,7 @@ func backendRuntimeContextForApp(a *App) backendruntime.BackendContext {
 		return domainbackend.DropCodexLineageAfterFailure(codexRuntimeRecovering(a.bindings.CodexRecovery), errorText(err))
 	}
 	ctx.HandleTransportFailure = func(sessionKey, threadID string, err error) {
-		if configuredBackend(a) == domainbackend.BackendClaude {
+		if a.configView().configuredBackend() == domainbackend.BackendClaude {
 			failClaudeSessionActiveWork(a.bindings.BackendFailure, sessionKey, threadID, err)
 			return
 		}
@@ -78,7 +78,7 @@ func backendRuntime(a *App) backendruntime.BackendFacade {
 	if a == nil {
 		return nil
 	}
-	return backendruntime.BackendForKind(configuredBackend(a))
+	return backendruntime.BackendForKind(a.configView().configuredBackend())
 }
 
 func currentBackendRuntimeHandle(a *App) *backendruntime.BackendHandle {
@@ -86,7 +86,7 @@ func currentBackendRuntimeHandle(a *App) *backendruntime.BackendHandle {
 		return nil
 	}
 	return &backendruntime.BackendHandle{
-		Backend: configuredBackend(a), Codex: currentCodexClient(a), Claude: currentClaudeCore(a),
+		Backend: a.configView().configuredBackend(), Codex: currentCodexClient(a), Claude: currentClaudeCore(a),
 	}
 }
 

@@ -155,14 +155,14 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				return effectiveBindingClaudePermissionMode(app, sess, ws, cfg)
 			},
 			QuietWorkingCardEnabled: func() bool {
-				return quietmode.WorkingCardEnabled(feishuConfig(app))
+				return quietmode.WorkingCardEnabled(app.configView().feishuConfig())
 			},
 		},
 		PrepareClaudeMCPConfig: func(sessionKey string) (string, []string, func(), error) {
 			return prepareClaudeMCPConfig(app, sessionKey)
 		},
 		ModelSettings: func(sessionKey string) domainmodelconfig.Snapshot {
-			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
+			sess := app.State().Session(app.configView().normalizeSessionKey(sessionKey))
 			return modelConfigSnapshot(app, sess, domainbackend.BackendClaude)
 		},
 		ModelSettingsApplied: func(sessionKey string, settings domainmodelconfig.Snapshot) {
@@ -172,7 +172,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 			}
 		},
 		AuxiliaryModels: func(sessionKey string) (string, string) {
-			sess := app.State().Session(normalizeSessionKey(app, sessionKey))
+			sess := app.State().Session(app.configView().normalizeSessionKey(sessionKey))
 			settings := app.bindings.ModelSnapshots.Desired(domainbackend.BackendClaude, sess)
 			return settings.SmallModel, settings.SubagentModel
 		},

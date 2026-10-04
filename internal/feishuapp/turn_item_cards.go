@@ -44,7 +44,7 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 	if payload.Title == "" || payload.Color == "" {
 		payload.Title, payload.Color = turnitem.TurnItemCardMeta(payload.ItemType, payload.IsFinalAnswer)
 	}
-	if quietmode.Enabled(feishuConfig(s.app)) && !shouldDeliverTurnItemPayloadInQuiet(quietmode.Mode(feishuConfig(s.app)), payload) {
+	if quietmode.Enabled(s.app.configView().feishuConfig()) && !shouldDeliverTurnItemPayloadInQuiet(quietmode.Mode(s.app.configView().feishuConfig()), payload) {
 		return ""
 	}
 	if payload.ItemType == "user_input" && payload.UserInput != nil {
@@ -147,7 +147,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	if s.app == nil || s.app.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return ""
 	}
-	if quietmode.Enabled(feishuConfig(s.app)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(s.app)), kind) {
+	if quietmode.Enabled(s.app.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(s.app.configView().feishuConfig()), kind) {
 		return ""
 	}
 	body = strings.TrimSpace(body)

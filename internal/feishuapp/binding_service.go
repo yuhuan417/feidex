@@ -49,10 +49,10 @@ func (s bindingService) commandCurrentBotGroupConfig(msg *feishu.InboundMessage,
 		return err
 	}
 	if len(args) == 0 || strings.EqualFold(args[0], "status") {
-		card := s.renderBindingStatusCard(makeSessionKey(s.app, msg), binding)
+		card := s.renderBindingStatusCard(s.app.configView().makeSessionKey(msg), binding)
 		return replyCardEffect(s.app, msg, card)
 	}
-	if err := ensureSessionModelConfigWritable(s.app, makeSessionKey(s.app, msg)); err != nil && (strings.EqualFold(strings.TrimSpace(args[0]), "model") || strings.EqualFold(strings.TrimSpace(args[0]), "effort") || strings.EqualFold(strings.TrimSpace(args[0]), "plan") || strings.EqualFold(strings.TrimSpace(args[0]), "plan_effort") || strings.EqualFold(strings.TrimSpace(args[0]), "review") || strings.EqualFold(strings.TrimSpace(args[0]), "subagent") || strings.EqualFold(strings.TrimSpace(args[0]), "small")) {
+	if err := ensureSessionModelConfigWritable(s.app, s.app.configView().makeSessionKey(msg)); err != nil && (strings.EqualFold(strings.TrimSpace(args[0]), "model") || strings.EqualFold(strings.TrimSpace(args[0]), "effort") || strings.EqualFold(strings.TrimSpace(args[0]), "plan") || strings.EqualFold(strings.TrimSpace(args[0]), "plan_effort") || strings.EqualFold(strings.TrimSpace(args[0]), "review") || strings.EqualFold(strings.TrimSpace(args[0]), "subagent") || strings.EqualFold(strings.TrimSpace(args[0]), "small")) {
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
@@ -300,7 +300,7 @@ func (s bindingService) replyBindingUpdated(msg *feishu.InboundMessage, body str
 	if msg == nil {
 		return nil
 	}
-	card := s.renderBindingStatusCard(makeSessionKey(s.app, msg), agentBindingForChat(s.app, msg.ChatType, msg.ChatID))
+	card := s.renderBindingStatusCard(s.app.configView().makeSessionKey(msg), agentBindingForChat(s.app, msg.ChatType, msg.ChatID))
 	if strings.TrimSpace(body) != "" {
 		card = s.renderer.SimpleStatusCard("当前 Bot 群内配置", "green", strings.TrimSpace(body), nil)
 	}
@@ -325,7 +325,7 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 	}
 	lines := []string{
 		"frontend: `" + textutil.FirstNonEmpty(s.app.FrontendID(), "default") + "`",
-		"backend: `" + textutil.FirstNonEmpty(configuredBackend(s.app), "unset") + "`",
+		"backend: `" + textutil.FirstNonEmpty(s.app.configView().configuredBackend(), "unset") + "`",
 		"chat: `" + binding.ChatType + "/" + binding.ChatID + "`",
 		statusLine,
 		"primary: `" + onOffLabel(isGroupPrimary(s.app, binding.ChatType, binding.ChatID)) + "`",

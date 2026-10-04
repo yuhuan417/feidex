@@ -41,7 +41,7 @@ func CodexRecoveryPorts(a *App) appcodexruntime.RecoveryDependencies {
 			return a.frontendID
 		},
 		IsBackendActive: func() bool {
-			return configuredBackend(a) == domainbackend.BackendCodex
+			return a.configView().configuredBackend() == domainbackend.BackendCodex
 		},
 		RecoverFrontendRuntimeState: func() {
 			recoverFrontendRuntimeState(a.bindings.StartupRecovery)
@@ -49,7 +49,7 @@ func CodexRecoveryPorts(a *App) appcodexruntime.RecoveryDependencies {
 		SessionKeysForRecovery: func() []string {
 			var keys []string
 			for _, sess := range a.State().Sessions() {
-				if sess != nil && sessionBelongsToFrontend(a, sess.Key) {
+				if sess != nil && a.configView().sessionBelongsToFrontend(sess.Key) {
 					keys = append(keys, strings.TrimSpace(sess.Key))
 				}
 			}

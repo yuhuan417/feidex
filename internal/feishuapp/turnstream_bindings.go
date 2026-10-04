@@ -75,7 +75,7 @@ func TurnPresentationPorts(a *App) appturnstream.Dependencies {
 			}
 			return ""
 		},
-		FeishuConfig: func() *config.FeishuConfig { return feishuConfig(a) },
+		FeishuConfig: func() *config.FeishuConfig { return a.configView().feishuConfig() },
 	}
 }
 

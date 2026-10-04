@@ -12,15 +12,15 @@ func (s bindingService) gatePendingGroupMessage(msg *feishu.InboundMessage) (boo
 	if s.app == nil || msg == nil || !isGroupMessage(msg) {
 		return false, nil
 	}
-	result, err := s.app.bindings.BindingPending.Gate(msg, makeSessionKey(s.app, msg), isGroupPrimary(s.app, msg.ChatType, msg.ChatID), time.Now().Unix())
+	result, err := s.app.bindings.BindingPending.Gate(msg, s.app.configView().makeSessionKey(msg), isGroupPrimary(s.app, msg.ChatType, msg.ChatID), time.Now().Unix())
 	if err != nil || !result.Handled {
 		return result.Handled, err
 	}
 	if err := newEffectRunner(s.app.runtimeOwner).Run(s.app.Context(), result.Effects); err != nil {
 		return false, err
 	}
-	card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(makeSessionKey(s.app, msg))
-	_, err = replyCardWithIDEffect(s.app.Context(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(s.app.configView().makeSessionKey(msg))
+	_, err = replyCardWithIDEffect(s.app.Context(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 	return true, err
 }
 func discardPendingBindingMessageByID(a *App, messageID string) bool {

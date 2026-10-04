@@ -230,7 +230,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				}
 			}
 			if actionName == "menu.model_auxiliary" {
-				if configuredBackend(s.app) == domainbackend.BackendClaude {
+				if s.app.configView().configuredBackend() == domainbackend.BackendClaude {
 					return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开 Claude 辅助模型配置"}, Card: rawCard(s.app.bindings.ModelCommands.RenderClaudeAuxiliaryModelConfigCard(sessionKey, "menu.model_auxiliary"))}, nil
 				}
 				card, err := s.app.bindings.ModelCommands.RenderCodexAuxiliaryModelConfigCardForSession(sessionKey, "menu.model_auxiliary")
@@ -251,7 +251,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				if value == modelconfig.DefaultOptionValue {
 					value = ""
 				}
-				if configuredBackend(s.app) == domainbackend.BackendClaude {
+				if s.app.configView().configuredBackend() == domainbackend.BackendClaude {
 					return s.app.bindings.ModelCommands.CompleteClaudeAuxiliaryModelSet(action, "subagent", value)
 				}
 				return s.app.bindings.ModelCommands.CompleteCodexAuxiliaryModelSet(action, "subagent", value)

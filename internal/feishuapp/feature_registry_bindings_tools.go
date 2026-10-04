@@ -206,7 +206,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			sessionKey := actionSessionKey(action)
 			switch actionName {
 			case "menu.skills":
-				if !menuActionVisibleForBackend(actionName, configuredBackend(s.app)) {
+				if !menuActionVisibleForBackend(actionName, s.app.configView().configuredBackend()) {
 					return completeMenuCommand(s.app, action, sessionKey, "/skills", "menu.tools")
 				}
 				return s.app.bindings.SkillCommands.CompleteSkillsOpen(action, sessionKey)

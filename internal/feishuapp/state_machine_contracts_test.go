@@ -22,7 +22,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 		RootMessageID: "root-stop",
 		UserID:        "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
 	sess := a.store.GetSession(sessionKey)
 	sess.Status = "turn_in_progress"
@@ -78,7 +78,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 
 func TestGroupTopLevelCommandInterruptTargetsActiveChatAndClearsQueuedInputs(t *testing.T) {
 	a, ff, fc := newTestApp(t)
-	sessionKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-active", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-active", UserID: "user-1"})
+	sessionKey := a.configView().makeSessionKey(&feishu.InboundMessage{MessageID: "msg-active", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-active", UserID: "user-1"})
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-active", "turn-active")
 	if _, err := a.store.UpdateSession(sessionKey, func(sess *conversation.Session) {
 		sess.RootMessageID = "root-active"

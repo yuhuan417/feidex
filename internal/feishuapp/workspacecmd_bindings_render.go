@@ -13,7 +13,7 @@ func buildWorkspaceRenderService(a *App) *workspacecards.Presentation {
 	if a != nil {
 		deps.Frontend = identity.FrontendID(a.FrontendID())
 		deps.Config, deps.ConfigPath, deps.Mutex, deps.Scopes = a.cfg, a.cfgPath, a.ConfigMu(), a.State()
-		deps.Backend = func() string { return configuredBackend(a) }
+		deps.Backend = func() string { return a.configView().configuredBackend() }
 	}
 	return compositionkit.NewWorkspacePresentation(deps)
 }

@@ -37,7 +37,7 @@ func sessionKeyChatForApp(a *App, sessionKey string) (chatType, chatID string) {
 	sessionKey = strings.TrimSpace(sessionKey)
 	chatType, chatID = sessionKeyChat(sessionKey)
 	if a != nil {
-		candidateKeys := []string{sessionKey, normalizeSessionKey(a, sessionKey)}
+		candidateKeys := []string{sessionKey, a.configView().normalizeSessionKey(sessionKey)}
 		for _, key := range candidateKeys {
 			if key == "" {
 				continue
@@ -79,7 +79,7 @@ func threadMenuEffectiveSessionKey(a *App, sessionKey string) string {
 	if a == nil {
 		return sessionKey
 	}
-	sessionKey = normalizeSessionKey(a, sessionKey)
+	sessionKey = a.configView().normalizeSessionKey(sessionKey)
 	chatType, chatID := sessionKeyChatForApp(a, sessionKey)
 	if chatType != "group" || strings.TrimSpace(chatID) == "" {
 		return sessionKey
@@ -103,20 +103,20 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 	if _, err := s.app.bindings.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID); err != nil {
 		return err
 	}
-	sessionKey := makeSessionKey(s.app, msg)
+	sessionKey := s.app.configView().makeSessionKey(msg)
 	if len(args) == 0 {
 		card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
-		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
-		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 		return err
 	case "choose":
 		card := s.app.bindings.WorkspacePresentation.RenderWorkspaceChooseCard(sessionKey)
-		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 		return err
 	case "use":
 		return s.commandCurrentBotGroupConfig(msg, append([]string{"use"}, args[1:]...))
@@ -153,7 +153,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 			if err != nil {
 				return err
 			}
-			_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+			_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 			return err
 		}
 		return s.commandCurrentBotGroupConfig(msg, append([]string{strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...))
@@ -167,7 +167,7 @@ func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []stri
 			return err
 		}
 		card := s.app.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
-		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err := replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 		return err
 	default:
 		return fmt.Errorf("usage: %s", groupBindingWorkspaceUsage)
@@ -194,7 +194,7 @@ func (s bindingService) beginBindingWorkspaceClone(msg *feishu.InboundMessage, s
 		return err
 	}
 	card := s.app.bindings.WorkspacePresentation.RenderWorkspaceCloneCard(sessionKey, request.ID, payload)
-	_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 	return err
 }
 
@@ -207,11 +207,11 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		if err != nil {
 			return err
 		}
-		card, err := s.renderBindingModelConfigCard(makeSessionKey(s.app, msg), binding)
+		card, err := s.renderBindingModelConfigCard(s.app.configView().makeSessionKey(msg), binding)
 		if err != nil {
 			return err
 		}
-		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 		return err
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
@@ -241,7 +241,7 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		}
 		return s.commandCurrentBotGroupConfig(msg, []string{role, args[2]})
 	case "option":
-		if configuredBackend(s.app) != domainbackend.BackendClaude {
+		if s.app.configView().configuredBackend() != domainbackend.BackendClaude {
 			return fmt.Errorf("/model option 仅适用于 Claude backend")
 		}
 		if len(args) != 3 {
@@ -263,11 +263,11 @@ func (s bindingService) commandEffort(msg *feishu.InboundMessage, args []string)
 		if err != nil {
 			return err
 		}
-		card, err := s.renderBindingModelConfigCard(makeSessionKey(s.app, msg), binding)
+		card, err := s.renderBindingModelConfigCard(s.app.configView().makeSessionKey(msg), binding)
 		if err != nil {
 			return err
 		}
-		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 		return err
 	case 1:
 		return s.commandCurrentBotGroupConfig(msg, []string{"effort", args[0]})
@@ -292,7 +292,7 @@ func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) e
 		if err != nil {
 			return err
 		}
-		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, s.renderBindingFastCard(makeSessionKey(s.app, msg), binding), replyInThreadEnabled(s.app, msg.ChatType))
+		_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, s.renderBindingFastCard(s.app.configView().makeSessionKey(msg), binding), s.app.configView().replyInThreadEnabled())
 		return err
 	case "fast", "default", "off":
 		return s.commandCurrentBotGroupConfig(msg, []string{"fast", args[0]})

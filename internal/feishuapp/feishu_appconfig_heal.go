@@ -60,7 +60,7 @@ func runFeishuAppConfigHeal(a *App) {
 	if a == nil || a.feishu == nil {
 		return
 	}
-	cfg := feishuConfig(a)
+	cfg := a.configView().feishuConfig()
 	if cfg == nil || strings.TrimSpace(cfg.AppID) == "" {
 		return
 	}
@@ -449,7 +449,7 @@ func feishuAppConfigHealTargets(a *App) []appfeishuwrap.NotifyTarget {
 		if sess == nil {
 			continue
 		}
-		if !sessionBelongsToFrontend(a, sess.Key) {
+		if !a.configView().sessionBelongsToFrontend(sess.Key) {
 			continue
 		}
 		if !strings.EqualFold(strings.TrimSpace(sess.ChatType), "p2p") {

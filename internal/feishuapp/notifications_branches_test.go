@@ -112,7 +112,7 @@ func TestStandaloneCompactItemLifecycleTracksSessionState(t *testing.T) {
 func TestStandaloneCompactNotificationsCanArriveBeforeRPCReturns(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-compact", ChatID: "chat-compact", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,

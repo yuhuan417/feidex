@@ -45,9 +45,9 @@ func seedAutoRetrySession(t *testing.T, a *App, sessionKey, threadID string) *co
 	t.Helper()
 	sess := &conversation.Session{
 		Key:                     sessionKey,
-		WorkspaceID:             defaultWorkspaceID(a),
+		WorkspaceID:             a.configView().defaultWorkspaceID(),
 		ActiveThreadID:          threadID,
-		ActiveThreadWorkspaceID: defaultWorkspaceID(a),
+		ActiveThreadWorkspaceID: a.configView().defaultWorkspaceID(),
 		OwnerUserID:             "user-1",
 		ChatID:                  "chat-1",
 		ChatType:                "group",
@@ -82,7 +82,7 @@ func TestAutoRetrySchedulesAndStartsContinueSubmission(t *testing.T) {
 	markSessionThreadLive(a, sessionKey, threadID)
 	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          defaultWorkspaceID(a),
+		WorkspaceID:          a.configView().defaultWorkspaceID(),
 		ThreadID:             threadID,
 		ChatID:               sess.ChatID,
 		TriggerMessageID:     "trigger-1",
@@ -173,9 +173,9 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	threadID := "thread-retry-queue-1"
 	sess := &conversation.Session{
 		Key:                     sessionKey,
-		WorkspaceID:             defaultWorkspaceID(a),
+		WorkspaceID:             a.configView().defaultWorkspaceID(),
 		ActiveThreadID:          threadID,
-		ActiveThreadWorkspaceID: defaultWorkspaceID(a),
+		ActiveThreadWorkspaceID: a.configView().defaultWorkspaceID(),
 		OwnerUserID:             "user-1",
 		ChatID:                  "chat-1",
 		ChatType:                "p2p",
@@ -187,7 +187,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	markSessionThreadLive(a, sessionKey, threadID)
 	queuedID, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:       sessionKey,
-		WorkspaceID:      defaultWorkspaceID(a),
+		WorkspaceID:      a.configView().defaultWorkspaceID(),
 		ChatID:           "chat-1",
 		TriggerMessageID: "later-1",
 		InputText:        "later input",
@@ -207,7 +207,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	}
 	failedSub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          defaultWorkspaceID(a),
+		WorkspaceID:          a.configView().defaultWorkspaceID(),
 		ThreadID:             threadID,
 		ChatID:               "chat-1",
 		TriggerMessageID:     "trigger-1",
@@ -308,7 +308,7 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 
 	queuedB, err := a.store.CreateSubmission(&domainsubmission.Submission{
 		SessionKey:       sessionKey,
-		WorkspaceID:      defaultWorkspaceID(a),
+		WorkspaceID:      a.configView().defaultWorkspaceID(),
 		ChatID:           "chat-1",
 		TriggerMessageID: "later-b",
 		InputText:        "root b input",
@@ -322,7 +322,7 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 	}
 	failedSub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          defaultWorkspaceID(a),
+		WorkspaceID:          a.configView().defaultWorkspaceID(),
 		ThreadID:             threadA,
 		ChatID:               "chat-1",
 		TriggerMessageID:     "trigger-a",
@@ -429,7 +429,7 @@ func TestCommandInterruptCancelsPendingAutoRetry(t *testing.T) {
 	markSessionThreadLive(a, sessionKey, threadID)
 	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          defaultWorkspaceID(a),
+		WorkspaceID:          a.configView().defaultWorkspaceID(),
 		ThreadID:             threadID,
 		ChatID:               sess.ChatID,
 		TriggerMessageID:     "trigger-1",
@@ -476,13 +476,13 @@ func TestGroupTopLevelCommandInterruptCancelsPendingAutoRetryAcrossRoot(t *testi
 		t.Fatalf("updateAutoRetryEnabled(true) error = %v", err)
 	}
 
-	sessionKey := makeSessionKey(a, &feishu.InboundMessage{MessageID: "msg-retry", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-retry", UserID: "user-1"})
+	sessionKey := a.configView().makeSessionKey(&feishu.InboundMessage{MessageID: "msg-retry", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-retry", UserID: "user-1"})
 	threadID := "thread-stop-retry"
 	sess := seedAutoRetrySession(t, a, sessionKey, threadID)
 	markSessionThreadLive(a, sessionKey, threadID)
 	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          defaultWorkspaceID(a),
+		WorkspaceID:          a.configView().defaultWorkspaceID(),
 		ThreadID:             threadID,
 		ChatID:               sess.ChatID,
 		TriggerMessageID:     "trigger-1",
@@ -549,7 +549,7 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 	markSessionThreadLive(a, sessionKey, threadID)
 	sub := &domainsubmission.Submission{
 		SessionKey:           sessionKey,
-		WorkspaceID:          defaultWorkspaceID(a),
+		WorkspaceID:          a.configView().defaultWorkspaceID(),
 		ThreadID:             threadID,
 		ChatID:               sess.ChatID,
 		TriggerMessageID:     "trigger-1",
@@ -658,7 +658,7 @@ func TestStopPreventsLateFailureFromRestartingRetry(t *testing.T) {
 					return &fakeDelayedTask{fn: fn}
 				}
 				msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", MessageID: "stop", UserID: "user-1"}
-				key := makeSessionKey(a, msg)
+				key := a.configView().makeSessionKey(msg)
 				seedActiveSubmission(t, a, key, "thread-1", "turn-1")
 				if existingLoop {
 					retry.AutoRetryTracker().States[key] = &appautoretry.RetryState{SessionKey: key, ThreadID: "thread-1", RetryCount: 1, TimerSeq: 7}
@@ -723,7 +723,7 @@ func TestStopInvalidatesAlreadyDispatchedRetryCallback(t *testing.T) {
 		return timer
 	}
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", MessageID: "stop", UserID: "user-1"}
-	key := makeSessionKey(a, msg)
+	key := a.configView().makeSessionKey(msg)
 	sess := seedAutoRetrySession(t, a, key, "thread-1")
 	markSessionThreadLive(a, key, "thread-1")
 	if !retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "", "") {
@@ -760,7 +760,7 @@ func TestStopWaitsForRetryStartupAndInterruptsStartedTurn(t *testing.T) {
 	}
 	retry.AutoRetryTracker().After = func(_ time.Duration, fn func()) appautoretry.DelayedTask { return &fakeDelayedTask{fn: fn} }
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", MessageID: "stop", UserID: "user-1"}
-	key := makeSessionKey(a, msg)
+	key := a.configView().makeSessionKey(msg)
 	sess := seedAutoRetrySession(t, a, key, "thread-1")
 	markSessionThreadLive(a, key, "thread-1")
 	retry.ObserveAutoRetryTerminal(key, "thread-1", "failed", sess, nil, "", "")
@@ -824,7 +824,7 @@ func TestStopDoesNotFinalizeUnconfirmedTurnAfterInterruptError(t *testing.T) {
 	a.frontendID = "default"
 	recomposeTestApp(a)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", MessageID: "stop", UserID: "user-1"}
-	key := makeSessionKey(a, msg)
+	key := a.configView().makeSessionKey(msg)
 	seedActiveSubmission(t, a, key, "thread-1", "turn-1")
 	interruptErr := errors.New("no active turn to interrupt")
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {

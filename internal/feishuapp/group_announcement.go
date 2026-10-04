@@ -114,7 +114,7 @@ func buildGroupAnnouncementStatus(a *App, chatID string, updatedAt time.Time) gr
 		groupAnnouncementField("Bot", botName),
 		groupAnnouncementField("Machine IP", textutil.FirstNonEmpty(localAnnouncementMachineIP(), "unknown")),
 		groupAnnouncementField("Workspace", groupAnnouncementWorkspaceDir(a, chatID)),
-		groupAnnouncementField("Backend", textutil.FirstNonEmpty(configuredBackend(a), "unset")),
+		groupAnnouncementField("Backend", textutil.FirstNonEmpty(a.configView().configuredBackend(), "unset")),
 		groupAnnouncementField("Thread", textutil.FirstNonEmpty(groupAnnouncementThreadID(a, chatID), "none")),
 		groupAnnouncementField("Marker", marker),
 	}

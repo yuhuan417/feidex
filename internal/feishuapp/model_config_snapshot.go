@@ -25,10 +25,10 @@ func ModelSnapshotRepository(a *App) applicationmodelconfig.SourceRepository {
 }
 
 func modelConfigStatus(a *App, sessionKey string) string {
-	backend := configuredBackend(a)
+	backend := a.configView().configuredBackend()
 	var sess *conversation.Session
 	if store := a.State(); store != nil {
-		sess = store.Session(normalizeSessionKey(a, sessionKey))
+		sess = store.Session(a.configView().normalizeSessionKey(sessionKey))
 	}
 	view := a.bindings.ModelSnapshots.SessionView(backend, sess)
 	return modelsettings.RenderStatus(view)

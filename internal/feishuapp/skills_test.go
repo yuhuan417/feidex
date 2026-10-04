@@ -174,7 +174,7 @@ func TestCompleteSkillsSelectRejectsDisabledSkill(t *testing.T) {
 func TestEnqueueSubmissionUsesPendingSkillWithoutListingSkills(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-pending", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "summarize this"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	a.bindings.SkillCommands.SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
 
 	var seenInputs []map[string]any
@@ -215,7 +215,7 @@ func TestEnqueueSubmissionUsesPendingSkillWithoutListingSkills(t *testing.T) {
 func TestEnqueueSubmissionExplicitSkillPrefixOverridesPending(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-explicit", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "$openai-docs summarize this"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	a.bindings.SkillCommands.SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "old-skill", Path: "/skills/old"})
 
 	var skillsListCalls int
@@ -274,7 +274,7 @@ func TestEnqueueSubmissionExplicitSkillPrefixOverridesPending(t *testing.T) {
 func TestEnqueueSubmissionInvalidSkillPrefixFallsBackToTextAndConsumesPending(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-invalid", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "$bad/name keep raw"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	a.bindings.SkillCommands.SetSessionPendingSkill(sessionKey, domainsubmission.SubmissionSkill{Name: "openai-docs", Path: "/skills/openai-docs"})
 
 	var seenInputs []map[string]any
@@ -312,7 +312,7 @@ func TestEnqueueSubmissionInvalidSkillPrefixFallsBackToTextAndConsumesPending(t 
 func TestEnqueueSubmissionSkillOnlySetsPendingSkill(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-skill-only", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "$openai-docs"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	turnStarted := false
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {

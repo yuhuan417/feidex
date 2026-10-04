@@ -23,7 +23,7 @@ func TestCommandPlanOnSavesThreadCollaborationMode(t *testing.T) {
 		ChatType:  "p2p",
 		UserID:    "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -81,7 +81,7 @@ func TestCommandPlanOnRejectsWhenExperimentalAPIDisabled(t *testing.T) {
 		ChatType:  "p2p",
 		UserID:    "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -110,7 +110,7 @@ func TestCommandPlanOnUsesConfiguredPlanModelAndEffort(t *testing.T) {
 		ChatType:  "p2p",
 		UserID:    "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -162,7 +162,7 @@ func TestCommandPlanOnLeavesReasoningEffortEmptyWithoutPresetOrOverride(t *testi
 		ChatType:  "p2p",
 		UserID:    "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -211,7 +211,7 @@ func TestCommandPlanWithoutArgsTogglesPlanMode(t *testing.T) {
 		ChatType:  "p2p",
 		UserID:    "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -293,7 +293,7 @@ func TestCommandPlanOffStoresDefaultModeWhenActiveModeMissing(t *testing.T) {
 		ChatType:  "p2p",
 		UserID:    "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -338,7 +338,7 @@ func TestCommandPlanOffStoresConfiguredDefaultModelAndEffort(t *testing.T) {
 		ChatType:  "p2p",
 		UserID:    "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -391,7 +391,7 @@ func TestCommandPlanOffDoesNotReuseConfiguredPlanModelAsDefault(t *testing.T) {
 		ChatType:  "p2p",
 		UserID:    "user-1",
 	}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -446,7 +446,7 @@ func TestCommandPlanOffDoesNotReuseConfiguredPlanModelAsDefault(t *testing.T) {
 func TestStartSubmissionTurnIncludesThreadCollaborationMode(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -498,7 +498,7 @@ func TestStartSubmissionTurnIncludesThreadCollaborationMode(t *testing.T) {
 func TestStartSubmissionTurnIncludesDefaultCollaborationModeAfterPlanDisabled(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -550,7 +550,7 @@ func TestStartSubmissionTurnFillsConfiguredEffortForStoredDefaultCollaborationMo
 	a, _, fc := newTestApp(t)
 	a.cfg.Codex.ReasoningEffort = "xhigh"
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -598,7 +598,7 @@ func TestStartSubmissionTurnFillsConfiguredEffortForStoredDefaultCollaborationMo
 func TestStartSubmissionTurnOmitsCollaborationModeByDefault(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,

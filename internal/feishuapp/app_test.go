@@ -142,7 +142,7 @@ func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
 	recoverRuntimeState(a.bindings.StartupRecovery)
 
 	sess1 := a.store.GetSession("sess-1")
-	if sess1.WorkspaceID != defaultWorkspaceID(a) || sess1.ActiveThreadID != "" {
+	if sess1.WorkspaceID != a.configView().defaultWorkspaceID() || sess1.ActiveThreadID != "" {
 		t.Fatalf("recoverRuntimeState(sess-1) = %+v, want workspace repair and cleared thread context", sess1)
 	}
 	sess2 := a.store.GetSession("sess-2")
@@ -287,20 +287,20 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 		t.Fatalf("nonZero() = %d, want 3", got)
 	}
 
-	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"})
+	sessionKey := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"})
 	if sessionKey != "feishu:chat:chat" {
 		t.Fatalf("makeSessionKey(group) = %q", sessionKey)
 	}
-	sessionKey = makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"})
+	sessionKey = a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"})
 	if sessionKey != "feishu:chat:chat" {
 		t.Fatalf("makeSessionKey(p2p) = %q", sessionKey)
 	}
 	a.frontendID = "frontend-a"
 	recomposeTestApp(a)
-	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:chat:chat" {
+	if got := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: "chat", RootMessageID: "root", MessageID: "msg"}); got != "feishu:frontend:frontend-a:chat:chat" {
 		t.Fatalf("makeSessionKey(frontend group) = %q", got)
 	}
-	if got := makeSessionKey(a, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"}); got != "feishu:frontend:frontend-a:chat:chat" {
+	if got := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat", UserID: "user"}); got != "feishu:frontend:frontend-a:chat:chat" {
 		t.Fatalf("makeSessionKey(frontend p2p) = %q", got)
 	}
 }
@@ -363,7 +363,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	if err := commandWorkspace(a, msg, []string{"use", "alt"}); err != nil {
 		t.Fatalf("commandWorkspace(use) error = %v", err)
 	}
-	sess := a.store.GetSession(makeSessionKey(a, msg))
+	sess := a.store.GetSession(a.configView().makeSessionKey(msg))
 	if sess == nil || sess.WorkspaceID != "alt" {
 		t.Fatalf("workspace switch did not persist session: %+v", sess)
 	}
@@ -430,7 +430,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "repo /tmp/test-workspace Repo Name"}
-	pending := &state.PendingRequest{ID: "req-1", Kind: "workspace_new", Status: "pending", FeishuMsgID: "card-1", SessionKey: makeSessionKey(a, msg)}
+	pending := &state.PendingRequest{ID: "req-1", Kind: "workspace_new", Status: "pending", FeishuMsgID: "card-1", SessionKey: a.configView().makeSessionKey(msg)}
 	if err := a.store.UpsertPending(pending); err != nil {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
@@ -457,17 +457,17 @@ func TestCompleteWorkspaceNewTextAndCommandNotifications(t *testing.T) {
 	if config.FindWorkspace(a.cfg, "repo") == nil {
 		t.Fatal("expected workspace to be appended to config")
 	}
-	if got := a.store.GetSession(makeSessionKey(a, msg)); got == nil || got.WorkspaceID != "repo" {
+	if got := a.store.GetSession(a.configView().makeSessionKey(msg)); got == nil || got.WorkspaceID != "repo" {
 		t.Fatalf("workspace session after creation = %+v, want switched workspace", got)
 	}
-	if got := a.store.GetSession(makeSessionKey(a, msg)); got == nil || got.ActiveThreadID != "thread-repo" || got.ActiveThreadWorkspaceID != "repo" {
+	if got := a.store.GetSession(a.configView().makeSessionKey(msg)); got == nil || got.ActiveThreadID != "thread-repo" || got.ActiveThreadWorkspaceID != "repo" {
 		t.Fatalf("workspace session should auto-bind thread after creation = %+v", got)
 	}
 	if len(ff.patchedCards) == 0 || len(ff.replyTexts) == 0 {
 		t.Fatalf("expected workspace creation to patch card and reply, patches=%d replies=%d", len(ff.patchedCards), len(ff.replyTexts))
 	}
 
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
 	ff.sendCards = nil
 	ff.replyCards = nil
@@ -583,7 +583,7 @@ func TestCompleteWorkspaceNewTextExistingWorkspacePromptsSwitch(t *testing.T) {
 		Kind:        "workspace_new",
 		Status:      "pending",
 		FeishuMsgID: "card-1",
-		SessionKey:  makeSessionKey(a, msg),
+		SessionKey:  a.configView().makeSessionKey(msg),
 		PayloadJSON: mustJSON(appworkspacecmd.NewPayload{
 			RootPath:    "/",
 			SelectedCWD: existingDir,
@@ -664,7 +664,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 	if ws := config.FindWorkspace(a.cfg, "repo"); ws == nil || ws.Cwd != wantTargetDir {
 		t.Fatalf("cloned workspace = %+v, want cwd %q", ws, wantTargetDir)
 	}
-	if sess := a.store.GetSession(makeSessionKey(a, msg)); sess == nil || sess.WorkspaceID != "repo" || sess.ActiveThreadID != "thread-clone" || sess.ActiveThreadWorkspaceID != "repo" {
+	if sess := a.store.GetSession(a.configView().makeSessionKey(msg)); sess == nil || sess.WorkspaceID != "repo" || sess.ActiveThreadID != "thread-clone" || sess.ActiveThreadWorkspaceID != "repo" {
 		t.Fatalf("session after clone = %+v", sess)
 	}
 	if len(ff.replyTexts) == 0 || !strings.Contains(ff.replyTexts[0], "已从仓库创建并切换到工作区 repo") || !strings.Contains(ff.replyTexts[0], wantTargetDir) {
@@ -2673,7 +2673,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 	}); err != nil {
 		t.Fatalf("SaveAgentBinding(chat-1) error = %v", err)
 	}
-	rootASessionKey := makeSessionKey(a, &feishu.InboundMessage{
+	rootASessionKey := a.configView().makeSessionKey(&feishu.InboundMessage{
 		ChatID:        "chat-1",
 		ChatType:      "group",
 		UserID:        "user-1",
@@ -2745,7 +2745,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 		Text:          "run in B",
 	})
 
-	rootBSessionKey := makeSessionKey(a, &feishu.InboundMessage{
+	rootBSessionKey := a.configView().makeSessionKey(&feishu.InboundMessage{
 		ChatID:        "chat-1",
 		ChatType:      "group",
 		UserID:        "user-1",
@@ -2771,7 +2771,7 @@ func TestHandleFeishuMessageQueuesGroupSubmissionsOnBindingWorkspace(t *testing.
 	if len(threadStartCwds) != 0 {
 		t.Fatalf("thread/start cwds before root-a completes = %+v, want no calls", threadStartCwds)
 	}
-	rootCSessionKey := makeSessionKey(a, &feishu.InboundMessage{
+	rootCSessionKey := a.configView().makeSessionKey(&feishu.InboundMessage{
 		ChatID:        "chat-1",
 		ChatType:      "group",
 		UserID:        "user-1",
@@ -2826,7 +2826,7 @@ func TestHandleFeishuMessageP2PQueuesSubmissionOnSelectedWorkspace(t *testing.T)
 	a, _, _ := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,
@@ -3050,7 +3050,7 @@ func TestReplyFallbackTurnBindsOnlyReplyRoot(t *testing.T) {
 
 func TestAdditionalCommandHelpers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
-	sessionKey := makeSessionKey(a, &feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1"})
+	sessionKey := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: "chat-1", RootMessageID: "root-1"})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
@@ -3260,7 +3260,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	bindingID := defaultBindingID(a.FrontendID(), "group", "chat-1")
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          bindingID,
@@ -3411,7 +3411,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 func TestCommandHistoryRendersCurrentThreadTurns(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-history", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    a.cfg.Workspaces[0].ID,
@@ -3542,7 +3542,7 @@ func TestSmallHelperBranches(t *testing.T) {
 func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        sessionKey,
 		WorkspaceID:                a.cfg.Workspaces[0].ID,
@@ -3676,7 +3676,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:         sessionKey,
 		WorkspaceID: a.cfg.Workspaces[0].ID,

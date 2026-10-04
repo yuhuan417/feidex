@@ -118,7 +118,7 @@ func PendingQueuePorts(a *App) appsubmission.PendingDependencies {
 		Context:            a.Context,
 		State:              a.State(),
 		Maintenance:        a.bindings.SubmissionCleanup,
-		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
+		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
 		AddReaction: func(ctx context.Context, messageID, emoji string) error {
 			if a.feishu == nil {
 				return nil
@@ -165,13 +165,13 @@ func SubmissionPorts(a *App) appsubmission.Dependencies {
 
 		BackendRuntime: sqBackendRuntimeFullAdapter{app: a},
 		DefaultWorkspaceID: func() string {
-			return defaultWorkspaceID(a)
+			return a.configView().defaultWorkspaceID()
 		},
 		Workspace: func(id string) *config.Workspace {
 			return config.FindWorkspace(a.cfg, id)
 		},
 		ReplyInThreadEnabled: func(chatType string) bool {
-			return replyInThreadEnabled(a, chatType)
+			return a.configView().replyInThreadEnabled()
 		},
 		ReplyInThreadForSubmission: func(sub *domainsubmission.Submission) bool {
 			return replyInThreadForSubmission(a, sub)
@@ -233,7 +233,7 @@ func SubmissionPorts(a *App) appsubmission.Dependencies {
 		},
 		DeleteTurnArtifacts: a.State().DeleteTurnArtifacts,
 		ClaudePrompt:        claudeadapter.BuildPrompt,
-		Backend:             func() string { return configuredBackend(a) },
+		Backend:             func() string { return a.configView().configuredBackend() },
 		ClaudeClient: func() appsubmission.QueueClaudeClient {
 			if currentClaudeCore(a) == nil {
 				return nil

@@ -71,14 +71,16 @@ func patchClaudePermissionMenuRuntimeFailure(a *App, messageID, sessionKey strin
 
 func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
 	return a.BackendDriver().Permission().RenderConversationPermissionModeMenu(sessionKey, appbackend.ConversationPermissionRenderDeps{
-		Permissions:    a,
-		Session:        a.State().Session,
-		FormatMenuBody: func(action, body string) string { return menuCardBodyForBackend(configuredBackend(a), action, body) },
+		Permissions: a,
+		Session:     a.State().Session,
+		FormatMenuBody: func(action, body string) string {
+			return menuCardBodyForBackend(a.configView().configuredBackend(), action, body)
+		},
 	})
 }
 
 func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
-	card, err := renderClaudeSessionPermissionMenuCard(a, makeSessionKey(a, msg))
+	card, err := renderClaudeSessionPermissionMenuCard(a, a.configView().makeSessionKey(msg))
 	if err != nil {
 		return err
 	}
@@ -87,7 +89,7 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
 		View:           feishuoutbound.Card(card),
-		InThread:       replyInThreadEnabled(a, msg.ChatType),
+		InThread:       a.configView().replyInThreadEnabled(),
 	}})
 }
 
@@ -96,7 +98,7 @@ func renderClaudeWorkspacePermissionMenuCard(workspacepresentation *workspacecar
 }
 
 func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error {
-	card, err := renderClaudeWorkspacePermissionMenuCard(a.bindings.WorkspacePresentation, makeSessionKey(a, msg))
+	card, err := renderClaudeWorkspacePermissionMenuCard(a.bindings.WorkspacePresentation, a.configView().makeSessionKey(msg))
 	if err != nil {
 		return err
 	}
@@ -105,6 +107,6 @@ func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
 		View:           feishuoutbound.Card(card),
-		InThread:       replyInThreadEnabled(a, msg.ChatType),
+		InThread:       a.configView().replyInThreadEnabled(),
 	}})
 }

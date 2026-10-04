@@ -63,7 +63,7 @@ func (p inboundBindings) DiscardPendingMessage(id string) bool {
 type inboundCommands struct{ app *App }
 
 func (p inboundCommands) IsLocalCommand(msg *application.InboundMessage, text string) bool {
-	return isLocalCommandForMessage(configuredBackend(p.app), msg, text)
+	return isLocalCommandForMessage(p.app.configView().configuredBackend(), msg, text)
 }
 func (p inboundCommands) HandleCommand(msg *application.InboundMessage, text string) error {
 	return handleCommand(p.app, msg, text)
@@ -71,7 +71,7 @@ func (p inboundCommands) HandleCommand(msg *application.InboundMessage, text str
 
 type inboundBackend struct{ app *App }
 
-func (p inboundBackend) Configured() bool { return hasConfiguredBackend(p.app) }
+func (p inboundBackend) Configured() bool { return p.app.configView().hasConfiguredBackend() }
 func (p inboundBackend) ReplySelection(msg *application.InboundMessage) error {
 	return p.app.bindings.BackendSelection.ReplyBackendSelectionCard(msg, "")
 }
@@ -87,7 +87,7 @@ func (p inboundBackend) CheckMaintenance() error {
 
 func InboundPorts(a *App) inbound.Dependencies {
 	return inbound.Dependencies{
-		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return makeSessionKey(a, msg) },
+		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		Routing: inboundRouting{app: a}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{app: a},
 		Continuation: a.bindings.Continuation, Pending: inboundPending{PendingQueueService: a.bindings.PendingQueue, attachments: func(msg *application.InboundMessage, workspaceID, key string) ([]domainsubmission.SubmissionAttachment, error) {
 			return resolveInboundAttachments(a, msg, workspaceID, key)

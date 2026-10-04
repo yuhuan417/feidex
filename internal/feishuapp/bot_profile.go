@@ -31,7 +31,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 		if operation == "set" && setting.Auxiliary() && setting != routing.PlanEffort && setting != routing.SubagentEffort {
 			return saveAuxiliaryCommand(a, msg, setting, args[2], string(setting)+" model")
 		}
-		if operation == "effort" && configuredBackend(a) == domainbackend.BackendCodex {
+		if operation == "effort" && a.configView().configuredBackend() == domainbackend.BackendCodex {
 			switch setting {
 			case routing.PlanModel:
 				return saveAuxiliaryCommand(a, msg, routing.PlanEffort, args[2], "Plan reasoning effort")
@@ -44,7 +44,7 @@ func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string)
 }
 
 func saveAuxiliaryCommand(a *App, msg *feishu.InboundMessage, setting routing.Setting, value, label string) error {
-	result, err := a.bindings.ModelSettings.SaveAuxiliary(makeSessionKey(a, msg), configuredBackend(a), setting, value)
+	result, err := a.bindings.ModelSettings.SaveAuxiliary(a.configView().makeSessionKey(msg), a.configView().configuredBackend(), setting, value)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func completeBotProfileEffortSet(backendconfiguration backend.ConfigurationServi
 }
 
 func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
-	result, err := a.bindings.ModelSettings.SaveAuxiliary(actionSessionKey(action), configuredBackend(a), routing.Setting(role), value)
+	result, err := a.bindings.ModelSettings.SaveAuxiliary(actionSessionKey(action), a.configView().configuredBackend(), routing.Setting(role), value)
 	if err != nil {
 		kind := "error"
 		if errors.Is(err, applicationmodelconfig.ErrSaveBlocked) {

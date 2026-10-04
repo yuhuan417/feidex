@@ -57,7 +57,7 @@ func goalDependenciesForApp(a *App) goalcmd.Dependencies {
 	return goalcmd.Dependencies{
 		StateProvider: a.State(), Outbound: goalOutbound{app: a}, CardRenderer: goalCardRenderer{app: a}, GoalManagement: a.bindings.GoalManagement,
 		GoalTracker:      goalTrackerForApp(a),
-		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return makeSessionKey(a, m) }, ReplyInThreadEnabledFn: func(v string) bool { return replyInThreadEnabled(a, v) },
+		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
 		MenuCardBodyForSessionFn: func(s, x, b string) string { return menuCardBodyForSession(a, s, x, b) }, ActionStringValueFn: actionStringValue, ActionSessionKeyFn: actionSessionKey,
 		CompleteMenuCommandFn: func(x *feishu.CardAction, s, r, f string) (*callback.CardActionTriggerResponse, error) {
 			return completeMenuCommand(a, x, s, r, f)
@@ -77,8 +77,8 @@ func GoalContinuationPorts(a *App) goalapp.Dependencies {
 		Presenter: goalAnchorPresenter{outbound: goalOutbound{app: a}},
 		Bindings:  a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
 		Streams: a.bindings.TurnPresentation, Live: turnRuntimePort{app: a},
-		DefaultWorkspaceID: func() string { return defaultWorkspaceID(a) },
-		BelongsToFrontend:  func(key string) bool { return sessionBelongsToFrontend(a, key) },
+		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
+		BelongsToFrontend:  func(key string) bool { return a.configView().sessionBelongsToFrontend(key) },
 	}
 }
 
@@ -148,7 +148,7 @@ func goalActionReplyInThread(a *App, sessionKey string) bool {
 		return false
 	}
 	if sess := a.State().Session(sessionKey); sess != nil {
-		return replyInThreadEnabled(a, sess.ChatType)
+		return a.configView().replyInThreadEnabled()
 	}
 	return false
 }

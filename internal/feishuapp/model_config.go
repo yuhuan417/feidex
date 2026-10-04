@@ -14,7 +14,7 @@ import (
 func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 	return modelconfig.ModelConfigService{
 		Defaults:    &app.bindings.ModelDefaults,
-		Backend:     func() string { return configuredBackend(app) },
+		Backend:     func() string { return app.configView().configuredBackend() },
 		Options:     &app.bindings.ModelOptions,
 		GetConfig:   func() *config.Config { return app.cfg },
 		GetConfigMu: func() *sync.RWMutex { return app.ConfigMu() },
@@ -28,16 +28,16 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 			return requireCodexGateway(app)
 		},
 		MakeSessionKey: func(msg *feishu.InboundMessage) string {
-			return makeSessionKey(app, msg)
+			return app.configView().makeSessionKey(msg)
 		},
 		NormalizeSessionKey: func(sessionKey string) string {
-			return normalizeSessionKey(app, sessionKey)
+			return app.configView().normalizeSessionKey(sessionKey)
 		},
 		SessionBelongsToFrontend: func(sessionKey string) bool {
-			return sessionBelongsToFrontend(app, sessionKey)
+			return app.configView().sessionBelongsToFrontend(sessionKey)
 		},
 		ReplyInThreadEnabled: func(chatType string) bool {
-			return replyInThreadEnabled(app, chatType)
+			return app.configView().replyInThreadEnabled()
 		},
 		SessionConfig: func(sessionKey string) *config.Config {
 			return sessionScopedConfigForApp(app, sessionKey)
@@ -56,9 +56,9 @@ func sessionScopedConfigForApp(a *App, sessionKey string) *config.Config {
 		return nil
 	}
 	clone := modelConfigReadCopy(a)
-	sess := a.State().Session(normalizeSessionKey(a, sessionKey))
+	sess := a.State().Session(a.configView().normalizeSessionKey(sessionKey))
 	values := a.bindings.ModelSnapshots.Auxiliary(sess)
-	main := a.bindings.ModelSnapshots.Desired(configuredBackend(a), sess)
+	main := a.bindings.ModelSnapshots.Desired(a.configView().configuredBackend(), sess)
 	if main.Backend == "claude" {
 		clone.Claude.Model, clone.Claude.Effort = main.Model, main.Effort
 	} else {

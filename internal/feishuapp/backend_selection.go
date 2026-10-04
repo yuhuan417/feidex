@@ -95,7 +95,7 @@ func (r backendSelectionRuntime) Recover() {
 }
 
 func BackendSwitchPorts(a *App) backendselection.Dependencies {
-	return backendselection.Dependencies{Repository: configadapter.BackendSelectionRepository{Source: a, Configured: func() string { return configuredBackend(a) }}, Transition: &a.runtimeOwner.BackendTransition, Runtime: backendSelectionRuntime{app: a}}
+	return backendselection.Dependencies{Repository: configadapter.BackendSelectionRepository{Source: a, Configured: func() string { return a.configView().configuredBackend() }}, Transition: &a.runtimeOwner.BackendTransition, Runtime: backendSelectionRuntime{app: a}}
 }
 
 func availableBackendsForApp(app *App) []backend.AvailableBackend {

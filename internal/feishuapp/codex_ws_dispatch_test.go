@@ -30,7 +30,7 @@ func TestHandleFeishuMessageCodexWSQueuesFollowupUntilTurnCompletion(t *testing.
 		UserID:    "user-1",
 		Text:      "first task",
 	}
-	sessionKey := makeSessionKey(a, msg1)
+	sessionKey := a.configView().makeSessionKey(msg1)
 
 	var mu sync.Mutex
 	var methods []string

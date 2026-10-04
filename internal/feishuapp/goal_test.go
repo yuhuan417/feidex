@@ -16,7 +16,7 @@ import (
 
 func seedGoalTestSession(t *testing.T, a *App, msg *feishu.InboundMessage, threadID string) string {
 	t.Helper()
-	sessionKey := makeSessionKey(a, msg)
+	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     sessionKey,
 		WorkspaceID:             a.cfg.Workspaces[0].ID,

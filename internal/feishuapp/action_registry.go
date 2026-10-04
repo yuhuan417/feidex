@@ -41,7 +41,7 @@ func CardActionPorts(app *App) appcardaction.Dependencies {
 			if !ok {
 				return
 			}
-			if normalized := normalizeSessionKey(app, raw); normalized != strings.TrimSpace(raw) {
+			if normalized := app.configView().normalizeSessionKey(raw); normalized != strings.TrimSpace(raw) {
 				action.ActionValue.SetString("session_key", normalized)
 			}
 		},

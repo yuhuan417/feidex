@@ -26,7 +26,7 @@ func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *s
 	if binding == nil {
 		binding = bindingForSessionKey(s.app, sessionKey)
 	}
-	backend := configuredBackend(s.app)
+	backend := s.app.configView().configuredBackend()
 	lines := []string{
 		"配置当前 Bot 在本群的模型相关设置。",
 		"",
@@ -53,7 +53,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 	if binding == nil {
 		binding = bindingForSessionKey(s.app, sessionKey)
 	}
-	switch configuredBackend(s.app) {
+	switch s.app.configView().configuredBackend() {
 	case domainbackend.BackendCodex:
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -66,8 +66,8 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 		return s.renderBindingClaudeModelConfigCard(sessionKey, binding), nil
 	default:
 		body := strings.Join([]string{
-			"backend: `" + textutil.FirstNonEmpty(configuredBackend(s.app), "unset") + "`",
-			unsupportedGroupModelBackendMessage(configuredBackend(s.app)),
+			"backend: `" + textutil.FirstNonEmpty(s.app.configView().configuredBackend(), "unset") + "`",
+			unsupportedGroupModelBackendMessage(s.app.configView().configuredBackend()),
 		}, "\n")
 		return s.renderer.SimpleStatusCard("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
 	}
@@ -337,7 +337,7 @@ func (s bindingService) renderBindingAuxiliaryModelConfigCard(sessionKey string,
 	}
 	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuCardBody("menu.model_auxiliary", "当前群内覆盖。未设置时跟随 Bot 默认；可随时保存，待对应会话边界生效。")})
-	switch configuredBackend(s.app) {
+	switch s.app.configView().configuredBackend() {
 	case domainbackend.BackendClaude:
 		small, subagent := "", ""
 		if binding != nil {
@@ -477,8 +477,8 @@ func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, arg
 	if err != nil {
 		return err
 	}
-	card := s.renderBindingModelConfigOrMenuCard(makeSessionKey(s.app, msg), binding)
-	_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, replyInThreadEnabled(s.app, msg.ChatType))
+	card := s.renderBindingModelConfigOrMenuCard(s.app.configView().makeSessionKey(msg), binding)
+	_, err = replyCardWithIDEffect(context.Background(), s.app, msg.MessageID, card, s.app.configView().replyInThreadEnabled())
 	return err
 }
 

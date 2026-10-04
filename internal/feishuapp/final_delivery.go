@@ -24,7 +24,7 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *domainsubmiss
 	if a == nil || a.feishu == nil || sub == nil {
 		return ""
 	}
-	if quietmode.Enabled(feishuConfig(a)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(a)), "final_message") {
+	if quietmode.Enabled(a.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(a.configView().feishuConfig()), "final_message") {
 		return ""
 	}
 	triggerMessageID := strings.TrimSpace(sub.TriggerMessageID)
@@ -76,7 +76,7 @@ func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *domai
 	if a == nil || a.feishu == nil || sub == nil || strings.TrimSpace(sub.TriggerMessageID) == "" {
 		return nil
 	}
-	if quietmode.Enabled(feishuConfig(a)) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig(a)), "final_message") {
+	if quietmode.Enabled(a.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(a.configView().feishuConfig()), "final_message") {
 		return nil
 	}
 	title, color, _, _ := outboundMessageCardMeta("final_message", sub.WorkspaceID)
