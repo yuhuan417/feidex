@@ -131,6 +131,7 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 		transport = a.transport
 	}
 	runner := feishuoutbound.NewEffectRunner(transport)
+	submissions := a.bindings.Submissions
 	if owner := a.runtimeView().ensureRuntimeOwner(); owner != nil {
 		runner.Deduper = owner.EffectDeduper
 	}
@@ -185,7 +186,7 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 		if string(e.Frontend) != a.FrontendID() {
 			return fmt.Errorf("enqueue effect frontend mismatch")
 		}
-		return a.bindings.Submissions.EnqueueSubmission(&e.Message, e.SessionKey, e.BindOnlyCurrentRoot)
+		return submissions.EnqueueSubmission(&e.Message, e.SessionKey, e.BindOnlyCurrentRoot)
 	}
 	runner.RefreshGroup = func(ctx context.Context, e application.RefreshGroupStatus) error {
 		if string(e.Frontend) != a.FrontendID() {

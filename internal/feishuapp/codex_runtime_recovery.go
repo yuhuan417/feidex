@@ -25,6 +25,7 @@ func CodexRecoveryPorts(a *App,
 	startVerifiedCodexClient func(context.Context) (appcodexruntime.CodexClient, error),
 	recoverFrontend func(),
 ) appcodexruntime.RecoveryDependencies {
+	submissions := a.bindings.Submissions
 	return appcodexruntime.RecoveryDependencies{
 		State:     recoveryState(a.runtimeView()),
 		Context:   a.Context,
@@ -59,7 +60,7 @@ func CodexRecoveryPorts(a *App,
 			return conversation.ShouldStartNextSubmission(sess)
 		},
 		StartNextSubmissionAsync: func(sessionKey, reason string) {
-			a.bindings.Submissions.StartNextSubmissionAsync(sessionKey, reason)
+			submissions.StartNextSubmissionAsync(sessionKey, reason)
 		},
 		RunSessionAsync: func(sessionKey string, fn func()) {
 			runSessionAsync(a, sessionKey, fn)

@@ -85,7 +85,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}
 	// All production objects are assembled here. internal/app only binds the
 	// already composed Feishu event transport to the frontend entrypoint.
-	feishuapp.AttachEffectRunner(frontend, feishuapp.NewEffectRunner(frontend))
 	feishuapp.AttachStateView(frontend, feishuapp.NewStateView(frontend))
 	scope.RuntimeOwner.TurnBindings = turnbinding.NewTracker(frontend.State().Submission)
 	bindings := &feishuapp.Bindings{
@@ -99,6 +98,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		return feishuapp.RequireCodexGoalGateway(frontend)
 	}}
 	frontend.AttachBindings(bindings)
+	feishuapp.AttachEffectRunner(frontend, feishuapp.NewEffectRunner(frontend))
 	bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(frontend)}
 	bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
 	bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: frontend.State(), Backend: func() string { return feishuapp.BackendKind(frontend) }, Context: frontend.Context, Run: feishuapp.SessionTaskRunner(frontend), Effects: feishuapp.NewEffectRunner(frontend)}}

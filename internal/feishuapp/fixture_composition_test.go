@@ -71,10 +71,6 @@ func prepareTestApp(a *App) *App {
 	if a.stateView == nil {
 		a.stateView = NewStateView(a)
 	}
-	if a.runtimeOwner.EffectRunner == nil {
-		runner := buildEffectRunner(a)
-		a.runtimeOwner.EffectRunner = &runner
-	}
 	if a.runtimeOwner.TurnBindings == nil {
 		a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 	}
@@ -84,6 +80,10 @@ func prepareTestApp(a *App) *App {
 		Continuation: &continuation.Service{}, Turns: &turn.Service{}, TurnPresentation: &turnstream.Service{},
 		Compaction: &compaction.Service{}, GoalContinuation: &goal.Service{}, GoalCommands: &goalcmd.Service{},
 		Interactions: &interaction.Service{}, BackendEvents: &backendevents.Service{}, Plan: &planapp.Service{},
+	}
+	if a.runtimeOwner.EffectRunner == nil {
+		runner := buildEffectRunner(a)
+		a.runtimeOwner.EffectRunner = &runner
 	}
 	a.bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(a)}
 	a.bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
