@@ -7,10 +7,10 @@ import (
 	"feidex/internal/domain/conversation"
 )
 
-type turnReconciliationGateway struct{ app *App }
+type turnReconciliationGateway struct{ runtimeDeps BackendRuntimeDeps }
 
-func TurnReconciliationGateway(a *App) turn.ReconciliationGateway {
-	return turnReconciliationGateway{app: a}
+func TurnReconciliationGateway(runtimeDeps BackendRuntimeDeps) turn.ReconciliationGateway {
+	return turnReconciliationGateway{runtimeDeps: runtimeDeps}
 }
 
 func ClaudeSessionStopped(a *App) func(string) bool {
@@ -20,10 +20,11 @@ func ClaudeSessionStopped(a *App) func(string) bool {
 	}
 }
 func (p turnReconciliationGateway) Available() bool {
-	return p.app.configView().configuredBackend() == "codex" && p.app.runtimeView().currentCodexClient() != nil
+	deps := p.runtimeDeps.currentBackend()
+	return deps.view.configuredBackend() == "codex" && deps.runtime.currentCodexClient() != nil
 }
 func (p turnReconciliationGateway) ReadThreadTurns(ctx context.Context, threadID string) (backendops.ThreadTurns, error) {
-	gateway, err := p.app.runtimeView().requireCodexGateway()
+	gateway, err := p.runtimeDeps.runtime.requireCodexGateway()
 	if err != nil {
 		return backendops.ThreadTurns{}, err
 	}

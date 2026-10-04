@@ -330,7 +330,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}))
 	*bindings.Turns = turn.NewService(feishuapp.TurnPorts(frontend, bindings.TurnPresentation))
 	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend, bindings.Turns))
-	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
+	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend.BackendRuntimeDeps()), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
 	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(frontend), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}
 	workspaceRepository := configadapter.NewWorkspaceRepository(frontend)
 	bindings.BackendEvents.Deps = backendevents.Dependencies{

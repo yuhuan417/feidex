@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 304 |
-| 收 `*App` 的顶层函数 | 183 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 302 |
+| 收 `*App` 的顶层函数 | 182 |
 | 收 `*App` 的 `*Ports` 工厂 | 10 |
-| **持有 `*App` 字段的结构体** | **7** |
+| **持有 `*App` 字段的结构体** | **6** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 0。`*App`
@@ -71,7 +71,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `menuActionService` | 19 | 12 |
 | 1 | `backendUpgradeService` | 15 | 4 |
 | 1 | `backendSelectionRuntime` | 6 | 4 |
-| 1 | `turnReconciliationGateway` | 2 | 0 |
 | 1 | `inboundCommands` | 2 | 1 |
 | 1 | `cardActionService` | 0 | 0 |
 
@@ -756,6 +755,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 123 将 Codex server-request reply adapter 的 `*App` 字段改为 frontend runtime owner 与 frontend ID；reply context 和 effect runner 仍在调用时从同一 owner 获取，response payload 与 backend target 不变。生产 `*App` 引用预算由 310 降至 309，App-bearing 结构体由 13 降至 12，lazy binding-read 预算保持 0。
 
 步骤 124 将 review workspace、Git options、target resolver 与 queued-review dispatcher 的 `*App` 字段分别替换为 config/session、lifecycle context、submission queue 和 pending queue；ReviewPorts 与 review form composition 的调用顺序和服务调用保持不变。生产 `*App` 引用预算由 309 降至 304，App-bearing 结构体由 12 降至 7，lazy binding-read 预算保持 0。
+
+步骤 125 将 `turnReconciliationGateway` 改为接收 `BackendRuntimeDeps`；backend 选择与 Codex client availability 仍在调用时从当前 frontend runtime 查询，thread turn 读取仍使用同一 Codex gateway。生产 `*App` 引用预算由 304 降至 302，收 `*App` 的顶层函数由 183 降至 182，App-bearing 结构体由 7 降至 6，lazy binding-read 预算保持 0。
 
 ## 方法
 
