@@ -197,10 +197,10 @@ func (s planSettingsSource) Values(sess *conversation.Session) planapp.SettingsV
 	return planapp.SettingsValues{Experimental: s.app.cfg != nil && s.app.cfg.Codex.ExperimentalAPI, Model: settings.Model, Effort: settings.Effort, PlanModel: settings.PlanModel, PlanEffort: settings.PlanEffort}
 }
 
-type planWorkspaces struct{ app *App }
+type planWorkspaces struct{ view frontendConfigView }
 
-func (w planWorkspaces) Get(id string) *config.Workspace { return config.FindWorkspace(w.app.cfg, id) }
-func (w planWorkspaces) DefaultID() string               { return w.app.configView().defaultWorkspaceID() }
+func (w planWorkspaces) Get(id string) *config.Workspace { return config.FindWorkspace(w.view.cfg, id) }
+func (w planWorkspaces) DefaultID() string               { return w.view.defaultWorkspaceID() }
 func PlanPorts(a *App) (planapp.SettingsSource, func() (planapp.Catalog, error), planapp.Workspaces) {
-	return planSettingsSource{app: a}, func() (planapp.Catalog, error) { return requireCodexGateway(a) }, planWorkspaces{app: a}
+	return planSettingsSource{app: a}, func() (planapp.Catalog, error) { return requireCodexGateway(a) }, planWorkspaces{view: a.configView()}
 }

@@ -2,17 +2,25 @@ package feishuapp
 
 import (
 	"context"
+
+	retryview "feidex/internal/adapter/feishu/autoretry"
+	retry "feidex/internal/application/autoretry"
 	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/domain/conversation"
 )
 
-type conversationRetryControl struct{ app *App }
+// conversationRetryControl holds the two values it uses rather than the
+// frontend aggregate.
+type conversationRetryControl struct {
+	tracker *retry.Tracker
+	service retryview.Service
+}
 
 func (r conversationRetryControl) Lock(key string) func() {
-	return r.app.AutoRetries().LockDispatch(key)
+	return r.tracker.LockDispatch(key)
 }
 func (r conversationRetryControl) Cancel(key string, keep bool, notice string) bool {
-	return r.app.bindings.AutoRetry.CancelAutoRetry(key, keep, notice)
+	return r.service.CancelAutoRetry(key, keep, notice)
 }
 
 type conversationRuntimeControl struct{ app *App }
@@ -36,5 +44,5 @@ func (r conversationRuntimeControl) Interrupt(ctx context.Context, key string, s
 }
 
 func ConversationControlPorts(a *App) conversationapp.ControlDependencies {
-	return conversationapp.ControlDependencies{Repository: a.State(), Workspaces: planWorkspaces{app: a}, Conversations: a.bindings.Conversations, Pending: a.bindings.PendingQueue, Retry: conversationRetryControl{app: a}, Runtime: conversationRuntimeControl{app: a}, Context: a.Context}
+	return conversationapp.ControlDependencies{Repository: a.State(), Workspaces: planWorkspaces{view: a.configView()}, Conversations: a.bindings.Conversations, Pending: a.bindings.PendingQueue, Retry: conversationRetryControl{tracker: a.AutoRetries(), service: a.bindings.AutoRetry}, Runtime: conversationRuntimeControl{app: a}, Context: a.Context}
 }

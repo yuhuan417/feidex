@@ -76,7 +76,7 @@ func interruptConversation(a *App, ctx context.Context, key string, sess *domain
 	return err
 }
 func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
-	return conversation.RecoveryDependencies{Repository: a.State(), Conversations: a.bindings.Conversations, Workspaces: planWorkspaces{app: a}, Capture: func() (conversation.RecoveryEndpoint, error) {
+	return conversation.RecoveryDependencies{Repository: a.State(), Conversations: a.bindings.Conversations, Workspaces: planWorkspaces{view: a.configView()}, Capture: func() (conversation.RecoveryEndpoint, error) {
 		if a.configView().configuredBackend() == domainbackend.BackendClaude {
 			return conversation.RecoveryEndpoint{LazyResume: true}, nil
 		}
