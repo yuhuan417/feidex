@@ -24,14 +24,17 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 的还是聚合对象。真正让聚合停止流动的动作是**拆掉 `Bindings`**：让每个
 `*Ports` 工厂从参数拿服务，composition 传它手里已有的那些。
 
-## 当前状态
+## 当前状态（2026-10-04）
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 543 |
-| 收 `*App` 的顶层函数 | 350 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 541 |
+| 收 `*App` 的顶层函数 | 337 |
 | `*Ports` 工厂 | 25 |
-| **持有 `*App` 字段的结构体** | **72** |
+| **持有 `*App` 字段的结构体** | **71** |
+
+棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 38。
 
 ## 施工顺序（2026-10 修正版）
 
@@ -137,9 +140,12 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 |---|---|---|
 | 1 | `InteractionPorts` | `(store *appstate.Store, submissionLookup appsubmission.SubmissionLookupService)` |
 | 2 | `BindingReplayPorts` | `(actors *runtime.SessionActors, runtimeOwner *runtime.FrontendOwner)` |
+| 3 | `BuildWorkspaceConfiguration` / `BuildWorkspaceManagement` | 加了 `(*workspacecards.Presentation, *conversationapp.Service)` 两个构造期参数，26 处惰性读取改为构造期读取 |
+| 4 | `BackendFailurePorts` | 9 处 `a.bindings.X` 改为函数开头的局部变量（快照式） |
+| 5 | `buildBackendConfigurationService` | 删掉死代码权限链后，`ModelCommands` 改为构造期读取 |
 
-这两个是 29 个里仅有的**立即求值、不捕获**的工厂，所以能一次改完。
-其余 27 个都在闭包或返回结构体里捕获 `app`。
+前两个是 29 个里仅有的**立即求值、不捕获**的工厂。步骤 3-5 走的是同一
+条路：值在调用时已经就绪，惰性读取纯属写法惯性。
 
 ## 方法
 

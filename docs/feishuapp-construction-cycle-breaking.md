@@ -71,33 +71,38 @@
 - **lazy**：`a.bindings.Y` 在 func literal 里读 —— 闭包运行时才发生，**不构成构造
   顺序约束**，但会挡住快照式的能力包
 
-实测结果（93 条赋值语句，337 个收 `*App` 的函数）：
+实测结果（2026-10-04，93 条赋值语句，337 个收 `*App` 的顶层函数、226 个结构体
+方法）：
 
 | | 数量 | 环 |
 |---|---|---|
-| **构造期环（只算 eager）** | **1** | `Plan ↔ Submissions ↔ TurnPresentation ↔ Turns` |
-| 含惰性读取的环 | 2 | 上面那个，加上 recovery 组 |
+| **构造期环（只算 eager）** | **0** | —— |
+| 含惰性读取的环 | 1 | recovery 组：`CodexRecovery ↔ CodexUpgrade ↔ ConversationRecovery ↔ MaintenanceCommands ↔ StartupRecovery` |
+
+（写作时的 1 个 eager 环 `Plan ↔ Submissions ↔ TurnPresentation ↔ Turns` 已由
+`db4a1c2` 拆掉。）
 
 ### 已经解决的两个
 
 **环 3（`Inbound ↔ ForwardInputs`）** 和 **环 2（recovery 组）** 都已经通过注入
 入口函数值解决：它们的 eager 依赖现在全空，剩下的边全部是惰性的。
 
-逐个看环 2 的边就很清楚：
+逐个看环 2 的边就很清楚（2026-10-04 实测，闭包修正后的口径）：
 
 ```
-CodexRecovery        eager→[]   lazy→[CodexUpgrade StartupRecovery]
-CodexUpgrade         eager→[]   lazy→[CodexRecovery StartupRecovery]
-ConversationRecovery eager→[]   lazy→[CodexRecovery]
-StartupRecovery      eager→[]   lazy→[ConversationRecovery MaintenanceCommands]
-MaintenanceCommands  eager→[StartupRecovery]     ← 唯一 eager 边，且是正向
+CodexRecovery        eager→[]                  lazy→[CodexUpgrade StartupRecovery]
+CodexUpgrade         eager→[StartupRecovery]   lazy→[CodexRecovery]
+ConversationRecovery eager→[CodexRecovery]     lazy→[]
+StartupRecovery      eager→[]                  lazy→[ConversationRecovery MaintenanceCommands]
+MaintenanceCommands  eager→[StartupRecovery]   lazy→[]
 ```
 
-它们仍会出现在"只看有没有边"的朴素图里，因为注入的闭包在 composition 那一侧
-仍然读 `bindings.Z` —— 但那是延迟读取，不约束顺序。**判断环时必须区分 eager
-与 lazy，否则会把已解决的当成未解决。**
+环内所有 eager 边都是**正向**的（被读的 binding 更早赋值），所以构造期无环；
+把 eager 边一起算进去才成一个环，因为反向的那些全是惰性读取 —— 注入的闭包在
+composition 那一侧仍然读 `bindings.Z`，但那是延迟读取，不约束顺序。
+**判断环时必须区分 eager 与 lazy，否则会把已解决的当成未解决。**
 
-### 唯一剩下的真环
+### 当时唯一剩下的真环（已解决）
 
 ```
 Plan             eager→[Submissions]
@@ -106,9 +111,8 @@ TurnPresentation eager→[Turns]
 Turns            eager→[Submissions, TurnPresentation]
 ```
 
-4 个节点、8 条 eager 边。`TurnStarter` 因为只有惰性边，已经从环里掉出去了。
-这是唯一需要设计改动的地方 —— 拆法与「环 1」一节相同（抽出共享的状态载体），
-但范围比原先估计的小：只有 4 个服务、且 `TurnStarter` 不必动。
+4 个节点、8 条 eager 边，2026-10 由 `db4a1c2` 拆掉（抽出共享状态载体）；
+`TurnStarter` 因为只有惰性边，当时就已经掉出环外。现在构造期环为 0。
 
 ## 环 1：turn / submission / turnstream
 
@@ -301,17 +305,48 @@ nil。这也解释了为什么 `SubmissionPorts` 那处能改、而 `BuildUpgrad
 - `BuildUpgrades ← WorkspacePresentation`、`CodexUpgradePorts ← CodexRecovery`
   —— 值确实在后面，需要先拆掉它俩的依赖（后者是环 2 注入的残留，正解是抽出
   共享的恢复状态载体）
-- `BuildUpgrades ← WorkspaceConfiguration` —— **要先统一生产和 fixture 的构造
-  顺序**。建议让 fixture 复用生产的那段构造逻辑，而不是自己再写一遍
+- `ClaudeRuntimePorts`（14 处）—— 它由 `bindings.ClaudeFactory` 在运行时调用，
+  惰性是真的；要去掉只能把工厂改成"组合期先建 ports、调用时只补 cfg"
+- 其余 20 处散在 16 个函数里，多为 1-3 处
+
+`BuildUpgrades ← WorkspaceConfiguration` 已经不再是惰性读取：workspace 两个
+builder 改成构造期参数后，这条边变成了正向的显式依赖。
 
 ### 棘轮
 
 `internal/architecture` 里有两条预算测试，**都只许降**，且降了必须同步改预算：
 
-| 测试 | 起始值 | 目标 |
-|---|---|---|
-| `TestFeishuAppAggregateDoesNotGrow` | 541 | 0 |
-| `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **0** |
+| 测试 | 起始值 | 当前 | 目标 |
+|---|---|---|---|
+| `TestFeishuAppAggregateDoesNotGrow` | 541 | 541 | 0 |
+| `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **38** | **0** |
+
+### 分析口径的第三次修正：语句级图必须闭包到 wrapper 的实现
+
+2026-10-04 发现：`depmap --bindings` 原来只看赋值语句里那个函数**自己**读了什么。
+`BuildWorkspaceConfiguration` 自己什么都不读——真正的读取在
+`buildWorkspaceConfigService` 里——于是 `WorkspaceConfiguration` 这条语句在图上
+是"零 eager 依赖"，被 `ebabde9` 排到了 `BackendConfiguration` 前面。而
+`buildWorkspaceConfigService` 构造期读 `a.bindings.BackendConfiguration`，读到的是
+**零值**，绑进 workspace 服务的三个 notice + usage 全是 nil Driver 的方法值，
+生产环境第一次工作区切换就会 panic。fixture 的顺序恰好相反，所以测试全绿。
+
+这跟前面三次错误同源：**判据不完整**（先是按名字筛工厂、再是漏掉 `Forward*`、
+这次是不闭包调用）。工具已修：`reach()` 会沿 `*App` 调用边和"工厂交出去的结构体的
+方法"求传递闭包，并区分 eager/lazy；结构体方法算运行时读取（交出去是依赖，不是
+构造顺序约束）。同时新增一节报告**反向 eager 读取**，在修复前的树上是：
+
+```
+WorkspaceConfiguration (line 142) reads BackendConfiguration (assigned line 189)
+```
+
+修复后为 0。这个检查应当成为每次重排 composition 的前置条件。
+
+顺带发现的死代码：`workspacecmd.BackendWorkspacePermissionCommand` 这条 port 从
+`33c4d06` 起就没有调用方（`/workspace permissions` 一直走
+`CommandWorkspace → Deps.PermissionDriver()`），它才是把 `BackendConfiguration`
+拉进 workspace 服务的原因。已删除；workspace 服务改成从 driver 直接取四个
+notice/usage。
 
 ## 施工顺序
 
