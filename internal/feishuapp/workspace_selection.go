@@ -3,10 +3,12 @@ package feishuapp
 import (
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/workspace"
+	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	"feidex/internal/textutil"
 	"strings"
+	"sync"
 
 	"feidex/internal/feishu"
 	"feidex/internal/state"
@@ -98,6 +100,7 @@ func (a *App) WorkspaceSelection() workspace.SelectionService {
 	return a.bindings.WorkspaceSelection
 }
 
-func DefaultWorkspaceID(a *App) func() string {
-	return func() string { return a.configView().defaultWorkspaceID() }
+func DefaultWorkspaceID(cfg *config.Config, mu *sync.RWMutex) func() string {
+	view := frontendConfigView{cfg: cfg, mu: mu}
+	return view.defaultWorkspaceID
 }

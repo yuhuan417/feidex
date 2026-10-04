@@ -120,6 +120,10 @@ func sessionBelongsToFrontend(frontendID, sessionKey string) bool {
 	return strings.TrimSpace(sessionFrontendID) == strings.TrimSpace(frontendID)
 }
 
+func FrontendSessionBelongsToFrontend(frontendID, sessionKey string) bool {
+	return sessionBelongsToFrontend(frontendID, sessionKey)
+}
+
 func (v frontendConfigView) makeSessionKey(msg *feishu.InboundMessage) string {
 	if msg == nil {
 		return ""

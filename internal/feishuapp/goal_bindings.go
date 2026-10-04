@@ -4,7 +4,9 @@ import (
 	"context"
 	"feidex/internal/adapter/feishu/goalcmd"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/application"
+	"feidex/internal/application/announcement"
 	goalapp "feidex/internal/application/goal"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
@@ -44,6 +46,14 @@ func GoalCommandOutbound(frontend identity.FrontendID, runner frontendruntime.Ef
 	return goalOutbound{frontend: frontend, runner: runner}
 }
 
+func GoalContinuationPresenter(outbound goalcmd.Outbound) goalapp.AnchorPresenter {
+	return goalAnchorPresenter{outbound: outbound}
+}
+
+func GoalContinuationLiveThreads(tracker *frontendruntime.LiveThreads, state planmode.SessionStateProvider, announcement announcement.Query, refreshes *frontendruntime.CoalescedRefresh) goalapp.LiveThreads {
+	return liveThreadMarker{tracker: tracker, state: state, announcement: announcement, refreshes: refreshes}
+}
+
 func commandGoalRaw(goalcommands *goalcmd.Service, msg *feishu.InboundMessage, raw string, args []string) error {
 	return goalcommands.CommandGoal(msg, raw, args)
 }
@@ -68,20 +78,6 @@ type goalAnchorPresenter struct{ outbound goalcmd.Outbound }
 
 func (p goalAnchorPresenter) SendContinuationAnchor(ctx context.Context, chatID string, goal conversation.ThreadGoal, ordinal int) (string, error) {
 	return p.outbound.SendCard(ctx, chatID, goalcmd.RenderContinuationCard(goal, ordinal))
-}
-
-func GoalContinuationPorts(a *App) goalapp.Dependencies {
-	owner := a.runtimeOwner
-	return goalapp.Dependencies{
-		Context: a.Context, Repository: a.State(), Tracker: a.bindings.Goals,
-		Presenter: goalAnchorPresenter{outbound: goalOutbound{frontend: identity.FrontendID(a.FrontendID()), runner: newEffectRunner(a.runtimeOwner)}},
-		Bindings:  owner.TurnBindings, Replies: a.bindings.Continuation,
-		Streams: a.bindings.TurnPresentation, Live: turnRuntimePort{lifecycle: &owner.Lifecycle, asyncRunner: a.asyncRunner, liveThreads: liveThreadMarker{
-			tracker: owner.LiveThreads, state: a.State(), announcement: a.bindings.AnnouncementQuery, refreshes: owner.Announcements,
-		}},
-		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },
-		BelongsToFrontend:  func(key string) bool { return a.configView().sessionBelongsToFrontend(key) },
-	}
 }
 
 func completeMenuGoalAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

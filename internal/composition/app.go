@@ -102,7 +102,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(frontend)}
 	bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
 	bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: frontend.State(), Backend: func() string { return feishuapp.BackendKind(frontend) }, Context: frontend.Context, Run: feishuapp.SessionTaskRunner(frontend), Effects: feishuapp.NewEffectRunner(frontend)}}
-	bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: scoped.WorkspaceSelections{Store: frontend.State()}, DefaultWorkspaceID: feishuapp.DefaultWorkspaceID(frontend)}
+	bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: scoped.WorkspaceSelections{Store: frontend.State()}, DefaultWorkspaceID: feishuapp.DefaultWorkspaceID(frontend.Config(), frontend.ConfigMu())}
 	bindings.SubmissionLookup = submission.SubmissionLookupService{State: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings}
 	bindings.SubmissionStatus = submission.StatusService{Lookup: bindings.SubmissionLookup, Repository: frontend.State()}
 	bindings.InteractionLifecycle = interaction.LifecycleService{Repository: frontend.State(), Frontend: frontend.FrontendID(), Presentation: feishuapp.InteractionExpiryPresentation(frontend.Feishu(), frontend.State(), identity.FrontendID(frontend.FrontendID()), *scope.RuntimeOwner.EffectRunner)}
@@ -264,7 +264,14 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	*bindings.PendingQueue = submission.NewPendingQueueService(feishuapp.PendingQueuePorts(frontend.Context, frontend.State(), bindings.SubmissionCleanup, frontend.Config(), frontend.ConfigMu(), frontend.Feishu()))
 	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner, bindings.Submissions, frontend.FrontendID(), frontend.FrontendConfigIndex(), frontend.Feishu())
 	bindings.Compaction.Deps = feishuapp.CompactionPorts(frontend.Context, frontend.State(), scope.RuntimeOwner, frontend.FrontendID(), frontend.Feishu() != nil)
-	bindings.GoalContinuation.Deps = feishuapp.GoalContinuationPorts(frontend)
+	bindings.GoalContinuation.Deps = goal.Dependencies{
+		Context: scope.RuntimeOwner.Lifecycle.Context, Repository: frontend.State(), Tracker: bindings.Goals,
+		Presenter: feishuapp.GoalContinuationPresenter(feishuapp.GoalCommandOutbound(identity.FrontendID(frontend.FrontendID()), feishuapp.NewEffectRunner(frontend))),
+		Bindings:  scope.RuntimeOwner.TurnBindings, Replies: bindings.Continuation, Streams: bindings.TurnPresentation,
+		Live:               feishuapp.GoalContinuationLiveThreads(scope.RuntimeOwner.LiveThreads, frontend.State(), bindings.AnnouncementQuery, scope.RuntimeOwner.Announcements),
+		DefaultWorkspaceID: feishuapp.DefaultWorkspaceID(frontend.Config(), frontend.ConfigMu()),
+		BelongsToFrontend:  func(key string) bool { return feishuapp.FrontendSessionBelongsToFrontend(frontend.FrontendID(), key) },
+	}
 	*bindings.GoalCommands = goalcmd.NewService(goalcmd.Dependencies{
 		StateProvider:  frontend.State(),
 		Outbound:       feishuapp.GoalCommandOutbound(identity.FrontendID(frontend.FrontendID()), feishuapp.NewEffectRunner(frontend)),

@@ -88,7 +88,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(a)}
 	a.bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
 	a.bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: a.State(), Backend: func() string { return a.configView().configuredBackend() }, Context: a.Context, Run: SessionTaskRunner(a), Effects: newEffectRunner(a.runtimeOwner)}}
-	a.bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(a.FrontendID()), Repository: scoped.WorkspaceSelections{Store: a.State()}, DefaultWorkspaceID: DefaultWorkspaceID(a)}
+	a.bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(a.FrontendID()), Repository: scoped.WorkspaceSelections{Store: a.State()}, DefaultWorkspaceID: DefaultWorkspaceID(a.Config(), a.ConfigMu())}
 	a.bindings.GoalManagement = &goal.Management{Tracker: a.bindings.Goals, Context: a.Context, Gateway: func() (goal.Gateway, error) { return RequireCodexGoalGateway(a) }}
 	a.bindings.SubmissionLookup = submission.SubmissionLookupService{State: a.State(), Runtime: a.runtimeOwner.TurnBindings}
 	a.bindings.SubmissionStatus = submission.StatusService{Lookup: a.bindings.SubmissionLookup, Repository: a.State()}
@@ -252,7 +252,14 @@ func prepareTestApp(a *App) *App {
 	*a.bindings.PendingQueue = submission.NewPendingQueueService(PendingQueuePorts(a.Context, a.State(), a.bindings.SubmissionCleanup, a.Config(), a.ConfigMu(), a.Feishu()))
 	a.bindings.Continuation.Deps = ContinuationPorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner, a.bindings.Submissions, a.FrontendID(), a.FrontendConfigIndex(), a.Feishu())
 	a.bindings.Compaction.Deps = CompactionPorts(a.Context, a.State(), a.runtimeOwner, a.FrontendID(), a.feishu != nil)
-	a.bindings.GoalContinuation.Deps = GoalContinuationPorts(a)
+	a.bindings.GoalContinuation.Deps = goal.Dependencies{
+		Context: a.Context, Repository: a.State(), Tracker: a.bindings.Goals,
+		Presenter: GoalContinuationPresenter(GoalCommandOutbound(identity.FrontendID(a.FrontendID()), NewEffectRunner(a))),
+		Bindings:  a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation, Streams: a.bindings.TurnPresentation,
+		Live:               GoalContinuationLiveThreads(a.runtimeOwner.LiveThreads, a.State(), a.bindings.AnnouncementQuery, a.runtimeOwner.Announcements),
+		DefaultWorkspaceID: DefaultWorkspaceID(a.Config(), a.ConfigMu()),
+		BelongsToFrontend:  func(key string) bool { return FrontendSessionBelongsToFrontend(a.FrontendID(), key) },
+	}
 	*a.bindings.GoalCommands = goalcmd.NewService(goalcmd.Dependencies{
 		StateProvider:  a.State(),
 		Outbound:       GoalCommandOutbound(identity.FrontendID(a.FrontendID()), newEffectRunner(a.runtimeOwner)),

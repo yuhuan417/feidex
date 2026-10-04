@@ -24,13 +24,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 的还是聚合对象。真正让聚合停止流动的动作是**拆掉 `Bindings`**：让每个
 `*Ports` 工厂从参数拿服务，composition 传它手里已有的那些。
 
-## 当前状态（2026-10-04）
+## 当前状态（2026-10-05）
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 356 |
-| 收 `*App` 的顶层函数 | 224 |
-| 收 `*App` 的 `*Ports` 工厂 | 12 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 354 |
+| 收 `*App` 的顶层函数 | 222 |
+| 收 `*App` 的 `*Ports` 工厂 | 11 |
 | **持有 `*App` 字段的结构体** | **21** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
@@ -56,7 +56,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 结构体方法 --调用--> 收 *App 的 helper
 ```
 
-### 当前工厂排序（2026-10-04）
+### 当前工厂排序（2026-10-05）
 
 以下计数由 `go run . <repo>/internal/feishuapp --json` 生成：`a.X` 是工厂直接读取的
 非 bindings 成员数，bindings 是直接读取的 `a.bindings.Y` 字段数，helpers 是直接调用的
@@ -86,7 +86,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 11 | `StartupRecoveryPorts` | 6 | 2 | 3 | 0 |
 | 10 | `CodexRecoveryPorts` | 5 | 1 | 4 | 0 |
 | 10 | `FileSharePorts` | 3 | 0 | 2 | 5 |
-| 10 | `GoalContinuationPorts` | 6 | 4 | 0 | 0 |
 | 10 | `TurnPresentationPorts` | 3 | 5 | 2 | 0 |
 | 8 | `ReviewPorts` | 1 | 2 | 2 | 3 |
 | 3 | `BackendSwitchPorts` | 2 | 0 | 0 | 1 |
@@ -726,6 +725,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 108 将 `threadMenuConversationBackendAdapter` 改为持有 scoped store、config/backend supplier、conversation service 与 `BackendRuntimeDeps`；线程列表和 fork 提示 helper 也改为显式输入。线程查询、fork 提示、interrupt 和 resume 仍委托原 owners，生产 `*App` 引用预算由 361 降至 358，lazy binding-read 预算保持 0。
 
 步骤 109 将 `threadMenuWorkspaceConfigAdapter` 改为持有 workspace configuration service 和 backend supplier；当前 thread 选择与缺少活动线程时的 backend-specific 提示不变。生产 `*App` 引用预算由 358 降至 356，lazy binding-read 预算保持 0。
+
+步骤 110 将 Goal continuation dependencies 直接在 composition root 中装配，不再由 `GoalContinuationPorts(*App)` 读取聚合字段；配置查询和 workspace selection 默认值改为接收 config/mutex，frontend 隔离仍按相同 session key parser 判断。对照 SM-25，后台 continuation 仍只创建合成 submission 和新的 Feishu anchor，不触发本地 `turn/start`；生产 `*App` 引用预算由 356 降至 354，lazy binding-read 预算保持 0。
 
 ## 方法
 
