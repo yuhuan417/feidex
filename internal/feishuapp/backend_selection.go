@@ -137,7 +137,10 @@ func prepareRuntimeForApp(app *App, ctx context.Context, target string) (*backen
 }
 
 func snapshotRuntimeForApp(app *App) *backend.BackendRuntimeHandle {
-	h := currentBackendRuntimeHandle(app)
+	if app == nil {
+		return nil
+	}
+	h := currentBackendRuntimeHandle(app.configView().configuredBackend(), app.runtimeView())
 	if h == nil {
 		return nil
 	}

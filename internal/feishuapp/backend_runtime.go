@@ -84,12 +84,9 @@ func backendRuntime(a *App) backendruntime.BackendFacade {
 	return backendruntime.BackendForKind(a.configView().configuredBackend())
 }
 
-func currentBackendRuntimeHandle(a *App) *backendruntime.BackendHandle {
-	if a == nil {
-		return nil
-	}
+func currentBackendRuntimeHandle(backend string, view runtimeView) *backendruntime.BackendHandle {
 	return &backendruntime.BackendHandle{
-		Backend: a.configView().configuredBackend(), Codex: a.runtimeView().currentCodexClient(), Claude: a.runtimeView().currentClaudeCore(),
+		Backend: backend, Codex: view.currentCodexClient(), Claude: view.currentClaudeCore(),
 	}
 }
 
