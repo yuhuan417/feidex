@@ -46,6 +46,7 @@ import (
 	"feidex/internal/compositionkit"
 	"feidex/internal/config"
 	"feidex/internal/domain/identity"
+	"feidex/internal/feishu"
 	"feidex/internal/runtime"
 	clauderuntime "feidex/internal/runtime/claude"
 	codexruntime "feidex/internal/runtime/codex"
@@ -54,6 +55,8 @@ import (
 	upgradeunits "feidex/internal/runtime/upgrade"
 	runtimeworkspace "feidex/internal/runtime/workspace"
 	"time"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 // Focused fixtures explicitly construct their complete dependency graph.
@@ -214,7 +217,26 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Continuation.Deps = ContinuationPorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner, a.bindings.Submissions, a.FrontendID(), a.FrontendConfigIndex(), a.Feishu())
 	a.bindings.Compaction.Deps = CompactionPorts(a.Context, a.State(), a.runtimeOwner, a.FrontendID(), a.feishu != nil)
 	a.bindings.GoalContinuation.Deps = GoalContinuationPorts(a)
-	*a.bindings.GoalCommands = goalcmd.NewService(GoalCommandPorts(a))
+	*a.bindings.GoalCommands = goalcmd.NewService(goalcmd.Dependencies{
+		StateProvider:  a.State(),
+		Outbound:       GoalCommandOutbound(identity.FrontendID(a.FrontendID()), newEffectRunner(a.runtimeOwner)),
+		CardRenderer:   a.feishu,
+		GoalManagement: a.bindings.GoalManagement,
+		GoalTracker:    a.bindings.Goals,
+		MakeSessionKeyFn: func(msg *feishu.InboundMessage) string {
+			return GoalCommandSessionKey(a.FrontendID(), msg)
+		},
+		ReplyInThreadEnabledFn: func(string) bool { return false },
+		MenuCardBodyForSessionFn: func(_, action, body string) string {
+			return menuCardBody(action, body)
+		},
+		ActionStringValueFn: GoalCommandActionStringValue,
+		ActionSessionKeyFn:  GoalCommandActionSessionKey,
+		CompleteMenuCommandFn: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
+			return CompleteGoalMenuCommand(a, action, sessionKey, rawCommand, parentAction)
+		},
+		ContextFn: a.runtimeOwner.Lifecycle.Context,
+	})
 	a.bindings.Interactions.Deps = InteractionPorts(a.State(), a.bindings.SubmissionLookup)
 	a.bindings.InteractionDelivery = &interaction.DeliveryService{Repository: a.State()}
 	review := reviewapp.NewService(ReviewPorts(a))

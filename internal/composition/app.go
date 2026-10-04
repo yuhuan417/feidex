@@ -15,6 +15,7 @@ import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/adapter/feishu/finalcardpatch"
 	"feidex/internal/adapter/feishu/goalcmd"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/adapter/feishu/turnmeta"
@@ -64,6 +65,8 @@ import (
 	upgradeunits "feidex/internal/runtime/upgrade"
 	runtimeworkspace "feidex/internal/runtime/workspace"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type FrontendScope = runtime.FrontendScope
@@ -229,7 +232,26 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner, bindings.Submissions, frontend.FrontendID(), frontend.FrontendConfigIndex(), frontend.Feishu())
 	bindings.Compaction.Deps = feishuapp.CompactionPorts(frontend.Context, frontend.State(), scope.RuntimeOwner, frontend.FrontendID(), frontend.Feishu() != nil)
 	bindings.GoalContinuation.Deps = feishuapp.GoalContinuationPorts(frontend)
-	*bindings.GoalCommands = goalcmd.NewService(feishuapp.GoalCommandPorts(frontend))
+	*bindings.GoalCommands = goalcmd.NewService(goalcmd.Dependencies{
+		StateProvider:  frontend.State(),
+		Outbound:       feishuapp.GoalCommandOutbound(identity.FrontendID(frontend.FrontendID()), feishuapp.NewEffectRunner(frontend)),
+		CardRenderer:   frontend.Feishu(),
+		GoalManagement: bindings.GoalManagement,
+		GoalTracker:    bindings.Goals,
+		MakeSessionKeyFn: func(msg *feishu.InboundMessage) string {
+			return feishuapp.GoalCommandSessionKey(frontend.FrontendID(), msg)
+		},
+		ReplyInThreadEnabledFn: func(string) bool { return false },
+		MenuCardBodyForSessionFn: func(_, action, body string) string {
+			return appmenuutil.MenuCardBody(action, body)
+		},
+		ActionStringValueFn: feishuapp.GoalCommandActionStringValue,
+		ActionSessionKeyFn:  feishuapp.GoalCommandActionSessionKey,
+		CompleteMenuCommandFn: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
+			return feishuapp.CompleteGoalMenuCommand(frontend, action, sessionKey, rawCommand, parentAction)
+		},
+		ContextFn: scope.RuntimeOwner.Lifecycle.Context,
+	})
 	bindings.Interactions.Deps = feishuapp.InteractionPorts(frontend.State(), bindings.SubmissionLookup)
 	bindings.InteractionDelivery = &interaction.DeliveryService{Repository: frontend.State()}
 	review := reviewapp.NewService(feishuapp.ReviewPorts(frontend))

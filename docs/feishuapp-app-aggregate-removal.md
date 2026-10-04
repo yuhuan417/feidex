@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 509 |
-| 收 `*App` 的顶层函数 | 310 |
-| 收 `*App` 的 `*Ports` 工厂 | 18 |
-| **持有 `*App` 字段的结构体** | **68** |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 506 |
+| 收 `*App` 的顶层函数 | 309 |
+| 收 `*App` 的 `*Ports` 工厂 | 17 |
+| **持有 `*App` 字段的结构体** | **66** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -78,7 +78,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
-| 1 | `GoalCommandPorts` | 0 | 1 | 0 |
 | 2 | `BackendEventPorts` | 1 | 0 | 1 |
 | 3 | `CardActionPorts` | 2 | 0 | 1 |
 | 3 | `BackendSwitchPorts` | 2 | 0 | 1 |
@@ -123,6 +122,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 11 | `ConversationRecoveryPorts` | 显式接收 scoped repository、conversation service、配置视图、runtime owner、Codex recovery 与 conversation configuration；恢复 endpoint 仍捕获当前 client 并校验其有效性 |
 | 12 | `CodexUpgradePorts` | 显式接收配置、配置锁、frontend 身份、runtime owner、runtime dependency snapshot、Codex recovery 与 startup recovery；配置和 backend 仍动态读取 |
 | 13 | `BackendMaintenancePorts` | 改为显式接收配置/锁、maintenance state、Codex upgrade 与 Claude maintenance owner、渲染和 patch ports；runtime callback 仍观察 Claude service 的更新字段 |
+| 14 | `GoalCommandPorts` | 移除 App-bearing 工厂与 outbound/renderer；composition 显式组装 `goalcmd.Dependencies`，outbound adapter 仅持有 frontend ID 与 effect runner |
 
 在最初纳入分析的 29 个工厂中，前两个是仅有的**立即求值、不捕获**工厂；当时
 步骤 3-5 也沿用这条路径：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -175,6 +175,15 @@ frontend identity 与 effect runner。`backend_maintenance_ports_test.go` 覆盖
 runtime callback、operation card 渲染与 patch 路径；Claude upgrade/restart 失败时旧
 runtime 保持打开的既有用例也通过。没有改变维护 operation 的开始、验证、切换或失败
 收口顺序；惰性读取预算由 36 降至 34。
+
+步骤 14 把 goal command 的 state、tracker、renderer、session key、菜单工具和 lifecycle
+context 作为显式依赖交给 `goalcmd.NewService`。共享 outbound 同时供 goal continuation
+使用，改成 frontend-scoped effect runner adapter，移除了 `goalOutbound` 与
+`goalCardRenderer` 上的 `*App` 字段。通用菜单命令 callback 仍进入现有 Feishu command
+dispatcher，因此这条 callback 目前仍由 composition 绑定到 `App`；goal tracker、Codex
+gateway 与 continuation 生命周期没有变化。`goal_command_ports_test.go` 覆盖 effect 的
+frontend/消息身份和 session key 兼容格式；Goal command、feishuapp 与 composition 测试通过。
+`*App` 引用预算由 509 降至 506，惰性读取预算保持 34。
 
 ## 方法
 

@@ -51,7 +51,7 @@ type Dependencies struct {
 	ActionStringValueFn      func(*feishu.CardAction, string) string
 	ActionSessionKeyFn       func(*feishu.CardAction) string
 	CompleteMenuCommandFn    func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
-	ContextProvider          interface{ Context() context.Context }
+	ContextFn                func() context.Context
 }
 
 func (d Dependencies) State() StateProvider   { return d.StateProvider }
@@ -94,8 +94,8 @@ func (d Dependencies) CompleteMenuCommand(a *feishu.CardAction, s, r, f string) 
 }
 
 func (d Dependencies) Context() context.Context {
-	if d.ContextProvider != nil {
-		if c := d.ContextProvider.Context(); c != nil {
+	if d.ContextFn != nil {
+		if c := d.ContextFn(); c != nil {
 			return c
 		}
 	}

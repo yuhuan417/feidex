@@ -3,63 +3,63 @@ package feishuapp
 import (
 	"context"
 	"feidex/internal/adapter/feishu/goalcmd"
+	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/application"
 	goalapp "feidex/internal/application/goal"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"log/slog"
 	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type goalOutbound struct{ app *App }
+type goalOutbound struct {
+	frontend identity.FrontendID
+	runner   frontendruntime.EffectRunner
+}
 
 func (o goalOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
+	return o.runner.RunSendCard(ctx, application.SendCard{
+		Frontend: o.frontend, ReplyMessageID: messageID,
+		View: feishuoutbound.Card(card), InThread: inThread,
+	})
 }
 
 func (o goalOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
-	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
+	return o.runner.Run(ctx, []application.Effect{application.SendMessage{
+		Frontend: o.frontend, ReplyMessageID: messageID, Text: text, InThread: inThread,
+	}})
 }
 
 func (o goalOutbound) SendCard(ctx context.Context, chatID string, card map[string]any) (string, error) {
-	return sendCardWithIDEffect(ctx, o.app, chatID, card)
+	return o.runner.RunSendCard(ctx, application.SendCard{
+		Frontend: o.frontend, Chat: identity.ChatRef{ID: chatID}, View: feishuoutbound.Card(card),
+	})
 }
 
-type goalCardRenderer struct{ app *App }
-
-func (r goalCardRenderer) SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any {
-	if r.app == nil || r.app.feishu == nil {
-		return nil
-	}
-	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
-}
-
-func goalTrackerForApp(tracker *goalapp.Tracker) *goalapp.Tracker {
-	return tracker
+func GoalCommandOutbound(frontend identity.FrontendID, runner frontendruntime.EffectRunner) goalcmd.Outbound {
+	return goalOutbound{frontend: frontend, runner: runner}
 }
 
 func commandGoalRaw(goalcommands *goalcmd.Service, msg *feishu.InboundMessage, raw string, args []string) error {
 	return goalcommands.CommandGoal(msg, raw, args)
 }
 
-func GoalCommandPorts(a *App) goalcmd.Dependencies { return goalDependenciesForApp(a) }
+func goalTrackerForApp(tracker *goalapp.Tracker) *goalapp.Tracker {
+	return tracker
+}
 
 func RequireCodexGoalGateway(a *App) (goalapp.Gateway, error) { return requireCodexGateway(a) }
 
-func goalDependenciesForApp(a *App) goalcmd.Dependencies {
-	if a == nil {
-		return goalcmd.Dependencies{}
-	}
-	return goalcmd.Dependencies{
-		StateProvider: a.State(), Outbound: goalOutbound{app: a}, CardRenderer: goalCardRenderer{app: a}, GoalManagement: a.bindings.GoalManagement,
-		GoalTracker:      goalTrackerForApp(a.bindings.Goals),
-		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
-		MenuCardBodyForSessionFn: func(s, x, b string) string { return menuCardBodyForSession(a, s, x, b) }, ActionStringValueFn: actionStringValue, ActionSessionKeyFn: actionSessionKey,
-		CompleteMenuCommandFn: func(x *feishu.CardAction, s, r, f string) (*callback.CardActionTriggerResponse, error) {
-			return completeMenuCommand(a, x, s, r, f)
-		}, ContextProvider: a,
-	}
+func GoalCommandSessionKey(frontendID string, msg *feishu.InboundMessage) string {
+	return (frontendConfigView{frontendID: frontendID}).makeSessionKey(msg)
+}
+
+func CompleteGoalMenuCommand(a *App, action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
+	return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 }
 
 type goalAnchorPresenter struct{ outbound goalcmd.Outbound }
@@ -70,8 +70,8 @@ func (p goalAnchorPresenter) SendContinuationAnchor(ctx context.Context, chatID 
 
 func GoalContinuationPorts(a *App) goalapp.Dependencies {
 	return goalapp.Dependencies{
-		Context: a.Context, Repository: a.State(), Tracker: goalTrackerForApp(a.bindings.Goals),
-		Presenter: goalAnchorPresenter{outbound: goalOutbound{app: a}},
+		Context: a.Context, Repository: a.State(), Tracker: a.bindings.Goals,
+		Presenter: goalAnchorPresenter{outbound: goalOutbound{frontend: identity.FrontendID(a.FrontendID()), runner: newEffectRunner(a.runtimeOwner)}},
 		Bindings:  a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
 		Streams: a.bindings.TurnPresentation, Live: turnRuntimePort{app: a},
 		DefaultWorkspaceID: func() string { return a.configView().defaultWorkspaceID() },

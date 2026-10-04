@@ -125,12 +125,20 @@ func actionSessionKey(action *feishu.CardAction) string {
 	return actionStringValue(action, "session_key")
 }
 
+func GoalCommandActionSessionKey(action *feishu.CardAction) string {
+	return actionSessionKey(action)
+}
+
 func actionStringValue(action *feishu.CardAction, key string) string {
 	if action == nil {
 		return ""
 	}
 	value, _ := action.ActionValue[key].(string)
 	return strings.TrimSpace(value)
+}
+
+func GoalCommandActionStringValue(action *feishu.CardAction, key string) string {
+	return actionStringValue(action, key)
 }
 
 func actionIntValue(action *feishu.CardAction, key string) int {
