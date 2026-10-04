@@ -162,9 +162,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	)
 	bindings.StartupState = conversation.StartupState{Repository: frontend.State(), DefaultWorkspaceID: func() string { return frontend.WorkspaceSelection().ResolveSession(nil) }}
 	bindings.UpgradePoller = upgrade.Poller{Repository: frontend.State(), Units: upgradeunits.Units{}}
-	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend, func() {
-		bindings.MaintenanceCommands.CleanupExpiredAttachments()
-	}))
 	bindings.MaintenanceCommands = feishuapp.BuildMaintenanceCommands(frontend)
 	bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings, Items: bindings.TurnItems}
 	bindings.AutoRetry = feishuapp.AutoRetryView(frontend)
@@ -258,7 +255,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
 	backendSwitch := backendselection.NewService(feishuapp.BackendSwitchPorts(frontend))
 	bindings.BackendSwitch = &backendSwitch
-	bindings.BackendSelection = feishuapp.BuildBackendSelection(frontend)
 	bindings.ServerRequests = feishuapp.BuildServerRequests(frontend)
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(frontend)
@@ -345,8 +341,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// two entry points are passed in after both exist.
 	inboundService := &inbound.Service{}
 	forwardService := inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend.Feishu()), Tasks: feishuapp.ForwardTasks(&scope.RuntimeOwner.Lifecycle, frontend.AsyncRunner()), Context: frontend.Context, Process: feishuapp.ForwardProcessor(frontend, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(frontend)}
-	inboundService.Deps = feishuapp.InboundPorts(frontend, forwardService.Start)
-	bindings.Inbound = inboundService
 	bindings.ForwardInputs = forwardService
 	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(feishuapp.ConversationPortInputs{
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),
@@ -375,6 +369,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		frontend.Config(), frontend.ConfigMu(), frontend.FrontendConfigIndex(), frontend.State(),
 		bindings.Conversations, scope.RuntimeOwner, bindings.CodexRecovery, bindings.ConversationConfiguration,
 	))
+	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(frontend, func() {
+		bindings.MaintenanceCommands.CleanupExpiredAttachments()
+	}, bindings.ConversationRecovery.Restore))
+	bindings.BackendSelection = feishuapp.BuildBackendSelection(frontend)
+	inboundService.Deps = feishuapp.InboundPorts(frontend, forwardService.Start)
+	bindings.Inbound = inboundService
 	controls := conversation.NewControls(feishuapp.ConversationControlPorts(feishuapp.ConversationControlInputs{
 		Repository: frontend.State(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
 		FrontendID: frontend.FrontendID(), FrontendConfigIndex: frontend.FrontendConfigIndex(),

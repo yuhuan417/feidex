@@ -34,7 +34,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | **持有 `*App` 字段的结构体** | **21** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 3。`*App`
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 2。`*App`
 引用与 lazy binding-read 都只允许单向下降；即使某一步只改善其中一项，也不能让另一项回升。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
@@ -701,6 +701,11 @@ upgrade/workspace 选择仍委托原 services，production 与 test fixture 构�
 `completeGoalRenderedActionAsync` 在提交 async work 前复制已就绪的 `GoalCommands` service，closure 捕获该 service
 值而不是延迟读取 `App.bindings`。卡片响应、toast 和异步 patch 流程不变；lazy binding-read 预算由 5 降至 3，
 `*App` 引用预算不变。
+
+步骤 99 将 `StartupRecovery` 构造移到 `ConversationRecovery` 之后，并把已就绪的
+`ConversationRecovery.Restore` 作为显式依赖传给 `StartupRecoveryPorts`；`BackendSelection` 与 inbound ports 随后
+组装，所需 owners 均已就绪。Codex transport recovery 仍通过 composition 根部连接 startup recovery callback，
+StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-read 预算由 3 降至 2，`*App` 引用预算不变。
 
 ## 方法
 

@@ -11,7 +11,7 @@ import (
 
 // StartupRecoveryPorts takes the maintenance-command entry point it needs
 // from a service constructed after it.
-func StartupRecoveryPorts(a *App, cleanupExpiredAttachments func()) maintenance.RecoveryDependencies {
+func StartupRecoveryPorts(a *App, cleanupExpiredAttachments func(), restoreConversationState func() error) maintenance.RecoveryDependencies {
 	return maintenance.RecoveryDependencies{
 		Context: a.Context, Repository: a.State(), RecoveryMu: &a.runtimeView().ensureRuntimeOwner().RecoveryMu,
 		ResetLiveThreads:  func() { resetAppLiveThreadTracker(a) },
@@ -23,7 +23,7 @@ func StartupRecoveryPorts(a *App, cleanupExpiredAttachments func()) maintenance.
 			}
 			return func() {}
 		},
-		RestoreState:       func() error { return a.bindings.ConversationRecovery.Restore() },
+		RestoreState:       restoreConversationState,
 		ResetState:         a.bindings.StartupState.Reset,
 		CleanupAttachments: cleanupExpiredAttachments,
 		SendText: func(ctx context.Context, id, text string) error {

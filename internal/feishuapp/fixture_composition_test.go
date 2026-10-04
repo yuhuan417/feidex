@@ -144,9 +144,6 @@ func prepareTestApp(a *App) *App {
 	)
 	a.bindings.StartupState = conversation.StartupState{Repository: a.State(), DefaultWorkspaceID: func() string { return a.WorkspaceSelection().ResolveSession(nil) }}
 	a.bindings.UpgradePoller = upgrade.Poller{Repository: a.State(), Units: upgradeunits.Units{}}
-	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a, func() {
-		a.bindings.MaintenanceCommands.CleanupExpiredAttachments()
-	}))
 	a.bindings.MaintenanceCommands = BuildMaintenanceCommands(a)
 	a.bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: a.State(), Runtime: a.runtimeOwner.TurnBindings, Items: a.bindings.TurnItems}
 	a.bindings.AutoRetry = AutoRetryView(a)
@@ -246,7 +243,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BackendActions = BuildBackendActions(a)
 	backendSwitch := backendselection.NewService(BackendSwitchPorts(a))
 	a.bindings.BackendSwitch = &backendSwitch
-	a.bindings.BackendSelection = BuildBackendSelection(a)
 	a.bindings.ServerRequests = BuildServerRequests(a)
 	a.bindings.Skills = compositionkit.NewSkillService(SkillUseCasePorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner.PendingSkills, a.FrontendID(), a.runtimeOwner))
 	a.bindings.SkillCommands = BuildSkillCommands(a)
@@ -330,8 +326,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BackendFailure = &failure
 	inboundService := &inbound.Service{}
 	forwardService := inbound.ForwardService{Gateway: ForwardGateway(a.feishu), Tasks: ForwardTasks(&a.runtimeOwner.Lifecycle, a.asyncRunner), Context: a.Context, Process: ForwardProcessor(a, func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: a.bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: a.bindings.PendingQueue.ClearMessageProcessingReactions, Failed: ForwardFailure(a)}
-	inboundService.Deps = InboundPorts(a, forwardService.Start)
-	a.bindings.Inbound = inboundService
 	a.bindings.ForwardInputs = forwardService
 	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(ConversationPortInputs{
 		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),
@@ -357,6 +351,12 @@ func prepareTestApp(a *App) *App {
 		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),
 		a.bindings.Conversations, a.runtimeOwner, a.bindings.CodexRecovery, a.bindings.ConversationConfiguration,
 	))
+	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(a, func() {
+		a.bindings.MaintenanceCommands.CleanupExpiredAttachments()
+	}, a.bindings.ConversationRecovery.Restore))
+	a.bindings.BackendSelection = BuildBackendSelection(a)
+	inboundService.Deps = InboundPorts(a, forwardService.Start)
+	a.bindings.Inbound = inboundService
 	controls := conversation.NewControls(ConversationControlPorts(ConversationControlInputs{
 		Repository: a.State(), Config: a.Config(), ConfigMu: a.ConfigMu(),
 		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(),
