@@ -102,23 +102,13 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 	}
 	title, color, replyClass, showHeader := outboundMessageCardMeta(kind, sub.WorkspaceID)
 	if replyClass {
-		results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil).SendWithReuse(ctx, sub, title, color, appdelivery.BuildReplyCardChunks(text, showHeader, nil), inThread, enablePreview, reuseMessageID)
-		if len(results) == 0 {
-			return nil
-		}
+		results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil,
+			a.configView(), newMessageLinkRecorder(a.configView(), a.runtimeOwner, a.bindings.Continuation),
+			newLocalFileLinkPatcher(a.Config(), a.State(), a.feishu, &a.runtimeOwner.Lifecycle, a.asyncRunner, a.bindings.FinalCardPatch, newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil),
+		).SendWithReuse(ctx, sub, title, color, appdelivery.BuildReplyCardChunks(text, showHeader, nil), inThread, enablePreview, reuseMessageID)
 		ids := make([]string, 0, len(results))
 		for _, result := range results {
 			ids = append(ids, result.MessageID)
-			_ = appState.SaveMessageLink(&state.MessageLink{
-				MessageID:    result.MessageID,
-				SessionKey:   sub.SessionKey,
-				SubmissionID: sub.ID,
-				ThreadID:     sub.ThreadID,
-				TurnID:       sub.TurnID,
-			})
-			if strings.TrimSpace(kind) == "final_message" && result.CardID != "" {
-				scheduleLocalFileLinkPatch(a, sub, result.CardID, result.Title, color, result.ShowHeader, result.Body, result.FooterLines)
-			}
 		}
 		return ids
 	}

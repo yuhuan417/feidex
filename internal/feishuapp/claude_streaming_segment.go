@@ -54,7 +54,10 @@ func deliverClaudeOutputSegment(a *App, ctx context.Context, threadID, turnID, b
 		}
 		return []appdelivery.SentReplyChunk{{MessageID: ids[0], Body: body, Title: title, ShowHeader: showHeader}}, true
 	}
-	results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil).SendWithReuseIDs(
+	results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil,
+		a.configView(), newMessageLinkRecorder(a.configView(), a.runtimeOwner, a.bindings.Continuation),
+		newLocalFileLinkPatcher(a.Config(), a.State(), a.feishu, &a.runtimeOwner.Lifecycle, a.asyncRunner, a.bindings.FinalCardPatch, newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil),
+	).SendWithReuseIDs(
 		ctx,
 		sub,
 		title,

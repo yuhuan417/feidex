@@ -81,16 +81,12 @@ func sendFinalMessagesWithFooterAndReuse(a *App, ctx context.Context, sub *domai
 	}
 	title, color, _, _ := outboundMessageCardMeta("final_message", sub.WorkspaceID)
 	chunks := appdelivery.BuildReplyCardChunks(strings.TrimSpace(text), true, footerLines)
-	results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil).SendWithReuseIDs(ctx, sub, title, color, chunks, inThread, true, reuseMessageIDs)
+	results := newReplyChunkDelivery(newCardRenderer(a.Config()), a.State(), newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil,
+		a.configView(), newMessageLinkRecorder(a.configView(), a.runtimeOwner, a.bindings.Continuation),
+		newLocalFileLinkPatcher(a.Config(), a.State(), a.feishu, &a.runtimeOwner.Lifecycle, a.asyncRunner, a.bindings.FinalCardPatch, newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil),
+	).SendWithReuseIDs(ctx, sub, title, color, chunks, inThread, true, reuseMessageIDs)
 	if len(results) == 0 {
 		return nil
-	}
-	for _, result := range results {
-		recordMessageLink(a, result.MessageID, "final_message", sub, "")
-		if result.CardID != "" {
-			a.bindings.FinalCardPatch.RegisterFinalCardPatchState(result.CardID, sub, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
-			scheduleLocalFileLinkPatch(a, sub, result.CardID, result.Title, "green", result.ShowHeader, result.Body, result.FooterLines)
-		}
 	}
 	return results
 }

@@ -82,9 +82,9 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 				fallback = payload.DetailText
 			}
 			if payload.IsFinalAnswer {
-				sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, replyInThreadForSubmission(sub))
+				s.replyChunks.SendFinalMessagesWithFooter(ctx, sub, fallback, footerLines, replyInThreadForSubmission(sub), "")
 			} else {
-				sendTurnEventMessages(s.app, ctx, sub, fallback, replyInThreadForSubmission(sub), kind)
+				s.replyChunks.SendMessagesWithReuse(ctx, sub, fallback, replyInThreadForSubmission(sub), kind, "")
 			}
 			return ""
 		}
@@ -110,9 +110,9 @@ func (s outboundCardService) sendTurnItemCardWithReuse(ctx context.Context, sub 
 			fallback = payload.DetailText
 		}
 		if payload.IsFinalAnswer {
-			sendFinalMessagesWithFooter(s.app, ctx, sub, fallback, footerLines, replyInThreadForSubmission(sub))
+			s.replyChunks.SendFinalMessagesWithFooter(ctx, sub, fallback, footerLines, replyInThreadForSubmission(sub), "")
 		} else {
-			sendTurnEventMessages(s.app, ctx, sub, fallback, replyInThreadForSubmission(sub), kind)
+			s.replyChunks.SendMessagesWithReuse(ctx, sub, fallback, replyInThreadForSubmission(sub), kind, "")
 		}
 		return ""
 	}
@@ -163,7 +163,7 @@ func (s outboundCardService) sendTurnEventCardWithReuse(ctx context.Context, sub
 	}
 	id, err := s.replyChunks.outbound.ReplyCard(ctx, sub.TriggerMessageID, card, replyInThreadForSubmission(sub))
 	if err != nil || strings.TrimSpace(id) == "" {
-		sendTurnEventMessages(s.app, ctx, sub, body, replyInThreadForSubmission(sub), kind)
+		s.replyChunks.SendMessagesWithReuse(ctx, sub, body, replyInThreadForSubmission(sub), kind, "")
 		return ""
 	}
 	s.links.Record(id, kind, anchorForSubmission(sub), itemID)

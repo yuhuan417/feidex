@@ -372,6 +372,15 @@ Continuation 持久化。生产 `*App` 引用预算由 455 降至 454，
 app-bearing 函数数由 282 降至 281，持有 App 字段的结构体预算保持 42。
 异步 patch 闭包只捕获显式 owners，惰性 binding-read 预算也由 34 降至 32。
 
+步骤 43 将普通状态消息和带 footer 的最终答复 fallback 迁入 `replyChunkDelivery`，并
+复用已有的 chunk renderer、message-link recorder 与 local-file patcher。`outboundCardService`
+在回复卡发送失败或无法产出 chunk 时不再回调 `sendTurnEventMessages(*App, ...)` 或
+`sendFinalMessagesWithFooter(*App, ...)`；quiet-mode 判断、workspace 本地链接中和、最终卡片
+注册与异步 patch 顺序保持不变。回复 chunk 路径的链接仍写入 scoped state，最终答复 fallback
+仍通过 Continuation 记录链接。该步只移除结构体方法对 App helper 的传递依赖，预算保持
+454 个 `*App` 引用、281 个 app-bearing 函数和 42 个持有 App 字段的结构体；depmap 中
+`outboundCardService` 的 App helper 依赖降为 0。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、
