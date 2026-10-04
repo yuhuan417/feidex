@@ -40,7 +40,7 @@ func (p inboundRouting) DropsGroupMessage(msg *application.InboundMessage) bool 
 type inboundRootInputs struct{ app *App }
 
 func (p inboundRootInputs) PendingTextRequest(key, userID string) *interaction.PendingRequest {
-	return rootPendingTextRequest(p.app, key, userID)
+	return rootPendingTextRequest(p.app.bindings.InteractionLifecycle, key, userID)
 }
 func (p inboundRootInputs) HandlePendingTextResponse(msg *application.InboundMessage, pending *interaction.PendingRequest) error {
 	return handleRootPendingTextResponse(p.app, msg, pending)

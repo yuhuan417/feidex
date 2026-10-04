@@ -359,7 +359,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		t.Fatalf("switchBackend(claude->codex) error = %v", err)
 	}
 
-	if !codexRuntimeRecovering(app) {
+	if !codexRuntimeRecovering(app.bindings.CodexRecovery) {
 		t.Fatal("expected codex runtime to be marked recovering")
 	}
 	if got := currentCodexClient(app); got != nil {

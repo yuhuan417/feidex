@@ -73,12 +73,12 @@ func TestFinishTurnStatuses(t *testing.T) {
 		t.Fatalf("UpdateSubmission() error = %v", err)
 	}
 
-	finishTurn(a, "thread-1", "turn-1", "interrupted")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "interrupted")
 	if sess := a.store.GetSession("sess-1"); sess == nil || sess.Status != "idle" {
 		t.Fatalf("session after interrupted finish = %+v", sess)
 	}
 
-	finishTurn(a, "missing", "missing", "failed")
+	finishTurn(a.bindings.Turns, "missing", "missing", "failed")
 }
 
 func TestStandaloneCompactItemLifecycleTracksSessionState(t *testing.T) {

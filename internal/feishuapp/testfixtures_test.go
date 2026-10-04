@@ -889,7 +889,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	})
 	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 	prepareTestApp(a)
-	replaceCodexClient(a, fc)
+	replaceCodexClient(a.bindings.CodexRecovery, fc)
 	configureGroupPrimaryEvents(a)
 	t.Cleanup(asyncWG.Wait)
 	return a, ff, fc

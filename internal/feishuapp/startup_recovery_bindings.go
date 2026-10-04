@@ -5,12 +5,12 @@ import (
 	"feidex/internal/runtime/maintenance"
 )
 
-func recoverRuntimeState(a *App) {
-	a.bindings.StartupRecovery.RecoverRuntimeState()
+func recoverRuntimeState(startuprecovery maintenance.StartupRecovery) {
+	startuprecovery.RecoverRuntimeState()
 }
 
-func recoverFrontendRuntimeState(a *App) {
-	a.bindings.StartupRecovery.RecoverFrontendRuntimeState()
+func recoverFrontendRuntimeState(startuprecovery maintenance.StartupRecovery) {
+	startuprecovery.RecoverFrontendRuntimeState()
 }
 
 func resetLiveThreadState(a *App) {

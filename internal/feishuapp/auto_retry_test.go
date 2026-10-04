@@ -268,7 +268,7 @@ func TestAutoRetryTakesPriorityOverSameSessionQueue(t *testing.T) {
 	if refreshed == nil || len(refreshed.Queue) != 1 || refreshed.Queue[0] != queuedID {
 		t.Fatalf("queue after retry start = %#v, want queued later input retained", refreshed)
 	}
-	finishTurn(a, threadID, "turn-retry-queue-1", "completed")
+	finishTurn(a.bindings.Turns, threadID, "turn-retry-queue-1", "completed")
 	if len(startInputs) != 2 || startInputs[1] != "later input" {
 		t.Fatalf("turn/start inputs after retry completion = %#v, want queued input to resume", startInputs)
 	}
@@ -389,7 +389,7 @@ func TestAutoRetryTakesPriorityOverGroupQueue(t *testing.T) {
 		t.Fatalf("group session before retry completion = %+v, want retry active and queued follow-up", sess)
 	}
 
-	finishTurn(a, threadA, "turn-root-a-retry", "completed")
+	finishTurn(a.bindings.Turns, threadA, "turn-root-a-retry", "completed")
 	if threadStartCalls != 0 {
 		t.Fatalf("thread/start calls = %d, want 0 for same group session queued submission", threadStartCalls)
 	}
@@ -690,7 +690,7 @@ func TestStopPreventsLateFailureFromRestartingRetry(t *testing.T) {
 					if sess := a.State().Session(key); sess.ActiveTurnID != "turn-1" {
 						t.Fatal("interrupt finalized before terminal notification")
 					}
-					finishTurn(a, "thread-1", "turn-1", "failed")
+					finishTurn(a.bindings.Turns, "thread-1", "turn-1", "failed")
 				}
 				if scheduled != 0 {
 					t.Fatalf("stop resurrected %d retries", scheduled)
@@ -813,7 +813,7 @@ func TestStopWaitsForRetryStartupAndInterruptsStartedTurn(t *testing.T) {
 		t.Fatal("stop missed retry startup")
 	}
 	<-retryDone
-	finishTurn(a, "thread-1", "turn-retry", "failed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-retry", "failed")
 	if retry.HasPendingAutoRetry(key) {
 		t.Fatal("stopped startup retried after failure")
 	}

@@ -278,7 +278,7 @@ func (s bindingService) commandEffort(msg *feishu.InboundMessage, args []string)
 
 func (s bindingService) commandFast(msg *feishu.InboundMessage, args []string) error {
 	if !isGroupMessage(msg) {
-		return commandFast(s.app, msg, args)
+		return commandFast(s.app.bindings.ServiceTier, msg, args)
 	}
 	if len(args) == 0 {
 		args = []string{"toggle"}

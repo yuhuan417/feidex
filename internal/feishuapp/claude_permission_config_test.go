@@ -78,7 +78,7 @@ func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *t
 		t.Fatalf("session permission card should expose bypassPermissions: %#v", cardButtonsForTest(sessionCard))
 	}
 
-	workspaceCard, err := renderClaudeWorkspacePermissionMenuCard(a, sessionKey)
+	workspaceCard, err := renderClaudeWorkspacePermissionMenuCard(a.bindings.WorkspacePresentation, sessionKey)
 	if err != nil {
 		t.Fatalf("renderClaudeWorkspacePermissionMenuCard() error = %v", err)
 	}

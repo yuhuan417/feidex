@@ -40,7 +40,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 			},
 			FinishTurn: func(threadID, turnID, status string) {
 				runSession(app, sessionKeyForBackendEvent(app, application.BackendEvent{ThreadID: threadID}), func() {
-					finishTurn(app, threadID, turnID, status)
+					finishTurn(app.bindings.Turns, threadID, turnID, status)
 				})
 			},
 			FinishSteerSubmission: func(submissionID, status string) {
@@ -54,7 +54,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 			},
 			FailClaudeSessionWork: func(sessionKey, threadID string, err error) {
 				runSession(app, sessionKey, func() {
-					failClaudeSessionActiveWork(app, sessionKey, threadID, err)
+					failClaudeSessionActiveWork(app.bindings.BackendFailure, sessionKey, threadID, err)
 				})
 			},
 			FailBackendActiveWork: func(backend, sessionKey, threadID, message string) {
@@ -109,13 +109,13 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 				return sendClaudeApprovalCard(app, requestID, sessionKey, sub, presentation)
 			},
 			SendClaudeUserInputCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
-				return sendClaudeUserInputCard(app, requestID, sessionKey, sub, payload)
+				return sendClaudeUserInputCard(app.bindings.ClaudeSupport, requestID, sessionKey, sub, payload)
 			},
 			SendClaudeUserInputFormCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, payload apppendingforms.ToolUserInputPayload) error {
-				return sendClaudeUserInputFormCard(app, requestID, sessionKey, sub, payload)
+				return sendClaudeUserInputFormCard(app.bindings.ClaudeSupport, requestID, sessionKey, sub, payload)
 			},
 			SendClaudePlanModeCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error {
-				return sendClaudePlanModeCard(app, requestID, sessionKey, sub, threadID, turnID, body)
+				return sendClaudePlanModeCard(app.bindings.ClaudeSupport, requestID, sessionKey, sub, threadID, turnID, body)
 			},
 			SendDetachedApprovalCard: func(requestID string, target appclauderuntime.InteractionTarget, presentation appapproval.Presentation) error {
 				return app.bindings.ClaudeSupport.SendDetachedApprovalCard(requestID, target, presentation)

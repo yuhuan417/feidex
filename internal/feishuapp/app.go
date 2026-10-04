@@ -3,6 +3,7 @@ package feishuapp
 import (
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/application"
+	"feidex/internal/application/submission"
 	"feidex/internal/domain/identity"
 
 	"context"
@@ -162,18 +163,18 @@ func (a *App) HandleCardAction(action *feishu.CardAction) (*callback.CardActionT
 }
 
 func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
-	return enqueueSubmissionWithSessionKey(a, msg, makeSessionKey(a, msg), false)
+	return enqueueSubmissionWithSessionKey(a.bindings.Submissions, msg, makeSessionKey(a, msg), false)
 }
 
-func enqueueSubmissionWithSessionKey(a *App, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
-	if err := a.bindings.Submissions.EnqueueSubmission(msg, sessionKey, bindOnlyCurrentRoot); err != nil {
+func enqueueSubmissionWithSessionKey(submissions *submission.SubmissionQueueService, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {
+	if err := submissions.EnqueueSubmission(msg, sessionKey, bindOnlyCurrentRoot); err != nil {
 		return err
 	}
 	return nil
 }
 
-func startNextSubmission(a *App, sessionKey string) error {
-	return a.bindings.Submissions.StartNextSubmission(sessionKey)
+func startNextSubmission(submissions *submission.SubmissionQueueService, sessionKey string) error {
+	return submissions.StartNextSubmission(sessionKey)
 }
 
 func replyError(a *App, msg *feishu.InboundMessage, err error) error {

@@ -102,7 +102,7 @@ type debugWorkspaceConfigAdapter struct {
 }
 
 func (a debugWorkspaceConfigAdapter) CurrentWorkspaceForMessage(msg *feishu.InboundMessage) (string, *conversation.Session, *config.Workspace) {
-	return currentWorkspaceForMessage(a.app, msg)
+	return currentWorkspaceForMessage(a.app.bindings.WorkspaceConfiguration, msg)
 }
 
 type debugWorkspaceRenderAdapter struct {

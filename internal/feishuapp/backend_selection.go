@@ -33,7 +33,7 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 				return snapshotRuntimeForApp(app)
 			},
 			RecoverState: func() {
-				recoverFrontendRuntimeState(app)
+				recoverFrontendRuntimeState(app.bindings.StartupRecovery)
 				scheduleAllGroupAnnouncementStatusRefreshes(app, "backend_switched")
 			},
 			IdleBlockedReason: func() string {
@@ -90,7 +90,7 @@ func (r backendSelectionRuntime) Snapshot() *backendselection.RuntimeHandle {
 	return snapshotRuntimeForApp(r.app)
 }
 func (r backendSelectionRuntime) Recover() {
-	recoverFrontendRuntimeState(r.app)
+	recoverFrontendRuntimeState(r.app.bindings.StartupRecovery)
 	scheduleAllGroupAnnouncementStatusRefreshes(r.app, "backend_switched")
 }
 

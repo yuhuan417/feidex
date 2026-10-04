@@ -28,12 +28,12 @@ func configureGroupMessagePolicy(a *App) {
 		return
 	}
 	configurer.SetGroupMessagePolicy(func(input feishu.GroupMessagePolicyInput) bool {
-		return shouldDeliverGroupMessageToApp(a, input)
+		return shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, input)
 	})
 }
 
-func shouldDeliverGroupMessageToApp(a *App, input feishu.GroupMessagePolicyInput) bool {
-	return a.bindings.GroupMessages.Deliver(routing.GroupMessage{
+func shouldDeliverGroupMessageToApp(groupmessages routing.GroupMessages, input feishu.GroupMessagePolicyInput) bool {
+	return groupmessages.Deliver(routing.GroupMessage{
 		ChatID: input.ChatID, RootMessageID: input.RootMessageID, ParentMessageID: input.ParentMessageID,
 		Text: input.Text, MentionedOpenIDs: input.MentionedOpenIDs, MentionAll: input.MentionAll,
 		MentionedSelf: input.MentionedSelf, MentionedAny: input.MentionedAny,

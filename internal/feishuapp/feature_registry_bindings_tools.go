@@ -83,7 +83,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"goal": {
 				HandleRaw: func(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
-					return commandGoalRaw(a, msg, raw, args)
+					return commandGoalRaw(a.bindings.GoalCommands, msg, raw, args)
 				},
 			},
 		},

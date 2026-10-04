@@ -2,11 +2,11 @@ package feishuapp
 
 import (
 	"context"
+	"feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/domain/conversation"
 	"fmt"
 	"strings"
 
-	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -34,11 +34,11 @@ func (r workspaceCardRenderer) SimpleStatusCard(title, color, body string, butto
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
-func workspaceCommandApp(a *App) appworkspacecmd.Dependencies {
+func workspaceCommandApp(a *App) workspacecmd.Dependencies {
 	if a == nil {
-		return appworkspacecmd.Dependencies{}
+		return workspacecmd.Dependencies{}
 	}
-	return appworkspacecmd.Dependencies{
+	return workspacecmd.Dependencies{
 		ConfigProvider: a,
 		Settings:       a.bindings.WorkspaceSettings,
 		Planning:       a.bindings.WorkspacePlanning,
@@ -58,33 +58,33 @@ func workspaceCommandApp(a *App) appworkspacecmd.Dependencies {
 	}
 }
 
-func buildWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
+func buildWorkspaceConfigService(a *App) *workspacecmd.ConfigService {
 	if a == nil {
-		return appworkspacecmd.NewConfigService(appworkspacecmd.ConfigDeps{})
+		return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{})
 	}
 
 	st := a.State()
 	bcfg := a.bindings.BackendConfiguration
-	return appworkspacecmd.NewConfigService(appworkspacecmd.ConfigDeps{
+	return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{
 		Dependencies: workspaceCommandApp(a),
 		State:        workspaceStateDeps(st),
-		SessionContext: appworkspacecmd.SessionContextDeps{
+		SessionContext: workspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
 			ClearSessionLiveThread: func(sessionKey string) { clearSessionLiveThread(a, sessionKey) },
 		},
-		Threads: appworkspacecmd.ThreadDeps{
-			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
+		Threads: workspacecmd.ThreadDeps{
+			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*workspacecmd.ThreadBinding, error) {
 				return a.bindings.Conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 		},
-		Backend: appworkspacecmd.BackendConfigDeps{
+		Backend: workspacecmd.BackendConfigDeps{
 			BackendWorkspaceSwitchBindingNotice:        bcfg.BackendWorkspaceSwitchBindingNotice,
 			BackendWorkspaceSwitchBindingFailureNotice: bcfg.BackendWorkspaceSwitchBindingFailureNotice,
 			BackendWorkspaceSwitchInFlightNotice:       bcfg.BackendWorkspaceSwitchInFlightNotice,
 			BackendWorkspaceCommandUsage:               bcfg.BackendWorkspaceCommandUsage,
 			BackendWorkspacePermissionCommand:          bcfg.HandleBackendWorkspacePermissionCommand,
 		},
-		Actions: appworkspacecmd.ActionDeps{
+		Actions: workspacecmd.ActionDeps{
 			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 			},
@@ -93,10 +93,10 @@ func buildWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 			},
 			CommandActionFromMessage: commandActionFromMessage,
 		},
-		Formatting: appworkspacecmd.FormattingDeps{
+		Formatting: workspacecmd.FormattingDeps{
 			FormatMenuBody: menuCardBody,
 		},
-		Render: appworkspacecmd.ConfigRenderDeps{
+		Render: workspacecmd.ConfigRenderDeps{
 			RenderMenuCard: func(sessionKey string) map[string]any {
 				return a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey)
 			},
@@ -125,12 +125,12 @@ func buildWorkspaceConfigService(a *App) *appworkspacecmd.ConfigService {
 	})
 }
 
-func currentWorkspaceForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace) {
-	return a.bindings.WorkspaceConfiguration.CurrentWorkspaceForMessage(msg)
+func currentWorkspaceForMessage(workspaceconfiguration *workspacecmd.ConfigService, msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace) {
+	return workspaceconfiguration.CurrentWorkspaceForMessage(msg)
 }
 
 func currentThreadForMessage(a *App, msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error) {
-	sessionKey, sess, ws = currentWorkspaceForMessage(a, msg)
+	sessionKey, sess, ws = currentWorkspaceForMessage(a.bindings.WorkspaceConfiguration, msg)
 	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) == "" {
 		return sessionKey, sess, ws, "", fmt.Errorf("%s", primaryConversationMissingLabel(configuredBackend(a)))
 	}

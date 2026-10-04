@@ -8,7 +8,7 @@ func modelConfigBlockedReason(a *App) string {
 	if a == nil {
 		return ""
 	}
-	return frontendActivity(a, false).ModelWriteBlockedReason()
+	return frontendActivity(a.bindings.FrontendQuery, false).ModelWriteBlockedReason()
 }
 
 func ensureSessionModelConfigWritable(a *App, _ string) error {

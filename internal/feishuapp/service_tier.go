@@ -4,6 +4,7 @@ import (
 	"context"
 	tier "feidex/internal/adapter/feishu/servicetier"
 	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application/threadsettings"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
 )
@@ -23,9 +24,9 @@ func BuildServiceTier(a *App) tier.Service {
 func renderServiceTierMenuCard(state *appstate.Store, key string) map[string]any {
 	return tier.RenderMenuCard(key, state.Session(key))
 }
-func setThreadServiceTier(a *App, key, threadID, value string) (*conversation.Session, error) {
-	return a.bindings.ThreadSettings.SetThreadServiceTier(key, threadID, value)
+func setThreadServiceTier(threadsettingsDep threadsettings.Service, key, threadID, value string) (*conversation.Session, error) {
+	return threadsettingsDep.SetThreadServiceTier(key, threadID, value)
 }
-func commandFast(a *App, msg *feishu.InboundMessage, args []string) error {
-	return a.bindings.ServiceTier.CommandFast(msg, args)
+func commandFast(servicetier tier.Service, msg *feishu.InboundMessage, args []string) error {
+	return servicetier.CommandFast(msg, args)
 }

@@ -2,6 +2,8 @@ package feishuapp
 
 import (
 	"errors"
+	"feidex/internal/adapter/feishu/backend"
+	modelcommands "feidex/internal/adapter/feishu/modelconfig"
 	domainbackend "feidex/internal/domain/backend"
 	"fmt"
 	"strings"
@@ -53,19 +55,19 @@ func saveAuxiliaryCommand(a *App, msg *feishu.InboundMessage, setting routing.Se
 	return replyTextEffect(a, msg, "已更新当前 "+scope+" 的 "+label)
 }
 
-func commandEffortProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
+func commandEffortProfileAware(modelcommandsDep modelcommands.ModelConfigService, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") || len(args) == 0 {
-		return a.bindings.ModelCommands.CommandEffort(msg, args)
+		return modelcommandsDep.CommandEffort(msg, args)
 	}
 	if len(args) != 1 {
 		return fmt.Errorf("usage: /effort | /effort EFFORT|default")
 	}
-	return a.bindings.ModelCommands.CommandEffort(msg, args)
+	return modelcommandsDep.CommandEffort(msg, args)
 }
 
 func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") || (len(args) == 1 && strings.EqualFold(strings.TrimSpace(args[0]), "config")) {
-		return commandFast(a, msg, args)
+		return commandFast(a.bindings.ServiceTier, msg, args)
 	}
 	if len(args) > 1 {
 		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast off | /fast toggle")
@@ -93,12 +95,12 @@ func effectiveBotProfile(a *App) *state.BotProfile {
 	return a.State().BotProfile()
 }
 
-func completeBotProfileModelSet(a *App, action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
-	return a.bindings.BackendConfiguration.CompleteGlobalModelSet(action, modelID)
+func completeBotProfileModelSet(backendconfiguration backend.ConfigurationService, action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {
+	return backendconfiguration.CompleteGlobalModelSet(action, modelID)
 }
 
-func completeBotProfileEffortSet(a *App, action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
-	return a.bindings.BackendConfiguration.CompleteGlobalReasoningEffortSet(action, effort)
+func completeBotProfileEffortSet(backendconfiguration backend.ConfigurationService, action *feishu.CardAction, effort string) (*callback.CardActionTriggerResponse, error) {
+	return backendconfiguration.CompleteGlobalReasoningEffortSet(action, effort)
 }
 
 func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {

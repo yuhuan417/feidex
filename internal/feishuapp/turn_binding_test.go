@@ -50,7 +50,7 @@ func TestFinishTurnCompletedWithoutFinalSendsEmptyGreenCard(t *testing.T) {
 	}
 
 	a.bindings.TurnPresentation.NoteTurnStarted("sess-1", &domainsubmission.Submission{ID: sub.ID, SessionKey: "sess-1", WorkspaceID: "default", ThreadID: "thread-1", TurnID: "turn-1"})
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 
 	if len(ff.replyCards) == 0 {
 		t.Fatal("expected empty green final card to be sent")
@@ -92,7 +92,7 @@ func TestFinalAnswersAreSentImmediatelyAndNotReplayedOnCompletion(t *testing.T) 
 	if body := cardMarkdownContent(t, ff.patchedCards[0]); !strings.Contains(body, "second final") {
 		t.Fatalf("patched final body = %q, want second final", body)
 	}
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != 1 || len(ff.patchedCards) != 1 {
 		t.Fatalf("expected no replay on completion, got %d cards and %d patches", len(ff.replyCards), len(ff.patchedCards))
 	}
@@ -120,7 +120,7 @@ func TestLegacyAgentMessageWithoutPhaseIsFinalAndNotReplayedOnCompletion(t *test
 		t.Fatalf("phase-less agent message body = %q, want final text", body)
 	}
 
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("expected no extra final card on completion, got %d cards", len(ff.replyCards))
 	}
@@ -156,7 +156,7 @@ func TestCommentaryOnlyTurnPromotesLastAgentMessageToFinalOnCompletion(t *testin
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply cards after commentary = %d, want 1", len(ff.replyCards))
 	}
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("expected no extra final card, got %d cards", len(ff.replyCards))
 	}
@@ -187,7 +187,7 @@ func TestFinishTurnFailedAutoRetrySuppressesTerminalStatusCard(t *testing.T) {
 	if len(ff.replyCards) != 0 {
 		t.Fatal("error notification must not start retry before completion")
 	}
-	finishTurn(a, "thread-1", "turn-1", "failed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "failed")
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply cards = %d, want 1 auto-retry card only", len(ff.replyCards))

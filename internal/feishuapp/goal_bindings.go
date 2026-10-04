@@ -42,8 +42,8 @@ func goalTrackerForApp(a *App) *goalapp.Tracker {
 	return a.bindings.Goals
 }
 
-func commandGoalRaw(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
-	return a.bindings.GoalCommands.CommandGoal(msg, raw, args)
+func commandGoalRaw(goalcommands *goalcmd.Service, msg *feishu.InboundMessage, raw string, args []string) error {
+	return goalcommands.CommandGoal(msg, raw, args)
 }
 
 func GoalCommandPorts(a *App) goalcmd.Dependencies { return goalDependenciesForApp(a) }

@@ -139,7 +139,7 @@ func TestAppStartStopAndRecoverRuntimeState(t *testing.T) {
 		t.Fatalf("UpsertSession(sess-2) error = %v", err)
 	}
 
-	recoverRuntimeState(a)
+	recoverRuntimeState(a.bindings.StartupRecovery)
 
 	sess1 := a.store.GetSession("sess-1")
 	if sess1.WorkspaceID != defaultWorkspaceID(a) || sess1.ActiveThreadID != "" {
@@ -187,7 +187,7 @@ func TestRecoverRuntimeStateResumesActiveThreadOnStartup(t *testing.T) {
 		return nil
 	}
 
-	recoverRuntimeState(a)
+	recoverRuntimeState(a.bindings.StartupRecovery)
 
 	if len(calls) != 1 || calls[0] != "thread/resume" {
 		t.Fatalf("startup recovery calls = %+v, want thread/resume", calls)
@@ -237,7 +237,7 @@ func TestRecoverRuntimeStateStartsFreshThreadWhenResumeFails(t *testing.T) {
 		}
 	}
 
-	recoverRuntimeState(a)
+	recoverRuntimeState(a.bindings.StartupRecovery)
 
 	if len(calls) != 2 || calls[0] != "thread/resume" || calls[1] != "thread/start" {
 		t.Fatalf("startup recovery calls = %+v, want resume then start", calls)
@@ -2364,7 +2364,7 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatal("expected startSubmissionTurn(empty input) to fail")
 	}
 
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if len(calls) != 2 || calls[0] != "thread/start" || calls[1] != "turn/start" {
@@ -2385,7 +2385,7 @@ func TestTurnStartAndFinishFlowHelpers(t *testing.T) {
 		t.Fatalf("submission after startNextSubmission = %+v", sub)
 	}
 
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 	time.Sleep(20 * time.Millisecond)
 	sub = a.store.GetSubmission(subID)
 	if sub != nil {
@@ -2454,7 +2454,7 @@ func TestNotificationHelpers(t *testing.T) {
 		t.Fatalf("updateSubmissionByTurn() = %+v, want updated status", got)
 	}
 
-	startNextSubmissionAsync(a, "", "test")
+	startNextSubmissionAsync(a.bindings.Submissions, "", "test")
 	if got := textutil.Truncate("  abcdef  ", 3); got != "  …" {
 		t.Fatalf("textutil.Truncate() = %q, want \"  …\"", got)
 	}

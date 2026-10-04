@@ -369,7 +369,7 @@ func TestStartNextSubmissionClaudeStartsTurnAndBindsSession(t *testing.T) {
 	}
 	markSessionThreadLive(a, sessionKey, "claude-prev")
 
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if len(claude.ensureCalls) != 1 {
@@ -470,7 +470,7 @@ func TestHandleFeishuMessageClaudeQueuesOrdinaryFollowupAndShowsQueuedCard(t *te
 		t.Fatalf("queued notice cards = %+v", replyCards)
 	}
 
-	finishTurn(a, "claude-thread-1", "claude-turn-current", "completed")
+	finishTurn(a.bindings.Turns, "claude-thread-1", "claude-turn-current", "completed")
 
 	a.waitAsync()
 
@@ -538,7 +538,7 @@ func TestStartNextSubmissionClaudeRetriesFreshSessionAfterResumedStartFailure(t 
 	}
 	markSessionThreadLive(a, sessionKey, "claude-stale")
 
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if len(claude.ensureCalls) != 2 {
@@ -690,7 +690,7 @@ func TestStartNextSubmissionClaudeBindsThreadAfterReady(t *testing.T) {
 		t.Fatalf("QueueSubmission() error = %v", err)
 	}
 
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 
@@ -842,7 +842,7 @@ func TestStartNextSubmissionClaudeKeepsQueuedFollowupPendingWhileTurnActive(t *t
 		t.Fatalf("QueueSubmission() error = %v", err)
 	}
 
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if len(claude.ensureCalls) != 0 {
@@ -918,7 +918,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 
 	sub := seedActiveSubmission(t, a, "sess-1", "claude-thread-1", "claude-turn-1")
 
-	if err := sendClaudeApprovalCardWithPayload(a,
+	if err := sendClaudeApprovalCardWithPayload(a.bindings.ClaudeSupport,
 		"command",
 		"approve-card-1",
 		"sess-1",
@@ -936,7 +936,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 		t.Fatalf("approval pending = %+v, want Claude pending command", pending)
 	}
 
-	if err := sendClaudeUserInputCard(a, "question-card-1", "sess-1", sub, pendingforms.ToolUserInputPayload{
+	if err := sendClaudeUserInputCard(a.bindings.ClaudeSupport, "question-card-1", "sess-1", sub, pendingforms.ToolUserInputPayload{
 		ThreadID: "claude-thread-1",
 		TurnID:   "claude-turn-1",
 		ItemID:   "item-2",
@@ -953,7 +953,7 @@ func TestSendClaudePendingCardsStoreBackendAndStatus(t *testing.T) {
 		t.Fatalf("Claude quick user input body = %q", got)
 	}
 
-	if err := sendClaudePlanModeCard(a, "plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
+	if err := sendClaudePlanModeCard(a.bindings.ClaudeSupport, "plan-card-1", "sess-1", sub, "claude-thread-1", "claude-turn-1", "plan body"); err != nil {
 		t.Fatalf("sendClaudePlanModeCard() error = %v", err)
 	}
 	if pending := a.store.PendingByID("plan-card-1"); pending == nil || pending.Backend != domainbackend.BackendClaude || pending.Kind != "claude_exit_plan_mode" || pending.Status != "pending" {
@@ -1551,7 +1551,7 @@ func TestSteerFlowCompleteBothTurnsSessionReturnsIdle(t *testing.T) {
 	// the steer submission is finalized together with the turn via
 	// FinishSteerSubmission, so both ActiveOperations are cleaned up.
 	t.Log("=== completing original turn (claude-turn-1) ===")
-	finishTurn(a, "claude-thread-1", "claude-turn-1", "completed")
+	finishTurn(a.bindings.Turns, "claude-thread-1", "claude-turn-1", "completed")
 
 	sess = a.store.GetSession(sessionKey)
 	dumpSessionState(t, "after-original-complete", sess)

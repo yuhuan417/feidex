@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	"feidex/internal/adapter/feishu/turn"
+	turnstream "feidex/internal/adapter/feishu/turnstream"
 	domainsubmission "feidex/internal/domain/submission"
 	"log/slog"
 	"strings"
@@ -29,7 +30,7 @@ func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *domainsubmissio
 			return
 		}
 		recordMessageLink(a, messageID, "turn_working", sub, "")
-		commitQuietWorkingCardRender(a, op.TurnID, messageID, op.Body)
+		commitQuietWorkingCardRender(a.bindings.TurnPresentation, op.TurnID, messageID, op.Body)
 		return
 	}
 	if err := patchCardEffect(ctx, a, op.MessageID, card); err != nil {
@@ -40,11 +41,11 @@ func executeQuietWorkingCardOp(a *App, ctx context.Context, sub *domainsubmissio
 		)
 		return
 	}
-	commitQuietWorkingCardRender(a, op.TurnID, op.MessageID, op.Body)
+	commitQuietWorkingCardRender(a.bindings.TurnPresentation, op.TurnID, op.MessageID, op.Body)
 }
 
-func commitQuietWorkingCardRender(a *App, turnID, messageID, body string) {
-	a.bindings.TurnPresentation.CommitStreamQuietRender(turnID, messageID, body)
+func commitQuietWorkingCardRender(turnpresentation *turnstream.Service, turnID, messageID, body string) {
+	turnpresentation.CommitStreamQuietRender(turnID, messageID, body)
 }
 
 // prepareQuietWorkingCardBoundaryLocked wraps turn.PrepareBoundaryLocked for use within the app package.

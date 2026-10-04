@@ -58,8 +58,8 @@ func planPresentationContext(a *App) planmode.Dependencies {
 	return planmode.Dependencies{ConfigProvider: a, StateProvider: a.State()}
 }
 
-func planModeStateForTurnStart(a *App, sessionKey, threadID string) *conversation.SessionCollaborationMode {
-	return a.bindings.Plan.ModeForTurnStart(sessionKey, threadID)
+func planModeStateForTurnStart(plan *planapp.Service, sessionKey, threadID string) *conversation.SessionCollaborationMode {
+	return plan.ModeForTurnStart(sessionKey, threadID)
 }
 
 func normalizeThreadCollaborationMode(mode *conversation.SessionCollaborationMode) *conversation.SessionCollaborationMode {
@@ -156,7 +156,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		SendLocalTurnFollowupCardFn: func(ctx context.Context, parent string, card map[string]any, reply bool, sub *domainsubmission.Submission, kind string) (string, error) {
 			return sendLocalTurnFollowupCard(ctx, a, parent, card, reply, sub, kind)
 		},
-		StartNextSubmissionFn: func(key string) error { return startNextSubmission(a, key) },
+		StartNextSubmissionFn: func(key string) error { return startNextSubmission(a.bindings.Submissions, key) },
 		StartWorkspaceThreadFn: func(key string, sess *conversation.Session, ws *config.Workspace) (*conversation.ThreadBinding, error) {
 			return a.bindings.Conversations.StartWorkspaceThread(key, sess, ws)
 		},

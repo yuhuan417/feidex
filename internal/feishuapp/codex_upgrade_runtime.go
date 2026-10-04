@@ -35,10 +35,10 @@ func CodexUpgradePorts(a *App) appcodexruntime.UpgradeDependencies {
 			return currentCodexClient(a)
 		},
 		ReplaceClient: func(next appcodexruntime.CodexClient) appcodexruntime.CodexClient {
-			return replaceCodexClient(a, next)
+			return replaceCodexClient(a.bindings.CodexRecovery, next)
 		},
 		RecoverFrontendRuntimeState: func() {
-			recoverFrontendRuntimeState(a)
+			recoverFrontendRuntimeState(a.bindings.StartupRecovery)
 		},
 	}
 }

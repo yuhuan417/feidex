@@ -89,13 +89,13 @@ func claudePlanCancelledBody(pending *state.PendingRequest) string {
 	return claudesupport.ClaudePlanCancelledBody(pending)
 }
 
-func sendClaudeApprovalCardWithPayload(a *App, kind, requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
-	return a.bindings.ClaudeSupport.SendApprovalCardWithPayload(sub, kind, requestID, sessionKey, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
+func sendClaudeApprovalCardWithPayload(claudesupportDep *claudesupport.Service, kind, requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, itemID, body string, requestPayload map[string]any, sessionActionLabel string) error {
+	return claudesupportDep.SendApprovalCardWithPayload(sub, kind, requestID, sessionKey, threadID, turnID, itemID, body, requestPayload, sessionActionLabel)
 }
 
 func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
 	return sendClaudeApprovalCardWithPayload(
-		a,
+		a.bindings.ClaudeSupport,
 		presentation.Kind.String(),
 		requestID,
 		sessionKey,
@@ -109,16 +109,16 @@ func sendClaudeApprovalCard(a *App, requestID, sessionKey string, sub *domainsub
 	)
 }
 
-func sendClaudeUserInputCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload) error {
-	return a.bindings.ClaudeSupport.SendUserInputCard(sub, requestID, sessionKey, payload)
+func sendClaudeUserInputCard(claudesupportDep *claudesupport.Service, requestID, sessionKey string, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload) error {
+	return claudesupportDep.SendUserInputCard(sub, requestID, sessionKey, payload)
 }
 
-func sendClaudeUserInputFormCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload) error {
-	return a.bindings.ClaudeSupport.SendUserInputFormCard(sub, requestID, sessionKey, payload)
+func sendClaudeUserInputFormCard(claudesupportDep *claudesupport.Service, requestID, sessionKey string, sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload) error {
+	return claudesupportDep.SendUserInputFormCard(sub, requestID, sessionKey, payload)
 }
 
-func sendClaudePlanModeCard(a *App, requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error {
-	return a.bindings.ClaudeSupport.SendPlanModeCard(sub, requestID, sessionKey, threadID, turnID, body)
+func sendClaudePlanModeCard(claudesupportDep *claudesupport.Service, requestID, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, body string) error {
+	return claudesupportDep.SendPlanModeCard(sub, requestID, sessionKey, threadID, turnID, body)
 }
 
 func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessage, pending *state.PendingRequest) error {
@@ -132,9 +132,9 @@ func (s pendingInputService) completeClaudePlanModeText(msg *feishu.InboundMessa
 	return s.app.bindings.ClaudeSupport.CompletePlanModeText(feedback, pending)
 }
 
-func completePlanApprove(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func completePlanApprove(claudesupportDep *claudesupport.Service, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID, _ := action.ActionValue["request_id"].(string)
-	result, err := a.bindings.ClaudeSupport.CompletePlanApprove(requestID, action.UserID)
+	result, err := claudesupportDep.CompletePlanApprove(requestID, action.UserID)
 	if err != nil {
 		return nil, err
 	}

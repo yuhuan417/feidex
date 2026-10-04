@@ -150,7 +150,7 @@ func TestRemovedBindSlashIsNotRegisteredAsLocalCommand(t *testing.T) {
 func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	a, _, fc := newTestApp(t)
 
-	if err := startNextSubmission(a, "missing"); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, "missing"); err != nil {
 		t.Fatalf("startNextSubmission(missing) error = %v", err)
 	}
 	if got := defaultWorkspaceID(prepareTestApp(&App{cfg: &config.Config{}})); got != "default" {
@@ -173,7 +173,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{ID: "sub-missing", SessionKey: sessionKey, WorkspaceID: "missing", Status: "queued"}); err != nil {
 		t.Fatalf("CreateSubmission(sub-missing) error = %v", err)
 	}
-	if err := startNextSubmission(a, sessionKey); err == nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err == nil {
 		t.Fatal("expected missing workspace to fail")
 	}
 
@@ -209,7 +209,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 			return nil
 		}
 	}
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission(resume fallback) error = %v", err)
 	}
 	if len(calls) != 2 || calls[0] != "thread/start" || calls[1] != "turn/start" {
@@ -245,7 +245,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 			return nil
 		}
 	}
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission(timeout) error = %v", err)
 	}
 	if sess := a.store.GetSession(sessionKey); sess == nil || sess.ActiveSubmissionID != "sub-2" || sess.Status != "turn_starting" {
@@ -325,7 +325,7 @@ func TestStartNextSubmissionFailureClearsBrokenActiveStateAndAdvancesQueue(t *te
 		}
 	}
 
-	startNextSubmissionAsync(a, sessionKey, "test")
+	startNextSubmissionAsync(a.bindings.Submissions, sessionKey, "test")
 
 	select {
 	case <-secondStarted:
@@ -385,7 +385,7 @@ func TestStartNextSubmissionNormalizesIdleAfterMissingQueuedSubmission(t *testin
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 
@@ -438,7 +438,7 @@ func TestStartNextSubmissionClearsCodexThreadLineageAfterRuntimeFailure(t *testi
 		}
 	}
 
-	if err := startNextSubmission(a, sessionKey); err == nil || !strings.Contains(err.Error(), "codex client not initialized") {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err == nil || !strings.Contains(err.Error(), "codex client not initialized") {
 		t.Fatalf("startNextSubmission() error = %v, want codex runtime failure", err)
 	}
 
@@ -501,7 +501,7 @@ func TestStartNextSubmissionSkipsMissingQueuedSubmissionAndStartsNext(t *testing
 		}
 	}
 
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 

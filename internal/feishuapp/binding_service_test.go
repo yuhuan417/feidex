@@ -763,7 +763,7 @@ func TestBindingOverridesCodexThreadAndTurnStart(t *testing.T) {
 		}
 	}
 
-	if err := startNextSubmission(a, sessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sessionKey); err != nil {
 		t.Fatalf("startNextSubmission() error = %v", err)
 	}
 	if threadParams == nil || turnParams == nil {

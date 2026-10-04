@@ -47,7 +47,7 @@ func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 			return app.State()
 		},
 		CurrentWorkspaceFunc: func(msg *feishu.InboundMessage) (string, *config.Workspace) {
-			sessionKey, _, ws := currentWorkspaceForMessage(app, msg)
+			sessionKey, _, ws := currentWorkspaceForMessage(app.bindings.WorkspaceConfiguration, msg)
 			return sessionKey, ws
 		},
 		WorkspaceForSessionFunc: func(sessionKey string) *config.Workspace {

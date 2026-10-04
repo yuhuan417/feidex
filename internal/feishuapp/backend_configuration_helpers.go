@@ -31,7 +31,7 @@ func buildBackendConfigurationService(app *App) appbackend.ConfigurationService 
 					Args:       args[1:],
 					SessionKey: sessionKey,
 					CurrentWorkspace: func(msg *feishu.InboundMessage) (string, *conversation.Session, *config.Workspace) {
-						return currentWorkspaceForMessage(app, msg)
+						return currentWorkspaceForMessage(app.bindings.WorkspaceConfiguration, msg)
 					},
 					ShowWorkspaceSandboxMenu: func(msg *feishu.InboundMessage) error {
 						return app.bindings.WorkspaceConfiguration.ShowWorkspaceSandboxMenu(msg)

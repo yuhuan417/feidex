@@ -44,7 +44,7 @@ func CodexRecoveryPorts(a *App) appcodexruntime.RecoveryDependencies {
 			return configuredBackend(a) == domainbackend.BackendCodex
 		},
 		RecoverFrontendRuntimeState: func() {
-			recoverFrontendRuntimeState(a)
+			recoverFrontendRuntimeState(a.bindings.StartupRecovery)
 		},
 		SessionKeysForRecovery: func() []string {
 			var keys []string
@@ -68,8 +68,8 @@ func CodexRecoveryPorts(a *App) appcodexruntime.RecoveryDependencies {
 	}
 }
 
-func codexRuntimeRecovering(a *App) bool {
-	return a.bindings.CodexRecovery.IsRecovering()
+func codexRuntimeRecovering(codexrecovery appcodexruntime.RecoveryService) bool {
+	return codexrecovery.IsRecovering()
 }
 
 func getCodex(a *App) CodexClient {
@@ -101,8 +101,8 @@ func requireCodexClient(a *App) (CodexClient, error) {
 	return client, nil
 }
 
-func replaceCodexClient(a *App, next CodexClient) CodexClient {
-	return a.bindings.CodexRecovery.ReplaceClient(next)
+func replaceCodexClient(codexrecovery appcodexruntime.RecoveryService, next CodexClient) CodexClient {
+	return codexrecovery.ReplaceClient(next)
 }
 
 func replyCodexError(a *App, requestID json.RawMessage, code int, message string) {
@@ -111,8 +111,8 @@ func replyCodexError(a *App, requestID json.RawMessage, code int, message string
 	}
 }
 
-func beginCodexAutoThreadRecoveryScope(a *App) func() {
-	return a.bindings.CodexRecovery.BeginAutoThreadRecoveryScope()
+func beginCodexAutoThreadRecoveryScope(codexrecovery appcodexruntime.RecoveryService) func() {
+	return codexrecovery.BeginAutoThreadRecoveryScope()
 }
 
 func requireCodexGateway(a *App) (codexadapter.Gateway, error) {

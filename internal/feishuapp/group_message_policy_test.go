@@ -164,7 +164,7 @@ func TestGroupMessagePolicyUsesMentionOpenIDForCurrentFrontend(t *testing.T) {
 		MentionedAny:     true,
 		MentionedSelf:    false,
 	}
-	if !shouldDeliverGroupMessageToApp(a, msg) {
+	if !shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, msg) {
 		t.Fatal("group policy rejected a message that mentions the current bot by open_id")
 	}
 }
@@ -180,44 +180,44 @@ func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.
 	if shouldAcceptGroupMessage(a, "chat-new", "", "", false, false) {
 		t.Fatal("app policy accepted unmentioned message before primary init")
 	}
-	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new"}) {
+	if !shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new"}) {
 		t.Fatal("adapter policy rejected top-level message needed for primary init")
 	}
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", RootMessageID: "root-1", ParentMessageID: "parent-1"}) {
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new", RootMessageID: "root-1", ParentMessageID: "parent-1"}) {
 		t.Fatal("adapter policy delivered unrelated reply for primary init")
 	}
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-other hello", MentionedOpenIDs: []string{"bot-other"}}) {
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-other hello", MentionedOpenIDs: []string{"bot-other"}}) {
 		t.Fatal("adapter policy delivered explicit mention of another bot for primary init")
 	}
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@unknown hello", MentionedAny: true}) {
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@unknown hello", MentionedAny: true}) {
 		t.Fatal("adapter policy delivered mention event without current bot mention")
 	}
 	a.feishu = appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})
 	recomposeTestApp(a)
-	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-b /primary on", MentionedOpenIDs: []string{"bot-b-open"}}) {
+	if !shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-b /primary on", MentionedOpenIDs: []string{"bot-b-open"}}) {
 		t.Fatal("adapter policy rejected primary command addressed to the current bot")
 	}
-	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-other /primary on", MentionedOpenIDs: []string{"bot-other-open"}}) {
+	if !shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-other /primary on", MentionedOpenIDs: []string{"bot-other-open"}}) {
 		t.Fatal("adapter policy rejected primary handoff command addressed to another bot")
 	}
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "/primary on"}) {
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "/primary on"}) {
 		t.Fatal("adapter policy delivered bare primary command without a mention")
 	}
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{
 		ChatID:           "chat-new",
 		Text:             "@bot-a @bot-b /primary on",
 		MentionedOpenIDs: []string{"bot-a-open", "bot-b-open"},
 	}) {
 		t.Fatal("adapter policy delivered ambiguous multi-mention primary command")
 	}
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-a hello", MentionedOpenIDs: []string{"bot-a-open"}}) {
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new", Text: "@bot-a hello", MentionedOpenIDs: []string{"bot-a-open"}}) {
 		t.Fatal("adapter policy delivered ordinary explicit mention of another bot")
 	}
 
 	if _, err := setGroupPrimary(a, "group", "chat-new", false); err != nil {
 		t.Fatalf("setGroupPrimary(false) error = %v", err)
 	}
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{ChatID: "chat-new"}) {
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{ChatID: "chat-new"}) {
 		t.Fatal("adapter policy delivered top-level message after non-primary owner state was initialized")
 	}
 }

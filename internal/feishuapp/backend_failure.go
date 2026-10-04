@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	mcpbridge "feidex/internal/adapter/feishu/mcpbridge"
+	"feidex/internal/application/backendfailure"
 	domainsubmission "feidex/internal/domain/submission"
 	backendruntime "feidex/internal/runtime"
 
@@ -10,8 +11,6 @@ import (
 	"feidex/internal/domain/conversation"
 	apputil "feidex/internal/formatutil"
 	"log/slog"
-
-	failureapp "feidex/internal/application/backendfailure"
 
 	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/codexrpc"
@@ -62,12 +61,12 @@ func (a *App) handleCodexTransportError(client CodexClient, err error) {
 	a.bindings.CodexRecovery.HandleTransportFailure(client, err)
 }
 
-func failClaudeSessionActiveWork(a *App, sessionKey, threadID string, err error) {
-	a.bindings.BackendFailure.FailClaudeSessionActiveWork(sessionKey, threadID, err)
+func failClaudeSessionActiveWork(backendfailureDep *backendfailure.BackendFailureService, sessionKey, threadID string, err error) {
+	backendfailureDep.FailClaudeSessionActiveWork(sessionKey, threadID, err)
 }
 
 func errorText(err error) string {
-	return failureapp.ErrorText(err)
+	return backendfailure.ErrorText(err)
 }
 
 func failBackendActiveWork(a *App, backend, scopeSessionKey, scopeThreadID, message string) {
@@ -85,10 +84,10 @@ func failSubmissionWithoutTerminalCompletion(a *App, sessionKey string, sub *dom
 }
 
 // BackendFailurePorts maps runtime and presentation effects to the failure use case.
-func BackendFailurePorts(a *App) failureapp.FailureDeps {
-	return failureapp.FailureDeps{
+func BackendFailurePorts(a *App) backendfailure.FailureDeps {
+	return backendfailure.FailureDeps{
 		Context: a.Context,
-		State: failureapp.FailureStateDeps{
+		State: backendfailure.FailureStateDeps{
 			AllSessions: func() []*conversation.Session {
 				return a.State().Sessions()
 			},
@@ -101,12 +100,12 @@ func BackendFailurePorts(a *App) failureapp.FailureDeps {
 			GetSession:     a.State().Session,
 			CommitTerminal: a.State().CommitTerminal,
 		},
-		Sessions: failureapp.FailureSessionDeps{
+		Sessions: backendfailure.FailureSessionDeps{
 			SessionBelongsToFrontend: func(sessionKey string) bool {
 				return sessionBelongsToFrontend(a, sessionKey)
 			},
 		},
-		Runtime: failureapp.FailureRuntimeDeps{
+		Runtime: backendfailure.FailureRuntimeDeps{
 			RecordTurnError: func(threadID, turnID, message string) {
 				a.bindings.TurnPresentation.RecordTurnError(threadID, turnID, message)
 			},
@@ -123,7 +122,7 @@ func BackendFailurePorts(a *App) failureapp.FailureDeps {
 				return false
 			},
 		},
-		Cards: failureapp.FailureCardDeps{
+		Cards: backendfailure.FailureCardDeps{
 			ExpireClaudeInteractions: func(key string) {
 				a.bindings.InteractionLifecycle.ExpireAndPresent("claude", key, nil, "transport failure")
 			},
@@ -140,7 +139,7 @@ func BackendFailurePorts(a *App) failureapp.FailureDeps {
 				return turnStopAttentionUserID(a, sub, turnID)
 			},
 		},
-		Async: failureapp.FailureAsyncDeps{
+		Async: backendfailure.FailureAsyncDeps{
 			CleanupSubmissionRuntimeState: func(sub *domainsubmission.Submission) {
 				a.bindings.SubmissionCleanup.CleanupSubmissionRuntimeState(sub)
 			},

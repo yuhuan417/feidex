@@ -162,7 +162,7 @@ func TestFinalAnswerSendsImmediatelyWithUsageFooter(t *testing.T) {
 	}
 
 	beforeComplete := len(ff.replyCards)
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 	if len(ff.replyCards) != beforeComplete {
 		t.Fatalf("expected completion not to replay final answer, got %d -> %d cards", beforeComplete, len(ff.replyCards))
 	}

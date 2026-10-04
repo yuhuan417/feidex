@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"feidex/internal/application"
 	"feidex/internal/application/backendops"
+	"feidex/internal/application/interaction"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
@@ -191,8 +192,8 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 
 // rootPendingTextRequest finds the most recent open pending text request
 // for kinds whose logic stays in root (workspace_new, claude_exit_plan_mode).
-func rootPendingTextRequest(a *App, sessionKey, userID string) *state.PendingRequest {
-	return a.bindings.InteractionLifecycle.LatestTextRequest(sessionKey, userID, "workspace_new", "claude_exit_plan_mode")
+func rootPendingTextRequest(interactionlifecycle interaction.LifecycleService, sessionKey, userID string) *state.PendingRequest {
+	return interactionlifecycle.LatestTextRequest(sessionKey, userID, "workspace_new", "claude_exit_plan_mode")
 }
 
 // handleRootPendingTextResponse dispatches a text reply for root-owned pending kinds.

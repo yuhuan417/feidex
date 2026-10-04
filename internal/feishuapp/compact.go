@@ -27,8 +27,8 @@ func renderCompactAcceptedCard(a *App, key string) map[string]any {
 func renderCompactFailedCard(a *App, key, text string) map[string]any {
 	return compactview.RenderCompactFailedCard(compactCardTitle(a, key), key, text)
 }
-func sendStandaloneCompactResult(a *App, sess *conversation.Session, status string) {
-	a.bindings.Compaction.SendSessionTextNotice(sess, compaction.StandaloneCompactResultText(status))
+func sendStandaloneCompactResult(compactionDep *compaction.Service, sess *conversation.Session, status string) {
+	compactionDep.SendSessionTextNotice(sess, compaction.StandaloneCompactResultText(status))
 }
 func standaloneCompactResultText(status string) string {
 	return compaction.StandaloneCompactResultText(status)

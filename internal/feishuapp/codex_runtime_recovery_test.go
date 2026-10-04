@@ -97,7 +97,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 	onError(errors.New("stdio EOF"))
 
 	waitForTestCondition(t, "codex runtime recovery to start", func() bool {
-		return codexRuntimeRecovering(a)
+		return codexRuntimeRecovering(a.bindings.CodexRecovery)
 	})
 	waitForTestCondition(t, "active submission failure cleanup", func() bool {
 		return a.store.GetSubmission(activeSub.ID) == nil
@@ -115,7 +115,7 @@ func TestHandleCodexTransportErrorRecoversRuntimeAndResumesQueuedSubmission(t *t
 
 	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
 		current, ok := currentCodexClient(a).(*fakeCodexClient)
-		return ok && current == promoted && !codexRuntimeRecovering(a)
+		return ok && current == promoted && !codexRuntimeRecovering(a.bindings.CodexRecovery)
 	})
 	waitForTestCondition(t, "queued submission to start on recovered runtime", func() bool {
 		sub := a.store.GetSubmission(queuedID)
@@ -245,11 +245,11 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 	newCodexClient = func(config.CodexConfig) CodexClient { return promoted }
 	defer func() { newCodexClient = origNewCodex }()
 
-	recoverFrontendRuntimeState(a)
+	recoverFrontendRuntimeState(a.bindings.StartupRecovery)
 
 	waitForTestCondition(t, "codex runtime recovery to finish", func() bool {
 		current, ok := currentCodexClient(a).(*fakeCodexClient)
-		return ok && current == promoted && !codexRuntimeRecovering(a)
+		return ok && current == promoted && !codexRuntimeRecovering(a.bindings.CodexRecovery)
 	})
 
 	if _, closed := fc.statusSnapshot(); !closed {
@@ -280,12 +280,12 @@ func TestHandleCodexTransportErrorSkipsFrontendThreadRecoveryLoopAfterAutoRecove
 func TestCodexRecoveryIsFrontendScoped(t *testing.T) {
 	a, _, first := newTestApp(t)
 	b, _, second := newTestApp(t)
-	replaceCodexClient(a, first)
-	replaceCodexClient(b, second)
+	replaceCodexClient(a.bindings.CodexRecovery, first)
+	replaceCodexClient(b.bindings.CodexRecovery, second)
 	if !a.bindings.CodexRecovery.BeginRecovery(first) {
 		t.Fatal("first frontend recovery not admitted")
 	}
-	if codexRuntimeRecovering(b) || currentCodexClient(b) != second {
+	if codexRuntimeRecovering(b.bindings.CodexRecovery) || currentCodexClient(b) != second {
 		t.Fatal("recovery crossed frontend boundary")
 	}
 	if currentCodexClient(a) != nil {

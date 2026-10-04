@@ -68,7 +68,7 @@ func renderConversationUsage(a *App, sess *domain.Session) string {
 func interruptConversation(a *App, ctx context.Context, key string, sess *domain.Session) error {
 	err := a.bindings.Conversations.InterruptActiveTurn(ctx, key, sess)
 	if err != nil && sess != nil && configuredBackend(a) == domainbackend.BackendCodex {
-		updated := reconcileCompletedCodexTurn(a, sess.Key, sess)
+		updated := reconcileCompletedCodexTurn(a.bindings.TurnReconciliation, sess.Key, sess)
 		if updated == nil || updated.ActiveTurnID != sess.ActiveTurnID {
 			return nil
 		}
@@ -88,6 +88,8 @@ func ConversationRecoveryPorts(a *App) conversation.RecoveryDependencies {
 			Client:        func() (codexadapter.ConversationClient, error) { return client, nil },
 			Configuration: a.bindings.ConversationConfiguration,
 		}
-		return conversation.RecoveryEndpoint{Gateway: gateway, Current: func() bool { return !codexRuntimeRecovering(a) && currentCodexClient(a) == client }}, nil
+		return conversation.RecoveryEndpoint{Gateway: gateway, Current: func() bool {
+			return !codexRuntimeRecovering(a.bindings.CodexRecovery) && currentCodexClient(a) == client
+		}}, nil
 	}}
 }

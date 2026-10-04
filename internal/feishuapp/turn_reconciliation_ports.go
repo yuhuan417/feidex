@@ -29,9 +29,9 @@ func (p turnReconciliationGateway) ReadThreadTurns(ctx context.Context, threadID
 	}
 	return gateway.ReadThreadTurns(ctx, threadID)
 }
-func reconcileCompletedCodexTurnFromFinalOutput(a *App, key string, sess *conversation.Session) *conversation.Session {
-	return a.bindings.TurnReconciliation.AfterFinal(key, sess)
+func reconcileCompletedCodexTurnFromFinalOutput(turnreconciliation turn.Reconciliation, key string, sess *conversation.Session) *conversation.Session {
+	return turnreconciliation.AfterFinal(key, sess)
 }
-func reconcileCompletedCodexTurn(a *App, key string, sess *conversation.Session) *conversation.Session {
-	return a.bindings.TurnReconciliation.Reconcile(key, sess)
+func reconcileCompletedCodexTurn(turnreconciliation turn.Reconciliation, key string, sess *conversation.Session) *conversation.Session {
+	return turnreconciliation.Reconcile(key, sess)
 }

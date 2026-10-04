@@ -60,7 +60,7 @@ func pendingCardActionHandlers() map[string]cardActionHandler {
 			return completePendingFormCancelDispatch(s.app, action)
 		},
 		"pending_form.plan_approve": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePlanApprove(s.app, action)
+			return completePlanApprove(s.app.bindings.ClaudeSupport, action)
 		},
 		"pending_form.plan_reject": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completePlanReject(s.app, action)

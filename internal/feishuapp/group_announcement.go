@@ -54,7 +54,7 @@ func clearGroupAnnouncementBotAbsent(a *App, chatID string) {
 }
 
 func scheduleAllGroupAnnouncementStatusRefreshes(a *App, reason string) {
-	for _, chatID := range knownGroupAnnouncementChatIDs(a) {
+	for _, chatID := range knownGroupAnnouncementChatIDs(a.bindings.AnnouncementQuery) {
 		scheduleGroupAnnouncementStatusRefresh(a, chatID, reason)
 	}
 }
@@ -208,9 +208,11 @@ func groupAnnouncementThreadID(a *App, chatID string) string {
 	return strings.TrimSpace(best.ActiveThreadID)
 }
 
-func knownGroupAnnouncementChatIDs(a *App) []string { return a.bindings.AnnouncementQuery.Chats() }
-func sessionMatchesGroupChat(a *App, sess *conversation.Session, chatID string) bool {
-	return a.bindings.AnnouncementQuery.GroupSession(sess, chatID)
+func knownGroupAnnouncementChatIDs(announcementquery announcement.Query) []string {
+	return announcementquery.Chats()
+}
+func sessionMatchesGroupChat(announcementquery announcement.Query, sess *conversation.Session, chatID string) bool {
+	return announcementquery.GroupSession(sess, chatID)
 }
 
 func localAnnouncementMachineIP() string {

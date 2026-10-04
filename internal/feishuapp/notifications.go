@@ -2,6 +2,8 @@ package feishuapp
 
 import (
 	"encoding/json"
+	"feidex/internal/application/submission"
+	"feidex/internal/application/turn"
 	"feidex/internal/codexrpc"
 )
 
@@ -9,8 +11,8 @@ func handleNotification(a *App, method string, params json.RawMessage) {
 	dispatchCodexNotification(a, method, params)
 }
 
-func onTurnStartedNotification(a *App, threadID, turnID string) {
-	a.bindings.Turns.OnTurnStartedNotification(threadID, turnID)
+func onTurnStartedNotification(turns *turn.Service, threadID, turnID string) {
+	turns.OnTurnStartedNotification(threadID, turnID)
 }
 
 func handleServerRequest(a *App, req codexrpc.RequestEnvelope) {
@@ -42,15 +44,15 @@ func onMcpElicitationRequest(a *App, req codexrpc.RequestEnvelope) {
 	dispatchCodexRequest(a, req)
 }
 
-func finishTurn(a *App, threadID, turnID, status string) {
+func finishTurn(turns *turn.Service, threadID, turnID, status string) {
 	// Steer-submission cleanup (which used to happen here) is now
 	// handled inside turnLifecycleService.FinishTurn, synchronously
 	// before the async StartNextSubmissionAsync is launched.  This
 	// prevents a race where the newly started submission (same thread)
 	// was incorrectly finalized by a post-hoc steer scan.
-	a.bindings.Turns.FinishTurn(threadID, turnID, status)
+	turns.FinishTurn(threadID, turnID, status)
 }
 
-func startNextSubmissionAsync(a *App, sessionKey, source string) {
-	a.bindings.Submissions.StartNextSubmissionAsync(sessionKey, source)
+func startNextSubmissionAsync(submissions *submission.SubmissionQueueService, sessionKey, source string) {
+	submissions.StartNextSubmissionAsync(sessionKey, source)
 }

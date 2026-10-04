@@ -36,7 +36,7 @@ func markSessionThreadLive(a *App, sessionKey, threadID string) {
 		if chatID == "" {
 			_, _, chatID, _, _ = identity.ParseSessionKey(sess.Key)
 		}
-		if sessionMatchesGroupChat(a, sess, chatID) {
+		if sessionMatchesGroupChat(a.bindings.AnnouncementQuery, sess, chatID) {
 			scheduleGroupAnnouncementStatusRefresh(a, chatID, "thread_live")
 		}
 	}

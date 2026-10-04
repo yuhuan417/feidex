@@ -288,7 +288,7 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForFinalCard(t *testing.T) 
 	}
 
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 
 	if len(ff.patchedCards) != 0 {
 		t.Fatalf("patched card count after finishTurn = %d, want 0", len(ff.patchedCards))
@@ -327,7 +327,7 @@ func TestQuietModeDoesNotReuseNonReasoningWorkingCardForTerminalCard(t *testing.
 		t.Fatalf("reply card count after command = %d, want 1", len(ff.replyCards))
 	}
 
-	finishTurn(a, "thread-1", "turn-1", "failed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "failed")
 
 	if len(ff.patchedCards) != 0 {
 		t.Fatalf("patched card count after failed finishTurn = %d, want 0", len(ff.patchedCards))

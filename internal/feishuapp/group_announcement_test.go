@@ -429,12 +429,12 @@ func TestKnownGroupAnnouncementChatIDsDoNotTreatUnknownCanonicalSessionAsGroup(t
 	}); err != nil {
 		t.Fatalf("SaveSession(unknown) error = %v", err)
 	}
-	if got := knownGroupAnnouncementChatIDs(a); len(got) != 0 {
+	if got := knownGroupAnnouncementChatIDs(a.bindings.AnnouncementQuery); len(got) != 0 {
 		t.Fatalf("knownGroupAnnouncementChatIDs() = %#v, want none", got)
 	}
 
 	seedGroupAnnouncementBinding(t, a, "chat-unknown")
-	if got := knownGroupAnnouncementChatIDs(a); len(got) != 1 || got[0] != "chat-unknown" {
+	if got := knownGroupAnnouncementChatIDs(a.bindings.AnnouncementQuery); len(got) != 1 || got[0] != "chat-unknown" {
 		t.Fatalf("knownGroupAnnouncementChatIDs(with binding) = %#v, want chat-unknown", got)
 	}
 }
@@ -463,7 +463,7 @@ func TestKnownGroupAnnouncementChatIDsIncludesPersistedAnnouncementBlocks(t *tes
 		t.Fatalf("UpsertGroupAnnouncementBlock(other frontend) error = %v", err)
 	}
 
-	got := knownGroupAnnouncementChatIDs(a)
+	got := knownGroupAnnouncementChatIDs(a.bindings.AnnouncementQuery)
 	if len(got) != 1 || got[0] != "chat-from-announcement" {
 		t.Fatalf("knownGroupAnnouncementChatIDs() = %#v, want persisted announcement chat", got)
 	}

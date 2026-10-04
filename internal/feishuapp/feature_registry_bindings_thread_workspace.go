@@ -124,7 +124,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					if groupBindingScopeActive(a, msg) {
 						return a.bindings.BindingCommands.commandEffort(msg, args)
 					}
-					return commandEffortProfileAware(a, msg, args)
+					return commandEffortProfileAware(a.bindings.ModelCommands, msg, args)
 				},
 			},
 		},
@@ -212,21 +212,21 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 					}
 					return completeBotProfileAuxiliaryModelSet(s.app, action, role, value)
 				case "model.config.set_model":
-					return completeBotProfileModelSet(s.app, action, actionStringValue(action, "model_id"))
+					return completeBotProfileModelSet(s.app.bindings.BackendConfiguration, action, actionStringValue(action, "model_id"))
 				case "model.config.select_model":
 					modelID := strings.TrimSpace(action.Option)
 					if modelID == modelconfig.DefaultOptionValue {
 						modelID = ""
 					}
-					return completeBotProfileModelSet(s.app, action, modelID)
+					return completeBotProfileModelSet(s.app.bindings.BackendConfiguration, action, modelID)
 				case "model.config.set_effort":
-					return completeBotProfileEffortSet(s.app, action, actionStringValue(action, "reasoning_effort"))
+					return completeBotProfileEffortSet(s.app.bindings.BackendConfiguration, action, actionStringValue(action, "reasoning_effort"))
 				case "model.config.select_effort":
 					effort := strings.TrimSpace(action.Option)
 					if effort == modelconfig.DefaultOptionValue {
 						effort = ""
 					}
-					return completeBotProfileEffortSet(s.app, action, effort)
+					return completeBotProfileEffortSet(s.app.bindings.BackendConfiguration, action, effort)
 				}
 			}
 			if actionName == "menu.model_auxiliary" {

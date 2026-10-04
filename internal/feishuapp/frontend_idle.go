@@ -12,8 +12,8 @@ func frontendIdleBlockedReasonIgnoringCurrentMessage(a *App) string {
 	return frontendIdleBlockedReasonWithMessageTrafficAllowance(a, 1)
 }
 
-func frontendActivity(a *App, includeSessions bool) frontend.Activity {
-	return a.bindings.FrontendQuery.Activity(includeSessions)
+func frontendActivity(frontendquery frontend.Query, includeSessions bool) frontend.Activity {
+	return frontendquery.Activity(includeSessions)
 }
 
 func FrontendFacts(a *App) func() frontend.RuntimeFacts {
@@ -26,5 +26,5 @@ func frontendIdleBlockedReasonWithMessageTrafficAllowance(a *App, allowance int)
 	if a == nil {
 		return "app not initialized"
 	}
-	return frontendActivity(a, true).IdleBlockedReason(allowance)
+	return frontendActivity(a.bindings.FrontendQuery, true).IdleBlockedReason(allowance)
 }

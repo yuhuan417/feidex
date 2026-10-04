@@ -23,14 +23,14 @@ func TestMentionAllIsDeliveredToEveryBot(t *testing.T) {
 	}
 
 	// Primary state exists and this bot is not primary: a plain message is dropped.
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{
 		ChatID: "chat-1", Text: "随便说点什么",
 	}) {
 		t.Fatal("plain message must not be delivered to a non-primary bot")
 	}
 
 	// @所有人 with body text.
-	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{
+	if !shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{
 		ChatID: "chat-1", Text: "@_all 大家看一下", MentionAll: true, MentionedAny: true,
 	}) {
 		t.Fatal("@所有人 must be delivered")
@@ -38,7 +38,7 @@ func TestMentionAllIsDeliveredToEveryBot(t *testing.T) {
 
 	// @所有人 on its own — the shape that used to be swallowed as a primary
 	// assignment.
-	if !shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{
+	if !shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{
 		ChatID: "chat-1", Text: "@_all", MentionAll: true, MentionedAny: true,
 	}) {
 		t.Fatal("bare @所有人 must be delivered, not treated as a primary assignment")
@@ -55,7 +55,7 @@ func TestSpecificMentionStillBlocksDelivery(t *testing.T) {
 		t.Fatalf("setGroupPrimaryState() error = %v", err)
 	}
 
-	if shouldDeliverGroupMessageToApp(a, feishu.GroupMessagePolicyInput{
+	if shouldDeliverGroupMessageToApp(a.bindings.GroupMessages, feishu.GroupMessagePolicyInput{
 		ChatID: "chat-1", Text: "@某人 你好", MentionedAny: true, MentionedOpenIDs: []string{"ou_someone"},
 	}) {
 		t.Fatal("mentioning someone else must not be delivered to the primary bot")

@@ -23,9 +23,9 @@ func backendRuntimeContextForApp(a *App) backendruntime.BackendContext {
 		Codex:  getCodex(a),
 		Claude: currentClaudeCore(a),
 	}
-	ctx.BeginStartupRecoveryScope = func() func() { return beginCodexAutoThreadRecoveryScope(a) }
+	ctx.BeginStartupRecoveryScope = func() func() { return beginCodexAutoThreadRecoveryScope(a.bindings.CodexRecovery) }
 	ctx.ReconcileCompletedTurn = func(key string, sess *conversation.Session) *conversation.Session {
-		return reconcileCompletedCodexTurnFromFinalOutput(a, key, sess)
+		return reconcileCompletedCodexTurnFromFinalOutput(a.bindings.TurnReconciliation, key, sess)
 	}
 	ctx.ReconcileClaudeCompletedTurn = func(key string, sess *conversation.Session) *conversation.Session {
 		return a.bindings.ClaudeReconciliation.Reconcile(key, sess)
@@ -60,13 +60,13 @@ func backendRuntimeContextForApp(a *App) backendruntime.BackendContext {
 		}
 		return a.bindings.Maintenance.CodexMaintenanceBlocksCommand(raw)
 	}
-	ctx.DeferQueuedSubmissionsRecovery = func() bool { return codexRuntimeRecovering(a) }
+	ctx.DeferQueuedSubmissionsRecovery = func() bool { return codexRuntimeRecovering(a.bindings.CodexRecovery) }
 	ctx.DropThreadLineageAfterFailure = func(err error) bool {
-		return domainbackend.DropCodexLineageAfterFailure(codexRuntimeRecovering(a), errorText(err))
+		return domainbackend.DropCodexLineageAfterFailure(codexRuntimeRecovering(a.bindings.CodexRecovery), errorText(err))
 	}
 	ctx.HandleTransportFailure = func(sessionKey, threadID string, err error) {
 		if configuredBackend(a) == domainbackend.BackendClaude {
-			failClaudeSessionActiveWork(a, sessionKey, threadID, err)
+			failClaudeSessionActiveWork(a.bindings.BackendFailure, sessionKey, threadID, err)
 			return
 		}
 		failBackendActiveWork(a, domainbackend.BackendCodex, sessionKey, threadID, errorText(err))
@@ -96,12 +96,12 @@ func installBackendRuntime(a *App, h *backendruntime.BackendHandle) {
 	}
 	if h == nil {
 		setRuntimeBackend(a, "")
-		replaceCodexClient(a, nil)
+		replaceCodexClient(a.bindings.CodexRecovery, nil)
 		setClaudeCore(a, nil)
 		return
 	}
 	setRuntimeBackend(a, h.Backend)
-	replaceCodexClient(a, h.Codex)
+	replaceCodexClient(a.bindings.CodexRecovery, h.Codex)
 	setClaudeCore(a, h.Claude)
 }
 

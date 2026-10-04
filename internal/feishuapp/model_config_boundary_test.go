@@ -77,7 +77,7 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 		out.(*codexrpc.TurnStartResult).Turn.ID = "turn-config"
 		return nil
 	}
-	if err := startNextSubmission(a, sub.SessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, sub.SessionKey); err != nil {
 		t.Fatal(err)
 	}
 	if got := a.store.GetSubmission(sub.ID).ModelConfig; got.Model != "new" || got.PlanModel != "new-plan" {
@@ -100,7 +100,7 @@ func TestModelConfigClaudeFailureRetainsQueueAndLineage(t *testing.T) {
 	setClaudeCore(a, fake)
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
 	second := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "second")
-	if err := startNextSubmission(a, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {
+	if err := startNextSubmission(a.bindings.Submissions, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {
 		t.Fatalf("error = %v", err)
 	}
 	sess := a.store.GetSession(first.SessionKey)
@@ -111,7 +111,7 @@ func TestModelConfigClaudeFailureRetainsQueueAndLineage(t *testing.T) {
 		t.Fatal("configuration error used fresh fallback or consumed input")
 	}
 	fake.ensureSessionErr, fake.ensureSessionID = nil, "original-thread"
-	if err := startNextSubmission(a, first.SessionKey); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, first.SessionKey); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.startTurnCalls) != 1 || fake.startTurnCalls[0].prompt != "first" {
@@ -131,7 +131,7 @@ func TestModelConfigClaudeRestartedTurnFailureRetainsQueueAndLineage(t *testing.
 	a.runtimeOwner = testOwnerWithClaude(&modelConfigProtectedClaude{fake})
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
 	second := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "second")
-	if err := startNextSubmission(a, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {
+	if err := startNextSubmission(a.bindings.Submissions, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {
 		t.Fatalf("error = %v", err)
 	}
 	sess := a.store.GetSession(first.SessionKey)
@@ -257,7 +257,7 @@ func TestModelConfigStartupRecoveryUsesSessionScope(t *testing.T) {
 				}
 				return nil
 			}
-			recoverFrontendRuntimeState(a)
+			recoverFrontendRuntimeState(a.bindings.StartupRecovery)
 			for chat, model := range models {
 				wantCalls := 1
 				if resumeFails {
@@ -305,7 +305,7 @@ func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 		out.(*codexrpc.ThreadStartResult).Thread.ID = "group-thread"
 		return nil
 	}
-	recoverFrontendRuntimeState(a)
+	recoverFrontendRuntimeState(a.bindings.StartupRecovery)
 	binding.ModelOverride = "gpt-6.1-sol"
 	if err := a.State().SaveAgentBinding(binding); err != nil {
 		t.Fatal(err)
@@ -330,7 +330,7 @@ func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 		return nil
 	}
 	modelBoundaryQueuedSubmission(t, a, key, "group-thread", "next")
-	if err := startNextSubmission(a, key); err != nil {
+	if err := startNextSubmission(a.bindings.Submissions, key); err != nil {
 		t.Fatal(err)
 	}
 	assertStatus("gpt-6.1-sol", false)

@@ -158,7 +158,7 @@ func (s menuActionService) completeMenuFast(action *feishu.CardAction, sessionKe
 }
 
 func (s menuActionService) completeServiceTierSet(action *feishu.CardAction, sessionKey, threadID, serviceTier string) (*callback.CardActionTriggerResponse, error) {
-	if _, err := setThreadServiceTier(s.app, sessionKey, threadID, serviceTier); err != nil {
+	if _, err := setThreadServiceTier(s.app.bindings.ThreadSettings, sessionKey, threadID, serviceTier); err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	return &callback.CardActionTriggerResponse{

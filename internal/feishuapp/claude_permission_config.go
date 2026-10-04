@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	workspacecards "feidex/internal/adapter/feishu/workspace"
 	"feidex/internal/application"
 	appruntime "feidex/internal/runtime"
 
@@ -90,12 +91,12 @@ func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
 	}})
 }
 
-func renderClaudeWorkspacePermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
-	return a.bindings.WorkspacePresentation.RenderWorkspacePermissionModeMenuCard(sessionKey)
+func renderClaudeWorkspacePermissionMenuCard(workspacepresentation *workspacecards.Presentation, sessionKey string) (map[string]any, error) {
+	return workspacepresentation.RenderWorkspacePermissionModeMenuCard(sessionKey)
 }
 
 func showClaudeWorkspacePermissionMenu(a *App, msg *feishu.InboundMessage) error {
-	card, err := renderClaudeWorkspacePermissionMenuCard(a, makeSessionKey(a, msg))
+	card, err := renderClaudeWorkspacePermissionMenuCard(a.bindings.WorkspacePresentation, makeSessionKey(a, msg))
 	if err != nil {
 		return err
 	}

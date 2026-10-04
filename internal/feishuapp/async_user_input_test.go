@@ -76,7 +76,7 @@ func TestAsyncUserInputStaysSeparateFromFinalInEveryQuietMode(t *testing.T) {
 			// A later question in the same turn has its own form and survives too.
 			handleNotification(a, "item/completed", json.RawMessage(strings.ReplaceAll(asyncQuestionNotification, "ask-1", "ask-2")))
 			handleNotification(a, "item/completed", json.RawMessage(`{"threadId":"thread-1","turnId":"turn-1","item":{"id":"final-1","type":"agentMessage","phase":"final_answer","text":"Finished the work."}}`))
-			finishTurn(a, "thread-1", "turn-1", "completed")
+			finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 			a.waitAsync()
 			if len(ff.replyCards) != 3 || len(ff.patchedCards) != 0 {
 				t.Fatalf("cards = %d, patches = %d; question must survive final output", len(ff.replyCards), len(ff.patchedCards))
@@ -117,7 +117,7 @@ func TestAsyncUserInputIsNotPromotedAtTurnCompletion(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeNormal
 	_, pending := seedAsyncUserInput(t, a)
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 	a.waitAsync()
 	if len(ff.patchedCards) != 0 || len(ff.replyCards) != 2 {
 		t.Fatalf("completion replaced question: cards=%d patches=%d", len(ff.replyCards), len(ff.patchedCards))
@@ -165,7 +165,7 @@ func TestAsyncUserInputAnswerAcknowledgesBeforeSteerAndRejectsDuplicates(t *test
 func TestAsyncUserInputAnswerAfterCompletionStartsSameThread(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sub, pending := seedAsyncUserInput(t, a)
-	finishTurn(a, "thread-1", "turn-1", "completed")
+	finishTurn(a.bindings.Turns, "thread-1", "turn-1", "completed")
 	a.waitAsync()
 	var starts int
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {

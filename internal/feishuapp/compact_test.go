@@ -199,10 +199,10 @@ func TestStandaloneCompactionFailureBranches(t *testing.T) {
 		t.Fatalf("completeStandaloneCompactTurn() sentTexts = %#v", ff.sentTexts)
 	}
 
-	sendStandaloneCompactResult(a, &conversation.Session{
+	sendStandaloneCompactResult(a.bindings.Compaction, &conversation.Session{
 		ChatID: "chat-interrupted",
 	}, "interrupted")
-	sendStandaloneCompactResult(a, &conversation.Session{
+	sendStandaloneCompactResult(a.bindings.Compaction, &conversation.Session{
 		ChatID: "chat-failed",
 	}, "failed")
 	if len(ff.sentTexts) < 3 || ff.sentTexts[len(ff.sentTexts)-2] != "当前线程上下文压缩已中断。" || ff.sentTexts[len(ff.sentTexts)-1] != "当前线程上下文压缩失败。" {
