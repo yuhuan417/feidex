@@ -80,8 +80,18 @@ func failSubmissionWithoutTerminalCompletion(d BackendRuntimeDeps, sessionKey st
 	d.backendFailure.FailSubmissionWithoutTerminalCompletion(sessionKey, sub, threadID, turnID, message)
 }
 
-// BackendFailurePorts maps runtime and presentation effects to the failure use case.
+// BackendFailurePorts maps runtime and presentation effects to the failure use
+// case. The services it calls back into are read once at construction: by the
+// time composition builds the failure service every one of them is assigned,
+// and a closure that reads a.bindings would hide that from the type system.
 func BackendFailurePorts(a *App) backendfailure.FailureDeps {
+	turnPresentation := a.bindings.TurnPresentation
+	compaction := a.bindings.Compaction
+	interactionLifecycle := a.bindings.InteractionLifecycle
+	autoRetry := a.bindings.AutoRetry
+	submissionCleanup := a.bindings.SubmissionCleanup
+	pendingQueue := a.bindings.PendingQueue
+	submissions := a.bindings.Submissions
 	return backendfailure.FailureDeps{
 		Context: a.Context,
 		State: backendfailure.FailureStateDeps{
@@ -104,13 +114,13 @@ func BackendFailurePorts(a *App) backendfailure.FailureDeps {
 		},
 		Runtime: backendfailure.FailureRuntimeDeps{
 			RecordTurnError: func(threadID, turnID, message string) {
-				a.bindings.TurnPresentation.RecordTurnError(threadID, turnID, message)
+				turnPresentation.RecordTurnError(threadID, turnID, message)
 			},
 			FlushTurnStream: func(ctx context.Context, threadID, turnID string) appturnstream.FlushResult {
-				return a.bindings.TurnPresentation.FlushTurnStream(ctx, threadID, turnID)
+				return turnPresentation.FlushTurnStream(ctx, threadID, turnID)
 			},
 			FailStandaloneCompactTurn: func(threadID, turnID, message string) bool {
-				return a.bindings.Compaction.FailStandaloneCompactTurn(threadID, turnID, message)
+				return compaction.FailStandaloneCompactTurn(threadID, turnID, message)
 			},
 			BackendRuntimeFailsStandaloneCompaction: func(backend string) bool {
 				if runtime := backendruntime.BackendForKind(backend); runtime != nil {
@@ -121,10 +131,10 @@ func BackendFailurePorts(a *App) backendfailure.FailureDeps {
 		},
 		Cards: backendfailure.FailureCardDeps{
 			ExpireClaudeInteractions: func(key string) {
-				a.bindings.InteractionLifecycle.ExpireAndPresent("claude", key, nil, "transport failure")
+				interactionLifecycle.ExpireAndPresent("claude", key, nil, "transport failure")
 			},
 			ObserveAutoRetryTerminal: func(sessionKey, threadID, status string, sess *conversation.Session, sub *domainsubmission.Submission, reuseMessageID, lastError string) bool {
-				return a.bindings.AutoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
+				return autoRetry.ObserveAutoRetryTerminal(sessionKey, threadID, status, sess, sub, reuseMessageID, lastError)
 			},
 			ReplaceTurnEventCard: func(ctx context.Context, sub *domainsubmission.Submission, title, color, body, eventType, threadID, reuseMessageID string) {
 				newOutboundCardService(a).replaceTurnEventCardWithReuse(ctx, sub, title, color, body, eventType, threadID, reuseMessageID)
@@ -138,16 +148,16 @@ func BackendFailurePorts(a *App) backendfailure.FailureDeps {
 		},
 		Async: backendfailure.FailureAsyncDeps{
 			CleanupSubmissionRuntimeState: func(sub *domainsubmission.Submission) {
-				a.bindings.SubmissionCleanup.CleanupSubmissionRuntimeState(sub)
+				submissionCleanup.CleanupSubmissionRuntimeState(sub)
 			},
 			ClearSubmissionProcessingReactions: func(sub *domainsubmission.Submission) {
-				a.bindings.PendingQueue.ClearSubmissionProcessingReactions(sub)
+				pendingQueue.ClearSubmissionProcessingReactions(sub)
 			},
 			StartNextSubmissionAsync: func(sessionKey, reason string) {
-				a.bindings.Submissions.StartNextSubmissionAsync(sessionKey, reason)
+				submissions.StartNextSubmissionAsync(sessionKey, reason)
 			},
 			NextQueuedSubmissionSessionKey: func(sessionKey string) string {
-				return a.bindings.Submissions.NextQueuedSessionKey(sessionKey)
+				return submissions.NextQueuedSessionKey(sessionKey)
 			},
 			RunAsync: func(fn func()) {
 				runAsync(a, fn)
