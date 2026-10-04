@@ -15,16 +15,6 @@ import (
 	"sync"
 )
 
-type skillsOutbound struct{ app *App }
-
-func (o skillsOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
-}
-
-func (o skillsOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
-	return patchCardEffect(ctx, o.app, messageID, card)
-}
-
 // This capability follows the frontend's client replacements without exposing
 // a raw protocol client or its lifetime to the use case.
 type skillsCatalog struct{ runtime runtimeView }
@@ -55,7 +45,7 @@ func SkillUseCasePorts(
 
 func BuildSkillCommands(a *App) *skillsadapter.Service {
 	return &skillsadapter.Service{
-		Service: a.bindings.Skills, Outbound: skillsOutbound{app: a},
+		Service: a.bindings.Skills, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)),
 		MakeSessionKey:       func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		ReplyInThreadEnabled: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
 		FormatMenuBody:       menuCardBody, CommandLabel: commandLabel,

@@ -38,7 +38,7 @@ func BuildMaintenanceCommands(a *App) appmaintenance.RuntimeMaintenanceService {
 	return appmaintenance.NewRuntimeMaintenanceService(appmaintenance.Dependencies{
 		Context: a.Context, Repository: a.State(), Poller: a.bindings.UpgradePoller,
 		ArtifactClient:   a.feishu,
-		Outbound:         maintenanceOutbound{app: a},
+		Outbound:         newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)),
 		Renderer:         simpleStatusCardRenderer{client: a.feishu},
 		PermissionNotify: maintenancePermissionNotifier{client: a.feishu},
 		MenuBody:         menuCardBody,
@@ -62,10 +62,4 @@ func (n maintenancePermissionNotifier) NotifyPermissionIssue(target appfeishuwra
 	}); ok {
 		notifier.NotifyPermissionIssue(target, err)
 	}
-}
-
-type maintenanceOutbound struct{ app *App }
-
-func (o maintenanceOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
-	return patchCardEffect(ctx, o.app, messageID, card)
 }

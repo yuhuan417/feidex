@@ -14,18 +14,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type debugOutbound struct{ app *App }
-
-func (o debugOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
-}
-func (o debugOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
-	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
-}
-func (o debugOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
-	return patchCardEffect(ctx, o.app, messageID, card)
-}
-
 type debugFileSharer interface {
 	ShareLocalFile(context.Context, feishu.SharedFileRequest) (feishu.SharedFileResult, error)
 }
@@ -55,7 +43,7 @@ func newDebugViewAppAdapter(app *App) appdebugviewcmd.Dependencies {
 		return appdebugviewcmd.Dependencies{}
 	}
 	return appdebugviewcmd.Dependencies{
-		ConfigProvider: app, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: debugOutbound{app: app}, FileSharing: app.bindings.FileSharing, CardRenderer: simpleStatusCardRenderer{client: app.feishu}, StateProvider: app.State(),
+		ConfigProvider: app, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)), FileSharing: app.bindings.FileSharing, CardRenderer: simpleStatusCardRenderer{client: app.feishu}, StateProvider: app.State(),
 		RuntimeStateProvider: debugRuntimeStateAdapter{app: app}, ConversationBackendProvider: debugConversationBackendAdapter{app: app},
 		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{app: app}, WorkspaceRenderProvider: debugWorkspaceRenderAdapter{app: app},
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return app.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return app.configView().replyInThreadEnabled() },

@@ -16,20 +16,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type reviewOutbound struct{ app *App }
-
-func (o reviewOutbound) ReplyInteractionCard(ctx context.Context, requestID, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyInteractionCardEffect(ctx, o.app, requestID, messageID, card, inThread)
-}
-
-func (o reviewOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
-}
-
-func (o reviewOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
-	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
-}
-
 // ---------------------------------------------------------------------------
 // Type and constant aliases — reviewcmd exported types
 // ---------------------------------------------------------------------------
@@ -57,7 +43,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 	}
 	return appreviewcmd.Dependencies{
 		UseCase:        a.bindings.Review,
-		ConfigProvider: a, Outbound: reviewOutbound{app: a}, CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
+		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
 		ContextProvider:        a,
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{app: a}, GitProvider: reviewGitProviderAdapter{app: a},
 		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return requireCodexGateway(a) },

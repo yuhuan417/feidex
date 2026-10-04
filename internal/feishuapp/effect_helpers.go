@@ -57,14 +57,6 @@ func replyCardWithIDEffect(ctx context.Context, a *App, parentMessageID string, 
 	return newEffectRunner(a.runtimeOwner).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, View: feishuoutbound.Card(card), InThread: inThread})
 }
 
-func replyInteractionCardEffect(ctx context.Context, a *App, requestID, parentMessageID string, card map[string]any, inThread bool) (string, error) {
-	return newEffectRunner(a.runtimeOwner).RunSendCard(ctx, application.SendCard{
-		Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID,
-		View: feishuoutbound.Card(card), InThread: inThread,
-		IdempotencyKey: application.StableEffectKey("interaction-card", a.FrontendID(), requestID),
-	})
-}
-
 func sendCardWithIDEffect(ctx context.Context, a *App, chatID string, card map[string]any) (string, error) {
 	if a == nil {
 		return "", nil

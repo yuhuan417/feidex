@@ -1,7 +1,6 @@
 package feishuapp
 
 import (
-	"context"
 	appbackend "feidex/internal/adapter/feishu/backend"
 	workspacecards "feidex/internal/adapter/feishu/workspace"
 	"feidex/internal/adapter/feishu/workspacecmd"
@@ -16,18 +15,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type workspaceOutbound struct{ app *App }
-
-func (o workspaceOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
-	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
-}
-func (o workspaceOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
-}
-func (o workspaceOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
-	return patchCardEffect(ctx, o.app, messageID, card)
-}
-
 func workspaceCommandApp(a *App) workspacecmd.Dependencies {
 	if a == nil {
 		return workspacecmd.Dependencies{}
@@ -38,7 +25,7 @@ func workspaceCommandApp(a *App) workspacecmd.Dependencies {
 		Planning:       a.bindings.WorkspacePlanning,
 		Workflow:       a.bindings.WorkspaceWorkflow,
 		Forms:          a.bindings.Forms,
-		Outbound:       workspaceOutbound{app: a},
+		Outbound:       newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)),
 		CardRenderer:   simpleStatusCardRenderer{client: a.feishu},
 		BotNameFn: func() string {
 			if a == nil || a.feishu == nil {

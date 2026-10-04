@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 475 |
-| 收 `*App` 的顶层函数 | 293 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 465 |
+| 收 `*App` 的顶层函数 | 292 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **51** |
+| **持有 `*App` 字段的结构体** | **42** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -65,34 +65,39 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 工厂数 | 结构体 | 方法数 | helper 数 |
 |---|---|---|---|
-| 3 | `outboundCardService` | 7 | 12 |
-| 3 | `sqLiveThreadAdapter` | 3 | 3 |
-| 2 | `menuActionService` | 21 | 15 |
-| 2 | `planModeOutbound` | 4 | 4 |
-| 2 | `goalOutbound` | 3 | 3 |
+| 3 | `outboundCardService` | 7 | 11 |
 | 2 | `turnRuntimePort` | 3 | 2 |
-| 2 | `planModeCardRenderer` | 1 | 0 |
+| 1 | `menuActionService` | 19 | 15 |
+| 1 | `claudeTurnStreamPort` | 7 | 0 |
+| 1 | `backendSelectionRuntime` | 6 | 6 |
+| 1 | `inboundBackend` | 4 | 1 |
+| 1 | `inboundRouting` | 4 | 4 |
+| 1 | `conversationRuntimeControl` | 3 | 2 |
+| 1 | `reviewDispatcher` | 3 | 1 |
+| 1 | `sqBackendRuntimeFullAdapter` | 3 | 1 |
+| 1 | `turnDeliveryPort` | 3 | 1 |
+| 1 | `turnStreamOutboundCardAdapter` | 3 | 1 |
 
 `cardRenderer` 已不再持有 `*App`，不属于这份图。当前工厂按直接依赖总数排序：
 
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
-| 3 | `CardActionPorts` | 2 | 0 | 1 |
-| 3 | `BackendSwitchPorts` | 2 | 0 | 1 |
-| 5 | `ConversationControlPorts` | 4 | 0 | 1 |
-| 5 | `FileSharePorts` | 2 | 2 | 1 |
-| 5 | `ReviewPorts` | 1 | 1 | 3 |
-| 6 | `BackendFailurePorts` | 3 | 3 | 0 |
-| 6 | `GoalContinuationPorts` | 4 | 0 | 2 |
-| 6 | `TurnPresentationPorts` | 3 | 1 | 2 |
-| 7 | `ConversationPorts` | 6 | 0 | 1 |
-| 7 | `TurnPorts` | 2 | 3 | 2 |
+| 17 | `SubmissionPorts` | 7 | 8 | 2 |
+| 15 | `ClaudeRuntimePorts` | 6 | 8 | 1 |
+| 12 | `InboundPorts` | 5 | 2 | 5 |
+| 9 | `AutoRetryPorts` | 7 | 2 | 0 |
 | 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
 | 9 | `StartupRecoveryPorts` | 6 | 3 | 0 |
-| 10 | `AutoRetryPorts` | 7 | 2 | 1 |
-| 12 | `InboundPorts` | 5 | 2 | 5 |
-| 16 | `ClaudeRuntimePorts` | 6 | 9 | 1 |
-| 19 | `SubmissionPorts` | 7 | 9 | 3 |
+| 7 | `TurnPorts` | 2 | 3 | 2 |
+| 6 | `BackendFailurePorts` | 3 | 3 | 0 |
+| 6 | `ConversationPorts` | 6 | 0 | 0 |
+| 6 | `GoalContinuationPorts` | 5 | 0 | 1 |
+| 6 | `TurnPresentationPorts` | 3 | 1 | 2 |
+| 5 | `ConversationControlPorts` | 4 | 0 | 1 |
+| 5 | `FileSharePorts` | 3 | 2 | 0 |
+| 5 | `ReviewPorts` | 1 | 1 | 3 |
+| 3 | `BackendSwitchPorts` | 2 | 0 | 1 |
+| 1 | `CardActionPorts` | 0 | 0 | 1 |
 
 ## 已完成的骨架
 
@@ -316,6 +321,13 @@ URL 和大小的映射及上传错误透传不变。生产 `*App` 引用预算�
 `SimpleStatusCard` renderer 合并为共享的 Feishu capability adapter。七处构造分别注入现有
 Feishu client，空 client 仍返回 nil，卡片调用参数和结果不变。生产 `*App` 引用预算由 482
 降至 475，持有 App 字段的结构体由 58 降至 51。
+
+步骤 37 将 autoretry、debug、maintenance、plan、review、upgrade、workspace、skills 和
+thread-menu outbound wrappers 合并为共享 `effectOutbound`。adapter 仅持有 frontend ID 与
+runtime `EffectRunner`；reply/send/patch effect payload、interaction-card 稳定幂等键和 patch
+card 幂等键均沿用原规则。升级 outbound 的按需构造继续读取 owner 当前 runner，但闭包只捕获
+runtime owner 与 frontend ID。移除已无调用方的 `replyInteractionCardEffect`。生产 `*App` 引用
+预算由 475 降至 465，app-bearing 函数数由 293 降至 292，持有 App 字段的结构体由 51 降至 42。
 
 ## 方法
 

@@ -20,7 +20,7 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		return appthreadmenu.Dependencies{}
 	}
 	return appthreadmenu.Dependencies{
-		ConfigProvider: a, Outbound: threadMenuOutbound{app: a}, Controls: a.bindings.ConversationControls, Settings: a.bindings.ThreadSettings,
+		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), Controls: a.bindings.ConversationControls, Settings: a.bindings.ThreadSettings,
 		PermissionSettings: a.bindings.PermissionSettings,
 		AppStateFn:         a.ThreadMenuAppState, EffectiveSessionKeyFn: a.ThreadMenuEffectiveSessionKey,
 		ConversationBackendFn: a.ThreadMenuConversationBackend, BackendRuntimeFn: a.ThreadMenuBackendRuntime,
@@ -35,16 +35,6 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		RenderClaudeSessionPermissionMenuCardFn:  a.RenderClaudeSessionPermissionMenuCard,
 		ShowClaudeSessionPermissionMenuFromAppFn: a.ShowClaudeSessionPermissionMenuFromApp,
 	}
-}
-
-type threadMenuOutbound struct{ app *App }
-
-func (o threadMenuOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
-	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
-}
-
-func (o threadMenuOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
 }
 
 // ---------------------------------------------------------------------------

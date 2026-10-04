@@ -1,7 +1,6 @@
 package feishuapp
 
 import (
-	"context"
 	appfeatures "feidex/internal/application/features"
 
 	"strings"
@@ -11,13 +10,9 @@ import (
 	"feidex/internal/feishu"
 )
 
-type upgradeOutbound struct{ app *App }
-
-func (o upgradeOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
-}
-
 func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
+	outboundFrontend := app.FrontendID()
+	runtimeOwner := app.runtimeOwner
 
 	deps := appupgradecmd.UpgradeServiceDeps{
 		CurrentVersion: func() string { return currentVersion() },
@@ -31,8 +26,10 @@ func BuildUpgrades(app *App) appupgradecmd.UpgradeService {
 	}
 
 	adapter := &appupgradecmd.DefaultApp{
-		ContextFunc:      app.Context,
-		OutboundFunc:     func() appupgradecmd.Outbound { return upgradeOutbound{app: app} },
+		ContextFunc: app.Context,
+		OutboundFunc: func() appupgradecmd.Outbound {
+			return newEffectOutbound(outboundFrontend, newEffectRunner(runtimeOwner))
+		},
 		CardRendererFunc: func() appupgradecmd.CardRenderer { return simpleStatusCardRenderer{client: app.feishu} },
 		StateFunc: func() appupgradecmd.UpgradeState {
 			return app.State()

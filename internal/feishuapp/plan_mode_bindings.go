@@ -143,7 +143,7 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 		ConfigProvider:         a,
 		ContextProvider:        a,
 		StateProvider:          a.State(),
-		Outbound:               planModeOutbound{app: a},
+		Outbound:               newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)),
 		CardRenderer:           simpleStatusCardRenderer{client: a.feishu},
 		CodexClientProvider:    func() (planmode.CodexClient, error) { return requireCodexGateway(a) },
 		MakeSessionKeyFn:       func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
@@ -164,24 +164,6 @@ func newPlanModeAppAdapter(a *App) planmode.Dependencies {
 			return a.bindings.Conversations.StartWorkspaceThread(key, sess, ws)
 		},
 	}
-}
-
-type planModeOutbound struct{ app *App }
-
-func (o planModeOutbound) ReplyInteractionCard(ctx context.Context, requestID, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyInteractionCardEffect(ctx, o.app, requestID, messageID, card, inThread)
-}
-
-func (o planModeOutbound) ReplyText(ctx context.Context, messageID, text string, inThread bool) error {
-	return replyTextByAnchorEffect(ctx, o.app, messageID, text, inThread)
-}
-
-func (o planModeOutbound) ReplyCard(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-	return replyCardWithIDEffect(ctx, o.app, messageID, card, inThread)
-}
-
-func (o planModeOutbound) PatchCard(ctx context.Context, messageID string, card map[string]any) error {
-	return patchCardEffect(ctx, o.app, messageID, card)
 }
 
 type planSettingsSource struct {
