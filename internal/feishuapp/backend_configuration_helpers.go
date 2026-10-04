@@ -1,22 +1,62 @@
 package feishuapp
 
 import (
+	"sync"
+
 	appbackend "feidex/internal/adapter/feishu/backend"
+	modelcommands "feidex/internal/adapter/feishu/modelconfig"
+	"feidex/internal/application/workspace"
+	"feidex/internal/config"
 	"feidex/internal/feishu"
+	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func buildBackendConfigurationService(app *App) appbackend.ConfigurationService {
-	driver := app.BackendDriver()
-	// Model commands are assembled before the backend configuration service in
-	// both composition entry points, so read them once instead of closing over
-	// the aggregate.
-	modelCommands := app.bindings.ModelCommands
+type BackendConfigurationInputs struct {
+	Config              *config.Config
+	ConfigMu            *sync.RWMutex
+	Backend             func() string
+	FrontendConfigIndex int
+	Store               *state.Store
+	WorkspaceSelection  workspace.SelectionService
+	Driver              appbackend.Driver
+	ModelCommands       modelcommands.ModelConfigService
+}
+
+type backendConfigurationPermissions struct {
+	config              *config.Config
+	configMu            *sync.RWMutex
+	backend             func() string
+	frontendConfigIndex int
+	store               *state.Store
+	workspaceSelection  workspace.SelectionService
+}
+
+func (p backendConfigurationPermissions) Config() *config.Config  { return p.config }
+func (p backendConfigurationPermissions) ConfigMu() *sync.RWMutex { return p.configMu }
+func (p backendConfigurationPermissions) Backend() string {
+	if p.backend == nil {
+		return ""
+	}
+	return p.backend()
+}
+func (p backendConfigurationPermissions) FrontendConfigIndex() int { return p.frontendConfigIndex }
+func (p backendConfigurationPermissions) Store() *state.Store      { return p.store }
+func (p backendConfigurationPermissions) WorkspaceSelection() workspace.SelectionService {
+	return p.workspaceSelection
+}
+
+func buildBackendConfigurationService(inputs BackendConfigurationInputs) appbackend.ConfigurationService {
+	modelCommands := inputs.ModelCommands
 
 	inner := appbackend.NewConfigurationService(appbackend.ConfigurationDeps{
-		Permissions: app,
-		Driver:      driver,
+		Permissions: backendConfigurationPermissions{
+			config: inputs.Config, configMu: inputs.ConfigMu, backend: inputs.Backend,
+			frontendConfigIndex: inputs.FrontendConfigIndex, store: inputs.Store,
+			workspaceSelection: inputs.WorkspaceSelection,
+		},
+		Driver: inputs.Driver,
 		Formatting: appbackend.ConfigurationFormattingDeps{
 			FormatMenuBody: menuCardBody,
 		},

@@ -238,7 +238,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ConversationConfiguration = conversation.Configuration{Models: bindings.ModelSnapshots, ServiceName: feishuapp.CodexServiceName(frontend.Config(), frontend.ConfigMu())}
 	bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(frontend.FrontendID()), Effects: feishuapp.NewEffectRunner(frontend), Collaboration: bindings.Plan}
 	bindings.BindingPending = routing.PendingService{Configuration: bindings.RoutingConfiguration.ConfigurationService, Repository: frontend.State()}
-	bindings.BackendConfiguration = feishuapp.BuildBackendConfiguration(frontend)
+	bindings.BackendConfiguration = feishuapp.BuildBackendConfiguration(feishuapp.BackendConfigurationInputs{
+		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), Backend: scope.RuntimeOwner.Backend,
+		FrontendConfigIndex: frontend.FrontendConfigIndex(), Store: frontend.Store(),
+		WorkspaceSelection: bindings.WorkspaceSelection, Driver: frontend.BackendDriver(), ModelCommands: bindings.ModelCommands,
+	})
 	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
 	backendSwitch := backendselection.NewService(feishuapp.BackendSwitchPorts(frontend))
 	bindings.BackendSwitch = &backendSwitch

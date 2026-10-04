@@ -169,8 +169,8 @@ type Bindings struct {
 }
 
 func (a *App) AttachBindings(bindings *Bindings) { a.bindings = bindings }
-func BuildBackendConfiguration(a *App) backend.ConfigurationService {
-	return buildBackendConfigurationService(a)
+func BuildBackendConfiguration(inputs BackendConfigurationInputs) backend.ConfigurationService {
+	return buildBackendConfigurationService(inputs)
 }
 func BuildBackendActions(a *App) backend.ActionService      { return buildBackendActionService(a) }
 func BuildBackendSelection(a *App) backend.SelectionService { return buildBackendSelectionService(a) }

@@ -224,7 +224,11 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ConversationConfiguration = conversation.Configuration{Models: a.bindings.ModelSnapshots, ServiceName: CodexServiceName(a.Config(), a.ConfigMu())}
 	a.bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(a.FrontendID()), Effects: newEffectRunner(a.runtimeOwner), Collaboration: a.bindings.Plan}
 	a.bindings.BindingPending = routing.PendingService{Configuration: a.bindings.RoutingConfiguration.ConfigurationService, Repository: a.State()}
-	a.bindings.BackendConfiguration = BuildBackendConfiguration(a)
+	a.bindings.BackendConfiguration = BuildBackendConfiguration(BackendConfigurationInputs{
+		Config: a.Config(), ConfigMu: a.ConfigMu(), Backend: a.runtimeOwner.Backend,
+		FrontendConfigIndex: a.FrontendConfigIndex(), Store: a.Store(),
+		WorkspaceSelection: a.bindings.WorkspaceSelection, Driver: a.BackendDriver(), ModelCommands: a.bindings.ModelCommands,
+	})
 	a.bindings.BackendActions = BuildBackendActions(a)
 	backendSwitch := backendselection.NewService(BackendSwitchPorts(a))
 	a.bindings.BackendSwitch = &backendSwitch

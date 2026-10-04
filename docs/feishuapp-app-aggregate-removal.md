@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 436 |
-| 收 `*App` 的顶层函数 | 274 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 434 |
+| 收 `*App` 的顶层函数 | 272 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **32** |
 
@@ -478,6 +478,12 @@ frontend identity 与 effect runner；失效卡标题仍按原 session state 添
 步骤 60 将 `CodexServiceName` 改为接收配置与共享配置锁，返回的 supplier 仍在调用时读取
 最新配置快照，不再捕获 `*App`。生产 `*App` 引用预算由 437 降至 436，收 `*App` 的函数由
 275 降至 274，持有 App 字段的结构体预算保持 31；lazy binding-read 预算保持 13。
+
+步骤 61 将 backend configuration builder 改为接收 `BackendConfigurationInputs`，并使用只持有
+接口所需配置、锁、backend selector、frontend index、store 与 workspace selection 的本地 adapter
+实现 `PermissionDependencies`。composition 和 test fixture 都从已构造对象注入这些值，避免再次
+将 App 作为“窄接口”传递；生产 `*App` 引用预算由 436 降至 434，收 `*App` 的函数由 274 降至
+272，持有 App 字段的结构体预算保持 31；lazy binding-read 预算保持 13。
 
 ## 方法
 
