@@ -274,9 +274,6 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 	}
 }
 
-func findSubmissionByTurn(a *App, threadID, turnID string) (string, *domainsubmission.Submission) {
-	if a == nil {
-		return "", nil
-	}
-	return a.bindings.SubmissionLookup.FindSubmissionByTurn(threadID, turnID)
+func findSubmissionByTurn(lookup appsubmission.SubmissionLookupService, threadID, turnID string) (string, *domainsubmission.Submission) {
+	return lookup.FindSubmissionByTurn(threadID, turnID)
 }

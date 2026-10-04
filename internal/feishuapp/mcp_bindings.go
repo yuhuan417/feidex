@@ -66,6 +66,7 @@ func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {
 	if a == nil {
 		return mcpbridge.Dependencies{}
 	}
+	submissionLookup := a.bindings.SubmissionLookup
 	return mcpbridge.Dependencies{
 		AttachmentSender: a.feishu,
 		StateProvider:    a.store,
@@ -87,7 +88,7 @@ func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {
 			return items
 		},
 		FindSubmissionByTurnFn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-			return findSubmissionByTurn(a, threadID, turnID)
+			return findSubmissionByTurn(submissionLookup, threadID, turnID)
 		},
 		ReplyInThreadForSubmissionFn: func(sub *domainsubmission.Submission) bool {
 			return replyInThreadForSubmission(a, sub)

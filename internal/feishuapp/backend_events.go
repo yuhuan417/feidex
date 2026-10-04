@@ -17,7 +17,7 @@ func BackendEventPorts(a *App) backendevents.Dependencies {
 		Compaction:           a.bindings.Compaction,
 		Submissions:          a.bindings.SubmissionStatus,
 		Usage:                a.runtimeOwner.TurnBindings,
-		Goals:                goalTrackerForApp(a),
+		Goals:                goalTrackerForApp(a.bindings.Goals),
 		Interactions:         a.bindings.Interactions,
 		InteractionPresenter: backendInteractionPresenter{app: a},
 	}
@@ -33,7 +33,7 @@ func deliverBackendInteraction(a *App, _ context.Context, event application.Back
 	switch event.Kind {
 	case application.EventApprovalRequested:
 		cwd := ""
-		if _, sub := findSubmissionByTurn(a, event.ThreadID, event.TurnID); sub != nil {
+		if _, sub := findSubmissionByTurn(a.bindings.SubmissionLookup, event.ThreadID, event.TurnID); sub != nil {
 			if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
 				cwd = ws.Cwd
 			}

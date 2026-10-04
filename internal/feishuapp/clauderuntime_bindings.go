@@ -29,6 +29,10 @@ import (
 )
 
 func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps {
+	// The ports are built by a runtime factory, so these are read here rather
+	// than through app.bindings inside the callbacks below.
+	submissionLookup := app.bindings.SubmissionLookup
+	modelSnapshots := app.bindings.ModelSnapshots
 	return appclauderuntime.Deps{
 		Context: app.Context,
 		Cfg:     cfg,
@@ -135,7 +139,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 		},
 		Lookup: appclauderuntime.LookupDeps{
 			FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-				return findSubmissionByTurn(app, threadID, turnID)
+				return findSubmissionByTurn(submissionLookup, threadID, turnID)
 			},
 			GetSession: func(sessionKey string) *conversation.Session {
 				return app.State().Session(sessionKey)
@@ -163,7 +167,7 @@ func ClaudeRuntimePorts(app *App, cfg config.ClaudeConfig) appclauderuntime.Deps
 		},
 		ModelSettings: func(sessionKey string) domainmodelconfig.Snapshot {
 			sess := app.State().Session(app.configView().normalizeSessionKey(sessionKey))
-			return modelConfigSnapshot(app, sess, domainbackend.BackendClaude)
+			return modelConfigSnapshot(modelSnapshots, sess, domainbackend.BackendClaude)
 		},
 		ModelSettingsApplied: func(sessionKey string, settings domainmodelconfig.Snapshot) {
 			err := app.bindings.ModelAcknowledgements.Applied(sessionKey, settings)

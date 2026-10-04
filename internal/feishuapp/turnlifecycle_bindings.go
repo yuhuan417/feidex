@@ -59,7 +59,7 @@ func (a *App) FinishStandaloneCompactTurn(threadID, turnID, status string) bool 
 }
 
 func (a *App) FindSubmissionByTurn(threadID, turnID string) (string, *domainsubmission.Submission) {
-	return findSubmissionByTurn(a, threadID, turnID)
+	return findSubmissionByTurn(a.bindings.SubmissionLookup, threadID, turnID)
 }
 
 func (a *App) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush appturnlifecycle.TurnStreamFlushResult) bool {

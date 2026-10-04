@@ -13,11 +13,8 @@ import (
 
 // Resolve from one config, binding and profile revision. Callers must not hold
 // ConfigMu; writers of profiles/bindings use the same lock.
-func modelConfigSnapshot(a *App, sess *conversation.Session, backend string) domainmodelconfig.Snapshot {
-	if a == nil {
-		return domainmodelconfig.Snapshot{}
-	}
-	return a.bindings.ModelSnapshots.TurnSnapshot(backend, sess)
+func modelConfigSnapshot(snapshots applicationmodelconfig.SnapshotService, sess *conversation.Session, backend string) domainmodelconfig.Snapshot {
+	return snapshots.TurnSnapshot(backend, sess)
 }
 
 func ModelSnapshotRepository(a *App) applicationmodelconfig.SourceRepository {

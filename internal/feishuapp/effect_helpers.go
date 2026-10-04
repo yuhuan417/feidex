@@ -87,19 +87,16 @@ func patchCardEffect(ctx context.Context, a *App, messageID string, card map[str
 		Frontend:       identity.FrontendID(a.FrontendID()),
 		MessageID:      messageID,
 		View:           feishuoutbound.Card(card),
-		IdempotencyKey: cardEffectKey("patch-card", a, messageID, card),
+		IdempotencyKey: cardEffectKey("patch-card", a.FrontendID(), messageID, card),
 	}})
 }
 
-func cardEffectKey(kind string, a *App, target string, card map[string]any) string {
-	if a == nil {
-		return ""
-	}
+func cardEffectKey(kind, frontendID, target string, card map[string]any) string {
 	data, err := json.Marshal(card)
 	if err != nil {
 		return ""
 	}
-	return application.StableEffectKey(kind, a.FrontendID(), target, string(data))
+	return application.StableEffectKey(kind, frontendID, target, string(data))
 }
 
 func replyTextByAnchorEffect(ctx context.Context, a *App, messageID, text string, inThread bool) error {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	applicationmodelconfig "feidex/internal/application/modelconfig"
 	applicationrouting "feidex/internal/application/routing"
 	"feidex/internal/domain/routing"
@@ -88,11 +89,11 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 	return replyTextEffect(a, msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(updated))
 }
 
-func effectiveBotProfile(a *App) *state.BotProfile {
-	if a == nil || a.State() == nil {
+func effectiveBotProfile(store *appstate.Store) *state.BotProfile {
+	if store == nil {
 		return nil
 	}
-	return a.State().BotProfile()
+	return store.BotProfile()
 }
 
 func completeBotProfileModelSet(backendconfiguration backend.ConfigurationService, action *feishu.CardAction, modelID string) (*callback.CardActionTriggerResponse, error) {

@@ -402,7 +402,7 @@ func TestModelConfigSnapshotConcurrentWritesRemainCoherent(t *testing.T) {
 		if i%10 == 0 {
 			_ = a.bindings.ModelCommands.RenderModelConfigCard(catalog.ModelListResult{}, nil, "", "menu.model")
 		}
-		got := modelConfigSnapshot(a, nil, domainbackend.BackendCodex)
+		got := modelConfigSnapshot(a.bindings.ModelSnapshots, nil, domainbackend.BackendCodex)
 		if got.Model != got.Effort {
 			t.Errorf("mixed settings: %+v", got)
 		}
@@ -533,11 +533,11 @@ func TestModelConfigPlanDefaultUsesPresetAfterClearingOverride(t *testing.T) {
 		Mode: "plan", Model: "plan", ReasoningEffort: "high", PresetReasoningEffort: "medium",
 	}}
 	a.cfg.Codex.PlanReasoningEffort = "high"
-	if got := modelConfigSnapshot(a, sess, domainbackend.BackendCodex).PlanEffort; got != "high" {
+	if got := modelConfigSnapshot(a.bindings.ModelSnapshots, sess, domainbackend.BackendCodex).PlanEffort; got != "high" {
 		t.Fatal(got)
 	}
 	a.cfg.Codex.PlanReasoningEffort = ""
-	if got := modelConfigSnapshot(a, sess, domainbackend.BackendCodex).PlanEffort; got != "medium" {
+	if got := modelConfigSnapshot(a.bindings.ModelSnapshots, sess, domainbackend.BackendCodex).PlanEffort; got != "medium" {
 		t.Fatalf("cleared override used stale effort: %s", got)
 	}
 }

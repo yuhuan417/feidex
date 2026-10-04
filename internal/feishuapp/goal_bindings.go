@@ -35,11 +35,8 @@ func (r goalCardRenderer) SimpleStatusCard(title, color, body string, buttons []
 	return r.app.feishu.SimpleStatusCard(title, color, body, buttons)
 }
 
-func goalTrackerForApp(a *App) *goalapp.Tracker {
-	if a == nil {
-		return nil
-	}
-	return a.bindings.Goals
+func goalTrackerForApp(tracker *goalapp.Tracker) *goalapp.Tracker {
+	return tracker
 }
 
 func commandGoalRaw(goalcommands *goalcmd.Service, msg *feishu.InboundMessage, raw string, args []string) error {
@@ -56,7 +53,7 @@ func goalDependenciesForApp(a *App) goalcmd.Dependencies {
 	}
 	return goalcmd.Dependencies{
 		StateProvider: a.State(), Outbound: goalOutbound{app: a}, CardRenderer: goalCardRenderer{app: a}, GoalManagement: a.bindings.GoalManagement,
-		GoalTracker:      goalTrackerForApp(a),
+		GoalTracker:      goalTrackerForApp(a.bindings.Goals),
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
 		MenuCardBodyForSessionFn: func(s, x, b string) string { return menuCardBodyForSession(a, s, x, b) }, ActionStringValueFn: actionStringValue, ActionSessionKeyFn: actionSessionKey,
 		CompleteMenuCommandFn: func(x *feishu.CardAction, s, r, f string) (*callback.CardActionTriggerResponse, error) {
@@ -73,7 +70,7 @@ func (p goalAnchorPresenter) SendContinuationAnchor(ctx context.Context, chatID 
 
 func GoalContinuationPorts(a *App) goalapp.Dependencies {
 	return goalapp.Dependencies{
-		Context: a.Context, Repository: a.State(), Tracker: goalTrackerForApp(a),
+		Context: a.Context, Repository: a.State(), Tracker: goalTrackerForApp(a.bindings.Goals),
 		Presenter: goalAnchorPresenter{outbound: goalOutbound{app: a}},
 		Bindings:  a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
 		Streams: a.bindings.TurnPresentation, Live: turnRuntimePort{app: a},
