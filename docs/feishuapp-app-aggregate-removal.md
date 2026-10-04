@@ -28,13 +28,13 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 516 |
-| 收 `*App` 的顶层函数 | 314 |
-| 收 `*App` 的 `*Ports` 工厂 | 22 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 515 |
+| 收 `*App` 的顶层函数 | 313 |
+| 收 `*App` 的 `*Ports` 工厂 | 21 |
 | **持有 `*App` 字段的结构体** | **70** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 38。
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 37。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
 如果调用点本身在闭包里，惰性读取预算会**上涨**——读取从 `f` 的函数体（不算惰性）
@@ -72,10 +72,9 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `claudeTurnStreamPort` |
 | 1 | `conversationRuntimeControl` |
 
-以及「已经只剩 helper、没有结构体依赖」的 5 个工厂：
+以及「已经只剩 helper、没有结构体依赖」的 4 个工厂：
 
 `CodexUpgradePorts`(0 helper)、`ConversationRecoveryPorts`(0)、
-`ClaudeMaintenancePorts`(1)、
 `StartupRecoveryPorts`(3)、`CodexRecoveryPorts`(6)。
 
 ### 第一优先：按结构体扇入施工
@@ -101,7 +100,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 |---|---|---|---|---|
 | 3 | `CardActionPorts` | 2 | 0 | 1 |
 | 5 | `BackendMaintenancePorts` | 2 | 1 | 2 |
-| 5 | `ClaudeMaintenancePorts` | 4 | 1 | 0 |
 | 6 | `ConversationRecoveryPorts` | 6 | 0 | 0 |
 | 7 | `CodexUpgradePorts` | 7 | 0 | 0 |
 | 10 | `ConversationControlPorts` | 7 | 2 | 1 |
@@ -148,6 +146,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 7 | `PlanPorts` / `planSettingsSource` | 显式接收配置、配置锁、模型快照服务和 runtime owner；返回对象不再持有 `App`，生产 composition 与测试 fixture 使用同一组输入 |
 | 8 | `CompactionPorts` | 显式接收 context、scoped store、runtime owner、frontend ID 与通知开关；client 查询和通知闭包不再捕获 `App` |
 | 9 | `ContinuationPorts` / `resolveInboundAttachments` | 显式接收配置、配置锁、context、scoped store、runtime owner、submission queue、frontend 身份与 Feishu client；状态方法值和附件下载不再捕获 `App` |
+| 10 | `ClaudeMaintenancePorts` | 显式接收配置、配置锁、context、runtime owner、frontend 配置索引与 Claude core factory；运行时选择与配置仍动态读取 |
 
 前两个是 29 个里仅有的**立即求值、不捕获**的工厂。步骤 3-5 走的是同一
 条路：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -169,6 +168,12 @@ frontend entry。状态存储继续使用 scoped store，附件下载保留 forw
 `continuation_ports_test.go` 覆盖 backend/配置更新、frontend 隔离、client 替换与移除、
 `expectedTurnId` 和附件来源。对照 SM-04/05：不改 turn 绑定、终态、模型快照与 steer
 语义；惰性读取预算保持 38。
+
+步骤 10 保留维护 smoke 使用的前端生命周期 context、当前 Claude 配置快照以及
+workspace workdir 选择；active/current/create 继续查询 runtime owner，create 每次
+从配置锁下读取最新 Claude 配置后调用注入的 factory。`claude_maintenance_ports_test.go`
+覆盖 backend 切换、core 替换和配置更新。维护流程的 smoke → active 检查 → runtime
+刷新顺序不变；惰性读取预算由 38 降至 37。
 
 ## 方法
 

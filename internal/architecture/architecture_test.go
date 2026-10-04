@@ -1089,7 +1089,7 @@ func importsUnder(root, relative string, banned []string) ([]string, error) {
 // narrow values it uses should lower the number here in the same commit; if a
 // change needs a higher number, it is adding coupling rather than removing it.
 func TestFeishuAppAggregateDoesNotGrow(t *testing.T) {
-	const budget = 516
+	const budget = 515
 
 	root := repositoryRoot(t)
 	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))
@@ -1129,7 +1129,7 @@ func TestFeishuAppAggregateDoesNotGrow(t *testing.T) {
 // The goal is zero. The budget only ratchets down; lower it in the same
 // commit that removes reads.
 func TestFeishuAppLazyBindingReadsDoesNotGrow(t *testing.T) {
-	const budget = 38 // goal: 0
+	const budget = 37 // goal: 0
 
 	root := repositoryRoot(t)
 	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))

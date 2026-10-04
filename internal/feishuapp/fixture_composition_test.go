@@ -151,7 +151,7 @@ func prepareTestApp(a *App) *App {
 		},
 		func() { a.bindings.StartupRecovery.RecoverFrontendRuntimeState() },
 	))
-	smoke, active, current, create := ClaudeMaintenancePorts(a)
+	smoke, active, current, create := ClaudeMaintenancePorts(a.Config(), a.ConfigMu(), a.Context, a.runtimeOwner, a.FrontendConfigIndex(), a.bindings.ClaudeFactory)
 	a.bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	a.bindings.History = BuildHistory(a)
 	sharedArtifacts, downloadPresentation, downloadRunner := FileSharePorts(a)

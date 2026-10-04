@@ -169,7 +169,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		},
 		func() { bindings.StartupRecovery.RecoverFrontendRuntimeState() },
 	))
-	smoke, active, current, create := feishuapp.ClaudeMaintenancePorts(frontend)
+	smoke, active, current, create := feishuapp.ClaudeMaintenancePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, scope.RuntimeOwner, frontend.FrontendConfigIndex(), bindings.ClaudeFactory)
 	bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	bindings.History = feishuapp.BuildHistory(frontend)
 	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend)
