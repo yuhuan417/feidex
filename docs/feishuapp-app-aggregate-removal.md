@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 405 |
-| 收 `*App` 的顶层函数 | 248 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 404 |
+| 收 `*App` 的顶层函数 | 247 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **26** |
 
@@ -534,6 +534,12 @@ binding command owner 传入已构造的 frontend query，不再把 App 传给 g
 配置副本读取统一直接使用既有 config+lock helper。`BuildModelCommands` 的状态 callback 在构造期捕获
 这些明确依赖，执行时仍通过 runtime owner 读取当前 backend。生产 `*App` 引用由 407 降至 405，收
 `*App` 的函数由 250 降至 248，持有 App 字段的结构体预算保持 26；lazy binding-read 预算保持 13。
+
+步骤 71 将 `sessionScopedConfigForApp` 改为值型 `sessionModelConfigSource`，只持有配置/锁、scoped
+store、snapshot service、frontend config identity 和动态 backend supplier。p2p session scope 解析保留
+原始/规范化 key 与 session metadata 的 fallback；group metadata 不会被误判为 p2p。生产 `*App` 引用由
+405 降至 404，收 `*App` 的函数由 248 降至 247，持有 App 字段的结构体预算保持 26；lazy binding-read
+预算保持 13。
 
 ## 方法
 

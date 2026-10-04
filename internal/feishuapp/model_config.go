@@ -2,11 +2,16 @@ package feishuapp
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"feidex/internal/adapter/feishu/modelconfig"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
+	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
+	"feidex/internal/textutil"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -19,6 +24,11 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 	statusBackend := app.runtimeOwner.Backend
 	statusFrontendID := app.frontendID
 	statusFrontendConfigIndex := app.frontendConfigIndex
+	sessionConfig := sessionModelConfigSource{
+		cfg: app.cfg, configMu: app.ConfigMu(), store: app.State(), snapshots: app.bindings.ModelSnapshots,
+		view:    frontendConfigView{cfg: app.cfg, mu: app.ConfigMu(), frontendID: app.frontendID, frontendConfigIndex: app.frontendConfigIndex},
+		backend: ConfiguredBackendBuilder(app.cfg, app.ConfigMu(), app.runtimeOwner.Backend, app.frontendID, app.frontendConfigIndex),
+	}
 	return modelconfig.ModelConfigService{
 		Defaults:    &app.bindings.ModelDefaults,
 		Backend:     func() string { return app.configView().configuredBackend() },
@@ -46,9 +56,7 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 		ReplyInThreadEnabled: func(chatType string) bool {
 			return app.configView().replyInThreadEnabled()
 		},
-		SessionConfig: func(sessionKey string) *config.Config {
-			return sessionScopedConfigForApp(app, sessionKey)
-		},
+		SessionConfig:  sessionConfig.ForSession,
 		MenuBackAction: menuBackAction,
 		FormatMenuBody: menuCardBody,
 		ModelConfigStatus: func(sessionKey string) string {
@@ -64,14 +72,30 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 	}
 }
 
-func sessionScopedConfigForApp(a *App, sessionKey string) *config.Config {
-	if a == nil || a.cfg == nil || !p2pSessionScopeActive(a, sessionKey) {
+type sessionModelConfigSource struct {
+	cfg       *config.Config
+	configMu  *sync.RWMutex
+	store     *appstate.Store
+	snapshots applicationmodelconfig.SnapshotService
+	view      frontendConfigView
+	backend   func() string
+}
+
+func (s sessionModelConfigSource) ForSession(sessionKey string) *config.Config {
+	view := s.view
+	if s.backend != nil {
+		view.backend = s.backend()
+	}
+	if s.cfg == nil || !p2pSessionScopeActiveForConfig(view, s.store, sessionKey) {
 		return nil
 	}
-	clone := configReadCopy(a.cfg, a.ConfigMu())
-	sess := a.State().Session(a.configView().normalizeSessionKey(sessionKey))
-	values := a.bindings.ModelSnapshots.Auxiliary(sess)
-	main := a.bindings.ModelSnapshots.Desired(a.configView().configuredBackend(), sess)
+	clone := configReadCopy(s.cfg, s.configMu)
+	var sess *conversation.Session
+	if s.store != nil {
+		sess = s.store.Session(view.normalizeSessionKey(sessionKey))
+	}
+	values := s.snapshots.Auxiliary(sess)
+	main := s.snapshots.Desired(view.configuredBackend(), sess)
 	if main.Backend == "claude" {
 		clone.Claude.Model, clone.Claude.Effort = main.Model, main.Effort
 	} else {
@@ -81,4 +105,17 @@ func sessionScopedConfigForApp(a *App, sessionKey string) *config.Config {
 	clone.Codex.ReviewModel, clone.Codex.SubagentModel, clone.Codex.SubagentReasoningEffort = values.ReviewModel, values.SubagentModel, values.SubagentEffort
 	clone.Claude.SmallModel, clone.Claude.SubagentModel = values.ClaudeSmallModel, values.ClaudeSubagent
 	return clone
+}
+
+func p2pSessionScopeActiveForConfig(view frontendConfigView, store *appstate.Store, sessionKey string) bool {
+	chatType, chatID := sessionKeyChat(sessionKey)
+	if store != nil {
+		for _, key := range []string{strings.TrimSpace(sessionKey), view.normalizeSessionKey(sessionKey)} {
+			if sess := store.Session(key); sess != nil {
+				chatType = textutil.FirstNonEmpty(chatType, strings.TrimSpace(sess.ChatType))
+				chatID = textutil.FirstNonEmpty(chatID, strings.TrimSpace(sess.ChatID))
+			}
+		}
+	}
+	return strings.TrimSpace(chatID) != "" && strings.EqualFold(strings.TrimSpace(chatType), "p2p")
 }
