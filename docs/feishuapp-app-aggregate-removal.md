@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 411 |
-| 收 `*App` 的顶层函数 | 253 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 408 |
+| 收 `*App` 的顶层函数 | 251 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **27** |
+| **持有 `*App` 字段的结构体** | **26** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -519,6 +519,11 @@ frontend aggregate。各调度入口只接收 coalescer/query，backend 仍在�
 读取并在 config 锁下回退到当前 frontend 配置。coalescing、frontend lifecycle 和刷新 timeout
 不变，并增加 runtime backend 动态读取测试。生产 `*App` 引用由 416 降至 411，收 `*App` 的函数由
 258 降至 253，持有 App 字段的结构体预算保持 27；lazy binding-read 预算保持 13。
+
+步骤 68 将 `modelWriteAdmission` 改为持有 `frontend.Query`，并让 blocked-reason helper 直接接收
+该 query；composition 与 fixture 都从已经构造的 `Bindings.FrontendQuery` 注入 admission。模型配置
+写入仍只检查 frontend 的维护/切换事实，零值 query 仍允许写入。生产 `*App` 引用由 411 降至 408，
+收 `*App` 的函数由 253 降至 251，持有 App 字段的结构体由 27 降至 26；lazy binding-read 预算保持 13。
 
 ## 方法
 

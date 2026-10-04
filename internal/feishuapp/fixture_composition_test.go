@@ -222,10 +222,10 @@ func prepareTestApp(a *App) *App {
 		*a.runtimeOwner.EffectRunner, SessionKeyBuilder(a.FrontendID()),
 	)
 	a.bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: ModelSnapshotRepository(a.Config(), a.ConfigMu(), a.State())}
-	a.bindings.ModelSettings = modelconfig.SettingsService{Repository: a.State(), Admission: ModelWriteAdmission(a), Frontend: identity.FrontendID(a.FrontendID())}
+	a.bindings.ModelSettings = modelconfig.SettingsService{Repository: a.State(), Admission: ModelWriteAdmission(a.bindings.FrontendQuery), Frontend: identity.FrontendID(a.FrontendID())}
 	a.bindings.ModelDefaults = modelconfig.DefaultsService{
 		Repository: configadapter.ModelDefaultsRepository{Source: a, Scope: a.State()},
-		Admission:  ModelWriteAdmission(a), Frontend: a.FrontendID(),
+		Admission:  ModelWriteAdmission(a.bindings.FrontendQuery), Frontend: a.FrontendID(),
 		Publisher: ModelDefaultsPublisher(a.runtimeOwner, a.Config(), a.ConfigMu()),
 	}
 	a.bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: a}}

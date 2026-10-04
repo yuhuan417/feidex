@@ -1,13 +1,16 @@
 package feishuapp
 
 import (
+	"feidex/internal/application/frontend"
 	"feidex/internal/application/modelconfig"
 )
 
-type modelWriteAdmission struct{ app *App }
+type modelWriteAdmission struct{ query frontend.Query }
 
 func (s modelWriteAdmission) ModelConfigBlockedReason() string {
-	return modelConfigBlockedReason(s.app)
+	return modelConfigBlockedReason(s.query)
 }
 
-func ModelWriteAdmission(a *App) modelconfig.WriteAdmission { return modelWriteAdmission{app: a} }
+func ModelWriteAdmission(query frontend.Query) modelconfig.WriteAdmission {
+	return modelWriteAdmission{query: query}
+}

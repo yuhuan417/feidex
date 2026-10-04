@@ -146,7 +146,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: feishuapp.ModelSnapshotRepository(frontend.Config(), frontend.ConfigMu(), frontend.State())}
 	bindings.ModelDefaults = modelconfig.DefaultsService{
 		Repository: configadapter.ModelDefaultsRepository{Source: frontend, Scope: frontend.State()},
-		Admission:  feishuapp.ModelWriteAdmission(frontend), Frontend: frontend.FrontendID(),
+		Admission:  feishuapp.ModelWriteAdmission(bindings.FrontendQuery), Frontend: frontend.FrontendID(),
 		Publisher: feishuapp.ModelDefaultsPublisher(scope.RuntimeOwner, frontend.Config(), frontend.ConfigMu()),
 	}
 	bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: frontend}}
@@ -239,7 +239,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		bindings.ThreadSettings, frontend.Context, identity.FrontendID(frontend.FrontendID()),
 		*scope.RuntimeOwner.EffectRunner, feishuapp.SessionKeyBuilder(frontend.FrontendID()),
 	)
-	bindings.ModelSettings = modelconfig.SettingsService{Repository: frontend.State(), Admission: feishuapp.ModelWriteAdmission(frontend), Frontend: identity.FrontendID(frontend.FrontendID())}
+	bindings.ModelSettings = modelconfig.SettingsService{Repository: frontend.State(), Admission: feishuapp.ModelWriteAdmission(bindings.FrontendQuery), Frontend: identity.FrontendID(frontend.FrontendID())}
 	bindings.ConversationConfiguration = conversation.Configuration{Models: bindings.ModelSnapshots, ServiceName: feishuapp.CodexServiceName(frontend.Config(), frontend.ConfigMu())}
 	bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(frontend.FrontendID()), Effects: feishuapp.NewEffectRunner(frontend), Collaboration: bindings.Plan}
 	bindings.BindingPending = routing.PendingService{Configuration: bindings.RoutingConfiguration.ConfigurationService, Repository: frontend.State()}
