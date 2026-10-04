@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 401 |
-| 收 `*App` 的顶层函数 | 245 |
-| 收 `*App` 的 `*Ports` 工厂 | 15 |
-| **持有 `*App` 字段的结构体** | **26** |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 400 |
+| 收 `*App` 的顶层函数 | 244 |
+| 收 `*App` 的 `*Ports` 工厂 | 14 |
+| **持有 `*App` 字段的结构体** | **25** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
@@ -86,10 +86,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 9 | `CodexRecoveryPorts` | 5 | 4 | 0 |
 | 7 | `TurnPorts` | 2 | 3 | 2 |
 | 6 | `BackendFailurePorts` | 3 | 3 | 0 |
-| 6 | `ConversationPorts` | 6 | 0 | 0 |
 | 6 | `GoalContinuationPorts` | 5 | 0 | 1 |
 | 6 | `TurnPresentationPorts` | 3 | 2 | 1 |
-| 5 | `ConversationControlPorts` | 4 | 0 | 1 |
 | 5 | `FileSharePorts` | 3 | 2 | 0 |
 | 5 | `ReviewPorts` | 1 | 1 | 3 |
 | 3 | `BackendSwitchPorts` | 2 | 0 | 1 |
@@ -546,6 +544,12 @@ store、snapshot service、frontend config identity 和动态 backend supplier�
 interrupt 仍只在 Codex error 后做完成状态对账。fixture 与 production composition 同步使用同一依赖形状。
 生产 `*App` 引用由 404 降至 401，收 `*App` 的函数由 247 降至 245，App-bearing `*Ports` 工厂由 16
 降至 15，持有 App 字段的结构体由 26 降至 25；lazy binding-read 预算保持 13。
+
+步骤 73 将 `ConversationPorts` 改为接收 `ConversationPortInputs`，显式传入 frontend-scoped
+repository、model settings、thread binding、conversation configuration 与 runtime owner。backend、Claude
+core 和 Codex client 仍从 runtime owner 动态读取；新增测试覆盖 backend override 变化及清空后的配置回退。
+生产 `*App` 引用由 401 降至 400，收 `*App` 的函数由 245 降至 244，App-bearing `*Ports` 工厂由 15
+降至 14，持有 App 字段的结构体预算保持 25；lazy binding-read 预算保持 13。
 
 ## 方法
 

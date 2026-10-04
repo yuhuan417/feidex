@@ -6,8 +6,8 @@ import (
 	claudeadapter "feidex/internal/adapter/backend/claude"
 	codexadapter "feidex/internal/adapter/backend/codex"
 	"feidex/internal/adapter/feishu/threadview"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/conversation"
-	"feidex/internal/application/submission"
 	"feidex/internal/compositionkit"
 	"feidex/internal/config"
 	domainbackend "feidex/internal/domain/backend"
@@ -19,22 +19,48 @@ import (
 	"sync"
 )
 
-func ConversationPorts(a *App, liveThreads conversation.LiveThreads) conversation.Dependencies {
-	s := conversation.Dependencies{Context: a.Context, Backend: func() string { return a.configView().configuredBackend() }, Repository: compositionkit.ConversationRepository{Repository: a.State(), Runner: newEffectRunner(a.runtimeOwner), Frontend: identity.FrontendID(a.FrontendID()), Context: a.Context}, Live: liveThreads}
-	s.ModelSettings = a.bindings.ModelSnapshots
-	s.Operations = a.State()
-	s.ThreadBinding = conversation.ThreadBindingDependencies{
-		Lookup:   submission.SubmissionLookupService{State: a.State(), Runtime: a.runtimeOwner.TurnBindings},
-		Bindings: a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
+type ConversationPortInputs struct {
+	Config                    *config.Config
+	ConfigMu                  *sync.RWMutex
+	FrontendID                string
+	FrontendConfigIndex       int
+	Context                   func() context.Context
+	Repository                *appstate.Store
+	RuntimeOwner              *frontendruntime.FrontendOwner
+	LiveThreads               conversation.LiveThreads
+	ModelSettings             conversation.ModelSettings
+	ThreadBinding             conversation.ThreadBindingDependencies
+	ConversationConfiguration conversation.Configuration
+	ContinueClaude            func(string, string) error
+}
+
+func ConversationPorts(inputs ConversationPortInputs) conversation.Dependencies {
+	view := frontendConfigView{cfg: inputs.Config, mu: inputs.ConfigMu, frontendID: inputs.FrontendID, frontendConfigIndex: inputs.FrontendConfigIndex}
+	runtime := runtimeView{owner: inputs.RuntimeOwner}
+	backend := func() string {
+		current := view
+		if inputs.RuntimeOwner != nil {
+			current.backend = inputs.RuntimeOwner.Backend()
+		}
+		return current.configuredBackend()
 	}
-	s.Gateway = backendadapter.ConversationGateway{Selected: s.Backend, Gateways: map[string]conversation.Gateway{
-		domainbackend.BackendClaude: claudeadapter.ConversationGateway{Client: func() claudeadapter.ConversationClient { return a.runtimeView().currentClaudeCore() }, Continue: a.bindings.Continuation.ContinueClaudeSessionWithText},
+	deps := conversation.Dependencies{
+		Context: inputs.Context, Backend: backend,
+		Repository: compositionkit.ConversationRepository{
+			Repository: inputs.Repository, Runner: newEffectRunner(inputs.RuntimeOwner),
+			Frontend: identity.FrontendID(inputs.FrontendID), Context: inputs.Context,
+		},
+		Live: inputs.LiveThreads, ModelSettings: inputs.ModelSettings, Operations: inputs.Repository,
+		ThreadBinding: inputs.ThreadBinding,
+	}
+	deps.Gateway = backendadapter.ConversationGateway{Selected: deps.Backend, Gateways: map[string]conversation.Gateway{
+		domainbackend.BackendClaude: claudeadapter.ConversationGateway{Client: func() claudeadapter.ConversationClient { return runtime.currentClaudeCore() }, Continue: inputs.ContinueClaude},
 		domainbackend.BackendCodex: codexadapter.ConversationGateway{
-			Client:        func() (codexadapter.ConversationClient, error) { return a.runtimeView().requireCodexClient() },
-			Configuration: a.bindings.ConversationConfiguration,
+			Client:        func() (codexadapter.ConversationClient, error) { return runtime.requireCodexClient() },
+			Configuration: inputs.ConversationConfiguration,
 		},
 	}}
-	return s
+	return deps
 }
 func renderThreadsCard(a *App, key string, all bool) (map[string]any, error) {
 	sess := a.State().Session(key)

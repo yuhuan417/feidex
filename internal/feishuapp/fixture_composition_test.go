@@ -307,7 +307,17 @@ func prepareTestApp(a *App) *App {
 	inboundService.Deps = InboundPorts(a, forwardService.Start)
 	a.bindings.Inbound = inboundService
 	a.bindings.ForwardInputs = forwardService
-	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(a, liveThreads)}
+	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(ConversationPortInputs{
+		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),
+		FrontendConfigIndex: a.FrontendConfigIndex(), Context: a.Context,
+		Repository: a.State(), RuntimeOwner: a.runtimeOwner, LiveThreads: liveThreads,
+		ModelSettings: a.bindings.ModelSnapshots,
+		ThreadBinding: conversation.ThreadBindingDependencies{
+			Lookup: a.bindings.SubmissionLookup, Bindings: a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation,
+		},
+		ConversationConfiguration: a.bindings.ConversationConfiguration,
+		ContinueClaude:            a.bindings.Continuation.ContinueClaudeSessionWithText,
+	})}
 	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
 	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
 	actors, replayRunner := BindingReplayPorts(a.sessionActorRuntime(), a.runtimeOwner)

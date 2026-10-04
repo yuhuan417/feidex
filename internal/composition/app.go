@@ -321,7 +321,17 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	inboundService.Deps = feishuapp.InboundPorts(frontend, forwardService.Start)
 	bindings.Inbound = inboundService
 	bindings.ForwardInputs = forwardService
-	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(frontend, liveThreads)}
+	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(feishuapp.ConversationPortInputs{
+		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),
+		FrontendConfigIndex: frontend.FrontendConfigIndex(), Context: frontend.Context,
+		Repository: frontend.State(), RuntimeOwner: scope.RuntimeOwner, LiveThreads: liveThreads,
+		ModelSettings: bindings.ModelSnapshots,
+		ThreadBinding: conversation.ThreadBindingDependencies{
+			Lookup: bindings.SubmissionLookup, Bindings: scope.RuntimeOwner.TurnBindings, Replies: bindings.Continuation,
+		},
+		ConversationConfiguration: bindings.ConversationConfiguration,
+		ContinueClaude:            bindings.Continuation.ContinueClaudeSessionWithText,
+	})}
 	// The workspace command services read the workspace card presentation and
 	// the conversation service at construction, so they are built once those
 	// bindings exist.
