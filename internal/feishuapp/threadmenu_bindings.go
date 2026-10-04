@@ -62,7 +62,7 @@ func (a threadMenuConversationBackendAdapter) ForkReplyMessage(forkedID string) 
 }
 
 type threadMenuBackendRuntimeAdapter struct {
-	app     *App
+	deps    BackendRuntimeDeps
 	runtime backendruntime.BackendFacade
 }
 
@@ -70,14 +70,14 @@ func (a threadMenuBackendRuntimeAdapter) ReconcileCompletedTurnFromFinalOutput(s
 	if a.runtime == nil {
 		return sess
 	}
-	return a.runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.app.BackendRuntimeDeps()), sessionKey, sess)
+	return a.runtime.ReconcileCompletedTurnFromFinalOutput(backendRuntimeContextForApp(a.deps), sessionKey, sess)
 }
 
 func (a threadMenuBackendRuntimeAdapter) ClearActiveOperationsAfterInterrupt(sessionKey string, sess *conversation.Session) *conversation.Session {
 	if a.runtime == nil {
 		return sess
 	}
-	return a.runtime.ClearActiveOperationsAfterInterruptContext(backendRuntimeContextForApp(a.app.BackendRuntimeDeps()), sessionKey, sess)
+	return a.runtime.ClearActiveOperationsAfterInterruptContext(backendRuntimeContextForApp(a.deps), sessionKey, sess)
 }
 
 type threadMenuBackendActionAdapter struct {
@@ -111,7 +111,9 @@ func (a *App) ThreadMenuBackendRuntime() appthreadmenu.BackendRuntimeProvider {
 	if a == nil {
 		return threadMenuBackendRuntimeAdapter{}
 	}
-	return threadMenuBackendRuntimeAdapter{app: a, runtime: backendRuntime(a.configView().configuredBackend())}
+	return threadMenuBackendRuntimeAdapter{
+		deps: a.BackendRuntimeDeps(), runtime: backendRuntime(a.configView().configuredBackend()),
+	}
 }
 
 func (a *App) ThreadMenuPendingQueue() appthreadmenu.PendingQueueProvider {
