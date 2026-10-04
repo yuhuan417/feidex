@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
+	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 )
 
 func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
@@ -13,7 +14,7 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 	}{
 		{name: "menu", handlers: menuCardActionHandlers()},
 		{name: "workspace", handlers: workspaceCardActionHandlers()},
-		{name: "maintenance", handlers: maintenanceCardActionHandlers()},
+		{name: "maintenance", handlers: maintenanceCardActionHandlers(appupgradecmd.UpgradeService{}, backendUpgradeService{})},
 		{name: "pending", handlers: pendingCardActionHandlers(nil, appreviewcmd.ReviewFormService{})},
 		{name: "server-request", handlers: serverRequestCardActionHandlers(nil)},
 	}

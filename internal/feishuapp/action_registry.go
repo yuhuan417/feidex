@@ -8,6 +8,7 @@ import (
 	claudesupport "feidex/internal/adapter/feishu/claudesupport"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
+	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/application"
 	appcardaction "feidex/internal/application/cardaction"
 	"feidex/internal/feishu"
@@ -24,11 +25,11 @@ func newCardActionService(app *App) cardActionService {
 	return cardActionService{app: app, inner: app.bindings.CardActions}
 }
 
-func CardActionPorts(app *App, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService) appcardaction.Dependencies {
+func CardActionPorts(app *App, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService) appcardaction.Dependencies {
 	handlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
 		workspaceCardActionHandlers(),
-		maintenanceCardActionHandlers(),
+		maintenanceCardActionHandlers(upgrades, backendUpgrades),
 		pendingCardActionHandlers(claudeSupport, reviewCommands),
 		serverRequestCardActionHandlers(serverRequests),
 	)
