@@ -16,17 +16,49 @@
 
 把构造顺序做成拓扑排序能解决**大部分**工厂，但排序对真环无效。所以先要把环拆掉。
 
-## 环的形状（用强连通分量算出来的）
+## 环的形状
 
-31 个工厂里只有两个真环，其余是排序问题：
+判定方法：把 composition 里每条 `bindings.X = ...` 赋值语句作为节点，语句里
+调用的 `feishuapp.*` 函数所读取的其他 binding 作为出边，求强连通分量。
+
+**有 3 个真环**（其余是排序问题）：
 
 ```
 环 1:  Submissions ↔ TurnPresentation ↔ Turns
-环 2:  CodexRecovery ↔ CodexUpgrade ↔ ConversationRecovery ↔ StartupRecovery
+环 2:  CodexRecovery ↔ CodexUpgrade ↔ ConversationRecovery ↔ MaintenanceCommands ↔ StartupRecovery
+环 3:  Inbound ↔ ForwardInputs
 ```
 
-判定依据：把"工厂 → 它构造的 binding → 它读的其他 binding"建成图，求强连通分量。
-只有这两个分量大小 > 1。
+边（行号为本文件写作时的 `internal/composition/app.go`）：
+
+| 语句 | 由谁构造 | 读环内 |
+|---|---|---|
+| `Submissions` (194) | `SubmissionPorts` | TurnPresentation |
+| `TurnPresentation` (196) | `TurnPresentationPorts` | Turns |
+| `Turns` (195) | `TurnPorts` | Submissions, TurnPresentation |
+| `CodexRecovery` (157) | `CodexRecoveryPorts` | CodexUpgrade, StartupRecovery（另读 Submissions） |
+| `CodexUpgrade` (156) | `CodexUpgradePorts` | CodexRecovery, StartupRecovery（另**自引用**） |
+| `ConversationRecovery` (212) | `ConversationRecoveryPorts` | CodexRecovery |
+| `MaintenanceCommands` (151) | `BuildMaintenanceCommands` | StartupRecovery |
+| `StartupRecovery` (150) | `StartupRecoveryPorts` | ConversationRecovery, MaintenanceCommands |
+| `Inbound` (202) | `InboundPorts` | ForwardInputs |
+| `ForwardInputs` (203) | `ForwardFailure`/`ForwardGateway`/`ForwardProcessor`/`ForwardTasks` | Inbound |
+
+### 分析口径上的两次教训
+
+第一版只用"名字以 `*Ports` 结尾"来识别工厂，漏掉了
+`BuildMaintenanceCommands` 这类名字不符的，于是漏掉了
+`StartupRecovery ↔ MaintenanceCommands`；也漏掉了 `ForwardInputs`（它由四个
+`Forward*` 函数拼装，一个 `Ports` 都没有），于是整个环 3 没被发现。
+
+**正确的口径是"这条语句调用了哪些 `feishuapp.*` 函数"，而不是"函数叫什么名字"。**
+按名字匹配的统计已经在本迁移里错了三次（`*Ports` 扇入、`cardRenderer` 杠杆、
+这次的两个环），改动前务必用语句级口径复核。
+
+另一个细节：`Submissions`、`Turns` 等在初始字面量里已用
+`&submission.SubmissionQueueService{}` 预建空占位符，之后用
+`*bindings.Submissions = ...` 原地填充。所以"指针已存在"不等于"值已就绪"，
+判断向后读要看**值**写入的位置。
 
 ## 环 1：turn / submission / turnstream
 
@@ -113,7 +145,7 @@ turnstart    →  EnsureStreamLocked(tracker)  （直接操作 tracker）
 - 恢复路径（startup recovery 期间 turn 绑定的重放）
 - 通知发送失败时的状态一致性
 
-## 环 2：recovery / upgrade 四个服务
+## 环 2：recovery / upgrade 五个服务
 
 ### 边（方法级）
 
@@ -126,6 +158,8 @@ turnstart    →  EnsureStreamLocked(tracker)  （直接操作 tracker）
 | `CodexUpgrade` | `StartupRecovery` | 同上 → `recoverFrontendRuntimeState(a.bindings.StartupRecovery)` | 同上 |
 | `ConversationRecovery` | `CodexRecovery` | `conversation_services.go` 的 `ConversationRecoveryPorts` → `codexRuntimeRecovering(a.bindings.CodexRecovery)` | **只查一个状态** |
 | `StartupRecovery` | `ConversationRecovery` | `maintenance_bindings.go` 的 `StartupRecoveryPorts` → `a.bindings.ConversationRecovery.Restore()` | 恢复会话 |
+| `StartupRecovery` | `MaintenanceCommands` | 同上 → `a.bindings.MaintenanceCommands`（`StartupState`） | 启动状态 |
+| `MaintenanceCommands` | `StartupRecovery` | `maintenance_bindings.go` 的 `BuildMaintenanceCommands` → `a.bindings.StartupRecovery` | 恢复前端运行时状态 |
 
 ### 共享的是什么
 
@@ -164,13 +198,35 @@ CodexRecovery   → CodexUpgrade.StartVerifiedCodexClient   ← 这条要单独�
 client）。建议把"启动已验证 client"抽成一个独立的 port，由 composition 注入，
 而不是让 recovery 依赖整个 upgrade 服务。
 
+## 环 3：Inbound / ForwardInputs
+
+只有两条边，但这是最容易被漏掉的一个 —— `ForwardInputs` 由四个 `Forward*`
+函数拼装，一个 `*Ports` 都没有，按名字筛选的工具完全看不到它。
+
+| 从 | 到 | 调用点 |
+|---|---|---|
+| `Inbound` | `ForwardInputs` | `InboundPorts` → `a.bindings.ForwardInputs` |
+| `ForwardInputs` | `Inbound` | `ForwardFailure`/`ForwardGateway`/`ForwardProcessor`/`ForwardTasks` → `a.bindings.Inbound` |
+
+### 拆法
+
+先看两边各自要什么：`InboundPorts` 读 `ForwardInputs` 是把它当作**转发处理器**；
+`Forward*` 读 `Inbound` 是为了**投递/派发**。和环 1 一样，互相要的是对方身上
+那部分状态/能力，而不是整条业务链。建议把 `Forward*` 真正需要的那个能力
+（投递入口）抽成一个显式 port，由 composition 注入，两边都不再持有对方的服务。
+
 ## 施工顺序
 
 1. **拓扑排序**（不改语义，纯重排 composition 的构造顺序）—— 消掉所有非环的向后读。
    做完后大部分工厂可以直接套 `BackendRuntimeDeps`。
-2. **拆环 2** —— 它更简单（4 个服务、边更窄、`recoverFrontendRuntimeState` 已是
-   一行转发），先拿它练手并确认拆法。
-3. **拆环 1** —— 涉及核心状态机，需要对照协议审计文档，单独一轮。
+
+   注意：**不要靠"交换两行"来做**。写作本文时曾打算交换 `StartupRecovery`(150) 与
+   `MaintenanceCommands`(151)，复核发现两者互相依赖（环 2 的一部分），交换只会
+   把顺序问题变成环。`Inbound`(202) 与 `ForwardInputs`(203) 同理（环 3）。
+   重排前必须按语句级口径重算一遍环。
+2. **拆环 3** —— 只有两条边、两个服务，先拿它练手并确认拆法。
+3. **拆环 2** —— 五个服务、七条边，`recoverFrontendRuntimeState` 已是一行转发。
+4. **拆环 1** —— 涉及核心状态机，需要对照协议审计文档，单独一轮。
 
 ## 验证
 
