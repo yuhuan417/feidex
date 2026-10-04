@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 234 |
-| 收 `*App` 的顶层函数 | 102 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 232 |
+| 收 `*App` 的顶层函数 | 101 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **2** |
 
@@ -817,6 +817,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 161 将 `renderQuietModeMenuCard(*App, ...)` 改为接收 quiet mode、最终标题和 card renderer。命令与 callback 在调用处用现有 config/plan/Feishu owners 组装这些输入，选中态、按钮及返回导航保持不变。生产 `*App` 引用由 240 降至 239，App-taking 顶层函数由 108 降至 107，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
 
 步骤 162 将 root/tools/system/backend/help 五个菜单 renderer 改为显式接收 backend、标题、Feishu card renderer 与 session scope（help）。菜单 body、按钮、标题和 backend 未配置时的展示保持不变；测试用 `_test.go` helper 继续以 fixture 构造同样的输入。生产 `*App` 引用由 239 降至 234，App-taking 顶层函数由 107 降至 102，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
+
+步骤 163 删除 `renderClaudeSessionPermissionMenuCard(*App, ...)` 转发函数及 `App.RenderClaudeSessionPermissionMenuCard` 兼容方法。会话权限 renderer 在 thread-menu composition 中一次构造并注入，命令入口直接用显式 config/backend/session 输入构造 renderer；permission options 与展示保持不变。生产 `*App` 引用由 234 降至 232，App-taking 顶层函数由 102 降至 101，App-bearing 结构体、App-bearing `*Ports` 工厂及 lazy binding-read 预算保持。
 
 ## 方法
 

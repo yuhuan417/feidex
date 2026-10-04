@@ -90,12 +90,10 @@ func ClaudePermissionMenuRenderer(cfg *config.Config, backend func() string, ses
 	}
 }
 
-func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
-	return ClaudePermissionMenuRenderer(a.Config(), ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()), a.State().Session)(sessionKey)
-}
-
 func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
-	card, err := renderClaudeSessionPermissionMenuCard(a, a.configView().makeSessionKey(msg))
+	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	render := ClaudePermissionMenuRenderer(a.Config(), backend, a.State().Session)
+	card, err := render(a.configView().makeSessionKey(msg))
 	if err != nil {
 		return err
 	}

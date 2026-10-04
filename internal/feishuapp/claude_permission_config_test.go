@@ -11,6 +11,11 @@ import (
 	"feidex/internal/feishu"
 )
 
+func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
+	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	return ClaudePermissionMenuRenderer(a.Config(), backend, a.State().Session)(sessionKey)
+}
+
 func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude

@@ -22,6 +22,8 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 	if a == nil {
 		return appthreadmenu.Dependencies{}
 	}
+	permissionBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	permissionMenuRenderer := ClaudePermissionMenuRenderer(a.Config(), permissionBackend, a.State().Session)
 	return appthreadmenu.Dependencies{
 		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), Controls: a.bindings.ConversationControls, Settings: a.bindings.ThreadSettings,
 		PermissionSettings: a.bindings.PermissionSettings,
@@ -35,7 +37,7 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		ReplyCommandActionResponseFn: a.ReplyCommandActionResponse, CommandForkFn: a.CommandFork,
 		CompleteMenuCommandFn: a.CompleteMenuCommand, ActionStringValueFn: actionStringValue,
 		MenuCardBodyFn: menuCardBody, MenuCardBodyForBackendFn: menuCardBodyForBackend,
-		RenderClaudeSessionPermissionMenuCardFn:  a.RenderClaudeSessionPermissionMenuCard,
+		RenderClaudeSessionPermissionMenuCardFn:  permissionMenuRenderer,
 		ShowClaudeSessionPermissionMenuFromAppFn: a.ShowClaudeSessionPermissionMenuFromApp,
 	}
 }
@@ -166,10 +168,6 @@ func (a *App) MenuCardBodyForBackend(backend, action, body string) string {
 
 func (a *App) CancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice string) bool {
 	return a.bindings.AutoRetry.CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
-}
-
-func (a *App) RenderClaudeSessionPermissionMenuCard(sessionKey string) (map[string]any, error) {
-	return renderClaudeSessionPermissionMenuCard(a, sessionKey)
 }
 
 func (a *App) ShowClaudeSessionPermissionMenuFromApp(msg *feishu.InboundMessage) error {
