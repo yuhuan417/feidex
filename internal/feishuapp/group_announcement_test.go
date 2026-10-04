@@ -33,6 +33,17 @@ func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeish
 	})
 }
 
+func groupAnnouncementStatusForTest(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
+	return buildGroupAnnouncementStatus(
+		a.FrontendID(), a.feishu, a.configView().configuredBackend(),
+		a.bindings.AnnouncementQuery, a.bindings.ConversationQuery, chatID, updatedAt,
+	)
+}
+
+func groupAnnouncementCommonStatusForTest(a *App, updatedAt time.Time) groupAnnouncementStatus {
+	return buildGroupAnnouncementCommonStatus(a.feishu, updatedAt)
+}
+
 func newGroupAnnouncementStore(t *testing.T) *state.Store {
 	t.Helper()
 	store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
@@ -118,7 +129,7 @@ func TestGroupAnnouncementRefreshRecreatesDeletedPersistedBlock(t *testing.T) {
 	ff := &fakeFeishuClient{botOpenID: "bot-open", botName: "luban-feidex"}
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
 	seedGroupAnnouncementBinding(t, a, "chat-1")
-	status := buildGroupAnnouncementStatus(a, "chat-1", time.Unix(1700000000, 0))
+	status := groupAnnouncementStatusForTest(a, "chat-1", time.Unix(1700000000, 0))
 	if err := a.State().SaveGroupAnnouncementBlock(&state.GroupAnnouncementBlock{
 		FrontendID:      a.FrontendID(),
 		ChatID:          "chat-1",
@@ -260,7 +271,7 @@ func TestGroupAnnouncementRefreshRecreatesDeletedPersistedCommonRegion(t *testin
 	if _, err := setGroupPrimary(a, "group", "chat-1", true); err != nil {
 		t.Fatalf("setGroupPrimary() error = %v", err)
 	}
-	status := buildGroupAnnouncementCommonStatus(a, "chat-1", time.Unix(1700000000, 0))
+	status := groupAnnouncementCommonStatusForTest(a, time.Unix(1700000000, 0))
 	if err := a.State().SaveGroupAnnouncementBlock(&state.GroupAnnouncementBlock{
 		FrontendID:      a.FrontendID(),
 		ChatID:          "chat-1",
@@ -293,13 +304,13 @@ func TestGroupAnnouncementBotNameFallbacks(t *testing.T) {
 	ff := &fakeFeishuClient{botOpenID: "bot-open"}
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
 
-	status := buildGroupAnnouncementStatus(a, "chat-1", time.Unix(1700000000, 0))
+	status := groupAnnouncementStatusForTest(a, "chat-1", time.Unix(1700000000, 0))
 	if !strings.Contains(status.content, groupAnnouncementField("Bot", "bot-open")) {
 		t.Fatalf("status content = %q, want bot open id fallback", status.content)
 	}
 
 	ff.botOpenID = ""
-	status = buildGroupAnnouncementStatus(a, "chat-1", time.Unix(1700000000, 0))
+	status = groupAnnouncementStatusForTest(a, "chat-1", time.Unix(1700000000, 0))
 	if strings.Contains(status.content, groupAnnouncementField("Bot", "bot-a")) || !strings.Contains(status.content, groupAnnouncementField("Bot", "unknown")) {
 		t.Fatalf("status content = %q, want unknown fallback without frontend id", status.content)
 	}

@@ -196,7 +196,7 @@ func (s bindingService) commandPrimary(msg *feishu.InboundMessage, args []string
 	_, initErr := ensureGroupPrimaryInitialized(context.Background(), s.app, msg.ChatType, msg.ChatID)
 	if len(args) == 0 || strings.EqualFold(strings.TrimSpace(args[0]), "status") {
 		body := "当前 Bot primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
-		if self := currentBotDisplayName(s.app); self != "" {
+		if self := currentBotDisplayName(s.app.feishu); self != "" {
 			body += "\n当前 Bot: `" + self + "`"
 		}
 		if initErr != nil && !hasGroupPrimaryState(s.app, msg.ChatType, msg.ChatID) {

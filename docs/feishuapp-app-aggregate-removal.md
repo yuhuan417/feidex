@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 420 |
-| 收 `*App` 的顶层函数 | 262 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 416 |
+| 收 `*App` 的顶层函数 | 258 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **27** |
 
@@ -506,6 +506,12 @@ counter 与失败回复能力。dispatcher 组合失败回复时只捕获 fronte
 primary 初始化、stale assignment 判断、非目标 bot 关闭 primary、`@所有人` 旁路及消息提及判断
 沿用原有顺序与决策。生产 `*App` 引用由 427 降至 420，收 `*App` 的函数由 268 降至 262，
 持有 App 字段的结构体由 28 降至 27；lazy binding-read 预算保持 13。
+
+步骤 66 将 group announcement status builders 和 Bot display-name helper 改为显式接收
+Feishu client、frontend/backend 快照及 announcement/conversation queries；删除忽略 chatID 的
+`groupAnnouncementBotOpenID(*App, ...)` 包装器。状态内容、common region、空名称 fallback 和
+刷新时读取的动态 backend/configuration 均保持原行为。生产 `*App` 引用由 420 降至 416，收
+`*App` 的函数由 262 降至 258，持有 App 字段的结构体预算保持 27；lazy binding-read 预算保持 13。
 
 ## 方法
 

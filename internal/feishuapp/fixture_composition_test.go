@@ -124,7 +124,7 @@ func prepareTestApp(a *App) *App {
 	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(a.FrontendID()), Selection: a.WorkspaceSelection(), Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(a)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: a, Scope: a.State()}}
 	a.bindings.WorkspaceCreation = &workspaceapp.CreationService{Filesystem: filesystem, Git: git, Lifecycle: workspaceLifecycle}
 	a.bindings.WorkspaceSettings = workspaceapp.SettingsService{Frontend: a.FrontendID(), Repository: configadapter.WorkspaceSettingsRepository{Source: a, Scope: a.State()}}
-	a.bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(a), PendingRequests: a.State().PendingRequests, ConfigPath: a.ConfigPath, BotName: func() string { return currentBotDisplayName(a) }, FrontendID: a.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
+	a.bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(a), PendingRequests: a.State().PendingRequests, ConfigPath: a.ConfigPath, BotName: func() string { return currentBotDisplayName(feishuClient) }, FrontendID: a.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
 	a.bindings.Forms = &interaction.FormService{Repository: a.State()}
 	a.bindings.WorkspaceWorkflow = &workspaceapp.Workflow{Forms: a.bindings.Forms, Planning: a.bindings.WorkspacePlanning, Creation: a.bindings.WorkspaceCreation}
 	a.bindings.WorkspacePresentation = NewWorkspacePresentation(a)

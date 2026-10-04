@@ -153,11 +153,11 @@ func currentBotName(client FeishuClient) string {
 	return strings.TrimSpace(provider.BotName())
 }
 
-func currentBotDisplayName(a *App) string {
-	if name := currentBotName(a.feishu); name != "" {
+func currentBotDisplayName(client FeishuClient) string {
+	if name := currentBotName(client); name != "" {
 		return name
 	}
-	return currentBotOpenID(a.feishu)
+	return currentBotOpenID(client)
 }
 
 func setGroupPrimaryState(a *App, chatType, chatID string, enabled bool, assignment *feishu.InboundMessage) (*state.GroupPrimary, error) {

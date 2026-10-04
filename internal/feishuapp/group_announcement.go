@@ -69,7 +69,10 @@ func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID strin
 		return nil
 	}
 	now := time.Now()
-	status, common := buildGroupAnnouncementStatus(a, chatID, now), buildGroupAnnouncementCommonStatus(a, chatID, now)
+	status, common := buildGroupAnnouncementStatus(
+		a.FrontendID(), a.feishu, a.configView().configuredBackend(),
+		a.bindings.AnnouncementQuery, a.bindings.ConversationQuery, chatID, now,
+	), buildGroupAnnouncementCommonStatus(a.feishu, now)
 	return a.bindings.Announcements.Refresh(ctx, chatID, status.applicationStatus(), common.applicationStatus())
 }
 func (s groupAnnouncementStatus) applicationStatus() announcement.Status {
@@ -86,11 +89,11 @@ type groupAnnouncementStatus struct {
 	updatedAt     time.Time
 }
 
-func buildGroupAnnouncementCommonStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
-	botOpenID := currentBotOpenID(a.feishu)
+func buildGroupAnnouncementCommonStatus(client FeishuClient, updatedAt time.Time) groupAnnouncementStatus {
+	botOpenID := currentBotOpenID(client)
 	stableLines := []string{
 		groupAnnouncementCommonTitle,
-		groupAnnouncementField("Primary Bot", currentBotDisplayName(a)),
+		groupAnnouncementField("Primary Bot", currentBotDisplayName(client)),
 		groupAnnouncementField("Marker", groupAnnouncementCommonMarker),
 	}
 	stableContent := strings.Join(stableLines, "\n")
@@ -105,18 +108,18 @@ func buildGroupAnnouncementCommonStatus(a *App, chatID string, updatedAt time.Ti
 	}
 }
 
-func buildGroupAnnouncementStatus(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
-	frontendID := textutil.FirstNonEmpty(strings.TrimSpace(a.FrontendID()), config.DefaultFrontendID)
-	botOpenID := groupAnnouncementBotOpenID(a, chatID)
-	botName := groupAnnouncementBotName(a.feishu, botOpenID)
+func buildGroupAnnouncementStatus(frontend string, client FeishuClient, backend string, announcements announcement.Query, conversations conversationapp.Query, chatID string, updatedAt time.Time) groupAnnouncementStatus {
+	frontendID := textutil.FirstNonEmpty(strings.TrimSpace(frontend), config.DefaultFrontendID)
+	botOpenID := currentBotOpenID(client)
+	botName := groupAnnouncementBotName(client, botOpenID)
 	marker := groupAnnouncementMarker(botName, botOpenID)
 	stableLines := []string{
 		groupAnnouncementDivider,
 		groupAnnouncementField("Bot", botName),
 		groupAnnouncementField("Machine IP", textutil.FirstNonEmpty(localAnnouncementMachineIP(), "unknown")),
-		groupAnnouncementField("Workspace", groupAnnouncementWorkspaceDir(a.bindings.AnnouncementQuery, chatID)),
-		groupAnnouncementField("Backend", textutil.FirstNonEmpty(a.configView().configuredBackend(), "unset")),
-		groupAnnouncementField("Thread", textutil.FirstNonEmpty(groupAnnouncementThreadID(a.bindings.ConversationQuery, chatID), "none")),
+		groupAnnouncementField("Workspace", groupAnnouncementWorkspaceDir(announcements, chatID)),
+		groupAnnouncementField("Backend", textutil.FirstNonEmpty(backend, "unset")),
+		groupAnnouncementField("Thread", textutil.FirstNonEmpty(groupAnnouncementThreadID(conversations, chatID), "none")),
 		groupAnnouncementField("Marker", marker),
 	}
 	stableContent := strings.Join(stableLines, "\n")
@@ -142,11 +145,6 @@ func groupAnnouncementField(key, value string) string {
 		return key + ": " + value
 	}
 	return fmt.Sprintf("%-*s: %s", groupAnnouncementFieldWidth, key, value)
-}
-
-func groupAnnouncementBotOpenID(a *App, chatID string) string {
-	_ = chatID
-	return strings.TrimSpace(currentBotOpenID(a.feishu))
 }
 
 func groupAnnouncementMarker(botName, botOpenID string) string {
