@@ -261,7 +261,29 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(frontend, bindings.Turns))
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
 	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(frontend), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}
-	bindings.BackendEvents.Deps = feishuapp.BackendEventPorts(frontend)
+	workspaceRepository := configadapter.NewWorkspaceRepository(frontend)
+	bindings.BackendEvents.Deps = backendevents.Dependencies{
+		Lifecycle: bindings.Turns, Items: bindings.TurnItems, Presentation: bindings.TurnPresentation,
+		Compaction: bindings.Compaction, Submissions: bindings.SubmissionStatus,
+		Usage: scope.RuntimeOwner.TurnBindings, Goals: bindings.Goals, Interactions: bindings.Interactions,
+		InteractionPresenter: feishuapp.BackendInteractionPresenter(feishuapp.BackendInteractionPresenterPorts{
+			FindSubmissionByTurn:      bindings.SubmissionLookup.FindSubmissionByTurn,
+			MergeApprovalPresentation: bindings.ItemContext.MergePresentation,
+			WorkspaceCwd: func(workspaceID string) string {
+				workspace, err := workspaceRepository.Get(workspaceID)
+				if err != nil || workspace == nil {
+					return ""
+				}
+				return workspace.Cwd
+			},
+			SendApprovalCardPresentation: bindings.ServerRequests.SendApprovalCardPresentation,
+			SendUserInputCard:            bindings.ServerRequests.SendUserInputCard,
+			SendUserInputFormCard:        bindings.ServerRequests.SendUserInputFormCard,
+			SendElicitationURLCard:       bindings.ServerRequests.SendElicitationURLCard,
+			SendElicitationFormCard:      bindings.ServerRequests.SendElicitationFormCard,
+			ReplyCodexError:              feishuapp.CodexErrorReplyPort(scope.RuntimeOwner),
+		}),
+	}
 	failure := backendfailure.NewBackendFailureService(feishuapp.BackendFailurePorts(frontend))
 	bindings.BackendFailure = &failure
 	// Inbound and ForwardInputs call each other at runtime, so neither can be

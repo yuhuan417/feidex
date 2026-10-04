@@ -3,68 +3,85 @@ package feishuapp
 import (
 	"context"
 	"encoding/json"
+
 	"feidex/internal/adapter/feishu/approval"
+	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/application"
 	"feidex/internal/application/backendevents"
-	"feidex/internal/config"
+	domainsubmission "feidex/internal/domain/submission"
+	frontendruntime "feidex/internal/runtime"
 )
 
-func BackendEventPorts(a *App) backendevents.Dependencies {
-	return backendevents.Dependencies{
-		Lifecycle:            a.bindings.Turns,
-		Items:                a.bindings.TurnItems,
-		Presentation:         a.bindings.TurnPresentation,
-		Compaction:           a.bindings.Compaction,
-		Submissions:          a.bindings.SubmissionStatus,
-		Usage:                a.runtimeOwner.TurnBindings,
-		Goals:                goalTrackerForApp(a.bindings.Goals),
-		Interactions:         a.bindings.Interactions,
-		InteractionPresenter: backendInteractionPresenter{app: a},
-	}
+type BackendInteractionPresenterPorts struct {
+	FindSubmissionByTurn         func(string, string) (string, *domainsubmission.Submission)
+	WorkspaceCwd                 func(string) string
+	MergeApprovalPresentation    func(approval.Presentation) approval.Presentation
+	SendApprovalCardPresentation func(json.RawMessage, approval.Presentation)
+	SendUserInputCard            func(json.RawMessage, serverrequest.ToolUserInputPayload)
+	SendUserInputFormCard        func(json.RawMessage, serverrequest.ToolUserInputPayload)
+	SendElicitationURLCard       func(json.RawMessage, serverrequest.ElicitationURLPayload)
+	SendElicitationFormCard      func(json.RawMessage, serverrequest.ElicitationFormPayload)
+	ReplyCodexError              func(json.RawMessage, int, string)
 }
 
-type backendInteractionPresenter struct{ app *App }
-
-func (p backendInteractionPresenter) InteractionRequested(ctx context.Context, event application.BackendEvent) error {
-	return deliverBackendInteraction(p.app, ctx, event)
+type backendInteractionPresenter struct {
+	ports BackendInteractionPresenterPorts
 }
-func deliverBackendInteraction(a *App, _ context.Context, event application.BackendEvent) error {
+
+func BackendInteractionPresenter(ports BackendInteractionPresenterPorts) backendevents.InteractionPresenter {
+	return backendInteractionPresenter{ports: ports}
+}
+
+func (p backendInteractionPresenter) InteractionRequested(_ context.Context, event application.BackendEvent) error {
+	ports := p.ports
 	token := json.RawMessage(event.ResponseToken)
 	switch event.Kind {
 	case application.EventApprovalRequested:
 		cwd := ""
-		if _, sub := findSubmissionByTurn(a.bindings.SubmissionLookup, event.ThreadID, event.TurnID); sub != nil {
-			if ws := config.FindWorkspace(a.cfg, sub.WorkspaceID); ws != nil {
-				cwd = ws.Cwd
+		if ports.FindSubmissionByTurn != nil {
+			if _, sub := ports.FindSubmissionByTurn(event.ThreadID, event.TurnID); sub != nil && ports.WorkspaceCwd != nil {
+				cwd = ports.WorkspaceCwd(sub.WorkspaceID)
 			}
 		}
-		p := approval.PresentationForEvent(event, a.bindings.ItemContext.MergePresentation, cwd)
-		a.ServerRequestService().SendApprovalCardPresentation(token, p)
+		presentation := approval.PresentationForEvent(event, ports.MergeApprovalPresentation, cwd)
+		if ports.SendApprovalCardPresentation != nil {
+			ports.SendApprovalCardPresentation(token, presentation)
+		}
 	case application.EventUserInputRequested:
 		if event.UserInput == nil {
 			return nil
 		}
-		p := *event.UserInput
-		if len(p.Questions) == 1 && len(p.Questions[0].Options) > 0 && len(p.Questions[0].Options) <= 3 && !p.Questions[0].MultiSelect && !p.Questions[0].IsOther {
-			a.ServerRequestService().SendUserInputCard(token, p)
-		} else {
-			a.ServerRequestService().SendUserInputFormCard(token, p)
+		payload := *event.UserInput
+		if len(payload.Questions) == 1 && len(payload.Questions[0].Options) > 0 && len(payload.Questions[0].Options) <= 3 && !payload.Questions[0].MultiSelect && !payload.Questions[0].IsOther {
+			if ports.SendUserInputCard != nil {
+				ports.SendUserInputCard(token, payload)
+			}
+		} else if ports.SendUserInputFormCard != nil {
+			ports.SendUserInputFormCard(token, payload)
 		}
 	case application.EventElicitationURLRequested:
-		if event.ElicitationURL == nil {
-			return nil
+		if event.ElicitationURL != nil && ports.SendElicitationURLCard != nil {
+			ports.SendElicitationURLCard(token, *event.ElicitationURL)
 		}
-		a.ServerRequestService().SendElicitationURLCard(token, *event.ElicitationURL)
 	case application.EventElicitationFormRequested:
-		if event.ElicitationForm == nil {
-			return nil
+		if event.ElicitationForm != nil && ports.SendElicitationFormCard != nil {
+			ports.SendElicitationFormCard(token, *event.ElicitationForm)
 		}
-		a.ServerRequestService().SendElicitationFormCard(token, *event.ElicitationForm)
 	case application.EventRequestRejected:
-		if event.Rejected == nil {
-			return nil
+		if event.Rejected != nil && ports.ReplyCodexError != nil {
+			ports.ReplyCodexError(token, event.Rejected.Code, event.Message)
 		}
-		replyCodexError(a, token, event.Rejected.Code, event.Message)
 	}
 	return nil
+}
+
+func CodexErrorReplyPort(owner *frontendruntime.FrontendOwner) func(json.RawMessage, int, string) {
+	return func(requestID json.RawMessage, code int, message string) {
+		if owner == nil {
+			return
+		}
+		if client := owner.CodexClient(); client != nil {
+			_ = client.ReplyError(requestID, code, message)
+		}
+	}
 }

@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 506 |
-| 收 `*App` 的顶层函数 | 309 |
-| 收 `*App` 的 `*Ports` 工厂 | 17 |
-| **持有 `*App` 字段的结构体** | **66** |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 503 |
+| 收 `*App` 的顶层函数 | 307 |
+| 收 `*App` 的 `*Ports` 工厂 | 16 |
+| **持有 `*App` 字段的结构体** | **65** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -78,7 +78,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 合计 | 工厂 | direct | helpers | structs |
 |---|---|---|---|---|
-| 2 | `BackendEventPorts` | 1 | 0 | 1 |
 | 3 | `CardActionPorts` | 2 | 0 | 1 |
 | 3 | `BackendSwitchPorts` | 2 | 0 | 1 |
 | 5 | `ConversationControlPorts` | 4 | 0 | 1 |
@@ -123,6 +122,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 12 | `CodexUpgradePorts` | 显式接收配置、配置锁、frontend 身份、runtime owner、runtime dependency snapshot、Codex recovery 与 startup recovery；配置和 backend 仍动态读取 |
 | 13 | `BackendMaintenancePorts` | 改为显式接收配置/锁、maintenance state、Codex upgrade 与 Claude maintenance owner、渲染和 patch ports；runtime callback 仍观察 Claude service 的更新字段 |
 | 14 | `GoalCommandPorts` | 移除 App-bearing 工厂与 outbound/renderer；composition 显式组装 `goalcmd.Dependencies`，outbound adapter 仅持有 frontend ID 与 effect runner |
+| 15 | `BackendEventPorts` | 移除 App-bearing presenter 与 ports 工厂；composition 直接连接 backendevents owners，并为 interaction presenter 注入 submission/workspace/item-context/server-request/Codex error capabilities |
 
 在最初纳入分析的 29 个工厂中，前两个是仅有的**立即求值、不捕获**工厂；当时
 步骤 3-5 也沿用这条路径：值在调用时已经就绪，惰性读取纯属写法惯性。
@@ -184,6 +184,15 @@ dispatcher，因此这条 callback 目前仍由 composition 绑定到 `App`；go
 gateway 与 continuation 生命周期没有变化。`goal_command_ports_test.go` 覆盖 effect 的
 frontend/消息身份和 session key 兼容格式；Goal command、feishuapp 与 composition 测试通过。
 `*App` 引用预算由 509 降至 506，惰性读取预算保持 34。
+
+步骤 15 将 `BackendEventPorts` 的 bindings 读取移入 composition 的显式
+`backendevents.Dependencies` 组装，并把 interaction presenter 的事件投影改为窄 ports。
+workspace cwd 经 `WorkspaceRepository` 在事件处理时查询，started item 上下文仍通过
+`ItemContext.MergePresentation` 合并，request error 始终回到 runtime owner 当前 Codex
+client。对照 SM-09/10/11/22/23：approval、user-input、elicitation、rejected 的分支和
+request token/error code 均不变；turn lifecycle、item、compaction、usage、goal 与
+resolved/resume owner 继续由原 service 处理。`backend_events_ports_test.go` 覆盖上述
+interaction 分支。`*App` 引用预算由 506 降至 503，惰性读取预算保持 34。
 
 ## 方法
 

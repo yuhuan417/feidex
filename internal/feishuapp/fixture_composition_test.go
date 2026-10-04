@@ -246,7 +246,29 @@ func prepareTestApp(a *App) *App {
 	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(a, a.bindings.Turns))
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}
 	a.bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: ClaudeSessionStopped(a), Session: a.State().Session, Finish: a.bindings.Turns.FinishTurn}
-	a.bindings.BackendEvents.Deps = BackendEventPorts(a)
+	workspaceRepository := configadapter.NewWorkspaceRepository(a)
+	a.bindings.BackendEvents.Deps = backendevents.Dependencies{
+		Lifecycle: a.bindings.Turns, Items: a.bindings.TurnItems, Presentation: a.bindings.TurnPresentation,
+		Compaction: a.bindings.Compaction, Submissions: a.bindings.SubmissionStatus,
+		Usage: a.runtimeOwner.TurnBindings, Goals: a.bindings.Goals, Interactions: a.bindings.Interactions,
+		InteractionPresenter: BackendInteractionPresenter(BackendInteractionPresenterPorts{
+			FindSubmissionByTurn:      a.bindings.SubmissionLookup.FindSubmissionByTurn,
+			MergeApprovalPresentation: a.bindings.ItemContext.MergePresentation,
+			WorkspaceCwd: func(workspaceID string) string {
+				workspace, err := workspaceRepository.Get(workspaceID)
+				if err != nil || workspace == nil {
+					return ""
+				}
+				return workspace.Cwd
+			},
+			SendApprovalCardPresentation: a.bindings.ServerRequests.SendApprovalCardPresentation,
+			SendUserInputCard:            a.bindings.ServerRequests.SendUserInputCard,
+			SendUserInputFormCard:        a.bindings.ServerRequests.SendUserInputFormCard,
+			SendElicitationURLCard:       a.bindings.ServerRequests.SendElicitationURLCard,
+			SendElicitationFormCard:      a.bindings.ServerRequests.SendElicitationFormCard,
+			ReplyCodexError:              CodexErrorReplyPort(a.runtimeOwner),
+		}),
+	}
 	failure := backendfailure.NewBackendFailureService(BackendFailurePorts(a))
 	a.bindings.BackendFailure = &failure
 	inboundService := &inbound.Service{}
