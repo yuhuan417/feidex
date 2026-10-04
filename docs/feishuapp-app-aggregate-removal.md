@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 397 |
-| 收 `*App` 的顶层函数 | 241 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 396 |
+| 收 `*App` 的顶层函数 | 240 |
 | 收 `*App` 的 `*Ports` 工厂 | 14 |
 | **持有 `*App` 字段的结构体** | **25** |
 
@@ -560,6 +560,11 @@ backend 仍通过 runtime owner 动态查询。生产 `*App` 引用由 400 降�
 submission 与 review delivery 均委托给该 owner。quiet-mode gate、compact card fallback 与 scoped message-link
 持久化沿用 `replyChunkDelivery`；生产 `*App` 引用由 398 降至 397，收 `*App` 的函数由 242 降至 241，
 App-bearing `*Ports` 工厂保持 14，持有 App 字段的结构体保持 25；lazy binding-read 预算保持 13。
+
+步骤 76 删除 `replyTextByAnchorEffect(*App, ...)` 并改由 `effectOutbound` 执行；`SubmissionPorts` 的
+reply/session-async callbacks 改捕获 effect outbound、frontend lifecycle、session actors 与 scoped state，异步
+工作仍先通过 lifecycle admission 再按 session 串行。生产 `*App` 引用由 397 降至 396，收 `*App` 的函数由
+241 降至 240，App-bearing `*Ports` 工厂保持 14，持有 App 字段的结构体保持 25；lazy binding-read 预算保持 13。
 
 ## 方法
 

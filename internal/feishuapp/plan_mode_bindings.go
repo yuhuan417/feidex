@@ -107,7 +107,7 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 		if text == "" || a == nil || a.feishu == nil {
 			return
 		}
-		if replyErr := replyTextByAnchorEffect(context.Background(), a, messageID, text, planActionReplyInThread(a, sessionKey)); replyErr != nil {
+		if replyErr := newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)).ReplyText(context.Background(), messageID, text, planActionReplyInThread(a, sessionKey)); replyErr != nil {
 			slog.Warn("plan async text reply failed",
 				"session_key", sessionKey,
 				"message_id", messageID,

@@ -216,12 +216,18 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 	cfg, configMu := a.Config(), a.ConfigMu()
 	frontendID, frontendConfigIndex := a.FrontendID(), a.FrontendConfigIndex()
 	stateStore, runtimeOwner := a.State(), a.runtimeOwner
+	contextFn, feishuClient := runtimeOwner.Lifecycle.Context, a.feishu
+	asyncRunner, sessionActors := a.AsyncRunner(), runtimeOwner.SessionActors
+	continuation, skillResolver := a.bindings.Continuation, a.bindings.Skills
+	turnItems, runtimeMaintenance := a.bindings.TurnItems, a.bindings.SubmissionCleanup
+	autoRetry, modelSettings := a.bindings.AutoRetry, a.bindings.ModelSnapshots
 	configView := frontendConfigView{cfg: cfg, mu: configMu, frontendID: frontendID, frontendConfigIndex: frontendConfigIndex}
 	configuredBackend := ConfiguredBackendBuilder(cfg, configMu, runtimeOwner.Backend, frontendID, frontendConfigIndex)
 	workspaceSelection := a.bindings.WorkspaceSelection
 	defaultWorkspaceID := func() string { return configView.defaultWorkspaceID() }
 	runtime := runtimeView{owner: runtimeOwner}
 	queuedNotice := newOutboundCardService(a)
+	replyOutbound := newEffectOutbound(frontendID, newEffectRunner(runtimeOwner))
 	return appsubmission.Dependencies{
 		PlanConfirmation: plan,
 		PlanExpired: func(ctx context.Context, pending *interaction.PendingRequest) {
@@ -229,18 +235,18 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 				_ = patchCardEffect(ctx, a, pending.FeishuMsgID, planmode.ExitExpiredCard(newPlanModeAppAdapter(a), pending.SessionKey, "", "当前已有新的提交，旧的计划确认已失效。"))
 			}
 		},
-		Context:            a.Context,
-		AppState:           a.State(),
-		SkillResolver:      a.bindings.Skills,
-		AttachmentResolver: sqAttachmentResolverFullAdapter{cfg: a.cfg, contextFn: a.Context, feishuClient: a.feishu},
+		Context:            contextFn,
+		AppState:           stateStore,
+		SkillResolver:      skillResolver,
+		AttachmentResolver: sqAttachmentResolverFullAdapter{cfg: cfg, contextFn: contextFn, feishuClient: feishuClient},
 		LiveThread:         liveThreads,
-		PendingQueue:       a.bindings.Continuation,
-		RuntimeState:       a.runtimeOwner.TurnBindings,
-		Items:              a.bindings.TurnItems,
-		RuntimeMaintenance: a.bindings.SubmissionCleanup,
-		ReplyContinuation:  a.bindings.Continuation,
+		PendingQueue:       continuation,
+		RuntimeState:       runtimeOwner.TurnBindings,
+		Items:              turnItems,
+		RuntimeMaintenance: runtimeMaintenance,
+		ReplyContinuation:  continuation,
 		TurnStream:         turnPresentation,
-		AutoRetry:          a.bindings.AutoRetry,
+		AutoRetry:          autoRetry,
 
 		BackendRuntime: sqBackendRuntimeAdapter{deps: a.BackendRuntimeDeps(), backendOwner: a.runtimeOwner},
 		DefaultWorkspaceID: func() string {
@@ -265,7 +271,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			return resolveSubmissionWorkspaceID(stateStore, workspaceSelection, defaultWorkspaceID, msg, sess, bindOnlyCurrentRoot)
 		},
 		ReplyText: func(ctx context.Context, messageID, text string, inThread bool) error {
-			return replyTextByAnchorEffect(ctx, a, messageID, text, inThread)
+			return replyOutbound.ReplyText(ctx, messageID, text, inThread)
 		},
 		SendQueuedNotice: func(ctx context.Context, sub *domainsubmission.Submission) {
 			queuedNotice.sendSubmissionQueuedNotice(ctx, sub)
@@ -274,7 +280,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			if fn == nil {
 				return
 			}
-			runAsync(a, func() { a.sessionActorRuntime().Run("session:"+strings.TrimSpace(sessionKey), fn) })
+			runtimeOwner.Lifecycle.Run(func() { sessionActors.Run("session:"+strings.TrimSpace(sessionKey), fn) }, asyncRunner)
 		},
 		TryBeginStart: func(sessionKey string) bool {
 			return starts.TryBegin(sessionKey)
@@ -310,7 +316,7 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			}
 			return codexadapter.StartConversation(ctx, client, conversationConfiguration.ThreadStart(conversationapp.Request{Workspace: ws, Session: sess, Model: model}), sub.ModelConfig)
 		},
-		DeleteTurnArtifacts: a.State().DeleteTurnArtifacts,
+		DeleteTurnArtifacts: stateStore.DeleteTurnArtifacts,
 		ClaudePrompt:        claudeadapter.BuildPrompt,
 		Backend:             configuredBackend,
 		ClaudeClient: func() appsubmission.QueueClaudeClient {
@@ -320,15 +326,15 @@ func SubmissionPorts(a *App, plan *appplan.Service, turnPresentation *appturnstr
 			return claudeClientAdapter{claude: runtime.currentClaudeCore()}
 		},
 		AgentBinding: func(chatType, chatID string) *state.AgentBinding {
-			return agentBindingForChat(a.State(), chatType, chatID)
+			return agentBindingForChat(stateStore, chatType, chatID)
 		},
 		AgentBindingByID: func(id string) *state.AgentBinding {
-			return a.State().AgentBinding(id)
+			return stateStore.AgentBinding(id)
 		},
 		BotProfile: func() *state.BotProfile {
-			return a.State().BotProfile()
+			return stateStore.BotProfile()
 		},
-		ModelSettings: a.bindings.ModelSnapshots,
+		ModelSettings: modelSettings,
 	}
 }
 

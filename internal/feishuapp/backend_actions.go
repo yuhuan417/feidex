@@ -53,7 +53,7 @@ func buildBackendActionService(app *App) appbackend.ActionService {
 				return enqueuePassthroughCommand(app, msg, rawCommand)
 			},
 			ReplyText: func(ctx context.Context, msgID, text string, inThread bool) error {
-				return replyTextByAnchorEffect(ctx, app, msgID, text, inThread)
+				return newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)).ReplyText(ctx, msgID, text, inThread)
 			},
 			ReplyInThreadEnabled: func(chatType string) bool {
 				return app.configView().replyInThreadEnabled()

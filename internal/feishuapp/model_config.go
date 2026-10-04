@@ -36,7 +36,7 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 		GetConfig:   func() *config.Config { return app.cfg },
 		GetConfigMu: func() *sync.RWMutex { return app.ConfigMu() },
 		ReplyText: func(ctx context.Context, msgID string, text string, replyInThread bool) error {
-			return replyTextByAnchorEffect(ctx, app, msgID, text, replyInThread)
+			return newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)).ReplyText(ctx, msgID, text, replyInThread)
 		},
 		ReplyCard: func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error) {
 			return replyCardWithIDEffect(ctx, app, msgID, card, replyInThread)

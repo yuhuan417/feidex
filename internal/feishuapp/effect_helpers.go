@@ -91,18 +91,6 @@ func cardEffectKey(kind, frontendID, target string, card map[string]any) string 
 	return application.StableEffectKey(kind, frontendID, target, string(data))
 }
 
-func replyTextByAnchorEffect(ctx context.Context, a *App, messageID, text string, inThread bool) error {
-	if a == nil {
-		return nil
-	}
-	return newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.SendMessage{
-		Frontend:       identity.FrontendID(a.FrontendID()),
-		ReplyMessageID: messageID,
-		Text:           text,
-		InThread:       inThread,
-	}})
-}
-
 func sendTextEffect(ctx context.Context, a *App, chatID, text string) error {
 	if a == nil {
 		return nil
