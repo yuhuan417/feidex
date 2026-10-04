@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 246 |
-| 收 `*App` 的顶层函数 | 113 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 244 |
+| 收 `*App` 的顶层函数 | 111 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **3** |
 
@@ -806,6 +806,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 155 删除无生产调用方的 `renderQuietModeCard(*App)` 空 session-key 转发，测试改为直接覆盖 `renderQuietModeMenuCard`。quiet mode 卡片内容和按钮不变；生产 `*App` 引用预算由 248 降至 247，收 `*App` 的顶层函数由 115 降至 114，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持。
 
 步骤 156 删除 `commandPlan(*App)` 纯转发，feature registry 直接调用 `planmode.CommandPlan` 和现有 adapter；Plan 命令参数及错误处理不变。测试通过 `_test.go` helper 调用同一 use case。生产 `*App` 引用预算由 247 降至 246，收 `*App` 的顶层函数由 114 降至 113，其他棘轮保持。
+
+步骤 157 将 MCP 构造从 `BuildMCP(*App)` / `mcpDependenciesForApp(*App)` 改为 `MCPPortInputs`、`MCPPorts` 与 composition 显式组装。MCP state provider 使用 frontend-scoped `Session/Sessions/Submission` API；跨 frontend session 不会进入当前 MCP 服务。Started turn item、submission lookup、附件 sender 和 reply policy 仍由原 owners 提供。生产 `*App` 引用预算由 246 降至 244，收 `*App` 的顶层函数由 113 降至 111，App-bearing 结构体保持 3，App-bearing `*Ports` 工厂保持 1，lazy binding-read 保持 0。
 
 ## 方法
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"feidex/internal/adapter/feishu/mcpbridge"
 	"feidex/internal/adapter/feishu/turnitem"
+	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/config"
 	domainsubmission "feidex/internal/domain/submission"
 	frontendruntime "feidex/internal/runtime"
@@ -37,8 +38,42 @@ func currentMCPPublicationFor(owner *frontendruntime.FrontendOwner, mcp *feidexM
 	return mcp.Publication()
 }
 
-func BuildMCP(a *App) (*feidexMCPService, error) {
-	svc, err := mcpbridge.NewService(mcpDependenciesForApp(a))
+type MCPPortInputs struct {
+	AttachmentSender mcpbridge.AttachmentSender
+	StateProvider    mcpbridge.StateProvider
+	TurnItems        *turnitem.Tracker
+	SubmissionLookup appsubmission.SubmissionLookupService
+}
+
+func MCPPorts(inputs MCPPortInputs) mcpbridge.Dependencies {
+	return mcpbridge.Dependencies{
+		AttachmentSender: inputs.AttachmentSender,
+		StateProvider:    inputs.StateProvider,
+		StartedTurnItemsFn: func() []mcpbridge.StartedTurnItem {
+			if inputs.TurnItems == nil {
+				return nil
+			}
+			started := inputs.TurnItems.StartedItems()
+			items := make([]mcpbridge.StartedTurnItem, 0, len(started))
+			for _, itemState := range started {
+				raw := itemState.Started.MergedRaw()
+				items = append(items, mcpbridge.StartedTurnItem{
+					ThreadID: strings.TrimSpace(itemState.ThreadID), TurnID: strings.TrimSpace(itemState.TurnID),
+					ItemID: strings.TrimSpace(itemState.ItemID), Type: strings.TrimSpace(itemState.Started.Type),
+					ToolName: strings.TrimSpace(itemState.Started.ToolName), Raw: turnitem.CloneJSONMap(raw),
+				})
+			}
+			return items
+		},
+		FindSubmissionByTurnFn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
+			return findSubmissionByTurn(inputs.SubmissionLookup, threadID, turnID)
+		},
+		ReplyInThreadForSubmissionFn: replyInThreadForSubmission,
+	}
+}
+
+func BuildMCP(dependencies mcpbridge.Dependencies) (*feidexMCPService, error) {
+	svc, err := mcpbridge.NewService(dependencies)
 	if err != nil {
 		return nil, err
 	}
@@ -54,38 +89,4 @@ func prepareClaudeMCPConfig(cfg *config.Config, owner *frontendruntime.FrontendO
 		return "", nil, nil, nil
 	}
 	return mcpbridge.PrepareClaudeConfig(cfg.DataDir, currentMCPPublicationFor(owner, mcp), sessionKey)
-}
-
-func mcpDependenciesForApp(a *App) mcpbridge.Dependencies {
-	if a == nil {
-		return mcpbridge.Dependencies{}
-	}
-	submissionLookup := a.bindings.SubmissionLookup
-	turnItems := a.bindings.TurnItems
-	return mcpbridge.Dependencies{
-		AttachmentSender: a.feishu,
-		StateProvider:    a.store,
-		StartedTurnItemsFn: func() []mcpbridge.StartedTurnItem {
-			if turnItems == nil {
-				return nil
-			}
-			started := turnItems.StartedItems()
-			items := make([]mcpbridge.StartedTurnItem, 0, len(started))
-			for _, itemState := range started {
-				raw := itemState.Started.MergedRaw()
-				items = append(items, mcpbridge.StartedTurnItem{
-					ThreadID: strings.TrimSpace(itemState.ThreadID), TurnID: strings.TrimSpace(itemState.TurnID),
-					ItemID: strings.TrimSpace(itemState.ItemID), Type: strings.TrimSpace(itemState.Started.Type),
-					ToolName: strings.TrimSpace(itemState.Started.ToolName), Raw: turnitem.CloneJSONMap(raw),
-				})
-			}
-			return items
-		},
-		FindSubmissionByTurnFn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-			return findSubmissionByTurn(submissionLookup, threadID, turnID)
-		},
-		ReplyInThreadForSubmissionFn: func(sub *domainsubmission.Submission) bool {
-			return replyInThreadForSubmission(sub)
-		},
-	}
 }

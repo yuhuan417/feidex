@@ -514,7 +514,10 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Conversations: bindings.Conversations, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
 	})
 	bindings.ReviewCommands = feishuapp.BuildReviewCommands(frontend)
-	bindings.MCP, err = feishuapp.BuildMCP(frontend)
+	bindings.MCP, err = feishuapp.BuildMCP(feishuapp.MCPPorts(feishuapp.MCPPortInputs{
+		AttachmentSender: frontend.Feishu(), StateProvider: frontend.State(),
+		TurnItems: bindings.TurnItems, SubmissionLookup: bindings.SubmissionLookup,
+	}))
 	if err != nil {
 		return nil, err
 	}

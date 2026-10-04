@@ -501,7 +501,7 @@ func prepareTestApp(a *App) *App {
 	dispatcher := newInputDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher
 	if a.runtimeOwner.MCP == nil {
-		mcp, err := BuildMCP(a)
+		mcp, err := buildMCPForTest(a)
 		if err != nil {
 			panic(err)
 		}

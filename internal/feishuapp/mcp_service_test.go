@@ -6,6 +6,7 @@ import (
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/feishu"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,35 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestMCPPortsUseFrontendScopedState(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	currentKey := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "p2p", ChatID: "current"})
+	otherKey := (frontendConfigView{frontendID: "other-frontend"}).makeSessionKey(&feishu.InboundMessage{ChatType: "p2p", ChatID: "other"})
+	for _, key := range []string{currentKey, otherKey} {
+		if err := a.store.UpsertSession(&conversation.Session{Key: key}); err != nil {
+			t.Fatalf("UpsertSession(%q) error = %v", key, err)
+		}
+	}
+
+	ports := MCPPorts(MCPPortInputs{StateProvider: a.State()})
+	if got := ports.StateProvider.Session(currentKey); got == nil {
+		t.Fatal("MCP state provider lost the current frontend session")
+	}
+	if got := ports.StateProvider.Session(otherKey); got != nil {
+		t.Fatalf("MCP state provider exposed another frontend session: %+v", got)
+	}
+	if sessions := ports.StateProvider.Sessions(); len(sessions) != 1 || sessions[0].Key != currentKey {
+		t.Fatalf("MCP state provider sessions = %+v, want only %q", sessions, currentKey)
+	}
+}
+
+func buildMCPForTest(a *App) (*feidexMCPService, error) {
+	return BuildMCP(MCPPorts(MCPPortInputs{
+		AttachmentSender: a.feishu, StateProvider: a.State(),
+		TurnItems: a.bindings.TurnItems, SubmissionLookup: a.bindings.SubmissionLookup,
+	}))
+}
 
 func performMCPHTTPRequest(t *testing.T, handler http.Handler, token, sessionKey, body string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -32,7 +62,7 @@ func performMCPHTTPRequest(t *testing.T, handler http.Handler, token, sessionKey
 
 func TestFeidexMCPToolsList(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	svc, err := BuildMCP(a)
+	svc, err := buildMCPForTest(a)
 	if err != nil {
 		t.Fatalf("BuildMCP() error = %v", err)
 	}
@@ -70,7 +100,7 @@ func TestFeidexMCPSendsCodexFileAttachment(t *testing.T) {
 		"status":    "inProgress",
 		"arguments": map[string]any{"path": path},
 	}))
-	svc, err := BuildMCP(a)
+	svc, err := buildMCPForTest(a)
 	if err != nil {
 		t.Fatalf("BuildMCP() error = %v", err)
 	}
@@ -101,7 +131,7 @@ func TestFeidexMCPRequiresClaudeSessionKeyForDynamicMCPTools(t *testing.T) {
 		"status": "in_progress",
 		"input":  map[string]any{"path": path},
 	}))
-	svc, err := BuildMCP(a)
+	svc, err := buildMCPForTest(a)
 	if err != nil {
 		t.Fatalf("BuildMCP() error = %v", err)
 	}
@@ -171,7 +201,7 @@ func TestFeidexMCPFailsClosedOnAmbiguousMatch(t *testing.T) {
 		}))
 	}
 
-	svc, err := BuildMCP(a)
+	svc, err := buildMCPForTest(a)
 	if err != nil {
 		t.Fatalf("BuildMCP() error = %v", err)
 	}
@@ -193,7 +223,7 @@ func TestFeidexMCPFallsBackToSessionActiveSubmission(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	svc, err := BuildMCP(a)
+	svc, err := buildMCPForTest(a)
 	if err != nil {
 		t.Fatalf("BuildMCP() error = %v", err)
 	}
@@ -217,7 +247,7 @@ func TestFeidexMCPFallsBackToOnlyActiveSubmissionWithoutSessionKey(t *testing.T)
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	svc, err := BuildMCP(a)
+	svc, err := buildMCPForTest(a)
 	if err != nil {
 		t.Fatalf("BuildMCP() error = %v", err)
 	}
@@ -267,7 +297,7 @@ func TestFeidexMCPFallbackWithoutSessionKeyFailsClosedWhenMultipleActiveSubmissi
 		t.Fatalf("CreateSubmission(second) error = %v", err)
 	}
 
-	svc, err := BuildMCP(a)
+	svc, err := buildMCPForTest(a)
 	if err != nil {
 		t.Fatalf("BuildMCP() error = %v", err)
 	}

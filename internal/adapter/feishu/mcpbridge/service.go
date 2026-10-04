@@ -45,9 +45,9 @@ type AttachmentSender interface {
 }
 
 type StateProvider interface {
-	GetSession(string) *conversation.Session
-	AllSessions() []*conversation.Session
-	GetSubmission(string) *domainsubmission.Submission
+	Session(string) *conversation.Session
+	Sessions() []*conversation.Session
+	Submission(string) *domainsubmission.Submission
 }
 
 type StartedTurnItem struct {
@@ -420,7 +420,7 @@ func (s *Service) resolveToolContextFromSession(sessionKey string) *toolContext 
 	if sessionKey == "" {
 		return nil
 	}
-	sess := s.app.State().GetSession(sessionKey)
+	sess := s.app.State().Session(sessionKey)
 	return s.resolveToolContextFromSessionSnapshot(sess)
 }
 
@@ -429,7 +429,7 @@ func (s *Service) resolveOnlyActiveToolContext() *toolContext {
 		return nil
 	}
 	var match *toolContext
-	for _, sess := range s.app.State().AllSessions() {
+	for _, sess := range s.app.State().Sessions() {
 		ctx := s.resolveToolContextFromSessionSnapshot(sess)
 		if ctx == nil {
 			continue
@@ -453,7 +453,7 @@ func (s *Service) resolveToolContextFromSessionSnapshot(sess *conversation.Sessi
 		if submissionID == "" {
 			continue
 		}
-		sub := s.app.State().GetSubmission(submissionID)
+		sub := s.app.State().Submission(submissionID)
 		if sub == nil || sub.Finalized || domainsubmission.NormalizeSubmissionStatus(sub.Status) != domainsubmission.SubmissionStatusRunning {
 			continue
 		}
