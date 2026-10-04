@@ -26,18 +26,26 @@ func (o debugOutbound) PatchCard(ctx context.Context, messageID string, card map
 	return patchCardEffect(ctx, o.app, messageID, card)
 }
 
-type debugArtifactSharer struct{ app *App }
+type debugFileSharer interface {
+	ShareLocalFile(context.Context, feishu.SharedFileRequest) (feishu.SharedFileResult, error)
+}
+
+type debugArtifactSharer struct{ client debugFileSharer }
 
 func (o debugArtifactSharer) Share(ctx context.Context, req fileshare.Request) (fileshare.Result, error) {
-	if o.app == nil || o.app.feishu == nil {
+	if o.client == nil {
 		return fileshare.Result{}, context.Canceled
 	}
-	result, err := o.app.feishu.ShareLocalFile(ctx, feishu.SharedFileRequest{LocalPath: req.LocalPath, ChatID: req.ChatID, UserID: req.UserID})
+	result, err := o.client.ShareLocalFile(ctx, feishu.SharedFileRequest{LocalPath: req.LocalPath, ChatID: req.ChatID, UserID: req.UserID})
 	return fileshare.Result{FileName: result.FileName, URL: result.URL, SizeBytes: result.SizeBytes}, err
 }
 
 func FileSharePorts(a *App) (fileshare.Artifacts, fileshare.Presentation, func(string, func()) bool) {
-	return debugArtifactSharer{app: a}, appdebugviewcmd.DownloadPresentation{Dependencies: newDebugViewAppAdapter(a)}, func(key string, fn func()) bool {
+	var client debugFileSharer
+	if a != nil {
+		client = a.feishu
+	}
+	return debugArtifactSharer{client: client}, appdebugviewcmd.DownloadPresentation{Dependencies: newDebugViewAppAdapter(a)}, func(key string, fn func()) bool {
 		return a.runtimeOwner.Lifecycle.Run(func() { runSession(a, key, fn) }, a.asyncRunner)
 	}
 }
