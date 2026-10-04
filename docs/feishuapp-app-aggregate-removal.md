@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 497 |
-| 收 `*App` 的顶层函数 | 302 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 495 |
+| 收 `*App` 的顶层函数 | 301 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **64** |
+| **持有 `*App` 字段的结构体** | **63** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 34。
@@ -263,6 +263,12 @@ builder。history outbound 只持有 identity/effect runner；分页、详情和
 backend、Codex client、lifecycle context 和 session key 仍动态取自对应的 runtime/config
 owners。history 查询与卡片行为不变。生产 `*App` 引用预算由 499 降至 497，app-bearing
 函数数降至 302；不涉及 turn lifecycle 或 pending request 状态。
+
+步骤 27 将 `serviceTierOutbound` 改为持有 frontend identity 与 effect runner，并由
+composition 注入 context、现成的 `ThreadSettings` owner 和 session-key builder。回复卡片与
+文本仍经同一 effect runner 使用原 message anchor 和 thread 标志发送。生产 `*App` 引用预算
+由 497 降至 495，app-bearing 函数数降至 301，持有 App 字段的结构体降至 63；不涉及
+Codex turn 或 pending request 状态。
 
 ## 方法
 

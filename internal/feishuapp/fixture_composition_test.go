@@ -202,7 +202,10 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ClaudeSupport = BuildClaudeSupport(a)
 	a.bindings.ThreadSettings = threadsettings.Service{Repository: a.State()}
 	a.bindings.PermissionSettings = threadsettings.PermissionService{Settings: a.bindings.ThreadSettings, Source: configadapter.ThreadPermissionRepository{Source: a, Scope: a.State()}, Runtime: PermissionRuntime(a), Tasks: PermissionTasks(a), Failure: PermissionFailure(a), Context: a.Context}
-	a.bindings.ServiceTier = BuildServiceTier(a)
+	a.bindings.ServiceTier = BuildServiceTier(
+		a.bindings.ThreadSettings, a.Context, identity.FrontendID(a.FrontendID()),
+		*a.runtimeOwner.EffectRunner, SessionKeyBuilder(a.FrontendID()),
+	)
 	a.bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: ModelSnapshotRepository(a)}
 	a.bindings.ModelSettings = modelconfig.SettingsService{Repository: a.State(), Admission: ModelWriteAdmission(a), Frontend: identity.FrontendID(a.FrontendID())}
 	a.bindings.ModelDefaults = modelconfig.DefaultsService{Repository: configadapter.ModelDefaultsRepository{Source: a, Scope: a.State()}, Admission: ModelWriteAdmission(a), Frontend: a.FrontendID(), Publisher: ModelDefaultsPublisher(a)}

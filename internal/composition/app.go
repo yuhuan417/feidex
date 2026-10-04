@@ -221,7 +221,10 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ClaudeSupport = feishuapp.BuildClaudeSupport(frontend)
 	bindings.ThreadSettings = threadsettings.Service{Repository: frontend.State()}
 	bindings.PermissionSettings = threadsettings.PermissionService{Settings: bindings.ThreadSettings, Source: configadapter.ThreadPermissionRepository{Source: frontend, Scope: frontend.State()}, Runtime: feishuapp.PermissionRuntime(frontend), Tasks: feishuapp.PermissionTasks(frontend), Failure: feishuapp.PermissionFailure(frontend), Context: frontend.Context}
-	bindings.ServiceTier = feishuapp.BuildServiceTier(frontend)
+	bindings.ServiceTier = feishuapp.BuildServiceTier(
+		bindings.ThreadSettings, frontend.Context, identity.FrontendID(frontend.FrontendID()),
+		*scope.RuntimeOwner.EffectRunner, feishuapp.SessionKeyBuilder(frontend.FrontendID()),
+	)
 	bindings.ModelSettings = modelconfig.SettingsService{Repository: frontend.State(), Admission: feishuapp.ModelWriteAdmission(frontend), Frontend: identity.FrontendID(frontend.FrontendID())}
 	bindings.ConversationConfiguration = conversation.Configuration{Models: bindings.ModelSnapshots, ServiceName: feishuapp.CodexServiceName(frontend)}
 	bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(frontend.FrontendID()), Effects: feishuapp.NewEffectRunner(frontend), Collaboration: bindings.Plan}
