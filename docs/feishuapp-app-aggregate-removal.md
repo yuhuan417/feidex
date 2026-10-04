@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 439 |
-| 收 `*App` 的顶层函数 | 276 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 437 |
+| 收 `*App` 的顶层函数 | 275 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **32** |
 
@@ -469,6 +469,11 @@ frontend 判断抽成纯 helper 供 config view 与 repository 共用。生产 `
 闭包仍在执行时读取 backend transition 和 message traffic 的当前值，维护状态服务在构造期注入；
 生产 `*App` 引用预算由 440 降至 439，收 `*App` 的函数由 277 降至 276，持有 App 字段的结构体
 预算保持 32；lazy binding-read 预算保持 13。
+
+步骤 59 将 Claude interaction expiry presenter 改为显式持有 Feishu renderer、scoped state、
+frontend identity 与 effect runner；失效卡标题仍按原 session state 添加 workspace/plan 前缀。
+生产 `*App` 引用预算由 439 降至 437，收 `*App` 的函数由 276 降至 275，持有 App 字段的
+结构体由 32 降至 31；lazy binding-read 预算保持 13。
 
 ## 方法
 

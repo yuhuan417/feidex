@@ -92,7 +92,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.GoalManagement = &goal.Management{Tracker: a.bindings.Goals, Context: a.Context, Gateway: func() (goal.Gateway, error) { return RequireCodexGoalGateway(a) }}
 	a.bindings.SubmissionLookup = submission.SubmissionLookupService{State: a.State(), Runtime: a.runtimeOwner.TurnBindings}
 	a.bindings.SubmissionStatus = submission.StatusService{Lookup: a.bindings.SubmissionLookup, Repository: a.State()}
-	a.bindings.InteractionLifecycle = interaction.LifecycleService{Repository: a.State(), Frontend: a.FrontendID(), Presentation: InteractionExpiryPresentation(a)}
+	a.bindings.InteractionLifecycle = interaction.LifecycleService{Repository: a.State(), Frontend: a.FrontendID(), Presentation: InteractionExpiryPresentation(a.Feishu(), a.State(), identity.FrontendID(a.FrontendID()), *a.runtimeOwner.EffectRunner)}
 	a.bindings.ModelAcknowledgements = modelconfig.AcknowledgementService{Repository: a.State()}
 	a.bindings.ClaudeFactory = func(cfg config.ClaudeConfig) ClaudeCore { return clauderuntime.NewService(ClaudeRuntimePorts(a, cfg)) }
 	routingConfiguration := routing.ConfigurationService{Repository: a.State(), Frontend: identity.FrontendID(a.FrontendID())}

@@ -105,7 +105,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: scoped.WorkspaceSelections{Store: frontend.State()}, DefaultWorkspaceID: feishuapp.DefaultWorkspaceID(frontend)}
 	bindings.SubmissionLookup = submission.SubmissionLookupService{State: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings}
 	bindings.SubmissionStatus = submission.StatusService{Lookup: bindings.SubmissionLookup, Repository: frontend.State()}
-	bindings.InteractionLifecycle = interaction.LifecycleService{Repository: frontend.State(), Frontend: frontend.FrontendID(), Presentation: feishuapp.InteractionExpiryPresentation(frontend)}
+	bindings.InteractionLifecycle = interaction.LifecycleService{Repository: frontend.State(), Frontend: frontend.FrontendID(), Presentation: feishuapp.InteractionExpiryPresentation(frontend.Feishu(), frontend.State(), identity.FrontendID(frontend.FrontendID()), *scope.RuntimeOwner.EffectRunner)}
 	bindings.ModelAcknowledgements = modelconfig.AcknowledgementService{Repository: frontend.State()}
 	bindings.ClaudeFactory = func(cfg config.ClaudeConfig) feishuapp.ClaudeCore {
 		return clauderuntime.NewService(feishuapp.ClaudeRuntimePorts(frontend, cfg))

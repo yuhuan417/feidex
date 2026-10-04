@@ -3,6 +3,8 @@ package feishuapp
 import (
 	"context"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/adapter/feishu/planmode"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
 	appinteraction "feidex/internal/application/interaction"
 	domainbackend "feidex/internal/domain/backend"
@@ -11,6 +13,7 @@ import (
 
 	"feidex/internal/domain/identity"
 	domaininteraction "feidex/internal/domain/interaction"
+	frontendruntime "feidex/internal/runtime"
 	appclauderuntime "feidex/internal/runtime/claude"
 )
 
@@ -38,24 +41,28 @@ func ExpireClaudeInteractionCards(lifecycle appinteraction.LifecycleService, ses
 	lifecycle.ExpireAndPresent(domainbackend.BackendClaude, sessionKey, requestIDs, reason)
 }
 
-type interactionExpiryPresentation struct{ app *App }
+type interactionExpiryPresentation struct {
+	feishu   FeishuClient
+	state    *appstate.Store
+	frontend identity.FrontendID
+	effects  frontendruntime.EffectRunner
+}
 
-func InteractionExpiryPresentation(a *App) interface {
+func InteractionExpiryPresentation(feishu FeishuClient, state *appstate.Store, frontend identity.FrontendID, effects frontendruntime.EffectRunner) interface {
 	ExpiredInteraction(*domaininteraction.PendingRequest, string)
 } {
-	return interactionExpiryPresentation{app: a}
+	return interactionExpiryPresentation{feishu: feishu, state: state, frontend: frontend, effects: effects}
 }
 func (p interactionExpiryPresentation) ExpiredInteraction(pending *domaininteraction.PendingRequest, reason string) {
-	a := p.app
 	body := claudeInteractionExpiredBody(reason)
 	messageID := strings.TrimSpace(pending.FeishuMsgID)
-	if messageID == "" || a.feishu == nil {
+	if messageID == "" || p.feishu == nil {
 		return
 	}
-	title := contentCardTitleForSession(a, pending.SessionKey, "", "请求已失效")
-	card := a.feishu.SimpleStatusCard(title, "grey", body, nil)
-	if err := newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.PatchCard{
-		Frontend:  identity.FrontendID(a.FrontendID()),
+	title := planmode.ContentCardTitleForSessionFromState(p.state, true, pending.SessionKey, "", "请求已失效")
+	card := p.feishu.SimpleStatusCard(title, "grey", body, nil)
+	if err := p.effects.Run(context.Background(), []application.Effect{application.PatchCard{
+		Frontend:  p.frontend,
 		MessageID: messageID,
 		View:      feishuoutbound.Card(card),
 	}}); err != nil {
