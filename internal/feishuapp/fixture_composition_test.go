@@ -106,12 +106,17 @@ func prepareTestApp(a *App) *App {
 		enabled, _ := a.bindings.Primary.IsPrimary(a.FrontendID(), "group", chatID)
 		return enabled
 	}}
-	a.bindings.AnnouncementQuery = announcement.Query{Repository: a.State(), Workspaces: configadapter.NewWorkspaceRepository(a), HasPrimary: func(chatID string) bool {
+	a.bindings.AnnouncementQuery = announcement.Query{Repository: a.State(), Workspaces: configadapter.NewWorkspaceRepositoryForConfig(a.Config(), a.ConfigMu(), a.ConfigPath()), HasPrimary: func(chatID string) bool {
 		record, _ := a.bindings.Primary.Lookup(a.FrontendID(), "group", chatID)
 		return record != nil
 	}}
+	a.bindings.ConversationQuery = conversation.Query{Repository: a.State()}
 	if a.runtimeOwner.Announcements == nil {
-		a.runtimeOwner.Announcements = runtime.NewCoalescedRefresh(&a.runtimeOwner.Lifecycle, 2*time.Second, 15*time.Second, GroupAnnouncementRefresh(a))
+		a.runtimeOwner.Announcements = runtime.NewCoalescedRefresh(&a.runtimeOwner.Lifecycle, 2*time.Second, 15*time.Second, GroupAnnouncementRefresh(GroupAnnouncementRefreshDependencies{
+			FrontendID: a.FrontendID(), Feishu: a.Feishu(), Config: a.Config(), ConfigMu: a.ConfigMu(),
+			FrontendConfigIndex: a.FrontendConfigIndex(), RuntimeOwner: a.runtimeOwner,
+			Announcements: a.bindings.Announcements, AnnouncementQuery: a.bindings.AnnouncementQuery, ConversationQuery: a.bindings.ConversationQuery,
+		}))
 	}
 	liveThreads := SubmissionLiveThreads(a.runtimeOwner.LiveThreads, a.State().Session, a.bindings.AnnouncementQuery, a.runtimeOwner.Announcements.Schedule)
 	a.bindings.PrimaryInitialization = routing.InitializationService{Repository: primaryRepository, BotCount: func(ctx context.Context, chatID string) (int, error) {
@@ -310,7 +315,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(&a.runtimeOwner.Lifecycle, a.asyncRunner, actors, a.runtimeOwner.LiveThreads, a.bindings.BindingReplay), Conversations: a.bindings.Conversations, Context: a.Context}
 	a.bindings.WorkspaceWorkflow.Effects = a.bindings.WorkspaceEffects
 	a.bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(a.FrontendID()), Repository: a.State(), Creation: a.bindings.WorkspaceCreation, Planning: a.bindings.WorkspacePlanning, Effects: a.bindings.WorkspaceEffects}
-	a.bindings.ConversationQuery = conversation.Query{Repository: a.State()}
 	a.bindings.Notifications = frontendapp.Notifications{Repository: a.State(), Sender: NotificationSender(a.feishu, a.FrontendID(), *a.runtimeOwner.EffectRunner), Context: a.Context}
 	a.bindings.ConversationRecovery = conversation.NewRecovery(ConversationRecoveryPorts(
 		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),

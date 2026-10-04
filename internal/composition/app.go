@@ -120,11 +120,16 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		enabled, _ := bindings.Primary.IsPrimary(frontend.FrontendID(), "group", chatID)
 		return enabled
 	}}
-	bindings.AnnouncementQuery = announcement.Query{Repository: frontend.State(), Workspaces: configadapter.NewWorkspaceRepository(frontend), HasPrimary: func(chatID string) bool {
+	bindings.AnnouncementQuery = announcement.Query{Repository: frontend.State(), Workspaces: configadapter.NewWorkspaceRepositoryForConfig(frontend.Config(), frontend.ConfigMu(), frontend.ConfigPath()), HasPrimary: func(chatID string) bool {
 		record, _ := bindings.Primary.Lookup(frontend.FrontendID(), "group", chatID)
 		return record != nil
 	}}
-	scope.RuntimeOwner.Announcements = runtime.NewCoalescedRefresh(&scope.RuntimeOwner.Lifecycle, 2*time.Second, 15*time.Second, feishuapp.GroupAnnouncementRefresh(frontend))
+	bindings.ConversationQuery = conversation.Query{Repository: frontend.State()}
+	scope.RuntimeOwner.Announcements = runtime.NewCoalescedRefresh(&scope.RuntimeOwner.Lifecycle, 2*time.Second, 15*time.Second, feishuapp.GroupAnnouncementRefresh(feishuapp.GroupAnnouncementRefreshDependencies{
+		FrontendID: frontend.FrontendID(), Feishu: frontend.Feishu(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
+		FrontendConfigIndex: frontend.FrontendConfigIndex(), RuntimeOwner: scope.RuntimeOwner,
+		Announcements: bindings.Announcements, AnnouncementQuery: bindings.AnnouncementQuery, ConversationQuery: bindings.ConversationQuery,
+	}))
 	liveThreads := feishuapp.SubmissionLiveThreads(scope.RuntimeOwner.LiveThreads, frontend.State().Session, bindings.AnnouncementQuery, scope.RuntimeOwner.Announcements.Schedule)
 	bindings.PrimaryInitialization = routing.InitializationService{Repository: primaryRepository, BotCount: frontend.Feishu().GetGroupBotCount, LiveBotOpenID: feishuapp.LiveBotOpenID(frontend.Feishu())}
 	bindings.TurnMetadata = turnmeta.Service{Tracker: scope.RuntimeOwner.TurnBindings}
@@ -327,7 +332,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: bindings.WorkspaceCreation.Lifecycle, Runtime: feishuapp.WorkspaceEffectRuntime(&scope.RuntimeOwner.Lifecycle, frontend.AsyncRunner(), scope.RuntimeOwner.SessionActors, scope.RuntimeOwner.LiveThreads, bindings.BindingReplay), Conversations: bindings.Conversations, Context: frontend.Context}
 	bindings.WorkspaceWorkflow.Effects = bindings.WorkspaceEffects
 	bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: frontend.State(), Creation: bindings.WorkspaceCreation, Planning: bindings.WorkspacePlanning, Effects: bindings.WorkspaceEffects}
-	bindings.ConversationQuery = conversation.Query{Repository: frontend.State()}
 	bindings.Notifications = frontendapp.Notifications{Repository: frontend.State(), Sender: feishuapp.NotificationSender(frontend.Feishu(), frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner), Context: frontend.Context}
 	bindings.ConversationRecovery = conversation.NewRecovery(feishuapp.ConversationRecoveryPorts(
 		frontend.Config(), frontend.ConfigMu(), frontend.FrontendConfigIndex(), frontend.State(),

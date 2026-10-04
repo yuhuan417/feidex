@@ -29,7 +29,7 @@ func (a *App) Serve() error { return startFrontend(a, a.Context()) }
 func (a *App) StartBackground() {
 	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 24*time.Hour, a.bindings.MaintenanceCommands.RunDriveArtifactGC)
 	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 30*time.Second, a.bindings.MaintenanceCommands.CheckPendingUpgrades)
-	scheduleStartupGroupAnnouncementRefreshes(a)
+	scheduleStartupGroupAnnouncementRefreshes(a.runtimeOwner.Announcements, a.bindings.AnnouncementQuery)
 	runAsync(a, func() { sendStartupReadyNotifications(a) })
 	runAsync(a, func() { runFeishuAppConfigHeal(a) })
 }

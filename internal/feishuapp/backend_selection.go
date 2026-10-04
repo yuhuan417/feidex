@@ -18,6 +18,8 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 	if app == nil {
 		return backend.SelectionService{}
 	}
+	announcementRefresh := app.runtimeOwner.Announcements
+	announcementQuery := app.bindings.AnnouncementQuery
 
 	return backend.NewSelectionService(backend.SelectionDeps{
 		Source:  app,
@@ -34,7 +36,7 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 			},
 			RecoverState: func() {
 				recoverFrontendRuntimeState(app.bindings.StartupRecovery)
-				scheduleAllGroupAnnouncementStatusRefreshes(app, "backend_switched")
+				scheduleAllGroupAnnouncementStatusRefreshes(announcementRefresh, announcementQuery)
 			},
 			IdleBlockedReason: func() string {
 				return frontendIdleBlockedReason(app)
@@ -91,7 +93,7 @@ func (r backendSelectionRuntime) Snapshot() *backendselection.RuntimeHandle {
 }
 func (r backendSelectionRuntime) Recover() {
 	recoverFrontendRuntimeState(r.app.bindings.StartupRecovery)
-	scheduleAllGroupAnnouncementStatusRefreshes(r.app, "backend_switched")
+	scheduleAllGroupAnnouncementStatusRefreshes(r.app.runtimeOwner.Announcements, r.app.bindings.AnnouncementQuery)
 }
 
 func BackendSwitchPorts(a *App) backendselection.Dependencies {

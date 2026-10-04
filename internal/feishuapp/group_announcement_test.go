@@ -40,6 +40,18 @@ func groupAnnouncementStatusForTest(a *App, chatID string, updatedAt time.Time) 
 	)
 }
 
+func groupAnnouncementRefreshDependenciesForTest(a *App) GroupAnnouncementRefreshDependencies {
+	return GroupAnnouncementRefreshDependencies{
+		FrontendID: a.FrontendID(), Feishu: a.Feishu(), Config: a.Config(), ConfigMu: a.ConfigMu(),
+		FrontendConfigIndex: a.FrontendConfigIndex(), RuntimeOwner: a.runtimeOwner,
+		Announcements: a.bindings.Announcements, AnnouncementQuery: a.bindings.AnnouncementQuery, ConversationQuery: a.bindings.ConversationQuery,
+	}
+}
+
+func refreshGroupAnnouncementForTest(ctx context.Context, a *App, chatID string) error {
+	return refreshGroupAnnouncementStatusNow(ctx, groupAnnouncementRefreshDependenciesForTest(a), chatID)
+}
+
 func groupAnnouncementCommonStatusForTest(a *App, updatedAt time.Time) groupAnnouncementStatus {
 	return buildGroupAnnouncementCommonStatus(a.feishu, updatedAt)
 }
@@ -90,7 +102,7 @@ func TestGroupAnnouncementRefreshCreatesBlockAndSkipsStableContent(t *testing.T)
 	seedGroupAnnouncementBinding(t, a, "chat-1")
 	seedGroupAnnouncementSession(t, a, "chat-1", "thread-1")
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementListCalls) != 1 || len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 0 {
@@ -116,11 +128,30 @@ func TestGroupAnnouncementRefreshCreatesBlockAndSkipsStableContent(t *testing.T)
 		t.Fatalf("persisted announcement record = %+v", record)
 	}
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("second refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementListCalls) != 2 || len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 0 {
 		t.Fatalf("stable refresh should skip writes after verifying block, calls list/create/update = %d/%d/%d", len(ff.announcementListCalls), len(ff.announcementCreateCalls), len(ff.announcementUpdateCalls))
+	}
+}
+
+func TestGroupAnnouncementRefreshReadsCurrentRuntimeBackend(t *testing.T) {
+	store := newGroupAnnouncementStore(t)
+	ff := &fakeFeishuClient{botOpenID: "bot-open", botName: "luban-feidex"}
+	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
+	seedGroupAnnouncementBinding(t, a, "chat-1")
+	refresh := GroupAnnouncementRefresh(groupAnnouncementRefreshDependenciesForTest(a))
+	a.runtimeOwner.SetBackend("claude")
+
+	if err := refresh(context.Background(), "chat-1"); err != nil {
+		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
+	}
+	if len(ff.announcementCreateCalls) != 1 {
+		t.Fatalf("announcement create calls = %d, want 1", len(ff.announcementCreateCalls))
+	}
+	if got := ff.announcementCreateCalls[0].content; !strings.Contains(got, groupAnnouncementField("Backend", "claude")) {
+		t.Fatalf("announcement backend should use the current runtime selection, content:\n%s", got)
 	}
 }
 
@@ -142,7 +173,7 @@ func TestGroupAnnouncementRefreshRecreatesDeletedPersistedBlock(t *testing.T) {
 		t.Fatalf("SaveGroupAnnouncementBlock() error = %v", err)
 	}
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementListCalls) != 1 || len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 0 {
@@ -163,7 +194,7 @@ func TestGroupAnnouncementRefreshCreatesCommonRegionAtTopForPrimary(t *testing.T
 		t.Fatalf("setGroupPrimary() error = %v", err)
 	}
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementListCalls) != 1 || len(ff.announcementCreateCalls) != 2 || len(ff.announcementUpdateCalls) != 0 {
@@ -197,7 +228,7 @@ func TestGroupAnnouncementRefreshCreatesCommonRegionAtTopForPrimary(t *testing.T
 		t.Fatalf("persisted bot announcement record = %+v", record)
 	}
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("second refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementListCalls) != 2 || len(ff.announcementCreateCalls) != 2 || len(ff.announcementUpdateCalls) != 0 {
@@ -214,7 +245,7 @@ func TestGroupAnnouncementRefreshSkipsCommonRegionForNonPrimary(t *testing.T) {
 		t.Fatalf("setGroupPrimary(false) error = %v", err)
 	}
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementCreateCalls) != 1 {
@@ -249,7 +280,7 @@ func TestGroupAnnouncementRefreshUpdatesExistingCommonRegionByPrimary(t *testing
 		t.Fatalf("setGroupPrimary() error = %v", err)
 	}
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementUpdateCalls) != 1 || ff.announcementUpdateCalls[0].blockID != "common-block" {
@@ -284,7 +315,7 @@ func TestGroupAnnouncementRefreshRecreatesDeletedPersistedCommonRegion(t *testin
 		t.Fatalf("SaveGroupAnnouncementBlock(common) error = %v", err)
 	}
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementListCalls) != 1 || len(ff.announcementCreateCalls) != 2 || len(ff.announcementUpdateCalls) != 0 {
@@ -329,7 +360,7 @@ func TestGroupAnnouncementRefreshRecoversExistingBlockByMarker(t *testing.T) {
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
 	seedGroupAnnouncementBinding(t, a, "chat-1")
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementListCalls) != 1 || len(ff.announcementCreateCalls) != 0 || len(ff.announcementUpdateCalls) != 1 {
@@ -356,7 +387,7 @@ func TestGroupAnnouncementRefreshDoesNotClaimLegacyUnknownMarker(t *testing.T) {
 	a := newGroupAnnouncementTestApp(t, store, ff, "default")
 	seedGroupAnnouncementBinding(t, a, "chat-1")
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 0 {
@@ -377,7 +408,7 @@ func TestGroupAnnouncementRefreshSwallowsRateLimitWithoutRetry(t *testing.T) {
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
 	seedGroupAnnouncementBinding(t, a, "chat-1")
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)
 	}
 	if len(ff.announcementListCalls) != 1 || len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 0 {
@@ -396,10 +427,10 @@ func TestGroupAnnouncementRefreshReusesBlockForSameBotIdentity(t *testing.T) {
 	seedGroupAnnouncementBinding(t, a, "chat-1")
 	seedGroupAnnouncementBinding(t, b, "chat-1")
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refresh bot-a error = %v", err)
 	}
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), b, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), b, "chat-1"); err != nil {
 		t.Fatalf("refresh bot-b error = %v", err)
 	}
 	if len(ff.announcementCreateCalls) != 1 || len(ff.announcementUpdateCalls) != 1 {
@@ -500,7 +531,7 @@ func TestGroupAnnouncementRefreshSkipsChatAfterBotAbsent(t *testing.T) {
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
 	seedGroupAnnouncementBinding(t, a, "chat-1")
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("bot-absent refresh should be absorbed, got error = %v", err)
 	}
 	record := a.State().GroupAnnouncementBlock("group", "chat-1")
@@ -509,7 +540,7 @@ func TestGroupAnnouncementRefreshSkipsChatAfterBotAbsent(t *testing.T) {
 	}
 	callsAfterFirst := len(ff.announcementListCalls)
 
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("second refresh error = %v", err)
 	}
 	if got := len(ff.announcementListCalls); got != callsAfterFirst {
@@ -523,7 +554,7 @@ func TestGroupAnnouncementRefreshSkipsChatAfterBotAbsent(t *testing.T) {
 	if record := a.State().GroupAnnouncementBlock("group", "chat-1"); record == nil || record.BotAbsent {
 		t.Fatalf("mark should be cleared after the bot rejoins, record = %+v", record)
 	}
-	if err := refreshGroupAnnouncementStatusNow(context.Background(), a, "chat-1"); err != nil {
+	if err := refreshGroupAnnouncementForTest(context.Background(), a, "chat-1"); err != nil {
 		t.Fatalf("refresh after clearing mark error = %v", err)
 	}
 	if got := len(ff.announcementListCalls); got <= callsAfterFirst {

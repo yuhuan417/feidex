@@ -193,7 +193,7 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		scheduleGroupAnnouncementStatusRefresh(a, e.ChatID, e.Reason)
+		scheduleGroupAnnouncementStatusRefresh(a.runtimeOwner.Announcements, e.ChatID)
 		return nil
 	}
 	return runner

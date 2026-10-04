@@ -11,10 +11,12 @@ import (
 	"log/slog"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"feidex/internal/application/announcement"
 	"feidex/internal/config"
+	"feidex/internal/runtime"
 )
 
 const (
@@ -28,16 +30,28 @@ const (
 	groupAnnouncementCommonTitle        = "Feidex Group Status"
 )
 
-func scheduleGroupAnnouncementStatusRefresh(a *App, chatID, reason string) {
-	if a == nil || a.runtimeOwner == nil || a.runtimeOwner.Announcements == nil {
+func scheduleGroupAnnouncementStatusRefresh(refresh *runtime.CoalescedRefresh, chatID string) {
+	if refresh == nil {
 		return
 	}
-	a.runtimeOwner.Announcements.Schedule(chatID)
+	refresh.Schedule(chatID)
 }
 
-func GroupAnnouncementRefresh(a *App) func(context.Context, string) error {
+type GroupAnnouncementRefreshDependencies struct {
+	FrontendID          string
+	Feishu              FeishuClient
+	Config              *config.Config
+	ConfigMu            *sync.RWMutex
+	FrontendConfigIndex int
+	RuntimeOwner        *runtime.FrontendOwner
+	Announcements       announcement.Service
+	AnnouncementQuery   announcement.Query
+	ConversationQuery   conversationapp.Query
+}
+
+func GroupAnnouncementRefresh(deps GroupAnnouncementRefreshDependencies) func(context.Context, string) error {
 	return func(ctx context.Context, chatID string) error {
-		return refreshGroupAnnouncementStatusNow(ctx, a, chatID)
+		return refreshGroupAnnouncementStatusNow(ctx, deps, chatID)
 	}
 }
 
@@ -54,26 +68,31 @@ func clearGroupAnnouncementBotAbsent(announcements announcement.Service, chatID 
 	}
 }
 
-func scheduleAllGroupAnnouncementStatusRefreshes(a *App, reason string) {
-	for _, chatID := range knownGroupAnnouncementChatIDs(a.bindings.AnnouncementQuery) {
-		scheduleGroupAnnouncementStatusRefresh(a, chatID, reason)
+func scheduleAllGroupAnnouncementStatusRefreshes(refresh *runtime.CoalescedRefresh, query announcement.Query) {
+	for _, chatID := range knownGroupAnnouncementChatIDs(query) {
+		scheduleGroupAnnouncementStatusRefresh(refresh, chatID)
 	}
 }
 
-func scheduleStartupGroupAnnouncementRefreshes(a *App) {
-	scheduleAllGroupAnnouncementStatusRefreshes(a, "startup")
+func scheduleStartupGroupAnnouncementRefreshes(refresh *runtime.CoalescedRefresh, query announcement.Query) {
+	scheduleAllGroupAnnouncementStatusRefreshes(refresh, query)
 }
 
-func refreshGroupAnnouncementStatusNow(ctx context.Context, a *App, chatID string) error {
-	if a == nil || a.feishu == nil {
+func refreshGroupAnnouncementStatusNow(ctx context.Context, deps GroupAnnouncementRefreshDependencies, chatID string) error {
+	if deps.Feishu == nil {
 		return nil
 	}
 	now := time.Now()
+	backend := ""
+	if deps.RuntimeOwner != nil {
+		backend = deps.RuntimeOwner.Backend()
+	}
+	view := frontendConfigView{cfg: deps.Config, mu: deps.ConfigMu, backend: backend, frontendConfigIndex: deps.FrontendConfigIndex}
 	status, common := buildGroupAnnouncementStatus(
-		a.FrontendID(), a.feishu, a.configView().configuredBackend(),
-		a.bindings.AnnouncementQuery, a.bindings.ConversationQuery, chatID, now,
-	), buildGroupAnnouncementCommonStatus(a.feishu, now)
-	return a.bindings.Announcements.Refresh(ctx, chatID, status.applicationStatus(), common.applicationStatus())
+		deps.FrontendID, deps.Feishu, view.configuredBackend(),
+		deps.AnnouncementQuery, deps.ConversationQuery, chatID, now,
+	), buildGroupAnnouncementCommonStatus(deps.Feishu, now)
+	return deps.Announcements.Refresh(ctx, chatID, status.applicationStatus(), common.applicationStatus())
 }
 func (s groupAnnouncementStatus) applicationStatus() announcement.Status {
 	return announcement.NewStatus(s.marker, s.content, s.stableContent, s.stableHash, s.botOpenID, s.updatedAt)

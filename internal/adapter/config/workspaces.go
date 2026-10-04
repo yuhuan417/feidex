@@ -21,10 +21,24 @@ type Source interface {
 	ConfigPath() string
 }
 
+type WorkspaceSource struct {
+	Value *fileconfig.Config
+	Mu    *sync.RWMutex
+	Path  string
+}
+
+func (s WorkspaceSource) Config() *fileconfig.Config { return s.Value }
+func (s WorkspaceSource) ConfigMu() *sync.RWMutex    { return s.Mu }
+func (s WorkspaceSource) ConfigPath() string         { return s.Path }
+
 type WorkspaceRepository struct{ source Source }
 
 func NewWorkspaceRepository(source Source) *WorkspaceRepository {
 	return &WorkspaceRepository{source: source}
+}
+
+func NewWorkspaceRepositoryForConfig(value *fileconfig.Config, mu *sync.RWMutex, path string) *WorkspaceRepository {
+	return NewWorkspaceRepository(WorkspaceSource{Value: value, Mu: mu, Path: path})
 }
 
 func (r *WorkspaceRepository) List() []domain.Workspace {

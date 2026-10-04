@@ -61,7 +61,7 @@ func handleBotGroupAdded(a *App, event *feishu.BotGroupEvent) {
 	// The bot is in this chat again, so undo any earlier "no longer a member"
 	// mark; otherwise its announcement would stay disabled forever.
 	clearGroupAnnouncementBotAbsent(a.bindings.Announcements, chatID)
-	scheduleGroupAnnouncementStatusRefresh(a, chatID, "bot_added")
+	scheduleGroupAnnouncementStatusRefresh(a.runtimeOwner.Announcements, chatID)
 }
 
 func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID string) (*state.GroupPrimary, error) {

@@ -231,7 +231,7 @@ func (s bindingService) setPrimaryForMessage(msg *feishu.InboundMessage) error {
 	}
 	body := "已更新 primary: `" + onOffLabel(isGroupPrimary(s.app, msg.ChatType, msg.ChatID)) + "`"
 	if updated != nil {
-		scheduleGroupAnnouncementStatusRefresh(s.app, updated.ChatID, "primary_updated")
+		scheduleGroupAnnouncementStatusRefresh(s.app.runtimeOwner.Announcements, updated.ChatID)
 	}
 	return s.replyBindingUpdated(msg, body)
 }

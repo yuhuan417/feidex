@@ -104,6 +104,7 @@ func (p inboundBackend) CheckMaintenance() error {
 // InboundPorts takes the forward prefetch entry point as a value rather
 // than reaching for a.bindings.ForwardInputs.
 func InboundPorts(a *App, prefetchForward func(*application.InboundMessage)) inbound.Dependencies {
+	announcementRefresh := a.runtimeOwner.Announcements
 	return inbound.Dependencies{
 		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: func(msg *application.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		Routing: inboundRouting{frontendID: a.FrontendID(), feishu: a.feishu, primary: a.bindings.Primary, primaryInitialization: a.bindings.PrimaryInitialization, groupMessages: a.bindings.GroupMessages}, Requests: a.bindings.ServerRequests, RootInputs: inboundRootInputs{app: a},
@@ -111,7 +112,7 @@ func InboundPorts(a *App, prefetchForward func(*application.InboundMessage)) inb
 			return resolveInboundAttachments(a.cfg, a.Context, a.feishu, msg, workspaceID, key)
 		}},
 		Bindings: inboundBindings{app: a}, Commands: inboundCommands{app: a}, Backend: inboundBackend{app: a}, Queue: a.bindings.Submissions,
-		RefreshGroup:       func(chatID, reason string) { scheduleGroupAnnouncementStatusRefresh(a, chatID, reason) },
+		RefreshGroup:       func(chatID, reason string) { scheduleGroupAnnouncementStatusRefresh(announcementRefresh, chatID) },
 		FlushNotifications: func(msg *application.InboundMessage) { flushPendingFrontendCardNotifications(a, msg) },
 		PrefetchForward:    prefetchForward,
 	}

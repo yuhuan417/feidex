@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 416 |
-| 收 `*App` 的顶层函数 | 258 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 411 |
+| 收 `*App` 的顶层函数 | 253 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
 | **持有 `*App` 字段的结构体** | **27** |
 
@@ -512,6 +512,13 @@ Feishu client、frontend/backend 快照及 announcement/conversation queries；�
 `groupAnnouncementBotOpenID(*App, ...)` 包装器。状态内容、common region、空名称 fallback 和
 刷新时读取的动态 backend/configuration 均保持原行为。生产 `*App` 引用由 420 降至 416，收
 `*App` 的函数由 262 降至 258，持有 App 字段的结构体预算保持 27；lazy binding-read 预算保持 13。
+
+步骤 67 将 group announcement 的 coalesced refresh 闭包改为捕获具名依赖包，不再持有
+`*App`；配置 workspace repository 改由 config 指针、锁和路径构造，避免 query 间接保留
+frontend aggregate。各调度入口只接收 coalescer/query，backend 仍在每次刷新时从 runtime owner
+读取并在 config 锁下回退到当前 frontend 配置。coalescing、frontend lifecycle 和刷新 timeout
+不变，并增加 runtime backend 动态读取测试。生产 `*App` 引用由 416 降至 411，收 `*App` 的函数由
+258 降至 253，持有 App 字段的结构体预算保持 27；lazy binding-read 预算保持 13。
 
 ## 方法
 
