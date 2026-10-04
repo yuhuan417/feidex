@@ -28,13 +28,14 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 449 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 448 |
 | 收 `*App` 的顶层函数 | 281 |
 | 收 `*App` 的 `*Ports` 工厂 | 16 |
-| **持有 `*App` 字段的结构体** | **37** |
+| **持有 `*App` 字段的结构体** | **36** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
-预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。
+预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 13。`*App`
+引用与 lazy binding-read 都只允许单向下降；即使某一步只改善其中一项，也不能让另一项回升。
 
 单成员 helper 的转换有个副作用值得记住：把 `f(a)` 改成 `f(a.bindings.X)` 时，
 如果调用点本身在闭包里，惰性读取预算会**上涨**——读取从 `f` 的函数体（不算惰性）
@@ -73,7 +74,6 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 | 1 | `inboundRouting` | 4 | 4 |
 | 1 | `inboundBackend` | 4 | 1 |
 | 1 | `feishuEventRouter` | 4 | 1 |
-| 1 | `turnDeliveryPort` | 3 | 1 |
 
 `cardRenderer`、`outboundCardService`、`turnStreamOutboundCardAdapter` 和 `turnRuntimePort`
 已不再持有 `*App`，不属于这份图。当前工厂按直接依赖总数排序：
@@ -420,6 +420,14 @@ binding-read 预算保持 18。
 快照。ReviewCommands 在 composition 中于两个稳定 service pointer 初始化后构造；review
 dispatch 仍通过 queue service 处理下一 submission 和 queued reactions。lazy binding-read
 预算由 15 降至 13，`*App` 引用预算保持 449。
+
+步骤 51 将 `turnDeliveryPort` 从持有 `*App` 改为持有 scoped state 与现成的
+`replyChunkDelivery`。空 final card 的 quiet-mode、mention、复用 patch、卡片失败后的回复文本
+fallback、无 trigger 时向 chat 发送文本及 message-link 记录均留在同一行为路径；普通 final
+messages 也直接复用 chunk delivery owner。`effectOutbound` 增加 chat 文本发送能力供无 trigger
+分支使用。对照 SM-04，本次只替换 delivery adapter 依赖，不改变 turn/item 通知顺序或
+`turn/completed` 终态。生产 `*App` 引用预算由 449 降至 448，持有 App 字段的结构体由 37 降至
+36，收 `*App` 的函数预算保持 281；lazy binding-read 预算保持 13。
 
 ## 方法
 

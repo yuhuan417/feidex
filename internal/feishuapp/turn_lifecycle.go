@@ -91,16 +91,19 @@ func (p turnContinuationPort) ProcessCodexPlanModeExitOnTurnCompleted(sessionKey
 	})
 }
 
-type turnDeliveryPort struct{ app *App }
+type turnDeliveryPort struct {
+	state       turnStopStateProvider
+	replyChunks replyChunkDelivery
+}
 
 func (p turnDeliveryPort) TurnStopAttentionUserID(sub *domainsubmission.Submission, turnID string) string {
-	return turnStopAttentionUserID(p.app.State(), sub, turnID)
+	return turnStopAttentionUserID(p.state, sub, turnID)
 }
 func (p turnDeliveryPort) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
-	return sendEmptyFinalCardWithReuse(p.app, ctx, sub, footerLines, reuseMessageID)
+	return p.replyChunks.SendEmptyFinalCardWithReuse(ctx, sub, footerLines, reuseMessageID)
 }
 func (p turnDeliveryPort) SendFinalMessagesWithReuse(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, reuseMessageID string) []string {
-	return p.app.SendFinalMessagesWithReuse(ctx, sub, text, footerLines, reuseMessageID)
+	return p.replyChunks.SendFinalMessagesWithFooter(ctx, sub, text, footerLines, replyInThreadForSubmission(sub), reuseMessageID)
 }
 
 type turnDiagnosticsPort struct{}
@@ -111,10 +114,11 @@ func (p turnDiagnosticsPort) LogSessionState(event, sessionKey string, sess *con
 
 func TurnPorts(app *App, turnPresentation *appturnstream.Service) applicationturn.Dependencies {
 	owner := app.runtimeOwner
+	outboundCards := newOutboundCardService(app)
 	return applicationturn.Dependencies{
 		State: app.State(), Bindings: app.bindings.TurnMetadata,
 		Replies: app.bindings.Continuation, Streams: turnPresentation,
-		Reactions: app.bindings.PendingQueue, Cards: newOutboundCardService(app),
+		Reactions: app.bindings.PendingQueue, Cards: outboundCards,
 		Queue: app.bindings.Submissions, Retry: app.bindings.AutoRetry,
 		Cleanup: app.bindings.SubmissionCleanup,
 		Runtime: turnRuntimePort{lifecycle: &owner.Lifecycle, asyncRunner: app.asyncRunner, liveThreads: liveThreadMarker{
@@ -125,6 +129,6 @@ func TurnPorts(app *App, turnPresentation *appturnstream.Service) applicationtur
 			}
 			runAsync(app, func() { app.sessionActorRuntime().Run("session:"+strings.TrimSpace(sessionKey), fn) })
 		}, Continuations: turnContinuationPort{compaction: app.bindings.Compaction, goal: app.bindings.GoalContinuation, plan: newPlanModeAppAdapter(app)},
-		Delivery: turnDeliveryPort{app: app}, Diagnostics: turnDiagnosticsPort{},
+		Delivery: turnDeliveryPort{state: app.State(), replyChunks: outboundCards.replyChunks}, Diagnostics: turnDiagnosticsPort{},
 	}
 }

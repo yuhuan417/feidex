@@ -32,6 +32,12 @@ func (o effectOutbound) ReplyText(ctx context.Context, messageID, text string, i
 	}})
 }
 
+func (o effectOutbound) SendText(ctx context.Context, chatID, text string) error {
+	return o.runner.Run(ctx, []application.Effect{application.SendMessage{
+		Frontend: o.frontend, Chat: identity.ChatRef{ID: chatID}, Text: text,
+	}})
+}
+
 func (o effectOutbound) ReplyTextWithID(ctx context.Context, messageID, text string, inThread bool) (string, error) {
 	return o.runner.RunSendMessage(ctx, application.SendMessage{
 		Frontend: o.frontend, ReplyMessageID: messageID, Text: text, InThread: inThread,

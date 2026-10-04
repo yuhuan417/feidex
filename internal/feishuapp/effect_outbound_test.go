@@ -40,6 +40,9 @@ func TestEffectOutboundPreservesEffectTargetsAndKeys(t *testing.T) {
 	if err := out.ReplyText(ctx, "text-anchor", "message", true); err != nil {
 		t.Fatalf("ReplyText() error = %v", err)
 	}
+	if err := out.SendText(ctx, "chat-2", "chat message"); err != nil {
+		t.Fatalf("SendText() error = %v", err)
+	}
 	if id, err := out.SendCard(ctx, "chat-1", card); err != nil || id != "sent" {
 		t.Fatalf("SendCard() = (%q, %v), want (sent, nil)", id, err)
 	}
@@ -60,8 +63,11 @@ func TestEffectOutboundPreservesEffectTargetsAndKeys(t *testing.T) {
 	if got := cards[2]; got.Frontend != frontend || got.Chat.ID != "chat-1" || got.ReplyMessageID != "" {
 		t.Fatalf("send card effect = %+v", got)
 	}
-	if len(messages) != 1 || messages[0].Frontend != frontend || messages[0].ReplyMessageID != "text-anchor" || messages[0].Text != "message" || !messages[0].InThread {
+	if len(messages) != 2 || messages[0].Frontend != frontend || messages[0].ReplyMessageID != "text-anchor" || messages[0].Text != "message" || !messages[0].InThread {
 		t.Fatalf("message effects = %+v", messages)
+	}
+	if got := messages[1]; got.Frontend != frontend || got.Chat.ID != "chat-2" || got.ReplyMessageID != "" || got.Text != "chat message" || got.InThread {
+		t.Fatalf("send text effect = %+v", got)
 	}
 	if len(patches) != 1 || patches[0].Frontend != frontend || patches[0].MessageID != "patch-1" || patches[0].IdempotencyKey != cardEffectKey("patch-card", "frontend-1", "patch-1", card) {
 		t.Fatalf("patch effects = %+v", patches)

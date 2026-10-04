@@ -60,6 +60,46 @@ func sendEmptyFinalCardWithReuse(a *App, ctx context.Context, sub *domainsubmiss
 	return ""
 }
 
+func (d replyChunkDelivery) SendEmptyFinalCardWithReuse(ctx context.Context, sub *domainsubmission.Submission, footerLines []string, reuseMessageID string) string {
+	if !d.ready || sub == nil {
+		return ""
+	}
+	feishuConfig := d.config.feishuConfig()
+	if quietmode.Enabled(feishuConfig) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(feishuConfig), "final_message") {
+		return ""
+	}
+	triggerMessageID := strings.TrimSpace(sub.TriggerMessageID)
+	inThread := replyInThreadForSubmission(sub)
+	attentionUserID := turnStopAttentionUserID(d.state, sub, sub.TurnID)
+	fallbackText := appendFooterText(apputil.PrependAttentionMentionMarkdown("任务已结束。", attentionUserID), footerLines)
+	body := apputil.PrependAttentionMentionMarkdown("", attentionUserID)
+	title, color, _, showHeader := outboundMessageCardMeta("final_message", sub.WorkspaceID)
+	card := d.renderer.renderReplyMarkdownCardWithHeaderOptions(ctx, sub, contentCardTitleForSubmission(d.state, sub, title), color, showHeader, body, nil, true)
+	appendReplyCardFooter(card, footerLines)
+	if reuseMessageID = strings.TrimSpace(reuseMessageID); reuseMessageID != "" {
+		if err := d.outbound.PatchCard(ctx, reuseMessageID, card); err == nil {
+			d.links.Record(reuseMessageID, "final_message", anchorForSubmission(sub), "")
+			return reuseMessageID
+		}
+	}
+	if triggerMessageID != "" {
+		id, err := d.outbound.ReplyCard(ctx, triggerMessageID, card, inThread)
+		if err == nil && strings.TrimSpace(id) != "" {
+			d.links.Record(id, "final_message", anchorForSubmission(sub), "")
+			return id
+		}
+		id, err = d.outbound.ReplyTextWithID(ctx, triggerMessageID, fallbackText, inThread)
+		if err == nil && strings.TrimSpace(id) != "" {
+			d.links.Record(id, "final_message", anchorForSubmission(sub), "")
+			return id
+		}
+	}
+	if chatID := strings.TrimSpace(sub.ChatID); chatID != "" {
+		_ = d.outbound.SendText(ctx, chatID, fallbackText)
+	}
+	return ""
+}
+
 func sendFinalMessagesWithFooter(a *App, ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool) []string {
 	results := sendFinalMessagesWithFooterAndReuse(a, ctx, sub, text, footerLines, inThread, nil)
 	if len(results) == 0 {

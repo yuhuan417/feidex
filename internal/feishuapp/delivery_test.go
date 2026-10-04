@@ -92,6 +92,30 @@ func TestSendEmptyFinalCardWithReuseFallsBackToReplyText(t *testing.T) {
 	}
 }
 
+func TestReplyChunkDeliveryEmptyFinalCardFallbacks(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	a.cfg.Feishu.Quiet = config.QuietModeVerbose
+	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
+	ff.replyCardErr = errors.New("boom")
+	delivery := newOutboundCardService(a).replyChunks
+
+	if got := delivery.SendEmptyFinalCardWithReuse(context.Background(), sub, nil, ""); got != "reply-text-id" {
+		t.Fatalf("SendEmptyFinalCardWithReuse() = %q, want reply-text-id fallback", got)
+	}
+	if len(ff.replyTextWithIDs) != 1 || !strings.Contains(ff.replyTextWithIDs[0], "任务已结束。") {
+		t.Fatalf("replyTextWithIDs = %#v, want terminal fallback text", ff.replyTextWithIDs)
+	}
+
+	ff.replyCardErr = nil
+	sub.TriggerMessageID = ""
+	if got := delivery.SendEmptyFinalCardWithReuse(context.Background(), sub, []string{"footer"}, ""); got != "" {
+		t.Fatalf("SendEmptyFinalCardWithReuse(no trigger) = %q, want empty", got)
+	}
+	if len(ff.sentTexts) != 1 || !strings.Contains(ff.sentTexts[0], "任务已结束。\nfooter") {
+		t.Fatalf("sentTexts = %#v, want chat fallback with footer", ff.sentTexts)
+	}
+}
+
 func TestFlushTurnStreamAdditionalBranches(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 
