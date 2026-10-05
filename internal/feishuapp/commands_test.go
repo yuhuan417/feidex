@@ -718,7 +718,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := commandFork(a, msg, nil); err != nil {
+	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandFork(msg, nil); err != nil {
 		t.Fatalf("commandFork() error = %v", err)
 	}
 	if gotMethod != "thread/fork" {

@@ -26,7 +26,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"fork": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return commandFork(a, msg, args)
+					return a.bindings.ThreadMenu.CommandFork(msg, args)
 				},
 			},
 			"new": {

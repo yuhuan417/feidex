@@ -443,6 +443,12 @@ func (s *Service) CommandThreads(msg *feishu.InboundMessage, includeAll bool) er
 	return err
 }
 
+// CommandFork runs the fork command with the capabilities injected into the
+// thread menu service.
+func (s *Service) CommandFork(msg *feishu.InboundMessage, args []string) error {
+	return s.app.CommandFork(msg, args)
+}
+
 // CommandThread handles the /thread command with subcommands.
 func (s *Service) CommandThread(msg *feishu.InboundMessage, args []string) error {
 	msg, sessionKey := s.messageForThreadMenu(msg)
