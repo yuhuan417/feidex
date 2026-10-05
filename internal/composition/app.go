@@ -90,7 +90,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	)
 	// All production objects are assembled here. internal/app only binds the
 	// already composed Feishu event transport to the frontend entrypoint.
-	feishuapp.AttachStateView(frontend, feishuapp.NewStateView(frontend))
 	scope.RuntimeOwner.TurnBindings = turnbinding.NewTracker(frontend.State().Submission)
 	bindings := &feishuapp.Bindings{
 		TurnStreams: turnstream.NewTracker(), TurnItems: turnitem.NewTracker(), FinalCardPatches: finalcardpatch.NewTracker(), Goals: goal.NewTracker(),

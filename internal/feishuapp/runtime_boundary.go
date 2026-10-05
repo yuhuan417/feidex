@@ -2,7 +2,6 @@ package feishuapp
 
 import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
-	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
 	"feidex/internal/runtime"
@@ -16,16 +15,6 @@ type BackendRuntimeHandle = runtime.BackendHandle
 // NewEffectRunner creates the frontend effect executor after the shell and its
 // transport have been composed.
 func NewEffectRunner(a *App) runtime.EffectRunner { return buildEffectRunner(a) }
-
-// NewStateView creates the frontend-scoped state projection.
-func NewStateView(a *App) *appstate.Store {
-	if a == nil {
-		return nil
-	}
-	view := appstate.NewScoped(a.store, a.FrontendID(), a.configView().configuredBackend())
-	view.RevisionMutex = a.ConfigMu()
-	return view
-}
 
 // NewDispatcher creates the application input dispatcher for this frontend.
 func NewDispatcher(a *App) application.Dispatcher { return newInputDispatcher(a) }
@@ -57,12 +46,6 @@ func AttachEffectRunner(a *App, runner runtime.EffectRunner) {
 			Frontend:              identity.FrontendID(a.frontendID),
 			Runner:                runner,
 		}
-	}
-}
-
-func AttachStateView(a *App, view *appstate.Store) {
-	if a != nil {
-		a.stateView = view
 	}
 }
 

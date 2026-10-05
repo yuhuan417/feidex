@@ -83,6 +83,8 @@ func NewFeishuShell(scope frontendruntime.FrontendScope) (*App, error) {
 		started:             time.Now(),
 		runtimeOwner:        owner,
 	}
+	app.stateView = appstate.NewScoped(store, app.frontendID, app.configView().configuredBackend())
+	app.stateView.RevisionMutex = app.configMutex()
 	return app, nil
 }
 

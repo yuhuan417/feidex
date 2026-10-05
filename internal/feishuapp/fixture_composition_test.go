@@ -73,6 +73,15 @@ func testWorkspacePresentation(a *App) *workspacecards.Presentation {
 	})
 }
 
+func testStateView(a *App) *scoped.Store {
+	if a == nil {
+		return nil
+	}
+	view := scoped.NewScoped(a.store, a.FrontendID(), a.configView().configuredBackend())
+	view.RevisionMutex = a.ConfigMu()
+	return view
+}
+
 // Focused fixtures explicitly construct their complete dependency graph.
 func prepareTestApp(a *App) *App {
 	if a.runtimeOwner == nil {
@@ -82,7 +91,7 @@ func prepareTestApp(a *App) *App {
 		a.transport = a.feishu
 	}
 	if a.stateView == nil {
-		a.stateView = NewStateView(a)
+		a.stateView = testStateView(a)
 	}
 	if a.runtimeOwner.TurnBindings == nil {
 		a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
@@ -564,7 +573,7 @@ func renderThreadsCardForTest(a *App, key string, all bool) (map[string]any, err
 }
 
 func recomposeTestApp(a *App) {
-	a.stateView = NewStateView(a)
+	a.stateView = testStateView(a)
 	a.transport = a.feishu
 	a.runtimeOwner.EffectRunner = nil
 	a.runtimeOwner.Dispatcher = nil

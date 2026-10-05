@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 181 |
-| 收 `*App` 的顶层函数 | 60 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 179 |
+| 收 `*App` 的顶层函数 | 58 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -869,6 +869,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 187 删除重复构造 workspace renderer 的 `buildWorkspaceRenderService(*App)`，并移除 `NewWorkspacePresentation(*App)` facade。composition 使用已有的 `WorkspacePresentationDependencies` 构造并注入同一个 presentation；workspace command dependencies 复用调用方传入的 renderer，不再按需从 App 重建。测试 fixture 通过 test-only helper 构造同样的 presentation。生产 `*App` 引用由 185 降至 183，收 `*App` 的函数数由 64 降至 62，App-bearing 结构体、App-bearing `*Ports` 工厂与 lazy binding-read 预算保持 1/1/0。
 
 步骤 188 删除生产 `App.Backend()` 与 `App.SetBackend()` 兼容 facade。动态配置视图直接读取 runtime owner；backend 切换测试便利方法移入 `_test.go`，继续同步 scoped state view。生产 `*App` 引用由 183 降至 181，收 `*App` 的函数数由 62 降至 60，其他棘轮保持 1/1/0。
+
+步骤 189 将 frontend-scoped state view 移入 `NewFeishuShell` 一次性构造，删除 composition 的 `NewStateView(*App)` / `AttachStateView(*App)` 反向装配。view 仍使用相同 store、frontend ID、configured backend 和共享 revision mutex；测试 fixture 用 test-only helper 支持手工 App。生产 `*App` 引用由 181 降至 179，收 `*App` 的函数数由 60 降至 58，其他棘轮保持 1/1/0。
 
 ## 方法
 
