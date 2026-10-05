@@ -168,10 +168,6 @@ func (a threadMenuBackendActionAdapter) CompleteMenuInterrupt(action *feishu.Car
 	return a.service.CompleteMenuInterrupt(action, sessionKey, targetTurnID)
 }
 
-func (a *App) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
-}
-
 type threadMenuWorkspaceConfigAdapter struct {
 	workspaceConfiguration *workspacecmd.ConfigService
 	backend                func() string

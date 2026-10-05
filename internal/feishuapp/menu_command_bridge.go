@@ -68,27 +68,60 @@ func commandMessageFromAction(scope bindingSessionScope, action *feishu.CardActi
 	return msg
 }
 
-func runCommandFromCardAction(a *App, action *feishu.CardAction, sessionKey, rawCommand string) (string, map[string]any, error) {
+type MenuCommandInputs struct {
+	BindingScope   BindingScope
+	Capture        FeishuClient
+	HandleCommand  func(*feishu.InboundMessage, string) error
+	RenderFallback func(string, string) (map[string]any, bool)
+}
+
+type MenuCommandService struct {
+	scope          bindingSessionScope
+	capture        appfeishuwrap.CommandCaptureFeishuClient
+	handleCommand  func(*feishu.InboundMessage, string) error
+	renderFallback func(string, string) (map[string]any, bool)
+}
+
+func NewMenuCommandService(inputs MenuCommandInputs) MenuCommandService {
+	var capture appfeishuwrap.CommandCaptureFeishuClient
+	if candidate, ok := inputs.Capture.(appfeishuwrap.CommandCaptureFeishuClient); ok {
+		capture = candidate
+	}
+	return MenuCommandService{
+		scope:          inputs.BindingScope.scope,
+		capture:        capture,
+		handleCommand:  inputs.HandleCommand,
+		renderFallback: inputs.RenderFallback,
+	}
+}
+
+func (s MenuCommandService) run(action *feishu.CardAction, sessionKey, rawCommand string) (string, map[string]any, error) {
 	if action == nil {
 		return "", nil, nil
 	}
-	msg := commandMessageFromAction(a.bindings.BindingCommands.scope, action, sessionKey, rawCommand)
-	if capture, ok := a.feishu.(appfeishuwrap.CommandCaptureFeishuClient); ok {
-		return capture.CaptureCommandOutput(strings.TrimSpace(action.MessageID), func() error {
-			return HandleInboundCommand(a, msg, rawCommand)
+	msg := commandMessageFromAction(s.scope, action, sessionKey, rawCommand)
+	if s.capture != nil {
+		return s.capture.CaptureCommandOutput(strings.TrimSpace(action.MessageID), func() error {
+			if s.handleCommand == nil {
+				return nil
+			}
+			return s.handleCommand(msg, rawCommand)
 		})
 	}
-	return "", nil, HandleInboundCommand(a, msg, rawCommand)
+	if s.handleCommand == nil {
+		return "", nil, nil
+	}
+	return "", nil, s.handleCommand(msg, rawCommand)
 }
 
-func completeMenuCommand(a *App, action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
+func (s MenuCommandService) Complete(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 	parentAction = textutil.FirstNonEmpty(actionStringValue(action, "parent_action"), strings.TrimSpace(parentAction))
-	text, card, err := runCommandFromCardAction(a, action, sessionKey, rawCommand)
+	text, card, err := s.run(action, sessionKey, rawCommand)
 	if err != nil {
 		resp := &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "warning", Content: err.Error()},
 		}
-		if fallback, ok := renderMenuCommandFallback(a, parentAction, sessionKey); ok {
+		if fallback, ok := s.fallback(parentAction, sessionKey); ok {
 			resp.Card = rawCard(fallback)
 		}
 		return resp, nil
@@ -102,13 +135,20 @@ func completeMenuCommand(a *App, action *feishu.CardAction, sessionKey, rawComma
 	resp := &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: textutil.FirstNonEmpty(text, "已执行 "+rawCommand)},
 	}
-	if fallback, ok := renderMenuCommandFallback(a, parentAction, sessionKey); ok {
+	if fallback, ok := s.fallback(parentAction, sessionKey); ok {
 		resp.Card = rawCard(fallback)
 	}
 	return resp, nil
 }
 
-func renderMenuCommandFallback(a *App, actionName, sessionKey string) (map[string]any, bool) {
+func (s MenuCommandService) fallback(actionName, sessionKey string) (map[string]any, bool) {
+	if s.renderFallback == nil {
+		return nil, false
+	}
+	return s.renderFallback(actionName, sessionKey)
+}
+
+func RenderMenuCommandFallback(a *App, actionName, sessionKey string) (map[string]any, bool) {
 	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
 		return nil, false
 	}

@@ -1,9 +1,7 @@
 package feishuapp
 
 import (
-	"feidex/internal/adapter/feishu/debugviewcmd"
 	"feidex/internal/adapter/feishu/planmode"
-	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/feishu"
 )
 
@@ -12,7 +10,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"review": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return appreviewcmd.CommandReview(ReviewCommandDependencies(a), msg, args)
+					return a.bindings.ReviewCommands.CommandReview(msg, args)
 				},
 			},
 		},
@@ -69,7 +67,10 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"download": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return debugviewcmd.CommandDownload(DebugViewDependencies(a), msg, args)
+					if a.bindings.Download == nil {
+						return nil
+					}
+					return a.bindings.Download(msg, args)
 				},
 			},
 		},

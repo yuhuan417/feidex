@@ -15,8 +15,6 @@ import (
 	frontendruntime "feidex/internal/runtime"
 	"fmt"
 	"strings"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type goalOutbound struct {
@@ -76,10 +74,6 @@ func RequireCodexGoalGateway(client CodexClient) (goalapp.Gateway, error) {
 
 func GoalCommandSessionKey(frontendID string, msg *feishu.InboundMessage) string {
 	return (frontendConfigView{frontendID: frontendID}).makeSessionKey(msg)
-}
-
-func CompleteGoalMenuCommand(a *App, action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 }
 
 type goalAnchorPresenter struct{ outbound goalcmd.Outbound }

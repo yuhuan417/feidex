@@ -267,7 +267,22 @@ func prepareTestApp(a *App) *App {
 		a.runtimeOwner.Lifecycle.Context, *a.runtimeOwner.EffectRunner,
 		SessionKeyBuilder(a.FrontendID()), func(string) bool { return false },
 	)
-	debugViewDependencies := DebugViewDependencies(a)
+	bindingScope := NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID())
+	menuCommands := NewMenuCommandService(MenuCommandInputs{
+		BindingScope: bindingScope, Capture: a.Feishu(),
+		HandleCommand: func(msg *feishu.InboundMessage, raw string) error {
+			return HandleInboundCommand(a, msg, raw)
+		},
+		RenderFallback: func(actionName, sessionKey string) (map[string]any, bool) {
+			return RenderMenuCommandFallback(a, actionName, sessionKey)
+		},
+	})
+	asyncCardActions := NewAsyncCardActionService(AsyncCardActionInputs{
+		Commands: menuCommands, Lifecycle: &a.runtimeOwner.Lifecycle, AsyncRunner: a.asyncRunner,
+		Actors: a.runtimeOwner.SessionActors, Context: a.Context, FrontendID: a.FrontendID(),
+		Effects: newEffectRunner(a.runtimeOwner),
+	})
+	debugViewDependencies := BuildDebugViewDependencies(a, menuCommands.Complete)
 	sharedArtifacts, downloadPresentation, downloadRunner := FileSharePorts(a.feishu, debugViewDependencies, &a.runtimeOwner.Lifecycle, a.runtimeOwner.SessionActors, a.asyncRunner)
 	a.bindings.FileSharing = &fileshare.Service{Forms: a.bindings.Forms, Repository: a.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: a.Context, Run: downloadRunner}
 	debugViewDependencies.FileSharing = a.bindings.FileSharing
@@ -314,7 +329,14 @@ func prepareTestApp(a *App) *App {
 		FrontendConfigIndex: a.FrontendConfigIndex(), Store: a.store,
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Driver: appbackend.SelectedDriver{Selected: configuredBackend}, ModelCommands: a.bindings.ModelCommands,
 	})
-	a.bindings.BackendActions = BuildBackendActions(a)
+	a.bindings.BackendActions = BuildBackendActions(BackendActionInputs{
+		State: a.State(), Feishu: a.Feishu(), Submissions: a.bindings.Submissions,
+		BindingScope: bindingScope,
+		Backend:      configuredBackend, SessionKey: SessionKeyBuilder(a.FrontendID()),
+		MenuCommands: menuCommands, AsyncActions: asyncCardActions,
+		FrontendID: identity.FrontendID(a.FrontendID()), Effects: *a.runtimeOwner.EffectRunner,
+		ReplyInThread: func() bool { return a.configView().replyInThreadEnabled() },
+	})
 	a.bindings.Skills = compositionkit.NewSkillService(SkillUseCasePorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner.PendingSkills, a.FrontendID(), a.runtimeOwner))
 	a.bindings.SkillCommands = BuildSkillCommands(SkillCommandInputs{
 		Service: a.bindings.Skills, FrontendID: a.FrontendID(), EffectRunner: *a.runtimeOwner.EffectRunner,
@@ -348,7 +370,7 @@ func prepareTestApp(a *App) *App {
 		ActionStringValueFn: GoalCommandActionStringValue,
 		ActionSessionKeyFn:  GoalCommandActionSessionKey,
 		CompleteMenuCommandFn: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-			return CompleteGoalMenuCommand(a, action, sessionKey, rawCommand, parentAction)
+			return menuCommands.Complete(action, sessionKey, rawCommand, parentAction)
 		},
 		ContextFn: a.runtimeOwner.Lifecycle.Context,
 	})
@@ -476,9 +498,11 @@ func prepareTestApp(a *App) *App {
 		ConversationConfiguration: a.bindings.ConversationConfiguration,
 		ContinueClaude:            a.bindings.Continuation.ContinueClaudeSessionWithText,
 	})}
-	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
-	bindingScope := NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID())
-	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, bindingScope)
+	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfigurationWithMenu(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, menuCommands.Complete)
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagementWithMenu(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, bindingScope, menuCommands.Complete)
+	downloadDependencies := BuildDebugViewDependencies(a, menuCommands.Complete)
+	downloadDependencies.FileSharing = a.bindings.FileSharing
+	a.bindings.Download = BuildDebug(downloadDependencies).CommandDownload
 	a.bindings.Upgrades = BuildUpgrades(UpgradeInputs{
 		Context: a.Context, Config: a.Config(), ConfigMu: a.ConfigMu(), ConfiguredBackend: configuredBackend,
 		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(), State: a.State(),
@@ -561,7 +585,7 @@ func prepareTestApp(a *App) *App {
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Submissions: a.bindings.Submissions,
 		Conversations: a.bindings.Conversations, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
 	})
-	reviewCommandDependencies := ReviewCommandDependencies(a)
+	reviewCommandDependencies := BuildReviewCommandDependencies(a, asyncCardActions)
 	a.bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
 	cardActionFrontendID := a.FrontendID()
 	normalizeCardActionSessionKey := func(key string) string {

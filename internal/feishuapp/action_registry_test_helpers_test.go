@@ -8,6 +8,10 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+func (a *App) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
+	return menuCommandServiceForApp(a).Complete(action, sessionKey, rawCommand, parentAction)
+}
+
 type cardActionService struct{ app *App }
 
 func newCardActionService(app *App) cardActionDispatcher {

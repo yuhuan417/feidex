@@ -189,6 +189,21 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindingScope := feishuapp.NewBindingScope(frontend.State(), func(key string) string {
 		return identity.CanonicalSessionKey(frontendIDForBindingScope, key)
 	}, bindings.Primary, frontendIDForBindingScope)
+	menuCommands := feishuapp.NewMenuCommandService(feishuapp.MenuCommandInputs{
+		BindingScope: bindingScope,
+		Capture:      frontend.Feishu(),
+		HandleCommand: func(msg *feishu.InboundMessage, raw string) error {
+			return feishuapp.HandleInboundCommand(frontend, msg, raw)
+		},
+		RenderFallback: func(actionName, sessionKey string) (map[string]any, bool) {
+			return feishuapp.RenderMenuCommandFallback(frontend, actionName, sessionKey)
+		},
+	})
+	asyncCardActions := feishuapp.NewAsyncCardActionService(feishuapp.AsyncCardActionInputs{
+		Commands: menuCommands, Lifecycle: &scope.RuntimeOwner.Lifecycle, AsyncRunner: asyncRunner,
+		Actors: scope.RuntimeOwner.SessionActors, Context: frontend.Context, FrontendID: frontend.FrontendID(),
+		Effects: *scope.RuntimeOwner.EffectRunner,
+	})
 	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner)
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 
@@ -295,7 +310,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		scope.RuntimeOwner.Lifecycle.Context, *scope.RuntimeOwner.EffectRunner,
 		feishuapp.SessionKeyBuilder(frontend.FrontendID()), func(string) bool { return false },
 	)
-	debugViewDependencies := feishuapp.DebugViewDependencies(frontend)
+	debugViewDependencies := feishuapp.BuildDebugViewDependencies(frontend, menuCommands.Complete)
 	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend.Feishu(), debugViewDependencies, &scope.RuntimeOwner.Lifecycle, scope.RuntimeOwner.SessionActors, asyncRunner)
 	bindings.FileSharing = &fileshare.Service{Forms: bindings.Forms, Repository: frontend.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: frontend.Context, Run: downloadRunner}
 	debugViewDependencies.FileSharing = bindings.FileSharing
@@ -329,7 +344,13 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		FrontendConfigIndex: frontendConfigIndex, Store: store,
 		WorkspaceSelection: bindings.WorkspaceSelection, Driver: appbackend.SelectedDriver{Selected: configuredBackend}, ModelCommands: bindings.ModelCommands,
 	})
-	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
+	bindings.BackendActions = feishuapp.BuildBackendActions(feishuapp.BackendActionInputs{
+		State: frontend.State(), Feishu: frontend.Feishu(), Submissions: bindings.Submissions,
+		BindingScope: bindingScope, Backend: configuredBackend,
+		SessionKey: feishuapp.SessionKeyBuilder(frontend.FrontendID()), MenuCommands: menuCommands,
+		AsyncActions: asyncCardActions, FrontendID: identity.FrontendID(frontend.FrontendID()),
+		Effects: *scope.RuntimeOwner.EffectRunner, ReplyInThread: func() bool { return false },
+	})
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(feishuapp.SkillCommandInputs{
 		Service: bindings.Skills, FrontendID: frontend.FrontendID(), EffectRunner: *scope.RuntimeOwner.EffectRunner,
@@ -363,7 +384,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		ActionStringValueFn: feishuapp.GoalCommandActionStringValue,
 		ActionSessionKeyFn:  feishuapp.GoalCommandActionSessionKey,
 		CompleteMenuCommandFn: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-			return feishuapp.CompleteGoalMenuCommand(frontend, action, sessionKey, rawCommand, parentAction)
+			return menuCommands.Complete(action, sessionKey, rawCommand, parentAction)
 		},
 		ContextFn: scope.RuntimeOwner.Lifecycle.Context,
 	})
@@ -499,8 +520,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// The workspace command services read the workspace card presentation and
 	// the conversation service at construction, so they are built once those
 	// bindings exist.
-	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend, bindings.WorkspacePresentation, bindings.Conversations)
-	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend, bindings.WorkspacePresentation, bindings.Conversations, bindingScope)
+	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfigurationWithMenu(frontend, bindings.WorkspacePresentation, bindings.Conversations, menuCommands.Complete)
+	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagementWithMenu(frontend, bindings.WorkspacePresentation, bindings.Conversations, bindingScope, menuCommands.Complete)
+	downloadDependencies := feishuapp.BuildDebugViewDependencies(frontend, menuCommands.Complete)
+	downloadDependencies.FileSharing = bindings.FileSharing
+	downloadService := feishuapp.BuildDebug(downloadDependencies)
+	bindings.Download = downloadService.CommandDownload
 	bindings.Upgrades = feishuapp.BuildUpgrades(feishuapp.UpgradeInputs{
 		Context: scope.RuntimeOwner.Lifecycle.Context, Config: scope.Config, ConfigMu: scope.ConfigMutex,
 		ConfiguredBackend: configuredBackend, FrontendID: scope.Frontend.ID, FrontendConfigIndex: frontendConfigIndex,
@@ -611,7 +636,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		WorkspaceSelection: bindings.WorkspaceSelection, ConversationControls: bindings.ConversationControls,
 		ThreadSettings: bindings.ThreadSettings, PermissionSettings: bindings.PermissionSettings,
 		BackendActions: bindings.BackendActions, AutoRetry: bindings.AutoRetry,
-		CompleteMenuCommand: frontend.CompleteMenuCommand,
+		CompleteMenuCommand: menuCommands.Complete,
 	}))
 	planSource, planCatalog, planWorkspaces := feishuapp.PlanPorts(frontend.Config(), frontend.ConfigMu(), bindings.ModelSnapshots, scope.RuntimeOwner)
 	*bindings.Plan = planapp.Service{Forms: bindings.Forms, Delivery: bindings.InteractionDelivery, Repository: frontend.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: frontend.Context}, Conversations: bindings.Conversations, Workspaces: planWorkspaces, Queue: bindings.Submissions}
@@ -621,7 +646,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		WorkspaceSelection: bindings.WorkspaceSelection, Submissions: bindings.Submissions,
 		Conversations: bindings.Conversations, Feishu: frontend.Feishu(), AsyncRunner: asyncRunner,
 	})
-	reviewCommandDependencies := feishuapp.ReviewCommandDependencies(frontend)
+	reviewCommandDependencies := feishuapp.BuildReviewCommandDependencies(frontend, asyncCardActions)
 	bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
 	bindings.MCP, err = feishuapp.BuildMCP(feishuapp.MCPPorts(feishuapp.MCPPortInputs{
 		AttachmentSender: frontend.Feishu(), StateProvider: frontend.State(),
@@ -641,7 +666,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		feishuapp.WorkspaceCardActionInputs{
 			BindingCommands: bindings.BindingCommands, WorkspaceManagement: bindings.WorkspaceManagement,
 			WorkspaceConfiguration: bindings.WorkspaceConfiguration, ThreadMenu: bindings.ThreadMenu,
-			CompleteMenuCommand: frontend.CompleteMenuCommand,
+			CompleteMenuCommand: menuCommands.Complete,
 		},
 		bindings.WorkspaceConfiguration.WorkspaceDeleteActions(),
 		bindings.History,
@@ -651,28 +676,28 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			BackendActions: bindings.BackendActions,
 		}, feishuapp.SystemCardActionInputs{
 			Debug: bindings.Debug, BackendUpgrades: bindings.BackendUpgrades,
-			BackendActions: bindings.BackendActions, CompleteMenuCommand: frontend.CompleteMenuCommand,
+			BackendActions: bindings.BackendActions, CompleteMenuCommand: menuCommands.Complete,
 		}, feishuapp.MenuCoreCardActionInputs{
 			Backend: configuredBackend, State: frontend.State(), Renderer: frontend.Feishu(),
 			BackendSelection: bindings.BackendSelection, AutoRetry: bindings.AutoRetry,
-			CompleteMenuCommand: frontend.CompleteMenuCommand,
+			CompleteMenuCommand: menuCommands.Complete,
 		}, feishuapp.BindingCardActionInputs{
 			Backend: configuredBackend, State: frontend.State(), Renderer: frontend.Feishu(),
-			BindingCommands: bindings.BindingCommands, CompleteMenuCommand: frontend.CompleteMenuCommand,
+			BindingCommands: bindings.BindingCommands, CompleteMenuCommand: menuCommands.Complete,
 		}, feishuapp.ToolsCardActionInputs{
-			CompleteMenuCommand: frontend.CompleteMenuCommand, Skills: bindings.SkillCommands,
+			CompleteMenuCommand: menuCommands.Complete, Skills: bindings.SkillCommands,
 			Backend: configuredBackend, State: frontend.State(), Renderer: frontend.Feishu(),
 			RuntimeSettings: bindings.RuntimeSettings,
 			QuietMode:       feishuapp.ConfiguredQuietModeBuilder(frontend.Config(), frontend.ConfigMu(), frontendConfigIndex),
 		}, feishuapp.ThreadForkCardActionInputs{
 			BindingCommands: bindings.BindingCommands, ConversationQuery: bindings.ConversationQuery,
 			NormalizeSessionKey: normalizeCardActionSessionKey,
-			Backend:             configuredBackend, CompleteMenuCommand: frontend.CompleteMenuCommand,
+			Backend:             configuredBackend, CompleteMenuCommand: menuCommands.Complete,
 		}, feishuapp.ReviewCardActionInputs{
 			Dependencies: reviewCommandDependencies, ReviewCommands: bindings.ReviewCommands,
-			Backend: configuredBackend, CompleteMenuCommand: frontend.CompleteMenuCommand,
+			Backend: configuredBackend, CompleteMenuCommand: menuCommands.Complete,
 		}, feishuapp.PlanCardActionInputs{
-			CompleteMenuCommand: frontend.CompleteMenuCommand,
+			CompleteMenuCommand: menuCommands.Complete,
 			Lifecycle:           &scope.RuntimeOwner.Lifecycle,
 			AsyncRunner:         asyncRunner,
 			Context:             frontend.Context,
@@ -692,7 +717,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			ReplyInThread:      false,
 			TransportAvailable: frontend.Feishu() != nil,
 		}, feishuapp.CompactCardActionInputs{
-			CompleteMenuCommand: frontend.CompleteMenuCommand,
+			CompleteMenuCommand: menuCommands.Complete,
 			Actions:             bindings.BackendActions,
 			Compaction:          bindings.Compaction,
 			State:               frontend.State(),
@@ -710,7 +735,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			ScopedRoutingConfiguration: bindings.ScopedRoutingConfiguration,
 			ThreadSettings:             bindings.ThreadSettings,
 			State:                      frontend.State(),
-			CompleteMenuCommand:        frontend.CompleteMenuCommand,
+			CompleteMenuCommand:        menuCommands.Complete,
 		}, feishuapp.PathPickerActionInputs{
 			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,

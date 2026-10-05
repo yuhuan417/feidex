@@ -259,6 +259,10 @@ func NewReviewFormService(app Dependencies) ReviewFormService {
 	return ReviewFormService{app: app}
 }
 
+func (s ReviewFormService) CommandReview(msg *feishu.InboundMessage, args []string) error {
+	return CommandReview(s.app, msg, args)
+}
+
 // ---------------------------------------------------------------------------
 // Exported helper functions
 // ---------------------------------------------------------------------------

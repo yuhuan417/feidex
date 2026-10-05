@@ -17,7 +17,7 @@ var workspaceGitClone = appworkspacecmd.GitClone
 
 // buildWorkspaceManagementService takes the card presentation and conversation
 // service as construction-time inputs; see buildWorkspaceConfigService.
-func BuildWorkspaceManagement(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service, scope BindingScope) *appworkspacecmd.ManagementService {
+func BuildWorkspaceManagementWithMenu(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service, scope BindingScope, completeMenuCommand appworkspacecmd.CompleteMenuCommandFn) *appworkspacecmd.ManagementService {
 	if a == nil {
 		return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{})
 	}
@@ -57,9 +57,7 @@ func BuildWorkspaceManagement(a *App, presentation *workspacecards.Presentation,
 		},
 		Backend: workspaceBackendConfigDeps(dependencies.BackendDriver),
 		Actions: appworkspacecmd.ActionDeps{
-			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
-			},
+			CompleteMenuCommand: completeMenuCommand,
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 				return replyCommandActionResponseWith(replyRunner, frontendID, replyInThread, msg, resp)
 			},

@@ -1,10 +1,12 @@
 package feishuapp
 
 import (
+	"context"
 	"feidex/internal/textutil"
 	"strings"
 
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -24,8 +26,34 @@ func callbackResponseToastText(resp *callback.CardActionTriggerResponse) string 
 	return strings.TrimSpace(resp.Toast.Content)
 }
 
-func completeAsyncCommandAction(
-	a *App,
+type AsyncCardActionInputs struct {
+	Commands    MenuCommandService
+	Lifecycle   *frontendruntime.FrontendRuntime
+	AsyncRunner func(func())
+	Actors      *frontendruntime.SessionActors
+	Context     func() context.Context
+	FrontendID  string
+	Effects     frontendruntime.EffectRunner
+}
+
+type AsyncCardActionService struct {
+	commands    MenuCommandService
+	lifecycle   *frontendruntime.FrontendRuntime
+	asyncRunner func(func())
+	actors      *frontendruntime.SessionActors
+	context     func() context.Context
+	frontendID  string
+	effects     frontendruntime.EffectRunner
+}
+
+func NewAsyncCardActionService(inputs AsyncCardActionInputs) AsyncCardActionService {
+	return AsyncCardActionService{
+		commands: inputs.Commands, lifecycle: inputs.Lifecycle, asyncRunner: inputs.AsyncRunner,
+		actors: inputs.Actors, context: inputs.Context, frontendID: inputs.FrontendID, effects: inputs.Effects,
+	}
+}
+
+func (s AsyncCardActionService) CompleteCommand(
 	action *feishu.CardAction,
 	sessionKey, rawCommand, fallbackAction, toastText string,
 	preparingCard map[string]any,
@@ -34,11 +62,11 @@ func completeAsyncCommandAction(
 	patchWarnMsg string,
 ) (*callback.CardActionTriggerResponse, error) {
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return completeMenuCommand(a, action, sessionKey, rawCommand, fallbackAction)
+		return s.commands.Complete(action, sessionKey, rawCommand, fallbackAction)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
-	runSessionAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, a.runtimeOwner.SessionActors, sessionKey, func() {
-		text, card, err := runCommandFromCardAction(a, action, sessionKey, rawCommand)
+	runSessionAsync(s.lifecycle, s.asyncRunner, s.actors, sessionKey, func() {
+		text, card, err := s.commands.run(action, sessionKey, rawCommand)
 		switch {
 		case err != nil:
 			card = failureCard(sessionKey, err.Error())
@@ -48,7 +76,11 @@ func completeAsyncCommandAction(
 		default:
 			card = failureCard(sessionKey, textutil.FirstNonEmpty(strings.TrimSpace(text), "命令没有返回卡片"))
 		}
-		patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, patchWarnMsg,
+		ctx := context.Background()
+		if s.context != nil {
+			ctx = s.context()
+		}
+		patchMaintenanceCard(ctx, s.frontendID, s.effects, messageID, card, patchWarnMsg,
 			"session_key", sessionKey,
 			"message_id", messageID,
 		)
@@ -59,8 +91,7 @@ func completeAsyncCommandAction(
 	}, nil
 }
 
-func completeAsyncRenderedCardAction(
-	a *App,
+func (s AsyncCardActionService) CompleteRendered(
 	action *feishu.CardAction,
 	sessionKey, toastText string,
 	preparingCard map[string]any,
@@ -72,7 +103,7 @@ func completeAsyncRenderedCardAction(
 		return run()
 	}
 	messageID := strings.TrimSpace(action.MessageID)
-	runSessionAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, a.runtimeOwner.SessionActors, sessionKey, func() {
+	runSessionAsync(s.lifecycle, s.asyncRunner, s.actors, sessionKey, func() {
 		resp, err := run()
 		card := callbackResponseCard(resp)
 		if card == nil {
@@ -82,7 +113,11 @@ func completeAsyncRenderedCardAction(
 			}
 			card = failureCard(sessionKey, textutil.FirstNonEmpty(strings.TrimSpace(errText), "操作没有返回卡片"))
 		}
-		patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, patchWarnMsg,
+		ctx := context.Background()
+		if s.context != nil {
+			ctx = s.context()
+		}
+		patchMaintenanceCard(ctx, s.frontendID, s.effects, messageID, card, patchWarnMsg,
 			"session_key", sessionKey,
 			"message_id", messageID,
 		)

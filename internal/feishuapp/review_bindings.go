@@ -39,7 +39,7 @@ func reviewPendingPayloadFromPending(pending *state.PendingRequest) appreviewcmd
 // App adapters — satisfy reviewcmd.App without adding feature methods on *App
 // ---------------------------------------------------------------------------
 
-func ReviewCommandDependencies(a *App) appreviewcmd.Dependencies {
+func BuildReviewCommandDependencies(a *App, asyncActions AsyncCardActionService) appreviewcmd.Dependencies {
 	if a == nil {
 		return appreviewcmd.Dependencies{}
 	}
@@ -64,10 +64,10 @@ func ReviewCommandDependencies(a *App) appreviewcmd.Dependencies {
 		SendSubmissionQueuedNoticeFn:    func(c context.Context, s *domainsubmission.Submission) { queuedNotice.sendSubmissionQueuedNotice(c, s) },
 		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { pendingQueue.MarkSubmissionQueuedReactions(s) },
 		CompleteAsyncCommandActionFn: func(x *feishu.CardAction, s, r, f, t string, p map[string]any, ok, fail func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
-			return completeAsyncCommandAction(a, x, s, r, f, t, p, ok, fail, w)
+			return asyncActions.CompleteCommand(x, s, r, f, t, p, ok, fail, w)
 		},
 		CompleteAsyncRenderedCardActionFn: func(x *feishu.CardAction, s, t string, p map[string]any, r func() (*callback.CardActionTriggerResponse, error), f func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
-			return completeAsyncRenderedCardAction(a, x, s, t, p, r, f, w)
+			return asyncActions.CompleteRendered(x, s, t, p, r, f, w)
 		},
 	}
 }

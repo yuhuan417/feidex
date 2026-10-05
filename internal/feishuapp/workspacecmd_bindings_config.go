@@ -67,7 +67,7 @@ func workspaceBackendConfigDeps(driver appbackend.Driver) workspacecmd.BackendCo
 // service as construction-time inputs. Reading them through a.bindings inside
 // the closures would hide the dependency and force the caller to build this
 // service before those bindings are assigned.
-func BuildWorkspaceConfiguration(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service) *workspacecmd.ConfigService {
+func BuildWorkspaceConfigurationWithMenu(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service, completeMenuCommand workspacecmd.CompleteMenuCommandFn) *workspacecmd.ConfigService {
 	if a == nil {
 		return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{})
 	}
@@ -92,9 +92,7 @@ func BuildWorkspaceConfiguration(a *App, presentation *workspacecards.Presentati
 		},
 		Backend: workspaceBackendConfigDeps(dependencies.BackendDriver),
 		Actions: workspacecmd.ActionDeps{
-			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
-			},
+			CompleteMenuCommand: completeMenuCommand,
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 				return replyCommandActionResponseWith(replyRunner, frontendID, replyInThread, msg, resp)
 			},

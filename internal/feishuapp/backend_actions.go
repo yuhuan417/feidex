@@ -4,26 +4,41 @@ import (
 	"context"
 
 	appbackend "feidex/internal/adapter/feishu/backend"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	appsubmission "feidex/internal/application/submission"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func BuildBackendActions(app *App) appbackend.ActionService {
-	if app == nil {
-		return appbackend.ActionService{}
-	}
-	state, feishuClient, submissions := app.State(), app.feishu, app.bindings.Submissions
-	bindingScope := app.bindings.BindingCommands.scope
+type BackendActionInputs struct {
+	State         *appstate.Store
+	Feishu        FeishuClient
+	Submissions   *appsubmission.SubmissionQueueService
+	BindingScope  BindingScope
+	Backend       func() string
+	SessionKey    func(*feishu.InboundMessage) string
+	MenuCommands  MenuCommandService
+	AsyncActions  AsyncCardActionService
+	FrontendID    identity.FrontendID
+	Effects       frontendruntime.EffectRunner
+	ReplyInThread func() bool
+}
+
+func BuildBackendActions(inputs BackendActionInputs) appbackend.ActionService {
+	state, feishuClient, submissions := inputs.State, inputs.Feishu, inputs.Submissions
+	bindingScope := inputs.BindingScope.scope
 	return appbackend.NewActionService(appbackend.ActionDeps{
-		Backend:    func() string { return app.configView().configuredBackend() },
-		SessionKey: func(msg *feishu.InboundMessage) string { return app.configView().makeSessionKey(msg) },
+		Backend:    inputs.Backend,
+		SessionKey: inputs.SessionKey,
 		Commands: appbackend.ActionCommandDeps{
 			CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
 				return commandMessageFromAction(bindingScope, action, sessionKey, rawCommand)
 			},
 			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-				return completeMenuCommand(app, action, sessionKey, rawCommand, parentAction)
+				return inputs.MenuCommands.Complete(action, sessionKey, rawCommand, parentAction)
 			},
 			CompleteAsyncCommandAction: func(
 				action *feishu.CardAction,
@@ -33,7 +48,7 @@ func BuildBackendActions(app *App) appbackend.ActionService {
 				failureCard func(sessionKey, errText string) map[string]any,
 				patchWarnMsg string,
 			) (*callback.CardActionTriggerResponse, error) {
-				return completeAsyncCommandAction(app, action, sessionKey, rawCommand, fallbackAction, toastText, preparingCard, successCardFromText, failureCard, patchWarnMsg)
+				return inputs.AsyncActions.CompleteCommand(action, sessionKey, rawCommand, fallbackAction, toastText, preparingCard, successCardFromText, failureCard, patchWarnMsg)
 			},
 		},
 		Render: appbackend.ActionRenderDeps{
@@ -49,16 +64,16 @@ func BuildBackendActions(app *App) appbackend.ActionService {
 		},
 		Execution: appbackend.ActionExecutionDeps{
 			EnqueueSubmission: func(msg *feishu.InboundMessage) error {
-				return enqueueSubmissionWithSessionKey(submissions, msg, app.configView().makeSessionKey(msg), false)
+				return enqueueSubmissionWithSessionKey(submissions, msg, inputs.SessionKey(msg), false)
 			},
 			EnqueuePassthroughCommand: func(msg *feishu.InboundMessage, rawCommand string) error {
-				return enqueuePassthroughCommand(submissions, app.configView().makeSessionKey(msg), msg, rawCommand)
+				return enqueuePassthroughCommand(submissions, inputs.SessionKey(msg), msg, rawCommand)
 			},
 			ReplyText: func(ctx context.Context, msgID, text string, inThread bool) error {
-				return newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)).ReplyText(ctx, msgID, text, inThread)
+				return newEffectOutbound(string(inputs.FrontendID), inputs.Effects).ReplyText(ctx, msgID, text, inThread)
 			},
 			ReplyInThreadEnabled: func(chatType string) bool {
-				return app.configView().replyInThreadEnabled()
+				return inputs.ReplyInThread != nil && inputs.ReplyInThread()
 			},
 		},
 	})

@@ -420,6 +420,10 @@ func NewDebugService(app Dependencies) DebugService {
 	return DebugService{app: app}
 }
 
+func (s DebugService) CommandDownload(msg *feishu.InboundMessage, args []string) error {
+	return CommandDownload(s.app, msg, args)
+}
+
 // SetRuntimeDebug sets the runtime debug log level and updates config.
 func (s DebugService) SetRuntimeDebug(enabled bool) string {
 	level := logcontrol.SetDebug(enabled)

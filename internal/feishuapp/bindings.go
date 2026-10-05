@@ -55,6 +55,7 @@ import (
 	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/compositionkit"
 	"feidex/internal/config"
+	"feidex/internal/feishu"
 	"feidex/internal/runtime"
 )
 
@@ -99,6 +100,7 @@ type Bindings struct {
 	ClaudeMaintenance          *clauderuntime.Maintenance
 	History                    history.Service
 	Debug                      appdebugviewcmd.DebugService
+	Download                   func(*feishu.InboundMessage, []string) error
 	FileSharing                *fileshare.Service
 	Usage                      appdebugviewcmd.UsageService
 	FinalCardPatch             finalcardpatch.Service

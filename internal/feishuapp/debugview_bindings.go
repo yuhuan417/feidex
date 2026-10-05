@@ -42,7 +42,7 @@ func FileSharePorts(client debugFileSharer, dependencies appdebugviewcmd.Depende
 	}
 }
 
-func DebugViewDependencies(app *App) appdebugviewcmd.Dependencies {
+func BuildDebugViewDependencies(app *App, completeMenuCommand func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)) appdebugviewcmd.Dependencies {
 	if app == nil {
 		return appdebugviewcmd.Dependencies{}
 	}
@@ -59,10 +59,8 @@ func DebugViewDependencies(app *App) appdebugviewcmd.Dependencies {
 		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{configuration: app.bindings.WorkspaceConfiguration},
 		WorkspaceRenderProvider: debugWorkspaceRenderAdapter{render: app.bindings.WorkspacePresentation.RenderPathPickerCard},
 		MakeSessionKeyFn:        func(m *feishu.InboundMessage) string { return app.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return app.configView().replyInThreadEnabled() },
-		CompleteMenuCommandFn: func(a *feishu.CardAction, s, r, p string) (*callback.CardActionTriggerResponse, error) {
-			return completeMenuCommand(app, a, s, r, p)
-		},
-		MenuCardBodyFn: menuCardBody, MenuBreadcrumbLabelsFn: menuBreadcrumbLabels, CommandLabelFn: commandLabel,
+		CompleteMenuCommandFn: completeMenuCommand,
+		MenuCardBodyFn:        menuCardBody, MenuBreadcrumbLabelsFn: menuBreadcrumbLabels, CommandLabelFn: commandLabel,
 		CurrentThreadLabelFn: appthreadmenu.SessionCurrentThreadLabel, PrimaryConversationMissingLabelFn: primaryConversationMissingLabel,
 		DefaultWorkspaceIDFn: func() string { return app.configView().defaultWorkspaceID() }, ConfigPathFn: func() string { return app.cfgPath },
 	}
