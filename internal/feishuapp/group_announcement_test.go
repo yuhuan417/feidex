@@ -18,12 +18,12 @@ import (
 	"feidex/internal/state"
 )
 
-func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeishuClient, frontendID string) *App {
+func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeishuClient, frontendID string) *Frontend {
 	t.Helper()
 	cfg := config.Default()
 	cfg.Feishu.Backend = domainbackend.BackendCodex
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	return prepareTestApp(&App{
+	return prepareTestApp(&Frontend{
 		cfg:          cfg,
 		store:        store,
 		frontendID:   strings.TrimSpace(frontendID),
@@ -33,26 +33,26 @@ func newGroupAnnouncementTestApp(t *testing.T, store *state.Store, ff *fakeFeish
 	})
 }
 
-func groupAnnouncementStatusForTest(a *App, chatID string, updatedAt time.Time) groupAnnouncementStatus {
+func groupAnnouncementStatusForTest(a *Frontend, chatID string, updatedAt time.Time) groupAnnouncementStatus {
 	return buildGroupAnnouncementStatus(
 		a.FrontendID(), a.feishu, a.configView().configuredBackend(),
 		a.bindings.AnnouncementQuery, a.bindings.ConversationQuery, chatID, updatedAt,
 	)
 }
 
-func groupAnnouncementRefreshDependenciesForTest(a *App) GroupAnnouncementRefreshDependencies {
+func groupAnnouncementRefreshDependenciesForTest(a *Frontend) GroupAnnouncementRefreshDependencies {
 	return GroupAnnouncementRefreshDependencies{
 		FrontendID: a.FrontendID(), Feishu: a.Feishu(), Config: a.Config(), ConfigMu: a.ConfigMu(),
-		FrontendConfigIndex: a.FrontendConfigIndex(), RuntimeOwner: a.runtimeOwner,
+		FrontendConfigIndex: a.frontendConfigIndex, RuntimeOwner: a.runtimeOwner,
 		Announcements: a.bindings.Announcements, AnnouncementQuery: a.bindings.AnnouncementQuery, ConversationQuery: a.bindings.ConversationQuery,
 	}
 }
 
-func refreshGroupAnnouncementForTest(ctx context.Context, a *App, chatID string) error {
+func refreshGroupAnnouncementForTest(ctx context.Context, a *Frontend, chatID string) error {
 	return refreshGroupAnnouncementStatusNow(ctx, groupAnnouncementRefreshDependenciesForTest(a), chatID)
 }
 
-func groupAnnouncementCommonStatusForTest(a *App, updatedAt time.Time) groupAnnouncementStatus {
+func groupAnnouncementCommonStatusForTest(a *Frontend, updatedAt time.Time) groupAnnouncementStatus {
 	return buildGroupAnnouncementCommonStatus(a.feishu, updatedAt)
 }
 
@@ -65,7 +65,7 @@ func newGroupAnnouncementStore(t *testing.T) *state.Store {
 	return store
 }
 
-func seedGroupAnnouncementBinding(t *testing.T, a *App, chatID string) {
+func seedGroupAnnouncementBinding(t *testing.T, a *Frontend, chatID string) {
 	t.Helper()
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          defaultBindingID(a.FrontendID(), "group", chatID),
@@ -79,7 +79,7 @@ func seedGroupAnnouncementBinding(t *testing.T, a *App, chatID string) {
 	}
 }
 
-func seedGroupAnnouncementSession(t *testing.T, a *App, chatID, threadID string) {
+func seedGroupAnnouncementSession(t *testing.T, a *Frontend, chatID, threadID string) {
 	t.Helper()
 	key := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "group", ChatID: chatID})
 	if err := a.State().SaveSession(&conversation.Session{
@@ -142,7 +142,7 @@ func TestGroupAnnouncementRefreshReadsCurrentRuntimeBackend(t *testing.T) {
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
 	seedGroupAnnouncementBinding(t, a, "chat-1")
 	refresh := GroupAnnouncementRefresh(groupAnnouncementRefreshDependenciesForTest(a))
-	a.runtimeOwner.SetBackend("claude")
+	selectBackendForTest(a, "claude")
 
 	if err := refresh(context.Background(), "chat-1"); err != nil {
 		t.Fatalf("refreshGroupAnnouncementStatusNow() error = %v", err)

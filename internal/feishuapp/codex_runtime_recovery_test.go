@@ -295,7 +295,7 @@ func TestCodexRecoveryIsFrontendScoped(t *testing.T) {
 	if runtimeViewOf(a.runtimeOwner).currentCodexClient() != nil {
 		t.Fatal("recovering frontend exposed failed client")
 	}
-	prepared := prepareTestApp(&App{})
+	prepared := prepareTestApp(&Frontend{})
 	if require, err := runtimeViewOf(prepared.runtimeOwner).requireCodexClient(); err == nil || require != nil {
 		t.Fatal("uninitialized frontend borrowed another frontend client")
 	}

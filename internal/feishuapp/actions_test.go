@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	appservicetiercmd "feidex/internal/adapter/feishu/servicetier"
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/daemon"
@@ -25,7 +24,7 @@ func TestCompleteMenuInterruptRejectsStaleTurnCard(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := prepareTestApp(&App{store: store, cfg: testCodexConfig()})
+	a := prepareTestApp(&Frontend{store: store, cfg: testCodexConfig()})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		ActiveThreadID: "thread-new",
@@ -34,7 +33,7 @@ func TestCompleteMenuInterruptRejectsStaleTurnCard(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteMenuInterrupt(nil, "sess-1", "turn-old")
+	resp, err := a.bindings.ThreadMenu.CompleteMenuInterrupt(nil, "sess-1", "turn-old")
 	if err != nil {
 		t.Fatalf("completeMenuInterrupt: %v", err)
 	}
@@ -52,7 +51,7 @@ func TestCompleteMenuNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := prepareTestApp(&App{store: store, cfg: testCodexConfig()})
+	a := prepareTestApp(&Frontend{store: store, cfg: testCodexConfig()})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		ActiveThreadID: "thread-1",
@@ -61,7 +60,7 @@ func TestCompleteMenuNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteMenuNew(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1")
+	resp, err := a.bindings.ThreadMenu.CompleteMenuNew(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1")
 	if err != nil {
 		t.Fatalf("completeMenuNew: %v", err)
 	}
@@ -76,7 +75,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := prepareTestApp(&App{store: store, cfg: testCodexConfig()})
+	a := prepareTestApp(&Frontend{store: store, cfg: testCodexConfig()})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "sess-1",
 		WorkspaceID:    "default",
@@ -86,7 +85,7 @@ func TestCompleteThreadResumeRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "thread-2")
+	resp, err := a.bindings.ThreadMenu.CompleteThreadResume(&feishu.CardAction{UserID: "u-1", ChatID: "c-1"}, "sess-1", "thread-2")
 	if err != nil {
 		t.Fatalf("completeThreadResume: %v", err)
 	}
@@ -103,7 +102,7 @@ func TestCompleteWorkspaceUseRejectsRunningTurn(t *testing.T) {
 
 	cfg := testCodexConfig()
 	cfg.Workspaces = append(cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir()})
-	a := prepareTestApp(&App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
+	a := prepareTestApp(&Frontend{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		OwnerUserID:             "u-1",
@@ -412,7 +411,7 @@ func TestCompleteWorkspaceSandboxSetPersistsConfig(t *testing.T) {
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := prepareTestApp(&App{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
+	a := prepareTestApp(&Frontend{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
 
 	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspaceSandboxSet(&feishu.CardAction{}, "sess-1", "default", "read-only")
 	if err != nil {
@@ -451,7 +450,7 @@ func TestCompleteWorkspacePolicySetPersistsConfig(t *testing.T) {
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := prepareTestApp(&App{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
+	a := prepareTestApp(&Frontend{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
 
 	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "never")
 	if err != nil {
@@ -490,7 +489,7 @@ func TestCompleteWorkspacePolicySetAcceptsUntrusted(t *testing.T) {
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := prepareTestApp(&App{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
+	a := prepareTestApp(&Frontend{store: store, cfg: cfg, cfgPath: cfgPath, feishu: feishu.New(cfg.Feishu)})
 
 	resp, err := a.bindings.WorkspaceManagement.CompleteWorkspacePolicySet(&feishu.CardAction{}, "sess-1", "default", "untrusted")
 	if err != nil {
@@ -510,7 +509,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	cfg := testCodexConfig()
-	a := prepareTestApp(&App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
+	a := prepareTestApp(&Frontend{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
@@ -520,7 +519,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "read-only")
+	resp, err := a.bindings.ThreadMenu.CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "read-only")
 	if err != nil {
 		t.Fatalf("completeThreadSandboxSet: %v", err)
 	}
@@ -534,7 +533,7 @@ func TestCompleteThreadSandboxSetUpdatesSessionOnly(t *testing.T) {
 	if got := config.FindWorkspace(a.cfg, "default").SandboxMode; got != "danger-full-access" {
 		t.Fatalf("workspace sandbox should stay default, got %q", got)
 	}
-	_, err = appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "")
+	_, err = a.bindings.ThreadMenu.CompleteThreadSandboxSet(&feishu.CardAction{}, "sess-1", "thread-1", "")
 	if err != nil {
 		t.Fatalf("clear thread sandbox override: %v", err)
 	}
@@ -550,7 +549,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	cfg := testCodexConfig()
-	a := prepareTestApp(&App{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
+	a := prepareTestApp(&Frontend{store: store, cfg: cfg, feishu: feishu.New(cfg.Feishu)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
@@ -560,7 +559,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "untrusted")
+	resp, err := a.bindings.ThreadMenu.CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "untrusted")
 	if err != nil {
 		t.Fatalf("completeThreadPolicySet: %v", err)
 	}
@@ -574,7 +573,7 @@ func TestCompleteThreadPolicySetUpdatesSessionOnly(t *testing.T) {
 	if got := config.FindWorkspace(a.cfg, "default").ApprovalPolicy; got != "never" {
 		t.Fatalf("workspace policy should stay default, got %q", got)
 	}
-	_, err = appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "")
+	_, err = a.bindings.ThreadMenu.CompleteThreadPolicySet(&feishu.CardAction{}, "sess-1", "thread-1", "")
 	if err != nil {
 		t.Fatalf("clear thread policy override: %v", err)
 	}
@@ -684,7 +683,7 @@ func TestActionHelperBranches(t *testing.T) {
 		t.Fatalf("completeMenuUpgrade() = %#v, %v", resp, err)
 	}
 
-	if resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteMenuInterrupt(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.root"}}, "sess-1", "turn-1"); err != nil || resp.Toast == nil {
+	if resp, err := a.bindings.ThreadMenu.CompleteMenuInterrupt(&feishu.CardAction{ActionValue: map[string]any{"parent_action": "menu.root"}}, "sess-1", "turn-1"); err != nil || resp.Toast == nil {
 		t.Fatalf("completeMenuInterrupt() = %#v, %v", resp, err)
 	}
 

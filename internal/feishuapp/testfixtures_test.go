@@ -30,13 +30,13 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func newFeishuEventRouterForTest(a *App) *feishuEventRouter {
+func newFeishuEventRouterForTest(a *Frontend) *feishuEventRouter {
 	return newFeishuEventRouter(a.started, a.bindings.Inbound, a.runtimeOwner.InboundDeduper, a.runtimeOwner, func(msg *feishu.InboundMessage, err error) {
 		_ = replyErrorForTest(a, msg, err)
 	})
 }
 
-func replyErrorForTest(a *App, msg *feishu.InboundMessage, err error) error {
+func replyErrorForTest(a *Frontend, msg *feishu.InboundMessage, err error) error {
 	return replyErrorWith(a.Context, identity.FrontendID(a.FrontendID()), newEffectRunner(a.runtimeOwner), msg, err)
 }
 
@@ -861,7 +861,7 @@ func cardSelectStaticForTest(card map[string]any) []map[string]any {
 	return selects
 }
 
-func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
+func newTestApp(t *testing.T) (*Frontend, *fakeFeishuClient, *fakeCodexClient) {
 	t.Helper()
 
 	cfg := config.Default()
@@ -882,7 +882,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	ff := &fakeFeishuClient{botOpenID: "bot-open"}
 	fc := &fakeCodexClient{}
 	var asyncWG sync.WaitGroup
-	a := prepareTestApp(&App{
+	a := prepareTestApp(&Frontend{
 		cfg:     loadedCfg,
 		cfgPath: cfgPath,
 		store:   store,
@@ -906,7 +906,7 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	return a, ff, fc
 }
 
-func testFeishuPolicyInputs(a *App) FeishuPolicyInputs {
+func testFeishuPolicyInputs(a *Frontend) FeishuPolicyInputs {
 	return FeishuPolicyInputs{
 		Client: a.feishu, GroupMessages: a.bindings.GroupMessages, Context: a.Context,
 		PrimaryInitialization: a.bindings.PrimaryInitialization, FrontendID: a.FrontendID(),
@@ -914,14 +914,14 @@ func testFeishuPolicyInputs(a *App) FeishuPolicyInputs {
 	}
 }
 
-func testEffectRunnerInputs(a *App) EffectRunnerInputs {
+func testEffectRunnerInputs(a *Frontend) EffectRunnerInputs {
 	return EffectRunnerInputs{
 		Transport: a.transport, FrontendID: a.FrontendID(), State: a.State(), RuntimeOwner: a.runtimeOwner,
 		Submissions: a.bindings.Submissions, AnnouncementRefresh: a.runtimeOwner.Announcements,
 	}
 }
 
-func testDispatcherInputs(a *App) DispatcherInputs {
+func testDispatcherInputs(a *Frontend) DispatcherInputs {
 	return DispatcherInputs{
 		FrontendID: a.FrontendID(), Started: a.started, Inbound: a.bindings.Inbound,
 		CardActions: a.bindings.CardActions, BackendEvents: a.bindings.BackendEvents, AutoRetry: a.bindings.AutoRetry,
@@ -929,7 +929,7 @@ func testDispatcherInputs(a *App) DispatcherInputs {
 	}
 }
 
-func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
+func enqueueSubmission(a *Frontend, msg *feishu.InboundMessage) error {
 	return enqueueSubmissionWithSessionKey(a.bindings.Submissions, msg, a.configView().makeSessionKey(msg), false)
 }
 
@@ -957,7 +957,7 @@ func testOwnerWithAutoRetries(tracker *appautoretry.Tracker) *frontendruntime.Fr
 	return o
 }
 
-func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *domainsubmission.Submission {
+func seedActiveSubmission(t *testing.T, a *Frontend, sessionKey, threadID, turnID string) *domainsubmission.Submission {
 	t.Helper()
 
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -990,7 +990,7 @@ func seedActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID str
 	return a.store.GetSubmission(subID)
 }
 
-func newTestClaudeRuntime(t *testing.T, a *App) *appclauderuntime.Service {
+func newTestClaudeRuntime(t *testing.T, a *Frontend) *appclauderuntime.Service {
 	t.Helper()
 	rc := a.bindings.ClaudeFactory(a.cfg.Claude)
 	rt, ok := rc.(*appclauderuntime.Service)
@@ -1000,12 +1000,12 @@ func newTestClaudeRuntime(t *testing.T, a *App) *appclauderuntime.Service {
 	return rt
 }
 
-func testClaudeRuntimePorts(a *App, cfg config.ClaudeConfig) appclauderuntime.Deps {
+func testClaudeRuntimePorts(a *Frontend, cfg config.ClaudeConfig) appclauderuntime.Deps {
 	deps := a.BackendRuntimeDeps()
 	return ClaudeRuntimePorts(ClaudeRuntimePortInputs{
 		Runtime: deps, Config: cfg,
 		Cards: NewOutboundCardService(OutboundCardInputs{
-			RuntimeDeps: deps, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+			RuntimeDeps: deps, Feishu: a.Feishu(), AsyncRunner: a.asyncRunner,
 			InteractionDelivery: a.bindings.InteractionDelivery, TurnPresentation: a.bindings.TurnPresentation,
 			Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
 			TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,

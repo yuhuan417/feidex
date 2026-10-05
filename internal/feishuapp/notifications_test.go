@@ -94,7 +94,7 @@ func TestTurnStartedNotificationRebindsPendingSubmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	a := prepareTestApp(&App{store: store})
+	a := prepareTestApp(&Frontend{store: store})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "sess-1",
 		WorkspaceID:             "default",
@@ -138,7 +138,7 @@ func TestFindSubmissionByTurnFallsBackToActiveSubmissionOnThread(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	a := prepareTestApp(&App{store: store})
+	a := prepareTestApp(&Frontend{store: store})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                "sess-1",
 		WorkspaceID:        "default",
@@ -335,7 +335,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 		t.Fatalf("user-input pending = %+v, want stored request", pending)
 	}
 
-	empty := prepareTestApp(&App{store: a.store, feishu: ff, runtimeOwner: testOwnerWithCodex(fc)})
+	empty := prepareTestApp(&Frontend{store: a.store, feishu: ff, runtimeOwner: testOwnerWithCodex(fc)})
 	empty.bindings.ServerRequests.SendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
 	empty.bindings.ServerRequests.SendUserInputCard(json.RawMessage(`"missing-input"`), pendingforms.ToolUserInputPayload{})
 	handleServerRequest(empty.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})

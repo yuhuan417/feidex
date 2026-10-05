@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func renderQuietModeMenuCardForTest(a *App, sessionKey string) map[string]any {
+func renderQuietModeMenuCardForTest(a *Frontend, sessionKey string) map[string]any {
 	return renderQuietModeMenuCard(
 		quietmode.Mode(a.configView().feishuConfig()), sessionKey,
 		planModeTitleForSession(a.State(), a != nil, sessionKey, "Quiet Mode"), a.feishu,
@@ -112,7 +112,7 @@ func TestUpdateQuietModePersistsConfig(t *testing.T) {
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
-	a := prepareTestApp(&App{cfg: cfg, cfgPath: cfgPath})
+	a := prepareTestApp(&Frontend{cfg: cfg, cfgPath: cfgPath})
 	if err := updateQuietMode(a.bindings.RuntimeSettings, config.QuietModeNormal); err != nil {
 		t.Fatalf("updateQuietMode: %v", err)
 	}
@@ -130,20 +130,21 @@ func TestUpdateQuietModePersistsConfig(t *testing.T) {
 
 func TestCommandQuietSupportsConfigCardAndExplicitModes(t *testing.T) {
 	cfg := config.Default()
+	cfg.Feishu.Backend = config.RuntimeBackendCodex
 	cfgPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
 	}
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{cfg: cfg, cfgPath: cfgPath, feishu: ff})
+	a := prepareTestApp(&Frontend{cfg: cfg, cfgPath: cfgPath, feishu: ff})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat", ChatType: "p2p"}
-	if err := commandQuiet(a, msg, nil); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/quiet"); err != nil {
 		t.Fatalf("commandQuiet() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("reply card count after /quiet = %d, want 1", len(ff.replyCards))
 	}
-	if err := commandQuiet(a, msg, []string{"normal"}); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/quiet normal"); err != nil {
 		t.Fatalf("commandQuiet(normal) error = %v", err)
 	}
 	if quietmode.Mode(a.configView().feishuConfig()) != config.QuietModeNormal {
@@ -152,7 +153,7 @@ func TestCommandQuietSupportsConfigCardAndExplicitModes(t *testing.T) {
 	if len(ff.replyTexts) != 1 {
 		t.Fatalf("reply text count after /quiet normal = %d, want 1", len(ff.replyTexts))
 	}
-	if err := commandQuiet(a, msg, []string{"config"}); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/quiet config"); err != nil {
 		t.Fatalf("commandQuiet(config) error = %v", err)
 	}
 	if len(ff.replyCards) != 2 {

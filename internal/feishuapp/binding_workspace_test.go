@@ -15,7 +15,7 @@ func TestResolveSubmissionWorkspaceUsesLocalBindingOnly(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := prepareTestApp(&App{cfg: cfg, store: store, frontendID: "frontend-a"})
+	a := prepareTestApp(&Frontend{cfg: cfg, store: store, frontendID: "frontend-a"})
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:          "binding-client",
 		ChatID:      "chat-1",

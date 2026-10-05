@@ -7,19 +7,18 @@ import (
 	"strings"
 	"testing"
 
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/feishu"
 )
 
-func renderClaudeSessionPermissionMenuCard(a *App, sessionKey string) (map[string]any, error) {
-	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+func renderClaudeSessionPermissionMenuCard(a *Frontend, sessionKey string) (map[string]any, error) {
+	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex)
 	return ClaudePermissionMenuRenderer(a.Config(), backend, a.State().Session)(sessionKey)
 }
 
 func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 
 	runtime := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
@@ -37,7 +36,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "acceptEdits")
+	resp, err := a.bindings.ThreadMenu.CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "acceptEdits")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}
@@ -61,7 +60,7 @@ func TestCompleteClaudeSessionPermissionModeSetPersistsWithoutLiveRuntime(t *tes
 func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Claude.DangerouslySkipPermissions = true
 
 	sessionKey := "feishu:chat:chat"
@@ -98,7 +97,7 @@ func TestClaudePermissionMenusShowBypassWhenDangerousSkipPermissionsEnabled(t *t
 func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPermissionsDisabled(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Claude.DangerouslySkipPermissions = false
 	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 
@@ -125,7 +124,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 		t.Fatalf("session permission card should hide bypassPermissions when disabled: %#v", cardButtonsForTest(card))
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "bypassPermissions")
+	resp, err := a.bindings.ThreadMenu.CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "bypassPermissions")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}
@@ -137,7 +136,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsBypassWhenDangerousSkipPer
 func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 
 	runtime := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
@@ -155,7 +154,7 @@ func TestCompleteClaudeSessionPermissionModeSetRejectsUnsupportedAutoMode(t *tes
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "auto")
+	resp, err := a.bindings.ThreadMenu.CompleteClaudeSessionPermissionModeSet(&feishu.CardAction{}, sessionKey, "claude-session-1", "auto")
 	if err != nil {
 		t.Fatalf("completeClaudeSessionPermissionModeSet() error = %v", err)
 	}

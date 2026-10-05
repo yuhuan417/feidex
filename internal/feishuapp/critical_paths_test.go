@@ -232,7 +232,7 @@ func TestApprovalRequestPayloadPrefersNestedRequestAndFallsBackCleanly(t *testin
 
 // --- merged from critical_paths_more_test.go ---
 
-func seedActiveSubmissionForInboundMessage(t *testing.T, a *App, msg *feishu.InboundMessage, threadID, turnID string) (string, *domainsubmission.Submission) {
+func seedActiveSubmissionForInboundMessage(t *testing.T, a *Frontend, msg *feishu.InboundMessage, threadID, turnID string) (string, *domainsubmission.Submission) {
 	t.Helper()
 
 	sessionKey := a.configView().makeSessionKey(msg)

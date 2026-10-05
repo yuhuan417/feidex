@@ -6,6 +6,6 @@ import (
 )
 
 func buildTurnSandboxPolicy(mode string) map[string]any { return codexadapter.SandboxPolicy(mode) }
-func codexCollaborationModeForTurnStart(a *App, sessionKey, threadID string) *codexrpc.CollaborationMode {
+func codexCollaborationModeForTurnStart(a *Frontend, sessionKey, threadID string) *codexrpc.CollaborationMode {
 	return codexadapter.CollaborationModeFromState(planModeStateForTurnStart(a.bindings.Plan, sessionKey, threadID))
 }

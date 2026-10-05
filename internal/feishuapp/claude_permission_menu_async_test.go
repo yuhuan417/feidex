@@ -7,13 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/feishu"
 )
 
 // newClaudePermissionMenuApp prepares an app on the Claude backend with an
 // active session whose thread matches the card's thread id.
-func newClaudePermissionMenuApp(t *testing.T, claude *fakeClaudeCore) (*App, *fakeFeishuClient, string) {
+func newClaudePermissionMenuApp(t *testing.T, claude *fakeClaudeCore) (*Frontend, *fakeFeishuClient, string) {
 	t.Helper()
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
@@ -33,7 +32,7 @@ func newClaudePermissionMenuApp(t *testing.T, claude *fakeClaudeCore) (*App, *fa
 	return a, ff, sessionKey
 }
 
-func dispatchClaudePermissionModeSet(t *testing.T, a *App, sessionKey, mode, messageID string) {
+func dispatchClaudePermissionModeSet(t *testing.T, a *Frontend, sessionKey, mode, messageID string) {
 	t.Helper()
 	if _, err := newCardActionService(a).dispatch(&feishu.CardAction{
 		UserID:    "user-1",
@@ -117,7 +116,7 @@ func TestClaudePermissionCommandAppliesRuntimeSynchronously(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	a, _, _ := newClaudePermissionMenuApp(t, claude)
 
-	err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandSession(&feishu.InboundMessage{
+	err := a.bindings.ThreadMenu.CommandSession(&feishu.InboundMessage{
 		MessageID: "msg-command-1",
 		ChatID:    "chat-1",
 		ChatType:  "p2p",

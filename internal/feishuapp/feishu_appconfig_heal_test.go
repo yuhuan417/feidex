@@ -28,6 +28,14 @@ type fakeAppConfigHealClient struct {
 	publishErr error
 }
 
+func healAppConfigForTest(a *Frontend) {
+	runFeishuAppConfigHealWith(FeishuAppConfigHealInputs{
+		Client: a.feishu, Config: a.cfg, ConfigMu: a.ConfigMu(), ConfigIndex: a.frontendConfigIndex,
+		FrontendID: a.frontendID, State: a.stateView, Context: a.Context,
+		Notifications: a.bindings.Notifications,
+	})
+}
+
 func (f *fakeAppConfigHealClient) FetchState(context.Context) (*appconfig.State, error) {
 	index := f.fetchCalls
 	f.fetchCalls++
@@ -100,7 +108,7 @@ func TestFeishuAppConfigHealInSyncIsSilent(t *testing.T) {
 	fake := &fakeAppConfigHealClient{state: inSyncHealState()}
 	withFakeHealClient(t, fake)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	if fake.fetchCalls != 1 || len(fake.fixes) != 0 || len(fake.publishes) != 0 {
 		t.Fatalf("in-sync heal made changes: fetch=%d fixes=%d publishes=%d",
@@ -120,7 +128,7 @@ func TestFeishuAppConfigHealRequestsAuthorizationWithoutPatch(t *testing.T) {
 	fake := &fakeAppConfigHealClient{state: state}
 	withFakeHealClient(t, fake)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	if len(fake.fixes) != 0 || len(fake.publishes) != 0 {
 		t.Fatalf("heal without patch scope attempted changes: fixes=%d publishes=%d", len(fake.fixes), len(fake.publishes))
@@ -149,7 +157,7 @@ func TestFeishuAppConfigHealRepairsDriftAndReports(t *testing.T) {
 	withFakeHealClient(t, fake)
 	withFastHealPolling(t)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	if len(fake.fixes) != 1 {
 		t.Fatalf("expected one fix, got %+v", fake.fixes)
@@ -184,7 +192,7 @@ func TestFeishuAppConfigHealReportsPendingPublish(t *testing.T) {
 	withFakeHealClient(t, fake)
 	withFastHealPolling(t)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	notes := a.State().FrontendCardNotifications()
 	if len(notes) != 1 || notes[0].Title != "飞书配置修复已提交,等待生效" {
@@ -198,7 +206,7 @@ func TestFeishuAppConfigHealSkipsWithoutAppID(t *testing.T) {
 	fake := &fakeAppConfigHealClient{state: inSyncHealState()}
 	withFakeHealClient(t, fake)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	if fake.fetchCalls != 0 {
 		t.Fatalf("heal ran without app id: fetch=%d", fake.fetchCalls)
@@ -253,7 +261,7 @@ func TestFeishuAppConfigHealWaitsForVersionPromotion(t *testing.T) {
 	fake := &fakeAppConfigHealClient{states: []*appconfig.State{driftedHealState(), driftedHealState(), promoted}}
 	withFakeHealClient(t, fake)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	notes := a.State().FrontendCardNotifications()
 	if len(notes) != 1 || notes[0].Title != "飞书配置已自动修复" {
@@ -274,7 +282,7 @@ func TestFeishuAppConfigHealReportsAuditPending(t *testing.T) {
 	fake := &fakeAppConfigHealClient{states: []*appconfig.State{driftedHealState(), underAudit}}
 	withFakeHealClient(t, fake)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	notes := a.State().FrontendCardNotifications()
 	if len(notes) != 1 || notes[0].Title != "飞书配置修复等待审核" {
@@ -294,7 +302,7 @@ func TestFeishuAppConfigHealReportsVerifyFailure(t *testing.T) {
 	fake := &fakeAppConfigHealClient{state: driftedHealState(), fetchErr: errors.New("connection reset")}
 	withFakeHealClient(t, fake)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	notes := a.State().FrontendCardNotifications()
 	if len(notes) != 1 || notes[0].Title != "飞书配置修复已提交,复查失败" {
@@ -316,7 +324,7 @@ func TestFeishuAppConfigHealReportsMismatchWhenOwnVersionIsOnline(t *testing.T) 
 	fake := &fakeAppConfigHealClient{states: []*appconfig.State{driftedHealState(), stillDrifted}}
 	withFakeHealClient(t, fake)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	notes := a.State().FrontendCardNotifications()
 	if len(notes) != 1 || notes[0].Title != "飞书配置修复未完全生效" {
@@ -337,7 +345,7 @@ func TestFeishuAppConfigHealWaitsWhenVersionAlreadyUnderAudit(t *testing.T) {
 	fake := &fakeAppConfigHealClient{state: drifted, stateAfter: inSyncHealState()}
 	withFakeHealClient(t, fake)
 
-	runFeishuAppConfigHeal(a)
+	healAppConfigForTest(a)
 
 	if len(fake.fixes) != 0 || len(fake.publishes) != 0 {
 		t.Fatalf("fixes = %v, publishes = %v; want no new submission while a version is under audit", fake.fixes, fake.publishes)

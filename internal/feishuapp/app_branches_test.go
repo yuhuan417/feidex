@@ -34,7 +34,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 	}
 	ff := &downloadFeishuStub{fakeFeishuClient: &fakeFeishuClient{}, downloadPath: downloadPath}
 	fc := &fakeCodexClient{}
-	a := prepareTestApp(&App{
+	a := prepareTestApp(&Frontend{
 		cfg:          cfg,
 		store:        store,
 		feishu:       ff,
@@ -111,7 +111,7 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 
 	a.HandleFeishuMessage(&feishu.InboundMessage{MessageID: "empty", ChatID: "chat", ChatType: "p2p", UserID: "user"})
 
-	bad := prepareTestApp(&App{
+	bad := prepareTestApp(&Frontend{
 		cfg:          &config.Config{Feishu: config.FeishuConfig{Backend: domainbackend.BackendCodex}},
 		store:        store,
 		feishu:       ff,
@@ -132,8 +132,9 @@ func TestHandleFeishuMessageAdditionalBranches(t *testing.T) {
 }
 
 func TestRemovedBindSlashIsNotRegisteredAsLocalCommand(t *testing.T) {
+	a, _, _ := newTestApp(t)
 	removed := "/" + "bind"
-	if spec := findLocalCommandSpec(removed); spec != nil {
+	if spec := findLocalCommandSpecIn(a.bindings.Commands.specs, removed); spec != nil {
 		t.Fatalf("removed command still registered: %+v", spec)
 	}
 	if isLocalCommandForBackend(domainbackend.BackendCodex, removed) {
@@ -153,7 +154,7 @@ func TestStartNextSubmissionAdditionalBranches(t *testing.T) {
 	if err := startNextSubmission(a.bindings.Submissions, "missing"); err != nil {
 		t.Fatalf("startNextSubmission(missing) error = %v", err)
 	}
-	if got := prepareTestApp(&App{cfg: &config.Config{}}).configView().defaultWorkspaceID(); got != "default" {
+	if got := prepareTestApp(&Frontend{cfg: &config.Config{}}).configView().defaultWorkspaceID(); got != "default" {
 		t.Fatalf("defaultWorkspaceID() = %q, want default", got)
 	}
 	if got := nonZero(0, 0); got != 0 {

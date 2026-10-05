@@ -16,10 +16,10 @@ func TestWorkspaceServiceDoesNotDependOnBackendConfigurationOrder(t *testing.T) 
 
 	saved := a.bindings.BackendConfiguration
 	a.bindings.BackendConfiguration = appbackend.ConfigurationService{}
-	early := BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
+	early := buildWorkspaceConfigurationForTest(a)
 	a.bindings.BackendConfiguration = saved
 
-	late := BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
+	late := buildWorkspaceConfigurationForTest(a)
 
 	for name, svc := range map[string]interface {
 		BackendWorkspaceSwitchInFlightNotice() string

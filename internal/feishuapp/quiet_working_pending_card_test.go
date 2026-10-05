@@ -13,7 +13,7 @@ import (
 
 // deliverTestPendingUserInputCard delivers a card that waits for user input,
 // mirroring the shared chokepoint both backends use for question/approval cards.
-func deliverTestPendingUserInputCard(t *testing.T, a *App, sub *domainsubmission.Submission) {
+func deliverTestPendingUserInputCard(t *testing.T, a *Frontend, sub *domainsubmission.Submission) {
 	t.Helper()
 	if err := newOutboundCardService(a).asyncInput.delivery.Deliver(anchorForSubmission(sub), a.feishu.SimpleStatusCard("需要补充输入", "orange", "你希望用哪种方案？", nil), pendingCardDelivery{
 		requestKey:    "req-1",
@@ -32,7 +32,7 @@ func deliverTestPendingUserInputCard(t *testing.T, a *App, sub *domainsubmission
 	}
 }
 
-func completeQuietCommandItem(t *testing.T, a *App, workspace, itemID, path string) {
+func completeQuietCommandItem(t *testing.T, a *Frontend, workspace, itemID, path string) {
 	t.Helper()
 	a.bindings.TurnPresentation.CompleteTurnItem(context.Background(), "thread-1", "turn-1", itemID, turnitem.NewProtocolItemWithID(itemID, map[string]any{
 		"id":     itemID,

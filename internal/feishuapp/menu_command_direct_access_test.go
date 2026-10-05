@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -30,7 +29,7 @@ func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThread(msg, []string{"sandbox", "read-only"}); err != nil {
+	if err := a.bindings.ThreadMenu.CommandThread(msg, []string{"sandbox", "read-only"}); err != nil {
 		t.Fatalf("commandThread(sandbox set) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadSandboxMode != "read-only" {
@@ -43,7 +42,7 @@ func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("sandbox card body = %q", body)
 	}
 
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThread(msg, []string{"policy", "never"}); err != nil {
+	if err := a.bindings.ThreadMenu.CommandThread(msg, []string{"policy", "never"}); err != nil {
 		t.Fatalf("commandThread(policy set) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadApprovalPolicy != "never" {
@@ -100,7 +99,7 @@ func TestCommandThreadDirectResume(t *testing.T) {
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThread(msg, []string{"resume", "thread-2"}); err != nil {
+	if err := a.bindings.ThreadMenu.CommandThread(msg, []string{"resume", "thread-2"}); err != nil {
 		t.Fatalf("commandThread(resume) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "thread-2" || got.ActiveThreadName != "Resumed Thread" {
@@ -125,7 +124,7 @@ func TestCommandWorkspaceDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := commandWorkspace(a, msg, []string{"sandbox", "read-only"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"sandbox", "read-only"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(sandbox set) error = %v", err)
 	}
 	if got := a.cfg.Workspaces[0].SandboxMode; got != "read-only" {
@@ -138,7 +137,7 @@ func TestCommandWorkspaceDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("workspace sandbox card body = %q", body)
 	}
 
-	if err := commandWorkspace(a, msg, []string{"policy", "never"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"policy", "never"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(policy set) error = %v", err)
 	}
 	if got := a.cfg.Workspaces[0].ApprovalPolicy; got != "never" {
@@ -174,7 +173,7 @@ func TestCommandWorkspaceDeleteRemovesConfigOnly(t *testing.T) {
 		t.Fatalf("UpsertSession(other) error = %v", err)
 	}
 
-	if err := commandWorkspace(a, msg, []string{"delete", "alt"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"delete", "alt"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(delete alt) error = %v", err)
 	}
 	if ws := config.FindWorkspace(a.cfg, "alt"); ws != nil {
@@ -205,7 +204,7 @@ func TestCommandWorkspaceDeleteRejectsCurrentWorkspace(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	err := commandWorkspace(a, msg, []string{"delete", "alt"})
+	err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"delete", "alt"}, a.bindings.WorkspaceManagement)
 	if err == nil {
 		t.Fatal("expected deleting current workspace to fail")
 	}
@@ -306,7 +305,7 @@ func TestCommandModelDirectSetAndEffort(t *testing.T) {
 
 func TestCommandModelDirectSetAndEffortForClaude(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
@@ -353,7 +352,7 @@ func TestCommandModelDirectSetAndEffortForClaude(t *testing.T) {
 
 func TestCommandModelOptionAddAndRemoveForClaude(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
@@ -382,7 +381,7 @@ func TestCommandModelOptionAddAndRemoveForClaude(t *testing.T) {
 
 func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
@@ -391,7 +390,7 @@ func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 	a.runtimeOwner.BeginMessageTraffic()
 	defer a.runtimeOwner.EndMessageTraffic()
 
-	if err := HandleInboundCommand(a, msg, msg.Text); err != nil {
+	if err := a.bindings.Commands.Handle(msg, msg.Text); err != nil {
 		t.Fatalf("HandleInboundCommand(/model set raw Claude model) error = %v", err)
 	}
 	if got := a.cfg.Claude.Model; got != "deepseek-v4-pro" {
@@ -404,7 +403,7 @@ func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 
 func TestCommandModelDirectSetClaudeModelRejectsConcurrentMessageTraffic(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
@@ -419,7 +418,7 @@ func TestCommandModelDirectSetClaudeModelRejectsConcurrentMessageTraffic(t *test
 	defer a.runtimeOwner.
 		EndMessageTraffic()
 
-	if err := HandleInboundCommand(a, msg, msg.Text); err != nil {
+	if err := a.bindings.Commands.Handle(msg, msg.Text); err != nil {
 		t.Fatalf("HandleInboundCommand(/model set raw Claude model) error = %v", err)
 	}
 	if got := a.cfg.Claude.Model; got == "deepseek-v4-pro" {

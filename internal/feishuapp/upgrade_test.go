@@ -165,14 +165,14 @@ func TestCodexUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a.bindings.Maintenance.BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := HandleInboundCommand(a, msg, "/status"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/status"); err != nil {
 		t.Fatalf("HandleInboundCommand(/status) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
 	if len(replyCards) != 1 {
 		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(replyCards))
 	}
-	if err := HandleInboundCommand(a, msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Codex 正在维护中") {
+	if err := a.bindings.Commands.Handle(msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Codex 正在维护中") {
 		t.Fatalf("HandleInboundCommand(/quiet) error = %v, want maintenance block", err)
 	}
 
@@ -555,7 +555,7 @@ func TestRunCodexRestartOperationRecoversFromExitedRuntime(t *testing.T) {
 
 func TestRefreshCodexRuntimeAfterMaintenanceOnClaudeBackendOnlySmokes(t *testing.T) {
 	a, _, fc := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 
 	origClient := newCodexClient
@@ -856,19 +856,19 @@ func TestCommandClaudeUpgradeCreatesPendingRequest(t *testing.T) {
 
 func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(&fakeClaudeCore{})
 	a.bindings.Maintenance.BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Phase: "preflight", Message: "running"})
 
 	msg := &feishu.InboundMessage{MessageID: "status-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := HandleInboundCommand(a, msg, "/status"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/status"); err != nil {
 		t.Fatalf("HandleInboundCommand(/status) error = %v", err)
 	}
 	replyCards := ff.replyCardsSnapshot()
 	if len(replyCards) != 1 {
 		t.Fatalf("expected /status to remain allowed, replyCards=%d", len(replyCards))
 	}
-	if err := HandleInboundCommand(a, msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
+	if err := a.bindings.Commands.Handle(msg, "/quiet"); err == nil || !strings.Contains(err.Error(), "Claude 正在维护中") {
 		t.Fatalf("HandleInboundCommand(/quiet) error = %v, want maintenance block", err)
 	}
 
@@ -881,7 +881,7 @@ func TestClaudeUpgradeBlocksCommandsAndInboundMessages(t *testing.T) {
 
 func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
@@ -940,7 +940,7 @@ func TestRunClaudeUpgradeOperationSuccess(t *testing.T) {
 
 func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
@@ -1001,7 +1001,7 @@ func TestRunClaudeUpgradeOperationFailsWithoutRollbackAfterSmokeFailure(t *testi
 
 func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
@@ -1057,7 +1057,7 @@ func TestCommandClaudeRestartStartsRestartOperation(t *testing.T) {
 
 func TestRunClaudeRestartOperationFailureKeepsOldRuntime(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)

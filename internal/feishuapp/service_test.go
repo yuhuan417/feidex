@@ -61,7 +61,7 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 	}
 
 	apps, err := newTestService(cfg, filepath.Join(t.TempDir(), "config.toml"))
-	svc := struct{ Frontends []*App }{Frontends: apps}
+	svc := struct{ Frontends []*Frontend }{Frontends: apps}
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -88,12 +88,12 @@ func TestNewServiceBuildsFrontendScopedApps(t *testing.T) {
 	}
 	codexClient := codexApp.runtimeOwner.CodexClient()
 	claudeOnCodex := codexApp.runtimeOwner.ClaudeCore()
-	if codexApp.frontendID != "codex-main" || codexApp.Backend() != domainbackend.BackendCodex || codexClient != codexClients[0] || claudeOnCodex != nil {
+	if codexApp.frontendID != "codex-main" || codexApp.runtimeOwner.Backend() != domainbackend.BackendCodex || codexClient != codexClients[0] || claudeOnCodex != nil {
 		t.Fatalf("codex app = %+v", codexApp)
 	}
 	codexOnClaude := claudeApp.runtimeOwner.CodexClient()
 	claudeClient := claudeApp.runtimeOwner.ClaudeCore()
-	if claudeApp.frontendID != "claude-main" || claudeApp.Backend() != domainbackend.BackendClaude || codexOnClaude != nil || claudeClient != claudeClients[0] {
+	if claudeApp.frontendID != "claude-main" || claudeApp.runtimeOwner.Backend() != domainbackend.BackendClaude || codexOnClaude != nil || claudeClient != claudeClients[0] {
 		t.Fatalf("claude app = %+v", claudeApp)
 	}
 }
@@ -135,7 +135,7 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 	}}
 
 	apps, err := newTestService(cfg, filepath.Join(t.TempDir(), "config.toml"))
-	svc := struct{ Frontends []*App }{Frontends: apps}
+	svc := struct{ Frontends []*Frontend }{Frontends: apps}
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
@@ -147,7 +147,7 @@ func TestNewServiceAllowsUnsetFrontendBackend(t *testing.T) {
 	}
 	codexClient := svc.Frontends[0].runtimeOwner.CodexClient()
 	claudeClient := svc.Frontends[0].runtimeOwner.ClaudeCore()
-	if svc.Frontends[0].Backend() != "" || codexClient != nil || claudeClient != nil {
+	if svc.Frontends[0].runtimeOwner.Backend() != "" || codexClient != nil || claudeClient != nil {
 		t.Fatalf("unset backend app = %+v", svc.Frontends[0])
 	}
 }

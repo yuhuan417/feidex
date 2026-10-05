@@ -4,7 +4,6 @@ import (
 	"context"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
@@ -129,7 +128,7 @@ func TestCommandInterruptClearsQueueAfterReconcilingCompletedCodexTurn(t *testin
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
+	if err := a.bindings.ThreadMenu.CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 

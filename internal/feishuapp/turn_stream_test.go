@@ -25,7 +25,7 @@ func cardBodyElements(t *testing.T, card map[string]any) []map[string]any {
 func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := prepareTestApp(&App{cfg: cfg})
+	a := prepareTestApp(&Frontend{cfg: cfg})
 	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
@@ -66,7 +66,7 @@ func TestRenderTurnItemCardUsesCompactMarkdownStyleForCommandExecution(t *testin
 func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := prepareTestApp(&App{cfg: cfg})
+	a := prepareTestApp(&Frontend{cfg: cfg})
 	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
@@ -99,7 +99,7 @@ func TestRenderTurnItemCardUsesSingleMarkdownBodyForReply(t *testing.T) {
 func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := prepareTestApp(&App{cfg: cfg})
+	a := prepareTestApp(&Frontend{cfg: cfg})
 	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",
@@ -136,7 +136,7 @@ func TestRenderTurnItemCardDoesNotTruncateLongReply(t *testing.T) {
 func TestRenderTurnItemCardKeepsFileChangeCompact(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := prepareTestApp(&App{cfg: cfg})
+	a := prepareTestApp(&Frontend{cfg: cfg})
 	sub := &domainsubmission.Submission{
 		SessionKey:  "sess-1",
 		WorkspaceID: "default",

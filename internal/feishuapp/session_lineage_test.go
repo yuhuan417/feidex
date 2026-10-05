@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func testAppLiveThreadMarker(a *App) liveThreadMarker {
+func testAppLiveThreadMarker(a *Frontend) liveThreadMarker {
 	if a == nil {
 		return liveThreadMarker{}
 	}
@@ -25,18 +25,18 @@ func testAppLiveThreadMarker(a *App) liveThreadMarker {
 	}
 }
 
-func markSessionThreadLive(a *App, sessionKey, threadID string) {
+func markSessionThreadLive(a *Frontend, sessionKey, threadID string) {
 	testAppLiveThreadMarker(a).MarkSessionThreadLive(sessionKey, threadID)
 }
 
-func sessionHasLiveThread(a *App, sessionKey, threadID string) bool {
+func sessionHasLiveThread(a *Frontend, sessionKey, threadID string) bool {
 	if a == nil {
 		return false
 	}
 	return runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner().LiveThreads.Has(sessionKey, threadID)
 }
 
-func clearSessionLiveThread(a *App, sessionKey string) {
+func clearSessionLiveThread(a *Frontend, sessionKey string) {
 	if a != nil {
 		runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner().LiveThreads.Clear(sessionKey)
 	}
@@ -112,7 +112,7 @@ func TestSessionCanResumeThreadForSubmissionRequiresMatchingWorkspace(t *testing
 }
 
 func TestSessionLiveThreadMarkers(t *testing.T) {
-	a := prepareTestApp(&App{})
+	a := prepareTestApp(&Frontend{})
 	if sessionHasLiveThread(a, "sess-1", "thread-1") {
 		t.Fatal("expected empty live-thread map to return false")
 	}

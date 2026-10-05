@@ -17,13 +17,13 @@ import (
 func TestFrontendIdleState(t *testing.T) {
 	t.Parallel()
 
-	newTestApp := func(t *testing.T) (*App, *state.Store) {
+	newTestApp := func(t *testing.T) (*Frontend, *state.Store) {
 		t.Helper()
 		store, err := state.Open(filepath.Join(t.TempDir(), "state.json"))
 		if err != nil {
 			t.Fatalf("Open(store) error = %v", err)
 		}
-		return prepareTestApp(&App{
+		return prepareTestApp(&Frontend{
 			cfg:        config.Default(),
 			store:      store,
 			frontendID: "frontend-a",
@@ -35,13 +35,13 @@ func TestFrontendIdleState(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		seed     func(t *testing.T, a *App, store *state.Store)
+		seed     func(t *testing.T, a *Frontend, store *state.Store)
 		wantIdle bool
 		want     string
 	}{
 		{
 			name: "idle ignores other frontend state",
-			seed: func(t *testing.T, a *App, store *state.Store) {
+			seed: func(t *testing.T, a *Frontend, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
@@ -69,7 +69,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "backend switching blocks idle",
-			seed: func(t *testing.T, a *App, _ *state.Store) {
+			seed: func(t *testing.T, a *Frontend, _ *state.Store) {
 				t.Helper()
 				a.runtimeOwner.BackendTransition.BeginBackendSwitchState(domainbackend.BackendCodex)
 			},
@@ -77,7 +77,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "maintenance blocks idle",
-			seed: func(t *testing.T, a *App, _ *state.Store) {
+			seed: func(t *testing.T, a *Frontend, _ *state.Store) {
 				t.Helper()
 				a.bindings.Maintenance.BeginCodexUpgrade(appbackend.BackendUpgradeSnapshot{Running: true})
 			},
@@ -85,7 +85,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "in flight message traffic blocks idle",
-			seed: func(t *testing.T, a *App, _ *state.Store) {
+			seed: func(t *testing.T, a *Frontend, _ *state.Store) {
 				t.Helper()
 				a.runtimeOwner.BeginMessageTraffic()
 				t.Cleanup(func() { a.runtimeOwner.EndMessageTraffic() })
@@ -94,7 +94,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "claude maintenance blocks idle",
-			seed: func(t *testing.T, a *App, _ *state.Store) {
+			seed: func(t *testing.T, a *Frontend, _ *state.Store) {
 				t.Helper()
 				a.bindings.Maintenance.BeginClaudeUpgrade(appbackend.BackendUpgradeSnapshot{Running: true})
 			},
@@ -102,7 +102,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "active work blocks idle",
-			seed: func(t *testing.T, _ *App, store *state.Store) {
+			seed: func(t *testing.T, _ *Frontend, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
@@ -115,7 +115,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "queued submissions block idle",
-			seed: func(t *testing.T, _ *App, store *state.Store) {
+			seed: func(t *testing.T, _ *Frontend, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
@@ -129,7 +129,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "staged images block idle",
-			seed: func(t *testing.T, _ *App, store *state.Store) {
+			seed: func(t *testing.T, _ *Frontend, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
@@ -147,7 +147,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "non idle status blocks idle",
-			seed: func(t *testing.T, _ *App, store *state.Store) {
+			seed: func(t *testing.T, _ *Frontend, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
@@ -160,7 +160,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "pending request blocks idle",
-			seed: func(t *testing.T, _ *App, store *state.Store) {
+			seed: func(t *testing.T, _ *Frontend, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertPending(&state.PendingRequest{
 					ID:         "req-1",
@@ -174,7 +174,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "pending auto retry blocks idle",
-			seed: func(t *testing.T, a *App, store *state.Store) {
+			seed: func(t *testing.T, a *Frontend, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
@@ -194,7 +194,7 @@ func TestFrontendIdleState(t *testing.T) {
 		},
 		{
 			name: "running auto retry blocks idle",
-			seed: func(t *testing.T, a *App, store *state.Store) {
+			seed: func(t *testing.T, a *Frontend, store *state.Store) {
 				t.Helper()
 				if err := store.UpsertSession(&conversation.Session{
 					Key:    currentSessionKey,
@@ -250,7 +250,7 @@ func TestFrontendIdleIgnoringCurrentMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open(store) error = %v", err)
 	}
-	a := prepareTestApp(&App{
+	a := prepareTestApp(&Frontend{
 		cfg:        config.Default(),
 		store:      store,
 		frontendID: "frontend-a",

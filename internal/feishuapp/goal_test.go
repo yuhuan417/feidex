@@ -14,7 +14,7 @@ import (
 	"testing"
 )
 
-func seedGoalTestSession(t *testing.T, a *App, msg *feishu.InboundMessage, threadID string) string {
+func seedGoalTestSession(t *testing.T, a *Frontend, msg *feishu.InboundMessage, threadID string) string {
 	t.Helper()
 	sessionKey := a.configView().makeSessionKey(msg)
 	if err := a.store.UpsertSession(&conversation.Session{
@@ -115,7 +115,7 @@ func TestCommandGoalStatusAndSetUseCodexGoalRPC(t *testing.T) {
 		return nil
 	}
 
-	if err := HandleInboundCommand(a, msg, "/goal"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/goal"); err != nil {
 		t.Fatalf("HandleInboundCommand(/goal) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -129,7 +129,7 @@ func TestCommandGoalStatusAndSetUseCodexGoalRPC(t *testing.T) {
 	setParams = nil
 	currentGet = nil
 	objective := "--tokens 98.5K improve benchmark coverage"
-	if err := HandleInboundCommand(a, msg, "/goal "+objective); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/goal "+objective); err != nil {
 		t.Fatalf("HandleInboundCommand(/goal objective) error = %v", err)
 	}
 	if !reflect.DeepEqual(calls, []string{"thread/goal/get", "thread/goal/set"}) {
@@ -198,7 +198,7 @@ func TestCommandGoalWithoutCurrentGoalRendersCreateForm(t *testing.T) {
 		return nil
 	}
 
-	if err := HandleInboundCommand(a, msg, "/goal"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/goal"); err != nil {
 		t.Fatalf("HandleInboundCommand(/goal no current goal) error = %v", err)
 	}
 	if !reflect.DeepEqual(calls, []string{"thread/goal/get"}) {
@@ -293,7 +293,7 @@ func TestCommandGoalControlsValidateAndCallExpectedMethods(t *testing.T) {
 	}
 
 	for _, raw := range []string{"/goal pause", "/goal resume", "/goal clear"} {
-		if err := HandleInboundCommand(a, msg, raw); err != nil {
+		if err := a.bindings.Commands.Handle(msg, raw); err != nil {
 			t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 		}
 	}
@@ -308,7 +308,7 @@ func TestCommandGoalControlsValidateAndCallExpectedMethods(t *testing.T) {
 	}
 
 	calls = nil
-	err := HandleInboundCommand(a, msg, "/goal "+strings.Repeat("x", goalcmd.MaxObjectiveRunes+1))
+	err := a.bindings.Commands.Handle(msg, "/goal "+strings.Repeat("x", goalcmd.MaxObjectiveRunes+1))
 	if err == nil || !strings.Contains(err.Error(), "too long") {
 		t.Fatalf("overlong /goal error = %v, want too long", err)
 	}
@@ -333,7 +333,7 @@ func TestCommandGoalExistingUnfinishedGoalRequiresConfirmation(t *testing.T) {
 		return nil
 	}
 
-	if err := HandleInboundCommand(a, msg, "/goal ship the new workflow"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/goal ship the new workflow"); err != nil {
 		t.Fatalf("HandleInboundCommand(/goal replace) error = %v", err)
 	}
 	if !reflect.DeepEqual(calls, []string{"thread/goal/get"}) {

@@ -201,6 +201,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 			return commandRegistry.RenderFallback(actionName, sessionKey)
 		},
 	})
+	bindings.Commands = commandRegistry
+	bindings.MenuCommands = menuCommands
 	asyncCardActions := feishuapp.NewAsyncCardActionService(feishuapp.AsyncCardActionInputs{
 		Commands: menuCommands, Lifecycle: &scope.RuntimeOwner.Lifecycle, AsyncRunner: asyncRunner,
 		Actors: scope.RuntimeOwner.SessionActors, Context: frontend.Context, FrontendID: frontend.FrontendID(),
@@ -537,6 +539,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 		Forms: bindings.Forms, FrontendID: frontend.FrontendID(), Effects: *scope.RuntimeOwner.EffectRunner,
 		Feishu: feishuClient, Presentation: bindings.WorkspacePresentation,
 	})
+	bindings.WorkspaceCommand = workspaceCommandDependencies
 	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfigurationService(feishuapp.WorkspaceConfigurationInputs{
 		Dependencies: workspaceCommandDependencies, State: frontend.State(), LiveThreads: scope.RuntimeOwner.LiveThreads,
 		Conversations: bindings.Conversations, Presentation: bindings.WorkspacePresentation,
@@ -552,6 +555,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 	})
 	downloadDependencies := buildDebugViewDependencies()
 	downloadDependencies.FileSharing = bindings.FileSharing
+	bindings.DebugView = downloadDependencies
 	downloadService := feishuapp.BuildDebug(downloadDependencies)
 	bindings.Download = downloadService.CommandDownload
 	bindings.Upgrades = feishuapp.BuildUpgrades(feishuapp.UpgradeInputs{
@@ -673,12 +677,14 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 		WorkspaceSelection: bindings.WorkspaceSelection, Submissions: bindings.Submissions,
 		Conversations: bindings.Conversations, Feishu: feishuClient, AsyncRunner: asyncRunner,
 	})
+	bindings.PlanMode = *turnPlanMode
 	reviewCommandDependencies := feishuapp.BuildReviewCommandDependencies(feishuapp.ReviewCommandInputs{
 		Runtime: frontend.BackendRuntimeDeps(), Store: store, WorkspaceSelection: bindings.WorkspaceSelection,
 		UseCase: bindings.Review, Submissions: bindings.Submissions, BindingScope: bindingScope,
 		PendingQueue: bindings.PendingQueue, QueuedNotice: bindings.OutboundCards, Feishu: feishuClient,
 		State: frontend.State(), Effects: *scope.RuntimeOwner.EffectRunner, AsyncActions: asyncCardActions,
 	})
+	bindings.ReviewCommand = reviewCommandDependencies
 	bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
 	*commandRegistry = feishuapp.BuildCommandRegistry(feishuapp.CommandRegistryInputs{
 		Features: feishuapp.BuildFeatureRegistryInputs(feishuapp.BuildCommandFeatureInputs(feishuapp.CommandFeatureDependencies{

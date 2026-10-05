@@ -14,7 +14,6 @@ import (
 
 	"feidex/internal/adapter/feishu/goalcmd"
 	appreview "feidex/internal/adapter/feishu/review"
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/daemon"
 	"feidex/internal/feishu"
@@ -252,7 +251,7 @@ func TestCompleteMenuReviewUncommittedReturnsPreparingCardAndPatchesAsync(t *tes
 		return nil
 	}
 
-	resp, err := appreviewcmd.CompleteMenuReviewUncommitted(ReviewCommandDependencies(a), &feishu.CardAction{
+	resp, err := appreviewcmd.CompleteMenuReviewUncommitted(a.bindings.ReviewCommand, &feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   msg.MessageID,
@@ -286,7 +285,7 @@ func TestCompleteMenuReviewBaseReturnsPreparingCardAndPatchesAsync(t *testing.T)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	resp, err := appreviewcmd.CompleteMenuReviewBase(ReviewCommandDependencies(a), &feishu.CardAction{
+	resp, err := appreviewcmd.CompleteMenuReviewBase(a.bindings.ReviewCommand, &feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   msg.MessageID,
@@ -434,7 +433,7 @@ func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteMenuInterrupt(&feishu.CardAction{
+	resp, err := a.bindings.ThreadMenu.CompleteMenuInterrupt(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-stop",

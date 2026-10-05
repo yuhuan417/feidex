@@ -1,6 +1,6 @@
 package feishuapp
 
-func newOutboundCardService(app *App) OutboundCardService {
+func newOutboundCardService(app *Frontend) OutboundCardService {
 	if app == nil {
 		return OutboundCardService{}
 	}

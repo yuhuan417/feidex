@@ -79,7 +79,7 @@ func TestRenderHistoryCardsAndFetchCurrentThreadHistory(t *testing.T) {
 		t.Fatalf("history detail body = %q, want outputs", detailBody)
 	}
 
-	if _, err := prepareTestApp(&App{}).bindings.History.RenderHistoryCard(sessionKey, 0); err == nil {
+	if _, err := prepareTestApp(&Frontend{}).bindings.History.RenderHistoryCard(sessionKey, 0); err == nil {
 		t.Fatal("expected fetchCurrentThreadHistory() without store to fail")
 	}
 	if _, err := a.bindings.History.RenderHistoryDetailCard(sessionKey, 1); err == nil {

@@ -66,7 +66,7 @@ func TestWorkspaceCommandsCreateAndUpdateLocalGroupConfig(t *testing.T) {
 		} else {
 			msg.MentionedOpenIDs = nil
 		}
-		if err := HandleInboundCommand(a, msg, raw); err != nil {
+		if err := a.bindings.Commands.Handle(msg, raw); err != nil {
 			t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 		}
 	}
@@ -146,7 +146,7 @@ func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) 
 	ffA.botOpenID = "bot-a-open"
 	ffA.groupBotCounts = map[string]int{"chat-primary": 1}
 	fb := &fakeFeishuClient{botOpenID: "bot-b-open", groupBotCounts: map[string]int{"chat-primary": 2}}
-	b := prepareTestApp(&App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: appfeishuwrap.WrapFeishuClient(fb)})
+	b := prepareTestApp(&Frontend{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: appfeishuwrap.WrapFeishuClient(fb)})
 	configureGroupPrimaryEvents(testFeishuPolicyInputs(b))
 
 	msgA := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-a", UserID: "user-1"}
@@ -584,7 +584,7 @@ func TestWorkspaceNewWorktreeSubmitSwitchesPrivateWorkspace(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-private", MessageID: "msg-private", UserID: "user-1"}
-	if err := commandWorkspace(a, msg, []string{"new", "worktree"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"new", "worktree"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("/workspace new worktree(p2p) error = %v", err)
 	}
 	var pending *state.PendingRequest
@@ -676,7 +676,7 @@ func initGitRepoForWorktreeTest(t *testing.T, dir string) {
 	}
 }
 
-func worktreePendingForChat(t *testing.T, a *App, chatID string) *state.PendingRequest {
+func worktreePendingForChat(t *testing.T, a *Frontend, chatID string) *state.PendingRequest {
 	t.Helper()
 	for _, pending := range a.State().PendingRequests() {
 		if pending.Kind == "workspace_worktree" && strings.Contains(pending.SessionKey, chatID) {
@@ -687,7 +687,7 @@ func worktreePendingForChat(t *testing.T, a *App, chatID string) *state.PendingR
 	return nil
 }
 
-func worktreePendingPayloadForChat(t *testing.T, a *App, chatID string) appworkspacecmd.WorktreePayload {
+func worktreePendingPayloadForChat(t *testing.T, a *Frontend, chatID string) appworkspacecmd.WorktreePayload {
 	t.Helper()
 	return appworkspacecmd.WorktreePayloadFromPending(worktreePendingForChat(t, a, chatID))
 }
@@ -1014,7 +1014,7 @@ func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(
 	a.frontendID = "bot-a"
 	recomposeTestApp(a)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(&fakeClaudeCore{})
 	configDir := t.TempDir()
@@ -1092,7 +1092,7 @@ func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-bind-cmd", MessageID: "msg-bind-cmd", UserID: "user-1"}
 	msg.Text = "/workspace use default"
-	if err := HandleInboundCommand(a, msg, msg.Text); err != nil {
+	if err := a.bindings.Commands.Handle(msg, msg.Text); err != nil {
 		t.Fatalf("/workspace use default error = %v", err)
 	}
 	commands := []string{
@@ -1109,7 +1109,7 @@ func TestGroupBindingScopedCommandsUpdateBindingNotGlobalState(t *testing.T) {
 	for _, raw := range commands {
 		msg.Text = raw
 		msg.MessageID = strings.ReplaceAll(strings.TrimPrefix(raw, "/"), " ", "-")
-		if err := HandleInboundCommand(a, msg, raw); err != nil {
+		if err := a.bindings.Commands.Handle(msg, raw); err != nil {
 			t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 		}
 	}
@@ -1135,11 +1135,11 @@ func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.
 	a, ff, _ := newTestApp(t)
 	a.frontendID = "bot-a"
 	recomposeTestApp(a)
-	a.SetBackend("")
+	selectBackendForTest(a, "")
 	a.cfg.Feishu.Backend = ""
 
 	msg := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-no-backend", MessageID: "msg-workspace", UserID: "user-1", Text: "/workspace"}
-	if err := HandleInboundCommand(a, msg, msg.Text); err != nil {
+	if err := a.bindings.Commands.Handle(msg, msg.Text); err != nil {
 		t.Fatalf("group /workspace without backend error = %v", err)
 	}
 	binding := agentBindingForChat(a.State(), "group", "chat-no-backend")
@@ -1159,7 +1159,7 @@ func TestGroupWorkspaceCommandCreatesBindingWithoutConfiguredBackend(t *testing.
 	}
 
 	p2pMsg := &feishu.InboundMessage{ChatType: "p2p", ChatID: "p2p-no-backend", MessageID: "msg-p2p", UserID: "user-1", Text: "/workspace"}
-	if err := HandleInboundCommand(a, p2pMsg, p2pMsg.Text); err != nil {
+	if err := a.bindings.Commands.Handle(p2pMsg, p2pMsg.Text); err != nil {
 		t.Fatalf("p2p /workspace without backend error = %v", err)
 	}
 	cards = ff.replyCardsSnapshot()
@@ -1266,13 +1266,13 @@ func TestWorkspaceDeletionBlockedWhenReferencedByLocalBinding(t *testing.T) {
 	}
 }
 
-func findWorkspaceForTest(a *App, id string) *config.Workspace {
+func findWorkspaceForTest(a *Frontend, id string) *config.Workspace {
 	return config.FindWorkspace(a.cfg, id)
 }
 
 func TestGroupModelSetSavesClaudeModelForNextTurn(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.frontendID = "claude-test"
 	recomposeTestApp(a)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude

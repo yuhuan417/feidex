@@ -19,7 +19,7 @@ import (
 func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = t.TempDir()
-	a := prepareTestApp(&App{cfg: cfg, cfgPath: filepath.Join(t.TempDir(), "config.toml"), feishu: feishu.New(cfg.Feishu)})
+	a := prepareTestApp(&Frontend{cfg: cfg, cfgPath: filepath.Join(t.TempDir(), "config.toml"), feishu: feishu.New(cfg.Feishu)})
 
 	card := renderQuietModeMenuCardForTest(a, "")
 	title, preview, buttonCount := feishu.New(cfg.Feishu).SimpleStatusCard("tmp", "blue", "tmp", nil)["header"], cardElementsForTest(card), 0
@@ -28,7 +28,7 @@ func TestQuietModeCardAndCommandValidation(t *testing.T) {
 	if elems := cardElementsForTest(card); len(elems) != 5 {
 		t.Fatalf("renderQuietModeMenuCard() elements = %#v", elems)
 	}
-	if err := commandQuiet(a, &feishu.InboundMessage{}, []string{"bad"}); err == nil {
+	if err := a.bindings.Commands.Handle(&feishu.InboundMessage{}, "/quiet bad"); err == nil {
 		t.Fatal("expected commandQuiet(invalid arg) to fail")
 	}
 	if quietmode.StatusText(config.QuietModeVerbose) != "verbose" || quietmode.StatusText(config.QuietModeFinal) != "final" || buttonCount != 0 {
@@ -64,7 +64,7 @@ func TestRuntimeMaintenanceHelpers(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Workspaces[0].Cwd = workspace
-	a := prepareTestApp(&App{cfg: cfg, store: store})
+	a := prepareTestApp(&Frontend{cfg: cfg, store: store})
 	if err := a.bindings.StartupState.ExpireInteractions(); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestMiscAppFunctions(t *testing.T) {
 	logSessionState("test", "sess", &conversation.Session{WorkspaceID: "ws", Queue: []string{"a"}})
 
 	started := time.Now()
-	app := prepareTestApp(&App{started: started})
+	app := prepareTestApp(&Frontend{started: started})
 	if !isStaleInboundMessage(app.started, &feishu.InboundMessage{CreatedAt: started.Add(-31 * time.Second).Unix()}) {
 		t.Fatal("expected old inbound message to be stale")
 	}
@@ -116,7 +116,7 @@ func TestMiscAppFunctions(t *testing.T) {
 }
 
 func TestReplyErrorWithEmptyInputReturnsEarly(t *testing.T) {
-	if err := replyErrorForTest(prepareTestApp(&App{}), nil, nil); err != nil {
+	if err := replyErrorForTest(prepareTestApp(&Frontend{}), nil, nil); err != nil {
 		t.Fatalf("replyError(nil, nil) error = %v", err)
 	}
 }

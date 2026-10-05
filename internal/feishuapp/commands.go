@@ -46,7 +46,7 @@ func CommandMaintenanceBlocker(deps BackendRuntimeDeps) func(string, string) err
 		if runtime == nil {
 			return nil
 		}
-		return runtime.MaintenanceBlocksCommand(backendRuntimeContextForApp(deps), raw)
+		return runtime.MaintenanceBlocksCommand(backendRuntimeContextForApp(deps.currentBackend()), raw)
 	}
 }
 

@@ -23,7 +23,7 @@ func TestGroupMessagePolicyRoutesPrimaryMentionsAndReplies(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := prepareTestApp(&App{
+	a := prepareTestApp(&Frontend{
 		cfg:        cfg,
 		store:      store,
 		frontendID: "frontend-a",
@@ -122,7 +122,7 @@ func TestGroupMessagePolicyKeepsNonPrimaryRepliesLocal(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := prepareTestApp(&App{cfg: cfg, store: store, frontendID: "frontend-b", feishu: appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})})
+	a := prepareTestApp(&Frontend{cfg: cfg, store: store, frontendID: "frontend-b", feishu: appfeishuwrap.WrapFeishuClient(&fakeFeishuClient{botOpenID: "bot-b-open"})})
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-client",
 		ChatID:   "chat-1",
@@ -175,7 +175,7 @@ func TestGroupMessagePolicyDeliversUnknownTopLevelForPrimaryAutoInit(t *testing.
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := prepareTestApp(&App{cfg: cfg, store: store, frontendID: "frontend-auto"})
+	a := prepareTestApp(&Frontend{cfg: cfg, store: store, frontendID: "frontend-auto"})
 
 	if shouldAcceptGroupMessage(a.bindings.GroupMessages, "chat-new", "", "", false, false) {
 		t.Fatal("app policy accepted unmentioned message before primary init")
@@ -228,7 +228,7 @@ func TestBindingUsesChatScopedGroupSessionKey(t *testing.T) {
 		t.Fatalf("state.Open() error = %v", err)
 	}
 	cfg := config.Default()
-	a := prepareTestApp(&App{cfg: cfg, store: store, frontendID: "frontend-a"})
+	a := prepareTestApp(&Frontend{cfg: cfg, store: store, frontendID: "frontend-a"})
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
 		ID:       "binding-server",
 		ChatID:   "chat-1",
@@ -400,7 +400,7 @@ func TestGroupWorkspaceCloneWithURLInNewGroupUsesConfigDirParent(t *testing.T) {
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
-	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementForTest(a, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 
 	msg := &feishu.InboundMessage{
 		MessageID:     "clone-new-group-url-1",

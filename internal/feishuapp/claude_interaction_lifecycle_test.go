@@ -14,7 +14,7 @@ import (
 	"feidex/internal/state"
 )
 
-func newClaudeInteractionPending(t *testing.T, a *App, id, kind, status string) {
+func newClaudeInteractionPending(t *testing.T, a *Frontend, id, kind, status string) {
 	t.Helper()
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          id,

@@ -13,7 +13,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func completePendingFormCancelDispatch(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func completePendingFormCancelDispatch(a *Frontend, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	return completePendingFormCancelWithInputs(PendingFormCancelActionInputs{
 		State: a.State(), ServerRequests: a.bindings.ServerRequests,
 		FinalizePending:   a.bindings.PendingReplies.Finalize,

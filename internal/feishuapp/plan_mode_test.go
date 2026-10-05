@@ -14,8 +14,8 @@ import (
 	"feidex/internal/feishu"
 )
 
-func commandPlan(a *App, msg *feishu.InboundMessage, args []string) error {
-	return appplanmode.CommandPlan(newPlanModeAppAdapter(a), msg, args)
+func commandPlan(a *Frontend, msg *feishu.InboundMessage, args []string) error {
+	return appplanmode.CommandPlan(a.bindings.PlanMode, msg, args)
 }
 
 func TestCommandPlanOnSavesThreadCollaborationMode(t *testing.T) {

@@ -11,7 +11,6 @@ import (
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 
 	"feidex/internal/adapter/feishu/pendingforms"
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/domain/conversation"
 	"os"
 	"path/filepath"
@@ -1200,7 +1199,7 @@ func TestCommandInterruptUsesClaudeBackend(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "msg-1", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
+	if err := a.bindings.ThreadMenu.CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if len(claude.interruptCalls) != 1 || claude.interruptCalls[0] != sessionKey {
@@ -1922,7 +1921,7 @@ func TestCommandAppendUsesClaudeContinuation(t *testing.T) {
 		t.Fatalf("CreateSubmission(sub-running) error = %v", err)
 	}
 
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandAppend(msg, "  append from command  "); err != nil {
+	if err := a.bindings.ThreadMenu.CommandAppend(msg, "  append from command  "); err != nil {
 		t.Fatalf("commandAppend() error = %v", err)
 	}
 	if len(claude.startSteerTurnCalls) != 1 || !strings.Contains(claude.startSteerTurnCalls[0].prompt, "append from command") {

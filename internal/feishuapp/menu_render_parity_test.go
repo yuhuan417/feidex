@@ -101,7 +101,7 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		})
 	}
 
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	p2pClaudeModelConfig := a.bindings.ModelCommands.RenderClaudeModelConfigCard(p2pKey, "menu.model")
 	groupClaudeModelConfig := a.bindings.BindingCommands.renderBindingClaudeModelConfigCard(groupKey, binding)

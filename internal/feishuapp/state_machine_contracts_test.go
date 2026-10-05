@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	domainsubmission "feidex/internal/domain/submission"
 
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
@@ -43,7 +42,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
+	if err := a.bindings.ThreadMenu.CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if interruptCalls != 1 {
@@ -125,7 +124,7 @@ func TestGroupTopLevelCommandInterruptTargetsActiveChatAndClearsQueuedInputs(t *
 		RootMessageID: "msg-stop",
 		UserID:        "user-1",
 	}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
+	if err := a.bindings.ThreadMenu.CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if interruptCalls != 1 {

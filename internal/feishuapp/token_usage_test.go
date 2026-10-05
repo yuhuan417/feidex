@@ -57,7 +57,7 @@ func TestRenderUsageCardAndStoreTokenUsage(t *testing.T) {
 
 func TestRenderUsageCardUsesClaudeModelUsageSnapshot(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	sessionKey := "sess-1"
 	if err := a.store.UpsertSession(&conversation.Session{

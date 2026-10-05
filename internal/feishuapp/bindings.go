@@ -6,6 +6,7 @@ import (
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	history "feidex/internal/adapter/feishu/history"
 	appmaintenance "feidex/internal/adapter/feishu/maintenance"
+	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	tier "feidex/internal/adapter/feishu/servicetier"
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
@@ -62,6 +63,12 @@ import (
 // Bindings is an explicit frontend adapter graph, injected by composition.
 // It has no string lookup, cache invalidation or lazy construction.
 type Bindings struct {
+	Commands                   *CommandRegistry
+	MenuCommands               MenuCommandService
+	PlanMode                   planmode.Dependencies
+	DebugView                  appdebugviewcmd.Dependencies
+	ReviewCommand              appreviewcmd.Dependencies
+	WorkspaceCommand           workspacecmd.Dependencies
 	AsyncInputs                asyncinput.Service
 	RuntimeSettings            runtimeconfig.Service
 	PathPicker                 pathpicker.Service

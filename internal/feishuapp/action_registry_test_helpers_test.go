@@ -8,22 +8,18 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
-	return menuCommandServiceForApp(a).Complete(action, sessionKey, rawCommand, parentAction)
-}
+type cardActionService struct{ app *Frontend }
 
-type cardActionService struct{ app *App }
-
-func newCardActionService(app *App) cardActionDispatcher {
+func newCardActionService(app *Frontend) cardActionDispatcher {
 	return cardActionDispatcher{inner: app.bindings.CardActions}
 }
 
-func newMenuActionService(app *App) cardActionService {
+func newMenuActionService(app *Frontend) cardActionService {
 	return cardActionService{app: app}
 }
 
 func (s cardActionService) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
-	return menuCommandServiceForApp(s.app).fallback(actionName, sessionKey)
+	return s.app.bindings.MenuCommands.fallback(actionName, sessionKey)
 }
 
 func (s cardActionService) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -48,7 +44,7 @@ func (s cardActionService) modelActionInputs() ModelCardActionInputs {
 		ScopedRoutingConfiguration: s.app.bindings.ScopedRoutingConfiguration,
 		ThreadSettings:             s.app.bindings.ThreadSettings,
 		State:                      s.app.State(),
-		CompleteMenuCommand:        s.app.CompleteMenuCommand,
+		CompleteMenuCommand:        s.app.bindings.MenuCommands.Complete,
 	}
 }
 
@@ -81,19 +77,19 @@ func (s cardActionService) completeMenuGroupSystem(action *feishu.CardAction, se
 }
 
 func (s cardActionService) completeMenuStatus(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return systemCardActionHandlers(SystemCardActionInputs{CompleteMenuCommand: s.app.CompleteMenuCommand})["menu.status"](action)
+	return systemCardActionHandlers(SystemCardActionInputs{CompleteMenuCommand: s.app.bindings.MenuCommands.Complete})["menu.status"](action)
 }
 
 func (s cardActionService) completeMenuHelp(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return systemCardActionHandlers(SystemCardActionInputs{CompleteMenuCommand: s.app.CompleteMenuCommand})["menu.help"](action)
+	return systemCardActionHandlers(SystemCardActionInputs{CompleteMenuCommand: s.app.bindings.MenuCommands.Complete})["menu.help"](action)
 }
 
 func (s cardActionService) toolsActionInputs() ToolsCardActionInputs {
 	return ToolsCardActionInputs{
-		CompleteMenuCommand: s.app.CompleteMenuCommand,
+		CompleteMenuCommand: s.app.bindings.MenuCommands.Complete,
 		Backend:             s.app.configView().configuredBackend, State: s.app.State(), Renderer: s.app.feishu,
 		RuntimeSettings: s.app.bindings.RuntimeSettings,
-		QuietMode:       ConfiguredQuietModeBuilder(s.app.Config(), s.app.ConfigMu(), s.app.FrontendConfigIndex()),
+		QuietMode:       ConfiguredQuietModeBuilder(s.app.Config(), s.app.ConfigMu(), s.app.frontendConfigIndex),
 	}
 }
 
@@ -117,7 +113,7 @@ func (s cardActionService) completeMenuUsage(action *feishu.CardAction, sessionK
 	return toolsCardActionHandlers(s.toolsActionInputs())["menu.usage"](action)
 }
 
-func completeMenuFork(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func completeMenuFork(a *Frontend, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	if action.ActionValue == nil {
 		action.ActionValue = map[string]any{}
 	}
@@ -125,7 +121,7 @@ func completeMenuFork(a *App, action *feishu.CardAction, sessionKey string) (*ca
 	return threadForkCardActionHandlers(ThreadForkCardActionInputs{
 		BindingCommands: a.bindings.BindingCommands, ConversationQuery: a.bindings.ConversationQuery,
 		NormalizeSessionKey: a.configView().normalizeSessionKey,
-		Backend:             a.configView().configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
+		Backend:             a.configView().configuredBackend, CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 	})["menu.fork"](action)
 }
 
@@ -134,14 +130,14 @@ func (s cardActionService) completeMenuReview(action *feishu.CardAction, session
 		action.ActionValue = map[string]any{}
 	}
 	action.ActionValue["session_key"] = sessionKey
-	deps := ReviewCommandDependencies(s.app)
+	deps := s.app.bindings.ReviewCommand
 	return reviewCardActionHandlers(ReviewCardActionInputs{
 		Dependencies: deps, ReviewCommands: s.app.bindings.ReviewCommands,
-		Backend: s.app.configView().configuredBackend, CompleteMenuCommand: s.app.CompleteMenuCommand,
+		Backend: s.app.configView().configuredBackend, CompleteMenuCommand: s.app.bindings.MenuCommands.Complete,
 	})["menu.review"](action)
 }
 
-func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+func completeMenuPlanAsync(a *Frontend, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	if action != nil {
 		if action.ActionValue == nil {
 			action.ActionValue = map[string]any{}
@@ -149,7 +145,7 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 		action.ActionValue["session_key"] = sessionKey
 	}
 	return planCardActionHandlers(PlanCardActionInputs{
-		CompleteMenuCommand: a.CompleteMenuCommand,
+		CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 		Lifecycle:           &a.runtimeOwner.Lifecycle,
 		AsyncRunner:         a.asyncRunner,
 		Context:             a.Context,
@@ -161,7 +157,7 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 	})["menu.plan"](action)
 }
 
-func completeGoalRenderedActionAsync(a *App, action *feishu.CardAction, sessionKey, toastText string, run func(goalcmd.Service) (*callback.CardActionTriggerResponse, error)) (*callback.CardActionTriggerResponse, error) {
+func completeGoalRenderedActionAsync(a *Frontend, action *feishu.CardAction, sessionKey, toastText string, run func(goalcmd.Service) (*callback.CardActionTriggerResponse, error)) (*callback.CardActionTriggerResponse, error) {
 	return runGoalCardActionAsync(GoalCardActionInputs{
 		Commands:           *a.bindings.GoalCommands,
 		Lifecycle:          &a.runtimeOwner.Lifecycle,
@@ -183,7 +179,7 @@ func (s cardActionService) completeMenuCompact(action *feishu.CardAction, sessio
 		action.ActionValue["session_key"] = sessionKey
 	}
 	return compactCardActionHandlers(CompactCardActionInputs{
-		CompleteMenuCommand: s.app.CompleteMenuCommand,
+		CompleteMenuCommand: s.app.bindings.MenuCommands.Complete,
 		Actions:             s.app.bindings.BackendActions,
 		Compaction:          s.app.bindings.Compaction,
 		State:               s.app.State(),

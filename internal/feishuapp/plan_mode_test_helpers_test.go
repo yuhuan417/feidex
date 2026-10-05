@@ -5,10 +5,10 @@ import (
 	"feidex/internal/state"
 )
 
-func codexPlanModeExitPendingRequest(a *App, sessionKey string) *state.PendingRequest {
-	return planmode.ExitPendingRequest(newPlanModeAppAdapter(a), sessionKey)
+func codexPlanModeExitPendingRequest(a *Frontend, sessionKey string) *state.PendingRequest {
+	return planmode.ExitPendingRequest(a.bindings.PlanMode, sessionKey)
 }
 
-func clearCodexPlanModeForSession(a *App, sessionKey string) (bool, error) {
-	return planmode.ClearCodexPlanModeForSession(newPlanModeAppAdapter(a), sessionKey)
+func clearCodexPlanModeForSession(a *Frontend, sessionKey string) (bool, error) {
+	return planmode.ClearCodexPlanModeForSession(a.bindings.PlanMode, sessionKey)
 }

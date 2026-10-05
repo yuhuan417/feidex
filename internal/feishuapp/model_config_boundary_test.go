@@ -23,7 +23,7 @@ import (
 	"feidex/internal/state"
 )
 
-func modelBoundaryQueuedSubmission(t *testing.T, a *App, key, thread, text string) *domainsubmission.Submission {
+func modelBoundaryQueuedSubmission(t *testing.T, a *Frontend, key, thread, text string) *domainsubmission.Submission {
 	t.Helper()
 	if a.store.GetSession(key) == nil {
 		if err := a.store.UpsertSession(&conversation.Session{Key: key, WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -94,7 +94,7 @@ func TestModelConfigQueuedCodexUsesStartSnapshotIncludingPlan(t *testing.T) {
 
 func TestModelConfigClaudeFailureRetainsQueueAndLineage(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: fmt.Errorf("%w: rejected", claudecli.ErrModelConfigApply)}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(fake)
@@ -125,7 +125,7 @@ func (*modelConfigProtectedClaude) CanRetryFreshSession(string) bool { return fa
 
 func TestModelConfigClaudeRestartedTurnFailureRetainsQueueAndLineage(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionID: "original-thread", startTurnErr: errors.New("restarted process rejected turn")}
 	a.runtimeOwner.SetClaudeCore(&modelConfigProtectedClaude{fake})
@@ -338,7 +338,7 @@ func TestModelConfigGroupMenuTracksTurnBoundary(t *testing.T) {
 
 func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: errors.New("must not initialize while steering")}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(fake)
@@ -360,7 +360,7 @@ func TestModelConfigFailedSaveDoesNotPublish(t *testing.T) {
 	for _, backend := range []string{domainbackend.BackendCodex, domainbackend.BackendClaude} {
 		t.Run(backend, func(t *testing.T) {
 			a, _, _ := newTestApp(t)
-			a.SetBackend(backend)
+			selectBackendForTest(a, backend)
 			a.cfg.Feishu.Backend = backend
 			runtimeViewOf(a.runtimeOwner).setClaudeCore(&fakeClaudeCore{})
 			before := *config.Clone(a.cfg)
@@ -412,7 +412,7 @@ func TestModelConfigSnapshotConcurrentWritesRemainCoherent(t *testing.T) {
 
 func TestModelConfigGroupWritesDuringWorkPreservePending(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{}
 	runtimeViewOf(a.runtimeOwner).setClaudeCore(fake)
@@ -471,7 +471,7 @@ for line in sys.stdin:
 
 func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	cli, logPath := writeModelConfigCLI(t)
 	a.cfg.Claude.Command, a.cfg.Claude.Model, a.cfg.Claude.Effort, a.cfg.Claude.SubagentModel = cli, "sonnet", "low", "fixed-subagent"

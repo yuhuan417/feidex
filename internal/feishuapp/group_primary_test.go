@@ -9,32 +9,32 @@ import (
 	"feidex/internal/state"
 )
 
-func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID string) (*state.GroupPrimary, error) {
+func ensureGroupPrimaryInitialized(ctx context.Context, a *Frontend, chatType, chatID string) (*state.GroupPrimary, error) {
 	if a == nil {
 		return nil, nil
 	}
 	return initializeGroupPrimary(ctx, a.bindings.PrimaryInitialization, a.FrontendID(), a.feishu, chatType, chatID)
 }
 
-func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
+func groupPrimaryForChat(a *Frontend, chatType, chatID string) *state.GroupPrimary {
 	if a == nil || a.store == nil {
 		return nil
 	}
 	return lookupGroupPrimary(a.bindings.Primary, a.FrontendID(), chatType, chatID)
 }
 
-func isGroupPrimary(a *App, chatType, chatID string) bool {
+func isGroupPrimary(a *Frontend, chatType, chatID string) bool {
 	return a != nil && a.store != nil && groupPrimaryEnabled(a.bindings.Primary, a.FrontendID(), chatType, chatID)
 }
 
-func setGroupPrimaryState(a *App, chatType, chatID string, enabled bool, assignment *feishu.InboundMessage) (*state.GroupPrimary, error) {
+func setGroupPrimaryState(a *Frontend, chatType, chatID string, enabled bool, assignment *feishu.InboundMessage) (*state.GroupPrimary, error) {
 	if a == nil {
 		return nil, fmt.Errorf("app not initialized")
 	}
 	return writeGroupPrimaryState(a.bindings.Primary, a.FrontendID(), chatType, chatID, enabled, assignment)
 }
 
-func setGroupPrimary(a *App, chatType, chatID string, enabled bool) (*state.GroupPrimary, error) {
+func setGroupPrimary(a *Frontend, chatType, chatID string, enabled bool) (*state.GroupPrimary, error) {
 	return setGroupPrimaryState(a, chatType, chatID, enabled, nil)
 }
 

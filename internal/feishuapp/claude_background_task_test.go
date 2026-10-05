@@ -51,7 +51,7 @@ func TestSendClaudeBackgroundTaskNotificationFallsBackToChatCard(t *testing.T) {
 	}
 }
 
-func newTestClaudeBackgroundTaskNotifier(a *App) claudeBackgroundTaskNotifier {
+func newTestClaudeBackgroundTaskNotifier(a *Frontend) claudeBackgroundTaskNotifier {
 	return claudeBackgroundTaskNotifier{
 		client: a.feishu, state: a.State(), frontend: identity.FrontendID(a.FrontendID()),
 		runner: *a.runtimeOwner.EffectRunner, ready: a.feishu != nil,

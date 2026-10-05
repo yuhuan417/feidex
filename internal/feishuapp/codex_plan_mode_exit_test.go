@@ -180,7 +180,7 @@ func TestCodexPlanModeExitStayKeepsOriginalPromptCard(t *testing.T) {
 		t.Fatalf("initial prompt title = %q", got)
 	}
 
-	resp, err := planmode.CompleteCodexPlanModeExit(newPlanModeAppAdapter(a), &feishu.CardAction{
+	resp, err := planmode.CompleteCodexPlanModeExit(a.bindings.PlanMode, &feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   pending.FeishuMsgID,
 		ActionValue: map[string]any{"request_id": pending.ID},
@@ -259,7 +259,7 @@ func TestCodexPlanModeExitImplementCurrentFollowupReplySteersActiveTurn(t *testi
 		}
 	}
 
-	resp, err := planmode.CompleteCodexPlanModeExit(newPlanModeAppAdapter(a), &feishu.CardAction{
+	resp, err := planmode.CompleteCodexPlanModeExit(a.bindings.PlanMode, &feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   pending.FeishuMsgID,
 		ActionValue: map[string]any{"request_id": pending.ID},
@@ -390,7 +390,7 @@ func TestClearCodexPlanModeForSessionRestoresConfiguredDefaultEffort(t *testing.
 	}
 }
 
-func seedPlanExitActiveSubmission(t *testing.T, a *App, sessionKey, threadID, turnID string) *domainsubmission.Submission {
+func seedPlanExitActiveSubmission(t *testing.T, a *Frontend, sessionKey, threadID, turnID string) *domainsubmission.Submission {
 	t.Helper()
 	sub := seedActiveSubmission(t, a, sessionKey, threadID, turnID)
 	if _, err := a.State().UpdateSession(sessionKey, func(sess *conversation.Session) {

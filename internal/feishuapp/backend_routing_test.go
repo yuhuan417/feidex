@@ -9,7 +9,7 @@ import (
 
 func TestHandleCompactCommandWithoutBackendDoesNotFallbackToCodex(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend("")
+	selectBackendForTest(a, "")
 	a.cfg.Feishu.Backend = ""
 
 	err := a.bindings.BackendActions.HandleCompactCommand(&feishu.InboundMessage{

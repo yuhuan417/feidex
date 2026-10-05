@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-func New(cfg *config.Config, path string) (*App, error) {
+func New(cfg *config.Config, path string) (*Frontend, error) {
 	svc, err := newTestService(cfg, path)
 	if err != nil || len(svc) == 0 {
 		return nil, err
@@ -18,7 +18,7 @@ func New(cfg *config.Config, path string) (*App, error) {
 	return svc[0], nil
 }
 
-func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
+func newTestFrontend(scope frontendruntime.FrontendScope) (*Frontend, error) {
 	scope.FeishuTransport = appfeishuwrap.WrapFeishuClient(newFeishuClient(scope.Frontend.Feishu))
 	scope.RuntimeOwner = frontendruntime.NewFrontendOwner()
 	a, err := NewFeishuShell(scope)
@@ -26,14 +26,14 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 		return nil, err
 	}
 	prepareTestApp(a)
-	AttachEffectRunner(a, NewEffectRunner(testEffectRunnerInputs(a)))
+	a.feishu = AttachEffectRuntime(a.runtimeOwner, a.feishu, a.frontendID, NewEffectRunner(testEffectRunnerInputs(a)))
 	a.bindings.WorkspacePresentation = testWorkspacePresentation(a)
 	dispatcher := NewDispatcher(testDispatcherInputs(a))
 	a.runtimeOwner.Dispatcher = &dispatcher
 	if err := CanonicalizeStoredSessionKeys(a.store); err != nil {
 		return nil, err
 	}
-	if backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())(); backend != "" {
+	if backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex)(); backend != "" {
 		handle, err := BuildBackendRuntimeHandle(a.BackendRuntimeDeps(), backend)
 		if err != nil {
 			return nil, err
@@ -46,7 +46,7 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 	return a, nil
 }
 
-func newTestService(cfg *config.Config, path string) ([]*App, error) {
+func newTestService(cfg *config.Config, path string) ([]*Frontend, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("nil config")
 	}
@@ -56,7 +56,7 @@ func newTestService(cfg *config.Config, path string) ([]*App, error) {
 		return nil, err
 	}
 	mu := &sync.RWMutex{}
-	apps := make([]*App, 0, len(frontends))
+	apps := make([]*Frontend, 0, len(frontends))
 	for _, frontend := range frontends {
 		a, err := newTestFrontend(frontendruntime.FrontendScope{Config: cfg, ConfigPath: path, Store: store, ConfigMutex: mu, Frontend: frontend})
 		if err != nil {

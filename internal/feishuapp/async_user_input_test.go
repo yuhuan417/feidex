@@ -19,7 +19,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func asyncUserInputActionInputsForTest(a *App) AsyncUserInputActionInputs {
+func asyncUserInputActionInputsForTest(a *Frontend) AsyncUserInputActionInputs {
 	return AsyncUserInputActionInputs{
 		State: a.State(), Inputs: a.bindings.AsyncInputs, Context: a.Context,
 		FrontendID: a.FrontendID(), EffectRunner: newEffectRunner(a.runtimeOwner),
@@ -32,14 +32,14 @@ func asyncUserInputActionInputsForTest(a *App) AsyncUserInputActionInputs {
 	}
 }
 
-func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {
+func completeAsyncUserInput(a *Frontend, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {
 	return completeAsyncUserInputWithService(asyncUserInputActionService{inputs: asyncUserInputActionInputsForTest(a)}, action, cancel)
 }
 
 // Matches the Codex 0.153.4 item emitted by request_user_input_async.
 const asyncQuestionNotification = `{"threadId":"thread-1","turnId":"turn-1","item":{"id":"ask-1","type":"agentMessage","phase":"final_answer","delivery":"async","text":"Which behavior do you see?","questions":[{"title":"Which behavior do you see?","options":["Old bot responds","No bot responds","Several bots respond"]}]}}`
 
-func seedAsyncUserInput(t *testing.T, a *App) (*domainsubmission.Submission, *state.PendingRequest) {
+func seedAsyncUserInput(t *testing.T, a *Frontend) (*domainsubmission.Submission, *state.PendingRequest) {
 	t.Helper()
 	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 	sessionKey, sub := seedActiveSubmissionForInboundMessage(t, a, msg, "thread-1", "turn-1")

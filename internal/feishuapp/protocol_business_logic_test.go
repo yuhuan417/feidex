@@ -153,7 +153,7 @@ func TestTurnItemStateMergesStartedContextAndClearsAfterCompletion(t *testing.T)
 	}
 }
 
-func seedStartingSubmission(t *testing.T, a *App, sessionKey, submissionID, threadID, kind string) *domainsubmission.Submission {
+func seedStartingSubmission(t *testing.T, a *Frontend, sessionKey, submissionID, threadID, kind string) *domainsubmission.Submission {
 	t.Helper()
 
 	if err := a.store.UpsertSession(&conversation.Session{

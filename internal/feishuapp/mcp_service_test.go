@@ -37,7 +37,7 @@ func TestMCPPortsUseFrontendScopedState(t *testing.T) {
 	}
 }
 
-func buildMCPForTest(a *App) (*feidexMCPService, error) {
+func buildMCPForTest(a *Frontend) (*feidexMCPService, error) {
 	return BuildMCP(MCPPorts(MCPPortInputs{
 		AttachmentSender: a.feishu, StateProvider: a.State(),
 		TurnItems: a.bindings.TurnItems, SubmissionLookup: a.bindings.SubmissionLookup,

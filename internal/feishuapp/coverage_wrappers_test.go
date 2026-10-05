@@ -432,12 +432,12 @@ func TestAdditionalCardAndThreadWrappers(t *testing.T) {
 		t.Fatalf("setSessionThreadDefaults() = %+v", sess)
 	}
 
-	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex)
 	if _, _, _, threadID, err := currentThreadForMessage(a.bindings.WorkspaceConfiguration, backend, msg); err != nil || threadID != "thread-1" {
 		t.Fatalf("currentThreadForMessage() = %q, %v", threadID, err)
 	}
-	other := prepareTestApp(&App{cfg: a.cfg, store: a.store})
-	otherBackend := ConfiguredBackendBuilder(other.Config(), other.ConfigMu(), other.runtimeOwner.Backend, other.FrontendID(), other.FrontendConfigIndex())
+	other := prepareTestApp(&Frontend{cfg: a.cfg, store: a.store})
+	otherBackend := ConfiguredBackendBuilder(other.Config(), other.ConfigMu(), other.runtimeOwner.Backend, other.FrontendID(), other.frontendConfigIndex)
 	if _, _, _, _, err := currentThreadForMessage(other.bindings.WorkspaceConfiguration, otherBackend, &feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-2", UserID: "user-2"}); err == nil || !strings.Contains(err.Error(), "当前没有活动线程") {
 		t.Fatalf("currentThreadForMessage(no thread) error = %v", err)
 	}

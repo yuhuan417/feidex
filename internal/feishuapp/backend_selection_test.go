@@ -21,7 +21,7 @@ func TestHandleFeishuMessageWithoutConfiguredBackendPromptsSelection(t *testing.
 		t.Fatalf("Open(store) error = %v", err)
 	}
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{
+	a := prepareTestApp(&Frontend{
 		cfg:     config.Default(),
 		store:   store,
 		feishu:  ff,
@@ -56,7 +56,7 @@ func TestHandleFeishuMessageWithoutConfiguredBackendPromptsSelection(t *testing.
 
 func TestCommandBackendShowsOnlyAvailableBackends(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{cfg: config.Default(), feishu: ff})
+	a := prepareTestApp(&Frontend{cfg: config.Default(), feishu: ff})
 
 	origLookPath := backendLookPath
 	backendLookPath = func(file string) (string, error) {
@@ -200,7 +200,7 @@ func TestSwitchBackendRestoresPerBackendThreadLineage(t *testing.T) {
 		return client
 	}
 
-	a := prepareTestApp(&App{
+	a := prepareTestApp(&Frontend{
 		cfg:          cfg,
 		cfgPath:      cfgPath,
 		store:        store,
@@ -301,7 +301,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		}
 	}
 
-	var app *App
+	var app *Frontend
 	var codexCalls []string
 	newCodexClient = func(config.CodexConfig) CodexClient {
 		client := &fakeCodexClient{}
@@ -326,7 +326,7 @@ func TestSwitchBackendToCodexDefersStartupRecoveryWhenTransportFails(t *testing.
 		return &fakeClaudeCore{}
 	}
 
-	app = prepareTestApp(&App{
+	app = prepareTestApp(&Frontend{
 		cfg:          cfg,
 		cfgPath:      cfgPath,
 		store:        store,
@@ -384,7 +384,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 		t.Fatalf("Open(store) error = %v", err)
 	}
 	cfg := testCodexConfig()
-	a := prepareTestApp(&App{cfg: cfg, store: store, runtimeOwner: testSelectedBackendOwner(nil, domainbackend.BackendClaude)})
+	a := prepareTestApp(&Frontend{cfg: cfg, store: store, runtimeOwner: testSelectedBackendOwner(nil, domainbackend.BackendClaude)})
 
 	sessionKey := "feishu:chat:chat-1"
 	if err := store.UpsertSession(&conversation.Session{
@@ -410,7 +410,7 @@ func TestReplyRootTurnLinkIgnoresMismatchedBackend(t *testing.T) {
 		t.Fatalf("replyRootTurnLink(claude current) = %+v, want nil", link)
 	}
 
-	a.SetBackend(domainbackend.BackendCodex)
+	selectBackendForTest(a, domainbackend.BackendCodex)
 	if err := store.UpsertSession(&conversation.Session{
 		Key:            sessionKey,
 		WorkspaceID:    "default",

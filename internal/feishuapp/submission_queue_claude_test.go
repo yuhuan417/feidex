@@ -11,7 +11,7 @@ import (
 
 func TestSubmissionBackendRuntimeAdapterTracksSelectedBackend(t *testing.T) {
 	a, _, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendCodex)
+	selectBackendForTest(a, domainbackend.BackendCodex)
 	adapter := sqBackendRuntimeAdapter{deps: a.BackendRuntimeDeps(), backendOwner: a.runtimeOwner}
 	startFailure := errors.New("codex client not initialized")
 
@@ -19,7 +19,7 @@ func TestSubmissionBackendRuntimeAdapterTracksSelectedBackend(t *testing.T) {
 		t.Fatal("Codex adapter should drop thread lineage after a missing client")
 	}
 
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	if adapter.DropThreadLineageAfterStartFailure(startFailure) {
 		t.Fatal("adapter should use the currently selected Claude backend")
 	}

@@ -16,7 +16,6 @@ import (
 	"strings"
 	"testing"
 
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/codexrpc"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -36,7 +35,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := prepareTestApp(&App{store: store})
+	a := prepareTestApp(&Frontend{store: store})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
@@ -46,7 +45,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	err = appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThreadsNew(&feishu.InboundMessage{
+	err = a.bindings.ThreadMenu.CommandThreadsNew(&feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",
@@ -65,7 +64,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 
-	a := prepareTestApp(&App{store: store, cfg: testCodexConfig(), runtimeOwner: testOwnerWithCodex(codexrpc.New(config.CodexConfig{}))})
+	a := prepareTestApp(&Frontend{store: store, cfg: testCodexConfig(), runtimeOwner: testOwnerWithCodex(codexrpc.New(config.CodexConfig{}))})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
@@ -86,7 +85,7 @@ func TestHandleCommandStopClearsQueuedInputsBeforeInterrupt(t *testing.T) {
 		t.Fatalf("create submission: %v", err)
 	}
 
-	err = HandleInboundCommand(a, &feishu.InboundMessage{
+	err = a.bindings.Commands.Handle(&feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",
@@ -117,7 +116,7 @@ func TestHandleCommandBlockedWhileBackendSwitching(t *testing.T) {
 		UserID:    "user-1",
 		Text:      "/quiet",
 	}
-	err := HandleInboundCommand(a, msg, "/quiet")
+	err := a.bindings.Commands.Handle(msg, "/quiet")
 	if err == nil || !strings.Contains(err.Error(), "当前正在切换到 Codex backend") {
 		t.Fatalf("HandleInboundCommand() error = %v, want backend switch block", err)
 	}
@@ -141,7 +140,7 @@ func TestHandleCommandWorkspaceUseRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	err := HandleInboundCommand(a, &feishu.InboundMessage{
+	err := a.bindings.Commands.Handle(&feishu.InboundMessage{
 		MessageID: "m-1",
 		ChatID:    "chat",
 		ChatType:  "p2p",
@@ -202,7 +201,7 @@ func TestHandleCommandWorkspaceUseClearsIdleThreadLineage(t *testing.T) {
 		return nil
 	}
 
-	if err := HandleInboundCommand(a, &feishu.InboundMessage{
+	if err := a.bindings.Commands.Handle(&feishu.InboundMessage{
 		MessageID: "m-1",
 		ChatID:    "chat",
 		ChatType:  "p2p",
@@ -329,7 +328,7 @@ func TestIsLocalCommand(t *testing.T) {
 func TestHandleCommandWorkspaceCloneWithoutURLOpensForm(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "msg-clone", ChatID: "chat-clone", ChatType: "p2p", UserID: "user-1"}
-	if err := HandleInboundCommand(a, msg, "/workspace clone"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/workspace clone"); err != nil {
 		t.Fatalf("HandleInboundCommand(/workspace clone) error = %v", err)
 	}
 	cards := ff.replyCardsSnapshot()
@@ -469,7 +468,7 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 				UserID:    "user",
 				Text:      raw,
 			}
-			if err := HandleInboundCommand(a, msg, raw); err != nil {
+			if err := a.bindings.Commands.Handle(msg, raw); err != nil {
 				t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 			}
 			if len(claude.startTurnCalls) != 1 {
@@ -499,7 +498,7 @@ func TestHandleCommandWorkspacePermissionsIsLocalOnCodex(t *testing.T) {
 		UserID:    "user",
 		Text:      "/workspace permissions inherit",
 	}
-	err := HandleInboundCommand(a, msg, msg.Text)
+	err := a.bindings.Commands.Handle(msg, msg.Text)
 	if err == nil {
 		t.Fatal("expected /workspace permissions to be handled locally on Codex")
 	}
@@ -509,7 +508,7 @@ func TestHandleCommandWorkspacePermissionsIsLocalOnCodex(t *testing.T) {
 }
 
 func TestSendCommandMenuListsTopLevelCommands(t *testing.T) {
-	a := prepareTestApp(&App{feishu: feishu.New(config.Default().Feishu)})
+	a := prepareTestApp(&Frontend{feishu: feishu.New(config.Default().Feishu)})
 	msg := &feishu.InboundMessage{MessageID: "m1", ChatType: "p2p", ChatID: "chat", UserID: "user"}
 	card := a.feishu.SimpleStatusCard("命令菜单", "blue", "选择命令执行。", nil)
 	elements := cardElementsForTest(card)
@@ -551,7 +550,7 @@ func TestCommandFastTogglesAndSupportsConfigCard(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{store: store, feishu: ff})
+	a := prepareTestApp(&Frontend{store: store, feishu: ff})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                     "feishu:chat:chat",
 		WorkspaceID:             "default",
@@ -590,7 +589,7 @@ func TestCommandCompactCallsThreadCompactStart(t *testing.T) {
 	}
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{store: store, feishu: ff, cfg: testCodexConfig(), runtimeOwner: testOwnerWithCodex(fc)})
+	a := prepareTestApp(&Frontend{store: store, feishu: ff, cfg: testCodexConfig(), runtimeOwner: testOwnerWithCodex(fc)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
@@ -630,7 +629,7 @@ func TestCommandCompactRestoresSessionWhenRPCFails(t *testing.T) {
 		t.Fatalf("open store: %v", err)
 	}
 	fc := &fakeCodexClient{callErr: context.DeadlineExceeded}
-	a := prepareTestApp(&App{store: store, feishu: &fakeFeishuClient{}, cfg: testCodexConfig(), runtimeOwner: testOwnerWithCodex(fc)})
+	a := prepareTestApp(&Frontend{store: store, feishu: &fakeFeishuClient{}, cfg: testCodexConfig(), runtimeOwner: testOwnerWithCodex(fc)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:            "feishu:chat:chat",
 		WorkspaceID:    "default",
@@ -658,7 +657,7 @@ func TestHandleCommandCompactPassthroughsToClaude(t *testing.T) {
 	cfg := testCodexConfig()
 	cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	a := prepareTestApp(&App{store: store, feishu: &fakeFeishuClient{}, cfg: cfg, runtimeOwner: testOwnerWithClaude(claude)})
+	a := prepareTestApp(&Frontend{store: store, feishu: &fakeFeishuClient{}, cfg: cfg, runtimeOwner: testOwnerWithClaude(claude)})
 
 	msg := &feishu.InboundMessage{
 		MessageID: "m-1",
@@ -667,7 +666,7 @@ func TestHandleCommandCompactPassthroughsToClaude(t *testing.T) {
 		UserID:    "user",
 		Text:      "/compact",
 	}
-	if err := HandleInboundCommand(a, msg, "/compact"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/compact"); err != nil {
 		t.Fatalf("HandleInboundCommand(/compact) error = %v", err)
 	}
 	if len(claude.startTurnCalls) != 1 || !strings.Contains(claude.startTurnCalls[0].prompt, "/compact") {
@@ -691,7 +690,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	fc := &fakeCodexClient{}
 	ff := &fakeFeishuClient{}
 	cfg := testCodexConfig()
-	a := prepareTestApp(&App{store: store, feishu: ff, cfg: cfg, runtimeOwner: testOwnerWithCodex(fc)})
+	a := prepareTestApp(&Frontend{store: store, feishu: ff, cfg: cfg, runtimeOwner: testOwnerWithCodex(fc)})
 	if err := a.store.UpsertSession(&conversation.Session{
 		Key:                        "feishu:chat:chat",
 		WorkspaceID:                "default",
@@ -718,7 +717,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandFork(msg, nil); err != nil {
+	if err := a.bindings.ThreadMenu.CommandFork(msg, nil); err != nil {
 		t.Fatalf("commandFork() error = %v", err)
 	}
 	if gotMethod != "thread/fork" {
@@ -750,7 +749,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 
 func TestCommandDebugTogglesRuntimeLogLevel(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{feishu: ff, cfg: testCodexConfig()})
+	a := prepareTestApp(&Frontend{feishu: ff, cfg: testCodexConfig()})
 	a.cfg.Feishu.DebugAllowFrom = []string{"user"}
 	prev := appdebugviewcmd.RuntimeLogLevelText()
 	t.Cleanup(func() {
@@ -798,7 +797,7 @@ func TestClaudeNewCommandsBindSessionAfterFirstInput(t *testing.T) {
 			}
 			markSessionThreadLive(a, sessionKey, "claude-old")
 			msg := &feishu.InboundMessage{MessageID: "msg-new", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-			if err := HandleInboundCommand(a, msg, raw); err != nil {
+			if err := a.bindings.Commands.Handle(msg, raw); err != nil {
 				t.Fatalf("HandleInboundCommand(%q): %v", raw, err)
 			}
 			if claude.resetCalls != 1 || len(claude.ensureCalls) != 1 || claude.ensureCalls[0].resumeID != "" {
@@ -847,7 +846,7 @@ func TestCodexNewRejectsEmptyThreadID(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	fc.callHook = func(_ context.Context, _ string, _ any, _ any) error { return nil }
 	msg := &feishu.InboundMessage{MessageID: "msg-new", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := HandleInboundCommand(a, msg, "/new"); err == nil || !strings.Contains(err.Error(), "empty thread id") {
+	if err := a.bindings.Commands.Handle(msg, "/new"); err == nil || !strings.Contains(err.Error(), "empty thread id") {
 		t.Fatalf("/new error = %v, want empty thread id", err)
 	}
 }
@@ -879,7 +878,7 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			}
 
 			msg := &feishu.InboundMessage{MessageID: "m-claude-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-			if err := HandleInboundCommand(a, msg, raw); err != nil {
+			if err := a.bindings.Commands.Handle(msg, raw); err != nil {
 				t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 			}
 			if len(claude.forkCalls) != 1 {
@@ -928,7 +927,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	markSessionThreadLive(a, sessionKey, "claude-parent")
 
 	msg := &feishu.InboundMessage{MessageID: "m-claude-fork-pending", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := HandleInboundCommand(a, msg, "/fork"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/fork"); err != nil {
 		t.Fatalf("HandleInboundCommand(/fork) error = %v", err)
 	}
 	if len(claude.forkCalls) != 1 {
@@ -948,7 +947,7 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 
 func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{feishu: ff, cfg: testCodexConfig()})
+	a := prepareTestApp(&Frontend{feishu: ff, cfg: testCodexConfig()})
 	a.cfg.Feishu.DebugAllowFrom = []string{"user"}
 	prevLevel := appdebugviewcmd.RuntimeLogLevelText()
 	oldLogger := slog.Default()
@@ -988,7 +987,7 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 
 func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{feishu: ff, cfg: testCodexConfig(), cfgPath: "/etc/feidex/config.toml"})
+	a := prepareTestApp(&Frontend{feishu: ff, cfg: testCodexConfig(), cfgPath: "/etc/feidex/config.toml"})
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	msg := &feishu.InboundMessage{MessageID: "m-logs", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
@@ -1008,7 +1007,7 @@ func TestCommandDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 
 func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{cfg: testCodexConfig(), feishu: appfeishuwrap.WrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"})
+	a := prepareTestApp(&Frontend{cfg: testCodexConfig(), feishu: appfeishuwrap.WrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"})
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	resp, err := a.bindings.Debug.CompleteMenuDebugLogs(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")
@@ -1032,7 +1031,7 @@ func TestCompleteMenuDebugLogsRejectsUnauthorizedUser(t *testing.T) {
 
 func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{feishu: ff, cfg: testCodexConfig(), cfgPath: "/etc/feidex/config.toml"})
+	a := prepareTestApp(&Frontend{feishu: ff, cfg: testCodexConfig(), cfgPath: "/etc/feidex/config.toml"})
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	msg := &feishu.InboundMessage{MessageID: "m-debug", ChatID: "chat", ChatType: "p2p", UserID: "blocked-user"}
@@ -1050,7 +1049,7 @@ func TestCommandDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 
 func TestCompleteMenuDebugRejectsUnauthorizedUserWithCard(t *testing.T) {
 	ff := &fakeFeishuClient{}
-	a := prepareTestApp(&App{cfg: testCodexConfig(), feishu: appfeishuwrap.WrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"})
+	a := prepareTestApp(&Frontend{cfg: testCodexConfig(), feishu: appfeishuwrap.WrapFeishuClient(ff), cfgPath: "/etc/feidex/config.toml"})
 	a.cfg.Feishu.DebugAllowFrom = []string{"allowed-user"}
 
 	resp, err := a.bindings.Debug.CompleteMenuDebug(&feishu.CardAction{UserID: "blocked-user"}, "sess-1")

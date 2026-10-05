@@ -18,6 +18,7 @@ import (
 	"feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/adapter/feishu/upgraderender"
 	workspacecards "feidex/internal/adapter/feishu/workspace"
+	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	filesystempicker "feidex/internal/adapter/filesystem/pathpicker"
 	statejson "feidex/internal/adapter/storage/json"
 	scoped "feidex/internal/adapter/storage/json/scoped"
@@ -66,18 +67,18 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func testWorkspacePresentation(a *App) *workspacecards.Presentation {
+func testWorkspacePresentation(a *Frontend) *workspacecards.Presentation {
 	if a == nil {
 		return compositionkit.NewWorkspacePresentation(compositionkit.WorkspacePresentationDependencies{})
 	}
 	return compositionkit.NewWorkspacePresentation(compositionkit.WorkspacePresentationDependencies{
-		Frontend: identity.FrontendID(a.FrontendID()), Config: a.Config(), ConfigPath: a.ConfigPath(),
+		Frontend: identity.FrontendID(a.FrontendID()), Config: a.Config(), ConfigPath: a.cfgPath,
 		Mutex: a.ConfigMu(), Scopes: a.State(),
-		Backend: ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
+		Backend: ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex),
 	})
 }
 
-func testStateView(a *App) *scoped.Store {
+func testStateView(a *Frontend) *scoped.Store {
 	if a == nil {
 		return nil
 	}
@@ -87,7 +88,10 @@ func testStateView(a *App) *scoped.Store {
 }
 
 // Focused fixtures explicitly construct their complete dependency graph.
-func prepareTestApp(a *App) *App {
+func prepareTestApp(a *Frontend) *Frontend {
+	if a.frontendConfigIndex == 0 && (a.cfg == nil || len(a.cfg.Frontends) == 0) {
+		a.frontendConfigIndex = -1
+	}
 	if a.runtimeOwner == nil {
 		a.runtimeOwner = runtime.NewFrontendOwner()
 	}
@@ -97,6 +101,7 @@ func prepareTestApp(a *App) *App {
 	if a.stateView == nil {
 		a.stateView = testStateView(a)
 	}
+	configSource := configadapter.FrontendSource{WorkspaceSource: configadapter.WorkspaceSource{Value: a.Config(), Mu: a.ConfigMu(), Path: a.cfgPath}, ConfigIndex: a.frontendConfigIndex}
 	if a.runtimeOwner.TurnBindings == nil {
 		a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 	}
@@ -111,7 +116,7 @@ func prepareTestApp(a *App) *App {
 		runner := NewEffectRunner(testEffectRunnerInputs(a))
 		a.runtimeOwner.EffectRunner = &runner
 	}
-	a.bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(a)}
+	a.bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(configSource)}
 	a.bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
 	a.bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: a.State(), Backend: func() string { return a.configView().configuredBackend() }, Context: a.Context, Run: SessionTaskRunner(a.runtimeOwner.SessionActors, func(fn func()) bool {
 		return a.runtimeOwner.Lifecycle.Run(fn, a.asyncRunner)
@@ -136,7 +141,7 @@ func prepareTestApp(a *App) *App {
 		enabled, _ := a.bindings.Primary.IsPrimary(a.FrontendID(), "group", chatID)
 		return enabled
 	}}
-	a.bindings.AnnouncementQuery = announcement.Query{Repository: a.State(), Workspaces: configadapter.NewWorkspaceRepositoryForConfig(a.Config(), a.ConfigMu(), a.ConfigPath()), HasPrimary: func(chatID string) bool {
+	a.bindings.AnnouncementQuery = announcement.Query{Repository: a.State(), Workspaces: configadapter.NewWorkspaceRepositoryForConfig(a.Config(), a.ConfigMu(), a.cfgPath), HasPrimary: func(chatID string) bool {
 		record, _ := a.bindings.Primary.Lookup(a.FrontendID(), "group", chatID)
 		return record != nil
 	}}
@@ -144,7 +149,7 @@ func prepareTestApp(a *App) *App {
 	if a.runtimeOwner.Announcements == nil {
 		a.runtimeOwner.Announcements = runtime.NewCoalescedRefresh(&a.runtimeOwner.Lifecycle, 2*time.Second, 15*time.Second, GroupAnnouncementRefresh(GroupAnnouncementRefreshDependencies{
 			FrontendID: a.FrontendID(), Feishu: a.Feishu(), Config: a.Config(), ConfigMu: a.ConfigMu(),
-			FrontendConfigIndex: a.FrontendConfigIndex(), RuntimeOwner: a.runtimeOwner,
+			FrontendConfigIndex: a.frontendConfigIndex, RuntimeOwner: a.runtimeOwner,
 			Announcements: a.bindings.Announcements, AnnouncementQuery: a.bindings.AnnouncementQuery, ConversationQuery: a.bindings.ConversationQuery,
 		}))
 	}
@@ -155,11 +160,11 @@ func prepareTestApp(a *App) *App {
 	a.bindings.TurnMetadata = turnmeta.Service{Tracker: a.runtimeOwner.TurnBindings}
 	a.bindings.ItemContext = approval.ItemContext{Items: a.bindings.TurnItems, Started: func(threadID, turnID string) { a.bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
 	a.bindings.PendingReplies = PendingReplyAdapter{Service: a.bindings.Interactions, Repository: a.State()}
-	filesystem, git := WorkspaceCreationPorts(a.ConfigPath())
-	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(a.FrontendID()), Selection: a.bindings.WorkspaceSelection, Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(a)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: a, Scope: a.State()}}
+	filesystem, git := WorkspaceCreationPorts(a.cfgPath)
+	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(a.FrontendID()), Selection: a.bindings.WorkspaceSelection, Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(configSource)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: configSource, Scope: a.State()}}
 	a.bindings.WorkspaceCreation = &workspaceapp.CreationService{Filesystem: filesystem, Git: git, Lifecycle: workspaceLifecycle}
-	a.bindings.WorkspaceSettings = workspaceapp.SettingsService{Frontend: a.FrontendID(), Repository: configadapter.WorkspaceSettingsRepository{Source: a, Scope: a.State()}}
-	a.bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(a), PendingRequests: a.State().PendingRequests, ConfigPath: a.ConfigPath, BotName: func() string { return currentBotDisplayName(feishuClient) }, FrontendID: a.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
+	a.bindings.WorkspaceSettings = workspaceapp.SettingsService{Frontend: a.FrontendID(), Repository: configadapter.WorkspaceSettingsRepository{Source: configSource, Scope: a.State()}}
+	a.bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(configSource), PendingRequests: a.State().PendingRequests, ConfigPath: func() string { return a.cfgPath }, BotName: func() string { return currentBotDisplayName(feishuClient) }, FrontendID: a.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
 	a.bindings.Forms = &interaction.FormService{Repository: a.State()}
 	a.bindings.WorkspaceWorkflow = &workspaceapp.Workflow{Forms: a.bindings.Forms, Planning: a.bindings.WorkspacePlanning, Creation: a.bindings.WorkspaceCreation}
 	a.bindings.WorkspacePresentation = testWorkspacePresentation(a)
@@ -177,13 +182,13 @@ func prepareTestApp(a *App) *App {
 		Context: a.Context, Repository: a.State(), Poller: a.bindings.UpgradePoller,
 		Feishu: a.Feishu(), FrontendID: a.FrontendID(), EffectRunner: *a.runtimeOwner.EffectRunner,
 		Config: a.Config(), QueueNotification: a.bindings.Notifications.Queue, ReadyChatIDs: maintenance.StartupReadyChatIDs,
-		RunAsync: func(fn func()) { a.runtimeOwner.Lifecycle.Run(fn, a.AsyncRunner()) },
+		RunAsync: func(fn func()) { a.runtimeOwner.Lifecycle.Run(fn, a.asyncRunner) },
 	})
 	a.bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: a.State(), Runtime: a.runtimeOwner.TurnBindings, Items: a.bindings.TurnItems}
-	configuredBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	configuredBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex)
 	a.bindings.AutoRetry = AutoRetryView(AutoRetryViewInputs{
 		Context: a.Context, Config: a.Config(), ConfigMu: a.ConfigMu(), ConfiguredBackend: configuredBackend,
-		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(), BackendDriver: appbackend.SelectedDriver{Selected: configuredBackend},
+		FrontendID: a.FrontendID(), FrontendConfigIndex: a.frontendConfigIndex, BackendDriver: appbackend.SelectedDriver{Selected: configuredBackend},
 		EffectRunner: *a.runtimeOwner.EffectRunner, Feishu: a.Feishu(),
 	})
 	autoRetryRuntimeDeps := &BackendRuntimeDeps{}
@@ -191,7 +196,7 @@ func prepareTestApp(a *App) *App {
 		Context: a.Context, Tracker: a.runtimeOwner.AutoRetries, Repository: a.State(), Live: liveThreads,
 		Enabled: func() bool { return a.bindings.AutoRetry.Settings().Enabled }, SaveEnabled: a.bindings.RuntimeSettings.SetAutoRetry,
 		RuntimeDeps: autoRetryRuntimeDeps, RuntimeOwner: a.runtimeOwner,
-		RunAsync:   func(fn func()) { a.runtimeOwner.Lifecycle.Run(fn, a.AsyncRunner()) },
+		RunAsync:   func(fn func()) { a.runtimeOwner.Lifecycle.Run(fn, a.asyncRunner) },
 		FrontendID: a.FrontendID(), Config: a.Config(), ConfigMu: a.ConfigMu(),
 		Starter: a.bindings.Submissions, Presenter: a.bindings.AutoRetry,
 	}))
@@ -205,7 +210,7 @@ func prepareTestApp(a *App) *App {
 		}
 	}
 	a.bindings.CodexRecovery = codexruntime.NewRecoveryService(CodexRecoveryPorts(CodexRecoveryPortInputs{
-		Runtime: a.BackendRuntimeDeps(), Submissions: a.bindings.Submissions, AsyncRunner: a.AsyncRunner(),
+		Runtime: a.BackendRuntimeDeps(), Submissions: a.bindings.Submissions, AsyncRunner: a.asyncRunner,
 		BackendFailure: func() *backendfailure.BackendFailureService { return backendFailureOwner },
 		StartVerifiedCodexClient: func(ctx context.Context) (codexruntime.CodexClient, error) {
 			return codexUpgrade.StartVerifiedCodexClient(ctx)
@@ -213,13 +218,13 @@ func prepareTestApp(a *App) *App {
 		RecoverFrontendRuntime: recoverFrontend,
 	}))
 	codexUpgrade = codexruntime.NewUpgradeService(CodexUpgradePorts(
-		a.Config(), a.ConfigMu(), a.FrontendID(), a.FrontendConfigIndex(),
+		a.Config(), a.ConfigMu(), a.FrontendID(), a.frontendConfigIndex,
 		a.runtimeOwner, a.BackendRuntimeDeps(), a.bindings.CodexRecovery,
 		recoverFrontend,
 		func(ctx context.Context) error { return codexUpgrade.CodexSmokeTest(ctx) },
 	))
 	a.bindings.CodexUpgrade = codexUpgrade
-	smoke, active, current, create := ClaudeMaintenancePorts(a.Config(), a.ConfigMu(), a.Context, a.runtimeOwner, a.FrontendConfigIndex(), a.bindings.ClaudeFactory)
+	smoke, active, current, create := ClaudeMaintenancePorts(a.Config(), a.ConfigMu(), a.Context, a.runtimeOwner, a.frontendConfigIndex, a.bindings.ClaudeFactory)
 	a.bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	a.bindings.BackendMaintenance = make(map[string]*backendmaintenance.Service)
 	a.bindings.MaintenanceRunners = make(map[string]maintenance.OperationRunner)
@@ -263,21 +268,24 @@ func prepareTestApp(a *App) *App {
 		Forms: a.bindings.Forms, CodexUpgrade: a.bindings.CodexUpgrade,
 	})
 	a.bindings.History = BuildHistory(
-		identity.FrontendID(a.FrontendID()), a.State(), ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
+		identity.FrontendID(a.FrontendID()), a.State(), ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex),
 		func() codexadapter.RPCClient { return runtimeViewOf(a.runtimeOwner).currentCodexClient() },
 		a.runtimeOwner.Lifecycle.Context, *a.runtimeOwner.EffectRunner,
 		SessionKeyBuilder(a.FrontendID()), func(string) bool { return false },
 	)
 	bindingScope := NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID())
+	commandRegistry := &CommandRegistry{}
+	a.bindings.Commands = commandRegistry
 	menuCommands := NewMenuCommandService(MenuCommandInputs{
 		BindingScope: bindingScope, Capture: a.Feishu(),
 		HandleCommand: func(msg *feishu.InboundMessage, raw string) error {
-			return HandleInboundCommand(a, msg, raw)
+			return a.bindings.Commands.Handle(msg, raw)
 		},
 		RenderFallback: func(actionName, sessionKey string) (map[string]any, bool) {
-			return RenderMenuCommandFallback(a, actionName, sessionKey)
+			return commandRegistry.RenderFallback(actionName, sessionKey)
 		},
 	})
+	a.bindings.MenuCommands = menuCommands
 	asyncCardActions := NewAsyncCardActionService(AsyncCardActionInputs{
 		Commands: menuCommands, Lifecycle: &a.runtimeOwner.Lifecycle, AsyncRunner: a.asyncRunner,
 		Actors: a.runtimeOwner.SessionActors, Context: a.Context, FrontendID: a.FrontendID(),
@@ -300,16 +308,16 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Usage = BuildUsage(debugViewDependencies)
 	a.bindings.FinalCardPatch = BuildFinalCardPatch(FinalCardPatchInputs{
 		Context: a.Context, Tracker: a.bindings.FinalCardPatches, Finder: a.State(),
-		Patcher: a.Feishu(), RunAsync: a.AsyncRunner(), Config: a.Config(), State: a.State(),
+		Patcher: a.Feishu(), RunAsync: a.asyncRunner, Config: a.Config(), State: a.State(),
 	})
 	a.bindings.ThreadSettings = threadsettings.Service{Repository: a.State()}
-	permissionBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	permissionBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex)
 	permissionMenuRenderer := ClaudePermissionMenuRenderer(a.Config(), permissionBackend, a.State().Session)
 	a.bindings.PermissionSettings = threadsettings.PermissionService{
 		Settings: a.bindings.ThreadSettings,
-		Source:   configadapter.ThreadPermissionRepository{Source: a, Scope: a.State()},
+		Source:   configadapter.ThreadPermissionRepository{Source: configSource, Scope: a.State()},
 		Runtime:  PermissionRuntime(permissionBackend, a.runtimeOwner.ClaudeCore),
-		Tasks:    PermissionTasks(&a.runtimeOwner.Lifecycle, a.runtimeOwner.SessionActors, a.AsyncRunner()),
+		Tasks:    PermissionTasks(&a.runtimeOwner.Lifecycle, a.runtimeOwner.SessionActors, a.asyncRunner),
 		Failure:  PermissionFailure(permissionMenuRenderer, a.FrontendID(), *a.runtimeOwner.EffectRunner),
 		Context:  a.Context,
 	}
@@ -320,15 +328,15 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: ModelSnapshotRepository(a.Config(), a.ConfigMu(), a.State())}
 	a.bindings.ModelSettings = modelconfig.SettingsService{Repository: a.State(), Admission: ModelWriteAdmission(a.bindings.FrontendQuery), Frontend: identity.FrontendID(a.FrontendID())}
 	a.bindings.ModelDefaults = modelconfig.DefaultsService{
-		Repository: configadapter.ModelDefaultsRepository{Source: a, Scope: a.State()},
+		Repository: configadapter.ModelDefaultsRepository{Source: configSource, Scope: a.State()},
 		Admission:  ModelWriteAdmission(a.bindings.FrontendQuery), Frontend: a.FrontendID(),
 		Publisher: ModelDefaultsPublisher(a.runtimeOwner, a.Config(), a.ConfigMu()),
 	}
-	a.bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: a}}
+	a.bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: configSource}}
 	a.bindings.ModelCommands = BuildModelCommands(ModelCommandInputs{
 		Defaults: &a.bindings.ModelDefaults, Options: &a.bindings.ModelOptions, Snapshots: a.bindings.ModelSnapshots,
 		Config: a.Config(), ConfigMu: a.ConfigMu(), State: a.State(), RuntimeOwner: a.runtimeOwner,
-		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(),
+		FrontendID: a.FrontendID(), FrontendConfigIndex: a.frontendConfigIndex,
 		ConfiguredBackend: func() string { return a.configView().configuredBackend() },
 	})
 	a.bindings.ConversationConfiguration = conversation.Configuration{Models: a.bindings.ModelSnapshots, ServiceName: CodexServiceName(a.Config(), a.ConfigMu())}
@@ -336,7 +344,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BindingPending = routing.PendingService{Configuration: a.bindings.RoutingConfiguration.ConfigurationService, Repository: a.State()}
 	a.bindings.BackendConfiguration = BuildBackendConfiguration(BackendConfigurationInputs{
 		Config: a.Config(), ConfigMu: a.ConfigMu(), Backend: a.runtimeOwner.Backend,
-		FrontendConfigIndex: a.FrontendConfigIndex(), Store: a.store,
+		FrontendConfigIndex: a.frontendConfigIndex, Store: a.store,
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Driver: appbackend.SelectedDriver{Selected: configuredBackend}, ModelCommands: a.bindings.ModelCommands,
 	})
 	a.bindings.BackendActions = BuildBackendActions(BackendActionInputs{
@@ -354,7 +362,7 @@ func prepareTestApp(a *App) *App {
 		RunAsync: func(fn func()) bool { return a.runtimeOwner.Lifecycle.Run(fn, a.asyncRunner) },
 	})
 	*a.bindings.PendingQueue = submission.NewPendingQueueService(PendingQueuePorts(a.Context, a.State(), a.bindings.SubmissionCleanup, a.Config(), a.ConfigMu(), a.Feishu()))
-	a.bindings.Continuation.Deps = ContinuationPorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner, a.bindings.Submissions, a.FrontendID(), a.FrontendConfigIndex(), a.Feishu())
+	a.bindings.Continuation.Deps = ContinuationPorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner, a.bindings.Submissions, a.FrontendID(), a.frontendConfigIndex, a.Feishu())
 	a.bindings.Compaction.Deps = CompactionPorts(a.Context, a.State(), a.runtimeOwner, a.FrontendID(), a.feishu != nil)
 	a.bindings.GoalContinuation.Deps = goal.Dependencies{
 		Context: a.Context, Repository: a.State(), Tracker: a.bindings.Goals,
@@ -387,7 +395,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Interactions.Deps = InteractionPorts(a.State(), a.bindings.SubmissionLookup)
 	a.bindings.InteractionDelivery = &interaction.DeliveryService{Repository: a.State()}
 	reviewCards := NewOutboundCardService(OutboundCardInputs{
-		RuntimeDeps: a.BackendRuntimeDeps(), Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+		RuntimeDeps: a.BackendRuntimeDeps(), Feishu: a.Feishu(), AsyncRunner: a.asyncRunner,
 		InteractionDelivery: a.bindings.InteractionDelivery, TurnPresentation: a.bindings.TurnPresentation,
 		Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
 		TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,
@@ -401,15 +409,15 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Review = &review
 	queuedNotice, expirePlan := SubmissionNoticePorts(SubmissionNoticeInputs{
 		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),
-		FrontendConfigIndex: a.FrontendConfigIndex(), State: a.State(), RuntimeOwner: a.runtimeOwner,
+		FrontendConfigIndex: a.frontendConfigIndex, State: a.State(), RuntimeOwner: a.runtimeOwner,
 		Continuation: a.bindings.Continuation, Feishu: a.feishu, Runner: *a.runtimeOwner.EffectRunner,
 	})
 	*a.bindings.Submissions = submission.NewSubmissionQueueService(SubmissionPorts(SubmissionPortInputs{
 		Plan: a.bindings.Plan, TurnPresentation: a.bindings.TurnPresentation, LiveThreads: liveThreads,
 		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),
-		FrontendConfigIndex: a.FrontendConfigIndex(), State: a.State(), Context: a.Context,
+		FrontendConfigIndex: a.frontendConfigIndex, State: a.State(), Context: a.Context,
 		Feishu: a.feishu, RuntimeOwner: a.runtimeOwner, RuntimeDeps: a.BackendRuntimeDeps(),
-		AsyncRunner: a.AsyncRunner(), PendingQueue: a.bindings.Continuation, SkillResolver: a.bindings.Skills,
+		AsyncRunner: a.asyncRunner, PendingQueue: a.bindings.Continuation, SkillResolver: a.bindings.Skills,
 		Continuation: a.bindings.Continuation, TurnItems: a.bindings.TurnItems, RuntimeMaintenance: a.bindings.SubmissionCleanup,
 		AutoRetry: a.bindings.AutoRetry, WorkspaceSelection: a.bindings.WorkspaceSelection,
 		ModelSettings: a.bindings.ModelSnapshots, ConversationConfiguration: a.bindings.ConversationConfiguration,
@@ -428,7 +436,7 @@ func prepareTestApp(a *App) *App {
 		PendingQueue: a.bindings.PendingQueue, Submissions: a.bindings.Submissions, AutoRetry: a.bindings.AutoRetry,
 		SubmissionCleanup: a.bindings.SubmissionCleanup, Compaction: a.bindings.Compaction,
 		GoalContinuation: a.bindings.GoalContinuation, PlanMode: turnPlanMode,
-		AnnouncementQuery: a.bindings.AnnouncementQuery, AsyncRunner: a.AsyncRunner(),
+		AnnouncementQuery: a.bindings.AnnouncementQuery, AsyncRunner: a.asyncRunner,
 	}))
 	*a.bindings.TurnPresentation = turnstream.NewService(TurnPresentationPorts(TurnPresentationPortInputs{
 		Runtime: runtimeDeps, Turns: a.bindings.Turns, TurnPresentation: a.bindings.TurnPresentation,
@@ -456,8 +464,8 @@ func prepareTestApp(a *App) *App {
 		},
 	})
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a.BackendRuntimeDeps()), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}
-	a.bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: ClaudeSessionStopped(ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()), a.runtimeOwner.ClaudeCore), Session: a.State().Session, Finish: a.bindings.Turns.FinishTurn}
-	workspaceRepository := configadapter.NewWorkspaceRepository(a)
+	a.bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: ClaudeSessionStopped(ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex), a.runtimeOwner.ClaudeCore), Session: a.State().Session, Finish: a.bindings.Turns.FinishTurn}
+	workspaceRepository := configadapter.NewWorkspaceRepository(configSource)
 	a.bindings.BackendEvents.Deps = backendevents.Dependencies{
 		Lifecycle: a.bindings.Turns, Items: a.bindings.TurnItems, Presentation: a.bindings.TurnPresentation,
 		Compaction: a.bindings.Compaction, Submissions: a.bindings.SubmissionStatus,
@@ -481,7 +489,7 @@ func prepareTestApp(a *App) *App {
 		}),
 	}
 	failureCards := NewOutboundCardService(OutboundCardInputs{
-		RuntimeDeps: runtimeDeps, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+		RuntimeDeps: runtimeDeps, Feishu: a.Feishu(), AsyncRunner: a.asyncRunner,
 		InteractionDelivery: a.bindings.InteractionDelivery, TurnPresentation: a.bindings.TurnPresentation,
 		Continuation: a.bindings.Continuation, FinalCardPatch: a.bindings.FinalCardPatch,
 		TurnFinalFooter: a.bindings.TurnMetadata.TurnFinalFooterLines,
@@ -490,7 +498,7 @@ func prepareTestApp(a *App) *App {
 		Runtime: runtimeDeps, TurnPresentation: a.bindings.TurnPresentation, Compaction: a.bindings.Compaction,
 		InteractionLifecycle: a.bindings.InteractionLifecycle, AutoRetry: a.bindings.AutoRetry,
 		SubmissionCleanup: a.bindings.SubmissionCleanup, PendingQueue: a.bindings.PendingQueue,
-		Submissions: a.bindings.Submissions, Cards: failureCards, AsyncRunner: a.AsyncRunner(),
+		Submissions: a.bindings.Submissions, Cards: failureCards, AsyncRunner: a.asyncRunner,
 	}))
 	a.bindings.BackendFailure = &failure
 	backendFailureOwner = a.bindings.BackendFailure
@@ -499,7 +507,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ForwardInputs = forwardService
 	a.bindings.Conversations = &conversation.Service{Deps: ConversationPorts(ConversationPortInputs{
 		Config: a.Config(), ConfigMu: a.ConfigMu(), FrontendID: a.FrontendID(),
-		FrontendConfigIndex: a.FrontendConfigIndex(), Context: a.Context,
+		FrontendConfigIndex: a.frontendConfigIndex, Context: a.Context,
 		Repository: a.State(), RuntimeOwner: a.runtimeOwner, LiveThreads: liveThreads,
 		ModelSettings: a.bindings.ModelSnapshots,
 		ThreadBinding: conversation.ThreadBindingDependencies{
@@ -514,6 +522,7 @@ func prepareTestApp(a *App) *App {
 		Forms: a.bindings.Forms, FrontendID: a.FrontendID(), Effects: newEffectRunner(a.runtimeOwner),
 		Feishu: a.Feishu(), Presentation: a.bindings.WorkspacePresentation,
 	})
+	a.bindings.WorkspaceCommand = workspaceCommandDependencies
 	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfigurationService(WorkspaceConfigurationInputs{
 		Dependencies: workspaceCommandDependencies, State: a.State(), LiveThreads: a.runtimeOwner.LiveThreads,
 		Conversations: a.bindings.Conversations, Presentation: a.bindings.WorkspacePresentation,
@@ -529,10 +538,11 @@ func prepareTestApp(a *App) *App {
 	})
 	downloadDependencies := buildDebugViewDependencies()
 	downloadDependencies.FileSharing = a.bindings.FileSharing
+	a.bindings.DebugView = downloadDependencies
 	a.bindings.Download = BuildDebug(downloadDependencies).CommandDownload
 	a.bindings.Upgrades = BuildUpgrades(UpgradeInputs{
 		Context: a.Context, Config: a.Config(), ConfigMu: a.ConfigMu(), ConfiguredBackend: configuredBackend,
-		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(), State: a.State(),
+		FrontendID: a.FrontendID(), FrontendConfigIndex: a.frontendConfigIndex, State: a.State(),
 		Feishu: a.Feishu(), EffectRunner: *a.runtimeOwner.EffectRunner,
 		WorkspacePresentation: a.bindings.WorkspacePresentation, WorkspaceConfiguration: a.bindings.WorkspaceConfiguration,
 		Workflow: a.bindings.UpgradeWorkflow,
@@ -544,7 +554,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(a.FrontendID()), Repository: a.State(), Creation: a.bindings.WorkspaceCreation, Planning: a.bindings.WorkspacePlanning, Effects: a.bindings.WorkspaceEffects}
 	a.bindings.BindingCommands = BuildBindingCommands(bindingCommandInputsForTest(a, bindingScope))
 	a.bindings.ConversationRecovery = conversation.NewRecovery(ConversationRecoveryPorts(
-		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),
+		a.Config(), a.ConfigMu(), a.frontendConfigIndex, a.State(),
 		a.bindings.Conversations, a.runtimeOwner, a.bindings.CodexRecovery, a.bindings.ConversationConfiguration,
 	))
 	a.bindings.StartupRecovery = maintenance.NewStartupRecovery(StartupRecoveryPorts(StartupRecoveryPortInputs{
@@ -566,7 +576,7 @@ func prepareTestApp(a *App) *App {
 		UseCase: a.bindings.BackendSwitch, AnnouncementQuery: a.bindings.AnnouncementQuery,
 		StartupRecovery: a.bindings.StartupRecovery, AutoRetry: a.bindings.AutoRetry, FrontendQuery: a.bindings.FrontendQuery,
 	})
-	inboundBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	inboundBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex)
 	inboundSessionKey := SessionKeyBuilder(a.FrontendID())
 	inboundService.Deps = InboundPorts(InboundPortInputs{
 		FrontendID: a.FrontendID(), Context: a.Context, SessionKey: inboundSessionKey,
@@ -581,7 +591,7 @@ func prepareTestApp(a *App) *App {
 		WorkspaceMenu: a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
 		LocalBackend:  inboundBackend,
 		HandleCommand: func(msg *application.InboundMessage, text string) error {
-			return HandleInboundCommand(a, msg, text)
+			return a.bindings.Commands.Handle(msg, text)
 		},
 		SelectBackend: a.bindings.BackendSelection.ReplyBackendSelectionCard,
 		BlockedReason: a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
@@ -597,28 +607,64 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Inbound = inboundService
 	controls := conversation.NewControls(ConversationControlPorts(ConversationControlInputs{
 		Repository: a.State(), Config: a.Config(), ConfigMu: a.ConfigMu(),
-		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(),
+		FrontendID: a.FrontendID(), FrontendConfigIndex: a.frontendConfigIndex,
 		Conversations: a.bindings.Conversations, Pending: a.bindings.PendingQueue,
 		RetryTracker: a.runtimeOwner.AutoRetries, AutoRetry: a.bindings.AutoRetry,
 		Runtime: a.BackendRuntimeDeps(), Context: a.Context,
 	}))
 	a.bindings.ConversationControls = &controls
-	a.bindings.ThreadMenu = threadmenu.NewService(ThreadMenuDependencies(a))
+	a.bindings.ThreadMenu = threadmenu.NewService(BuildThreadMenuDependencies(ThreadMenuInputs{
+		Runtime: a.BackendRuntimeDeps(), Store: a.store, State: a.State(), Conversations: a.bindings.Conversations,
+		BindingScope: bindingScope, ConversationQuery: a.bindings.ConversationQuery, PendingQueue: a.bindings.PendingQueue,
+		WorkspaceConfiguration: a.bindings.WorkspaceConfiguration, WorkspaceSelection: a.bindings.WorkspaceSelection,
+		ConversationControls: a.bindings.ConversationControls, ThreadSettings: a.bindings.ThreadSettings,
+		PermissionSettings: a.bindings.PermissionSettings, BackendActions: a.bindings.BackendActions,
+		AutoRetry: a.bindings.AutoRetry, CompleteMenuCommand: menuCommands.Complete,
+	}))
 	planSource, planCatalog, planWorkspaces := PlanPorts(a.Config(), a.ConfigMu(), a.bindings.ModelSnapshots, a.runtimeOwner)
 	*a.bindings.Plan = planapp.Service{Forms: a.bindings.Forms, Delivery: a.bindings.InteractionDelivery, Repository: a.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: a.Context}, Conversations: a.bindings.Conversations, Workspaces: planWorkspaces, Queue: a.bindings.Submissions}
 	*turnPlanMode = PlanModePorts(PlanModePortInputs{
 		Runtime: a.BackendRuntimeDeps(), UseCase: a.bindings.Plan, Continuation: a.bindings.Continuation,
 		State: a.State(), ModelSnapshots: a.bindings.ModelSnapshots,
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Submissions: a.bindings.Submissions,
-		Conversations: a.bindings.Conversations, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
+		Conversations: a.bindings.Conversations, Feishu: a.Feishu(), AsyncRunner: a.asyncRunner,
 	})
+	a.bindings.PlanMode = *turnPlanMode
 	reviewCommandDependencies := BuildReviewCommandDependencies(ReviewCommandInputs{
 		Runtime: a.BackendRuntimeDeps(), Store: a.store, WorkspaceSelection: a.bindings.WorkspaceSelection,
 		UseCase: a.bindings.Review, Submissions: a.bindings.Submissions, BindingScope: bindingScope,
 		PendingQueue: a.bindings.PendingQueue, QueuedNotice: a.bindings.OutboundCards, Feishu: a.Feishu(),
 		State: a.State(), Effects: newEffectRunner(a.runtimeOwner), AsyncActions: asyncCardActions,
 	})
+	a.bindings.ReviewCommand = reviewCommandDependencies
 	a.bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
+	*commandRegistry = BuildCommandRegistry(CommandRegistryInputs{
+		Features: BuildFeatureRegistryInputs(BuildCommandFeatureInputs(CommandFeatureDependencies{
+			BindingScope: bindingScope, BindingCommands: a.bindings.BindingCommands,
+			BackendSelection: a.bindings.BackendSelection, BackendConfiguration: a.bindings.BackendConfiguration,
+			ReviewCommands: a.bindings.ReviewCommands, RuntimeSettings: a.bindings.RuntimeSettings,
+			QuietMode: ConfiguredQuietModeBuilder(a.Config(), a.ConfigMu(), a.frontendConfigIndex),
+			PlanMode:  a.bindings.PlanMode, GoalCommands: a.bindings.GoalCommands,
+			BackendActions: a.bindings.BackendActions, Compaction: a.bindings.Compaction, Download: a.bindings.Download,
+			History: a.bindings.History, SkillCommands: a.bindings.SkillCommands, Usage: a.bindings.Usage,
+			ThreadMenu: a.bindings.ThreadMenu, WorkspaceConfiguration: a.bindings.WorkspaceConfiguration,
+			WorkspaceManagement: a.bindings.WorkspaceManagement, WorkspacePresentation: a.bindings.WorkspacePresentation,
+			ModelCommands: a.bindings.ModelCommands, ModelSettings: a.bindings.ModelSettings,
+			ScopedRoutingConfiguration: a.bindings.ScopedRoutingConfiguration, ServiceTier: a.bindings.ServiceTier,
+			Debug: a.bindings.Debug, BackendUpgrades: a.bindings.BackendUpgrades,
+			UpgradePresentation: a.bindings.UpgradePresentation, Upgrades: a.bindings.Upgrades,
+			State: a.State(), Config: a.Config(), ConfiguredBackend: configuredBackend,
+			MakeSessionKey: SessionKeyBuilder(a.FrontendID()), NormalizeSessionKey: a.configView().normalizeSessionKey,
+			ConversationQuery: a.bindings.ConversationQuery, Conversations: a.bindings.Conversations,
+			Renderer: a.Feishu(), Effects: newEffectRunner(a.runtimeOwner), FrontendID: a.FrontendID(),
+		})),
+		ConfiguredBackend: configuredBackend, MakeSessionKey: SessionKeyBuilder(a.FrontendID()),
+		WorkspaceConfigured:        func() bool { return a.Config() != nil && len(a.Config().Workspaces) > 0 },
+		ReplyBackendSelection:      a.bindings.BackendSelection.ReplyBackendSelectionCard,
+		BackendSwitchBlockedReason: a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
+		MaintenanceBlocksCommand:   CommandMaintenanceBlocker(a.BackendRuntimeDeps()),
+		QueuePassthrough:           CommandPassthroughQueue(a.bindings.Submissions),
+	})
 	cardActionFrontendID := a.FrontendID()
 	normalizeCardActionSessionKey := func(key string) string {
 		return identity.CanonicalSessionKey(cardActionFrontendID, key)
@@ -629,7 +675,7 @@ func prepareTestApp(a *App) *App {
 		WorkspaceCardActionInputs{
 			BindingCommands: a.bindings.BindingCommands, WorkspaceManagement: a.bindings.WorkspaceManagement,
 			WorkspaceConfiguration: a.bindings.WorkspaceConfiguration, ThreadMenu: a.bindings.ThreadMenu,
-			CompleteMenuCommand: a.CompleteMenuCommand,
+			CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 		},
 		a.bindings.WorkspaceConfiguration.WorkspaceDeleteActions(),
 		a.bindings.History,
@@ -639,28 +685,28 @@ func prepareTestApp(a *App) *App {
 			BackendActions: a.bindings.BackendActions,
 		}, SystemCardActionInputs{
 			Debug: a.bindings.Debug, BackendUpgrades: a.bindings.BackendUpgrades,
-			BackendActions: a.bindings.BackendActions, CompleteMenuCommand: a.CompleteMenuCommand,
+			BackendActions: a.bindings.BackendActions, CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 		}, MenuCoreCardActionInputs{
 			Backend: configuredBackend, State: a.State(), Renderer: a.Feishu(),
 			BackendSelection: a.bindings.BackendSelection, AutoRetry: a.bindings.AutoRetry,
-			CompleteMenuCommand: a.CompleteMenuCommand,
+			CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 		}, BindingCardActionInputs{
 			Backend: configuredBackend, State: a.State(), Renderer: a.Feishu(),
-			BindingCommands: a.bindings.BindingCommands, CompleteMenuCommand: a.CompleteMenuCommand,
+			BindingCommands: a.bindings.BindingCommands, CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 		}, ToolsCardActionInputs{
-			CompleteMenuCommand: a.CompleteMenuCommand, Skills: a.bindings.SkillCommands,
+			CompleteMenuCommand: a.bindings.MenuCommands.Complete, Skills: a.bindings.SkillCommands,
 			Backend: configuredBackend, State: a.State(), Renderer: a.Feishu(),
 			RuntimeSettings: a.bindings.RuntimeSettings,
-			QuietMode:       ConfiguredQuietModeBuilder(a.Config(), a.ConfigMu(), a.FrontendConfigIndex()),
+			QuietMode:       ConfiguredQuietModeBuilder(a.Config(), a.ConfigMu(), a.frontendConfigIndex),
 		}, ThreadForkCardActionInputs{
 			BindingCommands: a.bindings.BindingCommands, ConversationQuery: a.bindings.ConversationQuery,
 			NormalizeSessionKey: normalizeCardActionSessionKey,
-			Backend:             configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
+			Backend:             configuredBackend, CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 		}, ReviewCardActionInputs{
 			Dependencies: reviewCommandDependencies, ReviewCommands: a.bindings.ReviewCommands,
-			Backend: configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
+			Backend: configuredBackend, CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 		}, PlanCardActionInputs{
-			CompleteMenuCommand: a.CompleteMenuCommand,
+			CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 			Lifecycle:           &a.runtimeOwner.Lifecycle,
 			AsyncRunner:         a.asyncRunner,
 			Context:             a.Context,
@@ -680,7 +726,7 @@ func prepareTestApp(a *App) *App {
 			ReplyInThread:      a.configView().replyInThreadEnabled(),
 			TransportAvailable: a.feishu != nil,
 		}, CompactCardActionInputs{
-			CompleteMenuCommand: a.CompleteMenuCommand,
+			CompleteMenuCommand: a.bindings.MenuCommands.Complete,
 			Actions:             a.bindings.BackendActions,
 			Compaction:          a.bindings.Compaction,
 			State:               a.State(),
@@ -698,7 +744,7 @@ func prepareTestApp(a *App) *App {
 			ScopedRoutingConfiguration: a.bindings.ScopedRoutingConfiguration,
 			ThreadSettings:             a.bindings.ThreadSettings,
 			State:                      a.State(),
-			CompleteMenuCommand:        a.CompleteMenuCommand,
+			CompleteMenuCommand:        a.bindings.MenuCommands.Complete,
 		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,
@@ -745,14 +791,40 @@ func prepareTestApp(a *App) *App {
 	return a
 }
 
-func renderThreadsCardForTest(a *App, key string, all bool) (map[string]any, error) {
-	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+func selectBackendForTest(a *Frontend, backend string) {
+	a.runtimeOwner.SetBackend(backend)
+	if a.stateView != nil {
+		a.stateView.SetBackend(a.runtimeOwner.Backend())
+	}
+}
+
+func buildWorkspaceConfigurationForTest(a *Frontend) *appworkspacecmd.ConfigService {
+	return BuildWorkspaceConfigurationService(WorkspaceConfigurationInputs{
+		Dependencies: a.bindings.WorkspaceCommand, State: a.State(), LiveThreads: a.runtimeOwner.LiveThreads,
+		Conversations: a.bindings.Conversations, Presentation: a.bindings.WorkspacePresentation,
+		CompleteMenuCommand: a.bindings.MenuCommands.Complete, FrontendID: a.FrontendID(),
+		Effects: newEffectRunner(a.runtimeOwner), ReplyInThread: a.configView().replyInThreadEnabled(),
+	})
+}
+
+func buildWorkspaceManagementForTest(a *Frontend, scope BindingScope) *appworkspacecmd.ManagementService {
+	return BuildWorkspaceManagementService(WorkspaceManagementInputs{
+		Dependencies: a.bindings.WorkspaceCommand, State: a.State(), RuntimeOwner: a.runtimeOwner,
+		AsyncRunner: a.asyncRunner, Conversations: a.bindings.Conversations, BindingScope: scope,
+		AnnouncementQuery: a.bindings.AnnouncementQuery, CompleteMenuCommand: a.bindings.MenuCommands.Complete,
+		FrontendID: a.FrontendID(), Effects: newEffectRunner(a.runtimeOwner),
+		ReplyInThread: a.configView().replyInThreadEnabled(), Presentation: a.bindings.WorkspacePresentation,
+	})
+}
+
+func renderThreadsCardForTest(a *Frontend, key string, all bool) (map[string]any, error) {
+	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex)
 	return renderThreadsCard(threadCardInputs{
 		Repository: a.State(), Config: a.Config(), Backend: backend, Conversations: a.bindings.Conversations,
 	}, key, all)
 }
 
-func recomposeTestApp(a *App) {
+func recomposeTestApp(a *Frontend) {
 	a.stateView = testStateView(a)
 	a.transport = a.feishu
 	a.runtimeOwner.EffectRunner = nil
@@ -768,11 +840,11 @@ func testSelectedBackendOwner(owner *runtime.FrontendOwner, backend string) *run
 	return owner
 }
 
-func bindingCommandInputsForTest(a *App, scope BindingScope) BindingCommandInputs {
+func bindingCommandInputsForTest(a *Frontend, scope BindingScope) BindingCommandInputs {
 	client := a.feishu
 	return BindingCommandInputs{
 		Scope: scope, Config: a.Config(), ConfigMu: a.ConfigMu(), State: a.State(), FrontendID: a.FrontendID(),
-		ConfiguredBackend: ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
+		ConfiguredBackend: ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex),
 		MakeSessionKey:    SessionKeyBuilder(a.FrontendID()), Context: a.Context, Effects: newEffectRunner(a.runtimeOwner),
 		RunAsync: func(fn func()) { a.runtimeOwner.Lifecycle.Run(fn, a.asyncRunner) },
 		RefreshGroupStatus: func(chatID string) {

@@ -19,8 +19,6 @@ import (
 	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	"feidex/internal/adapter/feishu/pendingforms"
 
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
-
 	appthreadview "feidex/internal/adapter/feishu/threadview"
 	"feidex/internal/adapter/feishu/turnitem"
 
@@ -307,7 +305,7 @@ func TestAppMiscMessageHelpers(t *testing.T) {
 
 func TestSendCommandMenuAndStartupReadyNotifications(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	if err := sendCommandMenu(a, &feishu.InboundMessage{MessageID: "m-1", ChatType: "group"}); err != nil {
+	if err := sendCommandMenuWith(a.configView().makeSessionKey, a.configView().configuredBackend, a.State(), a.feishu, newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), &feishu.InboundMessage{MessageID: "m-1", ChatType: "group"}); err != nil {
 		t.Fatalf("sendCommandMenu() error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -337,7 +335,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 
-	if err := commandWorkspace(a, msg, []string{"list"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"list"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(list) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -360,7 +358,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 			return nil
 		}
 	}
-	if err := commandWorkspace(a, msg, []string{"use", "alt"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"use", "alt"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(use) error = %v", err)
 	}
 	sess := a.store.GetSession(a.configView().makeSessionKey(msg))
@@ -372,7 +370,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := commandWorkspace(a, msg, nil); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, nil, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(menu) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -383,7 +381,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := commandWorkspace(a, msg, []string{"sandbox"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"sandbox"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(sandbox) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -391,7 +389,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := commandWorkspace(a, msg, []string{"policy"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"policy"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(policy) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -399,7 +397,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 
 	ff.replyCards = nil
-	if err := commandWorkspace(a, msg, []string{"new"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"new"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(new) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -416,7 +414,7 @@ func TestCommandWorkspaceAndCommandThreads(t *testing.T) {
 	}
 	ff.replyTexts = nil
 	ff.replyCards = nil
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
+	if err := a.bindings.ThreadMenu.CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(empty) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -629,7 +627,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 		gotTargetDir = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
-	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementForTest(a, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
@@ -649,7 +647,7 @@ func TestCommandWorkspaceCloneCreatesAndSwitchesWorkspace(t *testing.T) {
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	repoURL := "git@github.com:example/repo.git"
-	if err := commandWorkspace(a, msg, []string{"clone", repoURL}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"clone", repoURL}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(clone) error = %v", err)
 	}
 	a.waitAsync()
@@ -686,7 +684,7 @@ func TestCommandWorkspaceCloneExistingDirectoryOpensWorkspaceNewCard(t *testing.
 	a.cfg.Workspaces[0].Cwd = currentDir
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	if err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(clone existing dir) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -716,7 +714,7 @@ func TestCommandWorkspaceCloneExistingWorkspacePromptsSwitch(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: existingDir})
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
-	if err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"}); err != nil {
+	if err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}, a.bindings.WorkspaceManagement); err != nil {
 		t.Fatalf("commandWorkspace(clone existing workspace) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -735,7 +733,7 @@ func TestCommandWorkspaceCloneRejectsExistingWorkspaceID(t *testing.T) {
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "repo", Cwd: t.TempDir()})
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 
-	err := commandWorkspace(a, msg, []string{"clone", "git@github.com:example/repo.git"})
+	err := a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, []string{"clone", "git@github.com:example/repo.git"}, a.bindings.WorkspaceManagement)
 	if err == nil {
 		t.Fatal("expected existing workspace id to fail clone")
 	}
@@ -868,7 +866,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return newMenuActionService(a).completeMenuTools(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.thread": func() (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteMenuThread(action, action.ActionValue["session_key"].(string))
+			return a.bindings.ThreadMenu.CompleteMenuThread(action, action.ActionValue["session_key"].(string))
 		},
 		"menu.download": func() (*callback.CardActionTriggerResponse, error) {
 			const downloadSessionKey = "feishu:chat:chat-1"
@@ -880,7 +878,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("UpsertSession(download) error = %v", err)
 			}
-			return appdebugviewcmd.CompleteMenuDownload(DebugViewDependencies(a), &feishu.CardAction{
+			return appdebugviewcmd.CompleteMenuDownload(a.bindings.DebugView, &feishu.CardAction{
 				UserID:      "user-1",
 				ChatID:      "chat-1",
 				MessageID:   "msg-download",
@@ -978,10 +976,10 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			return a.bindings.WorkspaceManagement.CompleteWorkspacePolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.sandbox.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
+			return a.bindings.ThreadMenu.CompleteThreadSandboxMenu(action, action.ActionValue["session_key"].(string))
 		},
 		"thread.policy.menu": func() (*callback.CardActionTriggerResponse, error) {
-			return appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
+			return a.bindings.ThreadMenu.CompleteThreadPolicyMenu(action, action.ActionValue["session_key"].(string))
 		},
 	} {
 		resp, err := fn()
@@ -2069,7 +2067,7 @@ func TestCommandUpgradeSupportsLocalPath(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-upgrade-path", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
-	if err := HandleInboundCommand(a, msg, "/upgrade path dist/feidex linux amd64"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/upgrade path dist/feidex linux amd64"); err != nil {
 		t.Fatalf("HandleInboundCommand(/upgrade path ...) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -3066,10 +3064,10 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).ShowThreadSandboxMenu(msg); err != nil {
+	if err := a.bindings.ThreadMenu.ShowThreadSandboxMenu(msg); err != nil {
 		t.Fatalf("showThreadSandboxMenu() error = %v", err)
 	}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).ShowThreadPolicyMenu(msg); err != nil {
+	if err := a.bindings.ThreadMenu.ShowThreadPolicyMenu(msg); err != nil {
 		t.Fatalf("showThreadPolicyMenu() error = %v", err)
 	}
 	if len(ff.replyCards) < 2 {
@@ -3090,7 +3088,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	}
 
 	emptyMsg := &feishu.InboundMessage{MessageID: "m-2", ChatID: "chat-2", ChatType: "group", RootMessageID: "root-2", UserID: "user-2"}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandAppend(emptyMsg, "  more text  "); err == nil {
+	if err := a.bindings.ThreadMenu.CommandAppend(emptyMsg, "  more text  "); err == nil {
 		t.Fatal("expected commandAppend without active session to fail")
 	}
 	fc.callHook = func(_ context.Context, method string, params any, out any) error {
@@ -3108,10 +3106,10 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 			return nil
 		}
 	}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandAppend(msg, "  more text  "); err != nil {
+	if err := a.bindings.ThreadMenu.CommandAppend(msg, "  more text  "); err != nil {
 		t.Fatalf("commandAppend() error = %v", err)
 	}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
+	if err := a.bindings.ThreadMenu.CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 
@@ -3121,7 +3119,7 @@ func TestAdditionalCommandHelpers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset) error = %v", err)
 	}
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThreadsNew(msg); err != nil {
+	if err := a.bindings.ThreadMenu.CommandThreadsNew(msg); err != nil {
 		t.Fatalf("commandThreadsNew() error = %v", err)
 	}
 }
@@ -3207,7 +3205,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertSession(thread resume) error = %v", err)
 	}
-	resp, err = appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{
+	resp, err = a.bindings.ThreadMenu.CompleteThreadResume(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		ActionValue: map[string]any{"thread_name": "Selected", "thread_preview": "chosen"},
@@ -3251,7 +3249,7 @@ func TestMoreActionAndModelHandlers(t *testing.T) {
 	if err := a.store.UpsertSession(sess); err != nil {
 		t.Fatalf("UpsertSession(reset for menu new) error = %v", err)
 	}
-	resp, err = appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
+	resp, err = a.bindings.ThreadMenu.CompleteMenuNew(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey)
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeMenuNew() = %#v, %v", resp, err)
 	}
@@ -3342,11 +3340,11 @@ func TestHandleCommandAndInboundDiscardHelpers(t *testing.T) {
 		"/workspace sandbox",
 		"/workspace policy",
 	} {
-		if err := HandleInboundCommand(a, msg, raw); err != nil && raw != "/threads" {
+		if err := a.bindings.Commands.Handle(msg, raw); err != nil && raw != "/threads" {
 			t.Fatalf("HandleInboundCommand(%q) error = %v", raw, err)
 		}
 	}
-	if err := HandleInboundCommand(a, msg, "/unknown"); err == nil {
+	if err := a.bindings.Commands.Handle(msg, "/unknown"); err == nil {
 		t.Fatal("expected unknown command to fail")
 	}
 	if len(ff.replyCards) == 0 {
@@ -3389,7 +3387,7 @@ func TestCommandHelpRendersHelpCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "m-help", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1"}
 
-	if err := commandHelp(a, msg, nil); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/help"); err != nil {
 		t.Fatalf("commandHelp() error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -3568,7 +3566,7 @@ func TestCommandThreadsDisplaysThreadList(t *testing.T) {
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
+	if err := a.bindings.ThreadMenu.CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(display) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -3702,7 +3700,7 @@ func TestCommandThreadsFiltersByWorkspaceCWD(t *testing.T) {
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThreads(msg, false); err != nil {
+	if err := a.bindings.ThreadMenu.CommandThreads(msg, false); err != nil {
 		t.Fatalf("commandThreads(filter) error = %v", err)
 	}
 	if attempts != 3 {
@@ -3749,7 +3747,7 @@ func TestCompleteThreadResumeRejectsThreadFromDifferentWorkspace(t *testing.T) {
 		return nil
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{
+	resp, err := a.bindings.ThreadMenu.CompleteThreadResume(&feishu.CardAction{
 		UserID: "user-1",
 		ChatID: "chat-1",
 		ActionValue: map[string]any{

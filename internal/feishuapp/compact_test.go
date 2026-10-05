@@ -304,7 +304,7 @@ func TestCompleteMenuCompactCodexAcksImmediatelyAndPatchesAcceptedCard(t *testin
 
 func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendClaude)
+	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 	claude := &blockingClaudeCompactCore{
@@ -383,7 +383,7 @@ func TestCompleteMenuCompactClaudeAcksImmediatelyAndPatchesAcceptedCard(t *testi
 
 func TestCompleteMenuCompactPatchesFailureCardOnError(t *testing.T) {
 	a, ff, _ := newTestApp(t)
-	a.SetBackend(domainbackend.BackendCodex)
+	selectBackendForTest(a, domainbackend.BackendCodex)
 	a.cfg.Feishu.Backend = domainbackend.BackendCodex
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	claudesession "feidex/internal/adapter/backend/claude/catalog"
-	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 )
@@ -67,7 +66,7 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	writeClaudeSessionFixture(t, configDir, a.cfg.Workspaces[0].Cwd, "session-list-1", "List Session", "continue work", time.Unix(100, 0))
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
-	if err := HandleInboundCommand(a, msg, "/session"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/session"); err != nil {
 		t.Fatalf("HandleInboundCommand(/session) error = %v", err)
 	}
 	if len(ff.replyCards) == 0 {
@@ -164,7 +163,7 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := HandleInboundCommand(a, msg, "/session resume session-resume-1"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/session resume session-resume-1"); err != nil {
 		t.Fatalf("HandleInboundCommand(/session resume) error = %v", err)
 	}
 	if len(claude.ensureCalls) != 1 {
@@ -211,7 +210,7 @@ func TestHandleCommandSessionNewClaudeBindsDeferredSessionID(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := HandleInboundCommand(a, msg, "/session new"); err != nil {
+	if err := a.bindings.Commands.Handle(msg, "/session new"); err != nil {
 		t.Fatalf("HandleInboundCommand(/session new) error = %v", err)
 	}
 	sess := a.store.GetSession(sessionKey)
@@ -254,7 +253,7 @@ func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "session-alt-1")
+	resp, err := a.bindings.ThreadMenu.CompleteThreadResume(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "session-alt-1")
 	if err != nil {
 		t.Fatalf("completeThreadResume() error = %v", err)
 	}
