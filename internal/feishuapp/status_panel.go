@@ -19,5 +19,5 @@ func commandStatus(a *App, msg *feishu.InboundMessage) error {
 	sessionKey := a.configView().makeSessionKey(msg)
 	sess := a.State().Session(sessionKey)
 	card := renderStatusCard(a.State(), a.feishu, a.configView().configuredBackend(), a.bindings.BackendConfiguration.StatusCardBody(sess), sessionKey)
-	return replyCardEffect(a, msg, card)
+	return replyCardEffect(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, card)
 }

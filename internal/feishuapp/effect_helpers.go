@@ -17,29 +17,29 @@ import (
 // replyCardEffect routes a user-visible card through the application effect
 // runner. Callers keep ownership of rendering while transport details stay at
 // the composition boundary.
-func replyCardEffect(a *App, msg *feishu.InboundMessage, card map[string]any) error {
-	if a == nil || msg == nil {
+func replyCardEffect(runner frontendruntime.EffectRunner, frontendID string, inThread bool, msg *feishu.InboundMessage, card map[string]any) error {
+	if msg == nil {
 		return nil
 	}
-	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
-		Frontend:       identity.FrontendID(a.FrontendID()),
+	return runner.Run(context.Background(), []application.Effect{application.SendCard{
+		Frontend:       identity.FrontendID(frontendID),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
 		View:           feishuoutbound.Card(card),
-		InThread:       a.configView().replyInThreadEnabled(),
+		InThread:       inThread,
 	}})
 }
 
-func replyTextEffect(a *App, msg *feishu.InboundMessage, text string) error {
-	if a == nil || msg == nil {
+func replyTextEffect(runner frontendruntime.EffectRunner, frontendID string, inThread bool, msg *feishu.InboundMessage, text string) error {
+	if msg == nil {
 		return nil
 	}
-	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendMessage{
-		Frontend:       identity.FrontendID(a.FrontendID()),
+	return runner.Run(context.Background(), []application.Effect{application.SendMessage{
+		Frontend:       identity.FrontendID(frontendID),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
 		Text:           text,
-		InThread:       a.configView().replyInThreadEnabled(),
+		InThread:       inThread,
 	}})
 }
 

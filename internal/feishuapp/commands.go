@@ -86,7 +86,7 @@ func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {
 	}
 	sessionKey := a.configView().makeSessionKey(msg)
 	card := renderHelpCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "帮助说明"), a.feishu, a.bindings.BindingCommands.scope, sessionKey)
-	return replyCardEffect(a, msg, card)
+	return replyCardEffect(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, card)
 }
 
 func renderCommandMenuCardData(backend, title string, renderer bindingCardRenderer, sessionKey string) map[string]any {

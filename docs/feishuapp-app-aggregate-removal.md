@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 170 |
-| 收 `*App` 的顶层函数 | 51 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 168 |
+| 收 `*App` 的顶层函数 | 47 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -878,9 +878,11 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 192 将自动重试视图和 runtime maintenance command 工厂改为接收显式构造输入。自动重试动态读取同一 frontend backend/config，回复仍走同一 effect runner；notification owner 在 maintenance command 之前构造，维护任务直接捕获它和 lifecycle runner，不再通过 App bindings 延迟查找。startup-ready chat 仍从 frontend-scoped repository 的 sessions 计算。本次仅改变依赖装配，不改变重试或维护任务的生命周期边界。生产 `*App` 引用由 174 降至 172，收 `*App` 的函数数由 53 降至 51，其他棘轮保持 1/1/0。
 
-步骤 193 删除配置自愈通知的单调用 `queueFrontendCardNotification(*App)` 转发 helper，在通知 owner 已就绪的函数内直接入队；通知内容、collapse key 和发送失败后的排队语义不变。生产 `*App` 引用由 172 降至 171，其他棘轮保持 1/1/0。
+步骤 193 删除配置自愈通知的单调用 `queueFrontendCardNotification(*App)` 转发 helper，在通知 owner 已就绪的函数内直接入队；通知内容、collapse key 和发送失败后的排队语义不变。生产 `*App` 引用由 172 降至 171，收 `*App` 的函数数由 51 降至 50，其他棘轮保持 1/1/0。
 
-步骤 194 删除 `replyCommandActionResponse(*App)` 转发 helper。workspace config/management 与 model config 在构造时捕获已有 effect runner、frontend ID 和 thread-reply 设置，再调用窄 `replyCommandActionResponseWith`；卡片优先于 toast 的回复顺序不变。生产 `*App` 引用由 171 降至 170，收 `*App` 的函数数由 51 降至 50，其他棘轮保持 1/1/0。
+步骤 194 删除 `replyCommandActionResponse(*App)` 转发 helper。workspace config/management 与 model config 在构造时捕获已有 effect runner、frontend ID 和 thread-reply 设置，再调用窄 `replyCommandActionResponseWith`；卡片优先于 toast 的回复顺序不变。生产 `*App` 引用由 171 降至 170，收 `*App` 的函数数由 50 降至 49，其他棘轮保持 1/1/0。
+
+步骤 195 将 `replyCardEffect` 与 `replyTextEffect` 改为接收显式 effect runner、frontend ID 和 thread-reply 设置，命令入口不再通过 effect helper 传递 App。发送 effect 仍保留原 chat type/id、reply message ID 与 in-thread 字段。生产 `*App` 引用由 170 降至 168，收 `*App` 的函数数由 49 降至 47，其他棘轮保持 1/1/0。
 
 ## 方法
 

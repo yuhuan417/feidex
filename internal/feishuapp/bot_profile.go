@@ -49,7 +49,7 @@ func saveAuxiliaryCommand(a *App, msg *feishu.InboundMessage, setting routing.Se
 	if result.Scope == applicationmodelconfig.SessionScope {
 		scope = "session"
 	}
-	return replyTextEffect(a, msg, "已更新当前 "+scope+" 的 "+label)
+	return replyTextEffect(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, "已更新当前 "+scope+" 的 "+label)
 }
 
 func commandEffortProfileAware(modelcommandsDep modelcommands.ModelConfigService, msg *feishu.InboundMessage, args []string) error {
@@ -82,7 +82,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 	if result.Profile != nil {
 		updated = result.Profile.ServiceTier
 	}
-	return replyTextEffect(a, msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(updated))
+	return replyTextEffect(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(updated))
 }
 
 func effectiveBotProfile(store *appstate.Store) *state.BotProfile {

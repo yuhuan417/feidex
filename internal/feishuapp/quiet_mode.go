@@ -71,6 +71,9 @@ func updateQuietMode(settings runtimeconfig.Service, mode config.QuietMode) erro
 }
 
 func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
+	replyRunner := newEffectRunner(a.runtimeOwner)
+	frontendID := a.FrontendID()
+	replyInThread := a.configView().replyInThreadEnabled()
 	if len(args) > 1 {
 		return fmt.Errorf("usage: /quiet | /quiet <verbose|progress|normal|final> | /quiet config")
 	}
@@ -80,7 +83,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 		}
 		sessionKey := a.configView().makeSessionKey(msg)
 		card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a.State(), a != nil, sessionKey, "Quiet Mode"), a.feishu)
-		return replyCardEffect(a, msg, card)
+		return replyCardEffect(replyRunner, frontendID, replyInThread, msg, card)
 	}
 	arg := strings.TrimSpace(args[0])
 	if len(args) == 1 {
@@ -91,7 +94,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			}
 			sessionKey := a.configView().makeSessionKey(msg)
 			card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a.State(), a != nil, sessionKey, "Quiet Mode"), a.feishu)
-			return replyCardEffect(a, msg, card)
+			return replyCardEffect(replyRunner, frontendID, replyInThread, msg, card)
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))
 			if err != nil {
@@ -103,7 +106,7 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			if err := updateQuietMode(a.bindings.RuntimeSettings, mode); err != nil {
 				return err
 			}
-			return replyTextEffect(a, msg, "Quiet Mode 已切换为 `"+quietmode.StatusText(mode)+"`。")
+			return replyTextEffect(replyRunner, frontendID, replyInThread, msg, "Quiet Mode 已切换为 `"+quietmode.StatusText(mode)+"`。")
 		}
 	}
 	return nil
