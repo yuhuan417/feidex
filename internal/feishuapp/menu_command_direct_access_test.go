@@ -30,7 +30,7 @@ func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThread(msg, []string{"sandbox", "read-only"}); err != nil {
+	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThread(msg, []string{"sandbox", "read-only"}); err != nil {
 		t.Fatalf("commandThread(sandbox set) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadSandboxMode != "read-only" {
@@ -43,7 +43,7 @@ func TestCommandThreadDirectSandboxAndPolicy(t *testing.T) {
 		t.Fatalf("sandbox card body = %q", body)
 	}
 
-	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThread(msg, []string{"policy", "never"}); err != nil {
+	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThread(msg, []string{"policy", "never"}); err != nil {
 		t.Fatalf("commandThread(policy set) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadApprovalPolicy != "never" {
@@ -100,7 +100,7 @@ func TestCommandThreadDirectResume(t *testing.T) {
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThread(msg, []string{"resume", "thread-2"}); err != nil {
+	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThread(msg, []string{"resume", "thread-2"}); err != nil {
 		t.Fatalf("commandThread(resume) error = %v", err)
 	}
 	if got := a.store.GetSession(sessionKey); got == nil || got.ActiveThreadID != "thread-2" || got.ActiveThreadName != "Resumed Thread" {

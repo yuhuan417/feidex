@@ -117,7 +117,7 @@ func TestClaudePermissionCommandAppliesRuntimeSynchronously(t *testing.T) {
 	claude := &fakeClaudeCore{}
 	a, _, _ := newClaudePermissionMenuApp(t, claude)
 
-	err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandSession(&feishu.InboundMessage{
+	err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandSession(&feishu.InboundMessage{
 		MessageID: "msg-command-1",
 		ChatID:    "chat-1",
 		ChatType:  "p2p",

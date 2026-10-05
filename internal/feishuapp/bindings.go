@@ -173,6 +173,3 @@ func (a *App) AttachBindings(bindings *Bindings) { a.bindings = bindings }
 func BuildBackendConfiguration(inputs BackendConfigurationInputs) backend.ConfigurationService {
 	return buildBackendConfigurationService(inputs)
 }
-func BuildThreadMenu(a *App) *threadmenu.Service {
-	return threadmenu.NewService(newThreadMenuDependencies(a))
-}

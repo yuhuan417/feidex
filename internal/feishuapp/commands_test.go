@@ -46,7 +46,7 @@ func TestCommandNewRejectsRunningTurn(t *testing.T) {
 		t.Fatalf("upsert session: %v", err)
 	}
 
-	err = appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandThreadsNew(&feishu.InboundMessage{
+	err = appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandThreadsNew(&feishu.InboundMessage{
 		ChatID:   "chat",
 		ChatType: "p2p",
 		UserID:   "user",
@@ -718,7 +718,7 @@ func TestCommandForkCallsThreadForkAndSwitchesSession(t *testing.T) {
 	}
 
 	msg := &feishu.InboundMessage{MessageID: "m-fork", ChatID: "chat", ChatType: "p2p", UserID: "user"}
-	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandFork(msg, nil); err != nil {
+	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandFork(msg, nil); err != nil {
 		t.Fatalf("commandFork() error = %v", err)
 	}
 	if gotMethod != "thread/fork" {

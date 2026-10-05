@@ -431,7 +431,7 @@ func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteMenuInterrupt(&feishu.CardAction{
+	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteMenuInterrupt(&feishu.CardAction{
 		UserID:      "user-1",
 		ChatID:      "chat-1",
 		MessageID:   "msg-stop",

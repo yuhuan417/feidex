@@ -19,6 +19,7 @@ import (
 	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/adapter/feishu/planmode"
+	"feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/adapter/feishu/turnmeta"
 	"feidex/internal/adapter/feishu/turnstream"
@@ -584,7 +585,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Runtime: frontend.BackendRuntimeDeps(), Context: frontend.Context,
 	}))
 	bindings.ConversationControls = &controls
-	bindings.ThreadMenu = feishuapp.BuildThreadMenu(frontend)
+	bindings.ThreadMenu = threadmenu.NewService(feishuapp.ThreadMenuDependencies(frontend))
 	planSource, planCatalog, planWorkspaces := feishuapp.PlanPorts(frontend.Config(), frontend.ConfigMu(), bindings.ModelSnapshots, scope.RuntimeOwner)
 	*bindings.Plan = planapp.Service{Forms: bindings.Forms, Delivery: bindings.InteractionDelivery, Repository: frontend.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: frontend.Context}, Conversations: bindings.Conversations, Workspaces: planWorkspaces, Queue: bindings.Submissions}
 	*turnPlanMode = feishuapp.PlanModePorts(feishuapp.PlanModePortInputs{

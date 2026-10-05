@@ -43,7 +43,7 @@ func TestInterruptLifecycleWaitsForTurnCompletedToFinalize(t *testing.T) {
 		return nil
 	}
 
-	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
+	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if interruptCalls != 1 {
@@ -125,7 +125,7 @@ func TestGroupTopLevelCommandInterruptTargetsActiveChatAndClearsQueuedInputs(t *
 		RootMessageID: "msg-stop",
 		UserID:        "user-1",
 	}
-	if err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
+	if err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CommandInterrupt(msg); err != nil {
 		t.Fatalf("commandInterrupt() error = %v", err)
 	}
 	if interruptCalls != 1 {

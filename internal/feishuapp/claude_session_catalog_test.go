@@ -254,7 +254,7 @@ func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testi
 		t.Fatalf("UpsertSession() error = %v", err)
 	}
 
-	resp, err := appthreadmenu.NewService(newThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "session-alt-1")
+	resp, err := appthreadmenu.NewService(ThreadMenuDependencies(a)).CompleteThreadResume(&feishu.CardAction{UserID: "user-1", ChatID: "chat-1"}, sessionKey, "session-alt-1")
 	if err != nil {
 		t.Fatalf("completeThreadResume() error = %v", err)
 	}

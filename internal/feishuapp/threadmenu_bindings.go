@@ -17,7 +17,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
+func ThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 	if a == nil {
 		return appthreadmenu.Dependencies{}
 	}
