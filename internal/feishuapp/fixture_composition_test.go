@@ -14,6 +14,7 @@ import (
 	"feidex/internal/adapter/feishu/turnmeta"
 	"feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/adapter/feishu/upgraderender"
+	workspacecards "feidex/internal/adapter/feishu/workspace"
 	filesystempicker "feidex/internal/adapter/filesystem/pathpicker"
 	statejson "feidex/internal/adapter/storage/json"
 	scoped "feidex/internal/adapter/storage/json/scoped"
@@ -60,6 +61,17 @@ import (
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
+
+func testWorkspacePresentation(a *App) *workspacecards.Presentation {
+	if a == nil {
+		return compositionkit.NewWorkspacePresentation(compositionkit.WorkspacePresentationDependencies{})
+	}
+	return compositionkit.NewWorkspacePresentation(compositionkit.WorkspacePresentationDependencies{
+		Frontend: identity.FrontendID(a.FrontendID()), Config: a.Config(), ConfigPath: a.ConfigPath(),
+		Mutex: a.ConfigMu(), Scopes: a.State(),
+		Backend: ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
+	})
+}
 
 // Focused fixtures explicitly construct their complete dependency graph.
 func prepareTestApp(a *App) *App {
@@ -135,7 +147,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(a), PendingRequests: a.State().PendingRequests, ConfigPath: a.ConfigPath, BotName: func() string { return currentBotDisplayName(feishuClient) }, FrontendID: a.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
 	a.bindings.Forms = &interaction.FormService{Repository: a.State()}
 	a.bindings.WorkspaceWorkflow = &workspaceapp.Workflow{Forms: a.bindings.Forms, Planning: a.bindings.WorkspacePlanning, Creation: a.bindings.WorkspaceCreation}
-	a.bindings.WorkspacePresentation = NewWorkspacePresentation(a)
+	a.bindings.WorkspacePresentation = testWorkspacePresentation(a)
 	platform, releases, artifacts, launcher := UpgradeWorkflowPorts(a.Config(), a.ConfigMu(), a.runtimeOwner)
 	a.bindings.UpgradeWorkflow = &upgrade.Service{Forms: a.bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 

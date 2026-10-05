@@ -27,11 +27,6 @@ func NewStateView(a *App) *appstate.Store {
 	return view
 }
 
-// NewWorkspacePresentation creates the detached Feishu workspace view.
-func NewWorkspacePresentation(a *App) *workspacecards.Presentation {
-	return buildWorkspaceRenderService(a)
-}
-
 // NewDispatcher creates the application input dispatcher for this frontend.
 func NewDispatcher(a *App) application.Dispatcher { return newInputDispatcher(a) }
 

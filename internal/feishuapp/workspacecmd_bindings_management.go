@@ -29,7 +29,7 @@ func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presen
 		announcement: a.bindings.AnnouncementQuery, refreshes: a.runtimeOwner.Announcements,
 	}
 	return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{
-		Dependencies: workspaceCommandApp(a),
+		Dependencies: workspaceCommandApp(a, presentation),
 		State:        workspaceStateDeps(st),
 		SessionContext: appworkspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,

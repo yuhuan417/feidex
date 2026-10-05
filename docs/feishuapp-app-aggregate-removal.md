@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 185 |
-| 收 `*App` 的顶层函数 | 64 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 183 |
+| 收 `*App` 的顶层函数 | 62 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -865,6 +865,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 185 删除 `App.Store()` 转发 accessor，composition 直接使用 frontend scope 已提供的 scoped store，测试 fixture 读取 package 内部字段。backend selection 的配置来源改为共享 `frontendConfigProvider`，补充 frontend lifecycle context 与 runtime backend 更新能力，保持原 backend 切换时 runtime owner/state view 的同步更新。生产 `*App` 引用由 187 降至 186，收 `*App` 的函数数由 66 降至 65，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0；不改变 backend transition 顺序或 app-server lifecycle。
 
 步骤 186 删除 `BackendKind(*App)` composition facade。composition 使用 `FrontendScope` 中已有的 config、锁、frontend identity/index 和 runtime owner 构造动态 `ConfiguredBackendBuilder`，供 async input、scoped routing configuration 与 startup backend 检查共用；backend 仍在每次读取时从 runtime owner/config 解析。生产 `*App` 引用由 186 降至 185，收 `*App` 的函数数由 65 降至 64，其他棘轮保持 1/1/0。
+
+步骤 187 删除重复构造 workspace renderer 的 `buildWorkspaceRenderService(*App)`，并移除 `NewWorkspacePresentation(*App)` facade。composition 使用已有的 `WorkspacePresentationDependencies` 构造并注入同一个 presentation；workspace command dependencies 复用调用方传入的 renderer，不再按需从 App 重建。测试 fixture 通过 test-only helper 构造同样的 presentation。生产 `*App` 引用由 185 降至 183，收 `*App` 的函数数由 64 降至 62，App-bearing 结构体、App-bearing `*Ports` 工厂与 lazy binding-read 预算保持 1/1/0。
 
 ## 方法
 

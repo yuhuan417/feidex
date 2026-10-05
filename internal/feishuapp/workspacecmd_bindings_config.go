@@ -15,7 +15,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func workspaceCommandApp(a *App) workspacecmd.Dependencies {
+func workspaceCommandApp(a *App, presentation *workspacecards.Presentation) workspacecmd.Dependencies {
 	if a == nil {
 		return workspacecmd.Dependencies{}
 	}
@@ -36,7 +36,7 @@ func workspaceCommandApp(a *App) workspacecmd.Dependencies {
 		},
 		ContextProvider:  a,
 		BackendDriver:    a.BackendDriver(),
-		SettingsRenderer: buildWorkspaceRenderService(a),
+		SettingsRenderer: presentation,
 	}
 }
 
@@ -74,7 +74,7 @@ func buildWorkspaceConfigService(a *App, presentation *workspacecards.Presentati
 	st := a.State()
 	liveThreads := a.runtimeOwner.LiveThreads
 	return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{
-		Dependencies: workspaceCommandApp(a),
+		Dependencies: workspaceCommandApp(a, presentation),
 		State:        workspaceStateDeps(st),
 		SessionContext: workspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
