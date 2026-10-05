@@ -1,20 +1,42 @@
 package feishuapp
 
 import (
+	"context"
 	appfeatures "feidex/internal/application/features"
 
 	"strings"
+	"sync"
 
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
+	workspacecards "feidex/internal/adapter/feishu/workspace"
 	"feidex/internal/adapter/feishu/workspacecmd"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	appupgrade "feidex/internal/application/upgrade"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 )
 
-func BuildUpgrades(app *App, workspaceConfiguration *workspacecmd.ConfigService) appupgradecmd.UpgradeService {
-	outboundFrontend := app.FrontendID()
-	runtimeOwner := app.runtimeOwner
-	workspacePresentation := app.bindings.WorkspacePresentation
+type UpgradeInputs struct {
+	Context                func() context.Context
+	Config                 *config.Config
+	ConfigMu               *sync.RWMutex
+	ConfiguredBackend      func() string
+	FrontendID             string
+	FrontendConfigIndex    int
+	State                  *appstate.Store
+	Feishu                 FeishuClient
+	EffectRunner           frontendruntime.EffectRunner
+	WorkspacePresentation  *workspacecards.Presentation
+	WorkspaceConfiguration *workspacecmd.ConfigService
+	Workflow               *appupgrade.Service
+}
+
+func BuildUpgrades(inputs UpgradeInputs) appupgradecmd.UpgradeService {
+	configView := frontendConfigView{
+		cfg: inputs.Config, mu: inputs.ConfigMu,
+		frontendID: inputs.FrontendID, frontendConfigIndex: inputs.FrontendConfigIndex,
+	}
 
 	deps := appupgradecmd.UpgradeServiceDeps{
 		CurrentVersion: func() string { return currentVersion() },
@@ -24,50 +46,50 @@ func BuildUpgrades(app *App, workspaceConfiguration *workspacecmd.ConfigService)
 		},
 		RenderSystemMenuCard: func(sessionKey string) map[string]any {
 			spec, _ := menuGroupSpec("menu.group.system")
-			return renderSystemMenuCardData(app.configView().configuredBackend(), planModeTitleForSession(app.State(), app != nil, sessionKey, spec.Label), app.feishu, sessionKey)
+			backend := ""
+			if inputs.ConfiguredBackend != nil {
+				backend = inputs.ConfiguredBackend()
+			}
+			return renderSystemMenuCardData(backend, planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, spec.Label), inputs.Feishu, sessionKey)
 		},
 	}
 
 	adapter := &appupgradecmd.DefaultApp{
-		ContextFunc: app.Context,
+		ContextFunc: inputs.Context,
 		OutboundFunc: func() appupgradecmd.Outbound {
-			return newEffectOutbound(outboundFrontend, newEffectRunner(runtimeOwner))
+			return newEffectOutbound(inputs.FrontendID, inputs.EffectRunner)
 		},
-		CardRendererFunc: func() appupgradecmd.CardRenderer { return simpleStatusCardRenderer{client: app.feishu} },
+		CardRendererFunc: func() appupgradecmd.CardRenderer { return simpleStatusCardRenderer{client: inputs.Feishu} },
 		StateFunc: func() appupgradecmd.UpgradeState {
-			return app.State()
+			return inputs.State
 		},
 		CurrentWorkspaceFunc: func(msg *feishu.InboundMessage) (string, *config.Workspace) {
-			sessionKey, _, ws := currentWorkspaceForMessage(workspaceConfiguration, msg)
+			sessionKey, _, ws := currentWorkspaceForMessage(inputs.WorkspaceConfiguration, msg)
 			return sessionKey, ws
 		},
 		WorkspaceForSessionFunc: func(sessionKey string) *config.Workspace {
-			wsID := app.configView().defaultWorkspaceID()
-			if sess := app.State().Session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
+			wsID := configView.defaultWorkspaceID()
+			if sess := inputs.State.Session(sessionKey); sess != nil && strings.TrimSpace(sess.WorkspaceID) != "" {
 				wsID = sess.WorkspaceID
 			}
-			return config.FindWorkspace(app.cfg, wsID)
+			return config.FindWorkspace(inputs.Config, wsID)
 		},
 		RenderPathPickerCardFunc: func(requestID string, payload appupgradecmd.PathPickerPayload) (map[string]any, error) {
-			return workspacePresentation.RenderPathPickerCard(requestID, payload)
+			return inputs.WorkspacePresentation.RenderPathPickerCard(requestID, payload)
 		},
 		DataDirFunc: func() string {
-			return app.cfg.DataDir
+			return inputs.Config.DataDir
 		},
 		DaemonNameFunc: func() string {
-			app.configMutex().RLock()
-			defer app.configMutex().RUnlock()
-			return strings.TrimSpace(app.cfg.Daemon.ServiceName)
+			inputs.ConfigMu.RLock()
+			defer inputs.ConfigMu.RUnlock()
+			return strings.TrimSpace(inputs.Config.Daemon.ServiceName)
 		},
-		MakeSessionKeyFunc: func(msg *feishu.InboundMessage) string {
-			return app.configView().makeSessionKey(msg)
-		},
-		ReplyInThreadFunc: func(chatType string) bool {
-			return app.configView().replyInThreadEnabled()
-		},
+		MakeSessionKeyFunc: configView.makeSessionKey,
+		ReplyInThreadFunc:  func(string) bool { return false },
 		MenuCardBodyFunc: func(action, body string) string {
 			return menuCardBody(action, body)
 		},
 	}
-	return appupgradecmd.NewUpgradeService(adapter, deps, app.bindings.UpgradeWorkflow)
+	return appupgradecmd.NewUpgradeService(adapter, deps, inputs.Workflow)
 }

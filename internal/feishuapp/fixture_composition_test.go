@@ -308,7 +308,11 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BackendActions = BuildBackendActions(a)
 	a.bindings.ServerRequests = BuildServerRequests(a)
 	a.bindings.Skills = compositionkit.NewSkillService(SkillUseCasePorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner.PendingSkills, a.FrontendID(), a.runtimeOwner))
-	a.bindings.SkillCommands = BuildSkillCommands(a)
+	a.bindings.SkillCommands = BuildSkillCommands(SkillCommandInputs{
+		Service: a.bindings.Skills, FrontendID: a.FrontendID(), EffectRunner: *a.runtimeOwner.EffectRunner,
+		Actors:   a.runtimeOwner.SessionActors,
+		RunAsync: func(fn func()) bool { return a.runtimeOwner.Lifecycle.Run(fn, a.asyncRunner) },
+	})
 	*a.bindings.PendingQueue = submission.NewPendingQueueService(PendingQueuePorts(a.Context, a.State(), a.bindings.SubmissionCleanup, a.Config(), a.ConfigMu(), a.Feishu()))
 	a.bindings.Continuation.Deps = ContinuationPorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner, a.bindings.Submissions, a.FrontendID(), a.FrontendConfigIndex(), a.Feishu())
 	a.bindings.Compaction.Deps = CompactionPorts(a.Context, a.State(), a.runtimeOwner, a.FrontendID(), a.feishu != nil)
@@ -447,7 +451,13 @@ func prepareTestApp(a *App) *App {
 	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfiguration(a, a.bindings.WorkspacePresentation, a.bindings.Conversations)
 	bindingScope := NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID())
 	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, bindingScope)
-	a.bindings.Upgrades = BuildUpgrades(a, a.bindings.WorkspaceConfiguration)
+	a.bindings.Upgrades = BuildUpgrades(UpgradeInputs{
+		Context: a.Context, Config: a.Config(), ConfigMu: a.ConfigMu(), ConfiguredBackend: configuredBackend,
+		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(), State: a.State(),
+		Feishu: a.Feishu(), EffectRunner: *a.runtimeOwner.EffectRunner,
+		WorkspacePresentation: a.bindings.WorkspacePresentation, WorkspaceConfiguration: a.bindings.WorkspaceConfiguration,
+		Workflow: a.bindings.UpgradeWorkflow,
+	})
 	actors, replayRunner := BindingReplayPorts(a.runtimeOwner.SessionActors, a.runtimeOwner)
 	a.bindings.BindingReplay = runtime.BindingReplay{Service: a.bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(&a.runtimeOwner.Lifecycle, a.asyncRunner, actors, a.runtimeOwner.LiveThreads, a.bindings.BindingReplay), Conversations: a.bindings.Conversations, Context: a.Context}

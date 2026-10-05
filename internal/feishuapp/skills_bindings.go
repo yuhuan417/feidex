@@ -5,11 +5,11 @@ import (
 	codexadapter "feidex/internal/adapter/backend/codex"
 	skillsadapter "feidex/internal/adapter/feishu/skills"
 	appstate "feidex/internal/adapter/storage/json/scoped"
+	appskill "feidex/internal/application/skill"
 	"feidex/internal/compositionkit"
 	"feidex/internal/config"
 	"feidex/internal/domain/identity"
 	skillcatalog "feidex/internal/domain/skill"
-	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
 	runtimeskill "feidex/internal/runtime/skill"
 	"sync"
@@ -43,18 +43,24 @@ func SkillUseCasePorts(
 	}
 }
 
-func BuildSkillCommands(a *App) *skillsadapter.Service {
-	owner := a.runtimeOwner
-	actors := owner.SessionActors
+type SkillCommandInputs struct {
+	Service      *appskill.Service
+	FrontendID   string
+	EffectRunner frontendruntime.EffectRunner
+	Actors       *frontendruntime.SessionActors
+	RunAsync     func(func()) bool
+}
+
+func BuildSkillCommands(inputs SkillCommandInputs) *skillsadapter.Service {
 	return &skillsadapter.Service{
-		Service: a.bindings.Skills, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(owner)),
-		MakeSessionKey:       func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
-		ReplyInThreadEnabled: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
+		Service: inputs.Service, Outbound: newEffectOutbound(inputs.FrontendID, inputs.EffectRunner),
+		MakeSessionKey:       SessionKeyBuilder(inputs.FrontendID),
+		ReplyInThreadEnabled: func(string) bool { return false },
 		FormatMenuBody:       menuCardBody, CommandLabel: commandLabel,
 		RunAsync: func(key string, work func()) bool {
-			return owner.Lifecycle.Run(func() {
-				runSessionOnActor(actors, key, work)
-			}, a.asyncRunner)
+			return inputs.RunAsync(func() {
+				runSessionOnActor(inputs.Actors, key, work)
+			})
 		},
 	}
 }

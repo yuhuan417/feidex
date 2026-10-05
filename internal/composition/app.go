@@ -317,7 +317,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
 	bindings.ServerRequests = feishuapp.BuildServerRequests(frontend)
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
-	bindings.SkillCommands = feishuapp.BuildSkillCommands(frontend)
+	bindings.SkillCommands = feishuapp.BuildSkillCommands(feishuapp.SkillCommandInputs{
+		Service: bindings.Skills, FrontendID: frontend.FrontendID(), EffectRunner: *scope.RuntimeOwner.EffectRunner,
+		Actors:   scope.RuntimeOwner.SessionActors,
+		RunAsync: func(fn func()) bool { return scope.RuntimeOwner.Lifecycle.Run(fn, asyncRunner) },
+	})
 	*bindings.PendingQueue = submission.NewPendingQueueService(feishuapp.PendingQueuePorts(frontend.Context, frontend.State(), bindings.SubmissionCleanup, frontend.Config(), frontend.ConfigMu(), frontend.Feishu()))
 	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner, bindings.Submissions, frontend.FrontendID(), frontendConfigIndex, frontend.Feishu())
 	bindings.Compaction.Deps = feishuapp.CompactionPorts(frontend.Context, frontend.State(), scope.RuntimeOwner, frontend.FrontendID(), frontend.Feishu() != nil)
@@ -463,7 +467,13 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// bindings exist.
 	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfiguration(frontend, bindings.WorkspacePresentation, bindings.Conversations)
 	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagement(frontend, bindings.WorkspacePresentation, bindings.Conversations, bindingScope)
-	bindings.Upgrades = feishuapp.BuildUpgrades(frontend, bindings.WorkspaceConfiguration)
+	bindings.Upgrades = feishuapp.BuildUpgrades(feishuapp.UpgradeInputs{
+		Context: scope.RuntimeOwner.Lifecycle.Context, Config: scope.Config, ConfigMu: scope.ConfigMutex,
+		ConfiguredBackend: configuredBackend, FrontendID: scope.Frontend.ID, FrontendConfigIndex: frontendConfigIndex,
+		State: frontend.State(), Feishu: frontend.Feishu(), EffectRunner: *scope.RuntimeOwner.EffectRunner,
+		WorkspacePresentation: bindings.WorkspacePresentation, WorkspaceConfiguration: bindings.WorkspaceConfiguration,
+		Workflow: bindings.UpgradeWorkflow,
+	})
 	actors, replayRunner := feishuapp.BindingReplayPorts(scope.RuntimeOwner.SessionActors, scope.RuntimeOwner)
 	bindings.BindingReplay = runtime.BindingReplay{Service: bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: bindings.WorkspaceCreation.Lifecycle, Runtime: feishuapp.WorkspaceEffectRuntime(&scope.RuntimeOwner.Lifecycle, asyncRunner, scope.RuntimeOwner.SessionActors, scope.RuntimeOwner.LiveThreads, bindings.BindingReplay), Conversations: bindings.Conversations, Context: frontend.Context}
