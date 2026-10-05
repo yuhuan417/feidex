@@ -621,7 +621,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		WorkspaceSelection: bindings.WorkspaceSelection, Submissions: bindings.Submissions,
 		Conversations: bindings.Conversations, Feishu: frontend.Feishu(), AsyncRunner: asyncRunner,
 	})
-	bindings.ReviewCommands = appreviewcmd.NewReviewFormService(feishuapp.ReviewCommandDependencies(frontend))
+	reviewCommandDependencies := feishuapp.ReviewCommandDependencies(frontend)
+	bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
 	bindings.MCP, err = feishuapp.BuildMCP(feishuapp.MCPPorts(feishuapp.MCPPortInputs{
 		AttachmentSender: frontend.Feishu(), StateProvider: frontend.State(),
 		TurnItems: bindings.TurnItems, SubmissionLookup: bindings.SubmissionLookup,
@@ -667,6 +668,9 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			BindingCommands: bindings.BindingCommands, ConversationQuery: bindings.ConversationQuery,
 			NormalizeSessionKey: normalizeCardActionSessionKey,
 			Backend:             configuredBackend, CompleteMenuCommand: frontend.CompleteMenuCommand,
+		}, feishuapp.ReviewCardActionInputs{
+			Dependencies: reviewCommandDependencies, ReviewCommands: bindings.ReviewCommands,
+			Backend: configuredBackend, CompleteMenuCommand: frontend.CompleteMenuCommand,
 		}, feishuapp.PathPickerActionInputs{
 			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,

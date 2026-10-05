@@ -27,6 +27,7 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		{name: "binding", handlers: bindingCardActionHandlers(BindingCardActionInputs{})},
 		{name: "tools", handlers: toolsCardActionHandlers(ToolsCardActionInputs{})},
 		{name: "thread-fork", handlers: threadForkCardActionHandlers(ThreadForkCardActionInputs{})},
+		{name: "review", handlers: reviewCardActionHandlers(ReviewCardActionInputs{})},
 		{name: "pending-ports", handlers: pendingPortCardActionHandlers(nil, nil, appreviewcmd.ReviewFormService{})},
 		{name: "pending-plan-exit-ports", handlers: pendingPlanModeExitPortCardActionHandlers(planmode.Dependencies{})},
 		{name: "workspace-delete-ports", handlers: workspaceDeletePortCardActionHandlers(workspacecmd.WorkspaceDeleteActions{})},

@@ -561,7 +561,8 @@ func prepareTestApp(a *App) *App {
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Submissions: a.bindings.Submissions,
 		Conversations: a.bindings.Conversations, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
 	})
-	a.bindings.ReviewCommands = appreviewcmd.NewReviewFormService(ReviewCommandDependencies(a))
+	reviewCommandDependencies := ReviewCommandDependencies(a)
+	a.bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
 	cardActionFrontendID := a.FrontendID()
 	normalizeCardActionSessionKey := func(key string) string {
 		return identity.CanonicalSessionKey(cardActionFrontendID, key)
@@ -599,6 +600,9 @@ func prepareTestApp(a *App) *App {
 			BindingCommands: a.bindings.BindingCommands, ConversationQuery: a.bindings.ConversationQuery,
 			NormalizeSessionKey: normalizeCardActionSessionKey,
 			Backend:             configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
+		}, ReviewCardActionInputs{
+			Dependencies: reviewCommandDependencies, ReviewCommands: a.bindings.ReviewCommands,
+			Backend: configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
 		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,

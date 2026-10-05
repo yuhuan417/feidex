@@ -27,23 +27,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			}
 			return a.bindings.ReviewCommands.RenderReviewMenuCard(sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			sessionKey := actionSessionKey(action)
-			switch actionName {
-			case "menu.review":
-				return s.completeMenuReview(action, sessionKey)
-			case "menu.review.uncommitted":
-				return appreviewcmd.CompleteMenuReviewUncommitted(ReviewCommandDependencies(s.app), action, sessionKey)
-			case "menu.review.base":
-				return appreviewcmd.CompleteMenuReviewBase(ReviewCommandDependencies(s.app), action, sessionKey)
-			case "menu.review.commit":
-				return appreviewcmd.CompleteMenuReviewCommit(ReviewCommandDependencies(s.app), action, sessionKey)
-			case "menu.review.custom":
-				return completeMenuCommand(s.app, action, sessionKey, "/review custom", "menu.review")
-			default:
-				return nil, nil
-			}
-		},
+		PortActions: []string{"menu.review", "menu.review.uncommitted", "menu.review.base", "menu.review.commit", "menu.review.custom"},
 	}
 	bindings["menu.quiet"] = featureBinding{
 		Commands: map[string]featureCommandBinding{

@@ -79,3 +79,15 @@ func completeMenuFork(a *App, action *feishu.CardAction, sessionKey string) (*ca
 		Backend:             a.configView().configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
 	})["menu.fork"](action)
 }
+
+func (s cardActionService) completeMenuReview(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if action.ActionValue == nil {
+		action.ActionValue = map[string]any{}
+	}
+	action.ActionValue["session_key"] = sessionKey
+	deps := ReviewCommandDependencies(s.app)
+	return reviewCardActionHandlers(ReviewCardActionInputs{
+		Dependencies: deps, ReviewCommands: s.app.bindings.ReviewCommands,
+		Backend: s.app.configView().configuredBackend, CompleteMenuCommand: s.app.CompleteMenuCommand,
+	})["menu.review"](action)
+}

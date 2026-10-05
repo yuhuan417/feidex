@@ -45,16 +45,6 @@ func (s cardActionService) completeMenuCompact(action *feishu.CardAction, sessio
 	}, nil
 }
 
-func (s cardActionService) completeMenuReview(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	if !menuActionVisibleForBackend("menu.review", s.app.configView().configuredBackend()) {
-		return completeMenuCommand(s.app, action, sessionKey, "/review", "menu.tools")
-	}
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"},
-		Card:  rawCard(s.app.bindings.ReviewCommands.RenderReviewMenuCard(sessionKey)),
-	}, nil
-}
-
 func (s cardActionService) completeMenuModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/model", "menu.group.model")
 }

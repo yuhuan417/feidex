@@ -934,6 +934,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 220 将 `menu.workspace` 加入已有 workspace owner-only handler family，并将 `menu.fork` 迁移到显式 `ThreadForkCardActionInputs`。fork 仍先通过 binding scope 和 conversation query 解析 effective session key，再根据当前 backend 生成 `/thread fork` 或 `/session fork` 并走原 menu command callback。生产 `completeMenuFork(*App)` 移除，测试兼容 helper 放入 `_test.go`。生产 `*App` 引用由 115 降至 114，收 `*App` 的顶层函数由 7 降至 6，其他棘轮保持 `1/1/0`；对照 SM-03，thread/session fork 的命令、session 绑定与 response 处理顺序不变。
 
+步骤 221 将 `menu.review` 及 uncommitted/base/commit/custom 四个子 action 迁移到 `ReviewCardActionInputs`。composition 只组装一次 `ReviewCommandDependencies`，同时供 `ReviewFormService` 与 card callbacks 使用，不再在 callback 时通过 `App` 重建 dependencies。review menu 的 backend 可见性与 fallback command、uncommitted/base/commit 的异步 command action、custom form 入口保持不变。文本棘轮保持 `114/6/1/1/0`；对照 SM-14，`review/start` payload、review item lifecycle、submission queue 与最终渲染边界不变。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

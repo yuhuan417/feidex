@@ -27,7 +27,7 @@ type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceActions WorkspaceCardActionInputs, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, maintenanceActions MaintenanceCardActionInputs, systemActions SystemCardActionInputs, menuActions MenuCoreCardActionInputs, bindingActions BindingCardActionInputs, toolsActions ToolsCardActionInputs, threadForkActions ThreadForkCardActionInputs, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service, planMode planmode.Dependencies, asyncInputs AsyncUserInputActionInputs, pendingCancel PendingFormCancelActionInputs) appcardaction.Dependencies {
+func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceActions WorkspaceCardActionInputs, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, maintenanceActions MaintenanceCardActionInputs, systemActions SystemCardActionInputs, menuActions MenuCoreCardActionInputs, bindingActions BindingCardActionInputs, toolsActions ToolsCardActionInputs, threadForkActions ThreadForkCardActionInputs, reviewActions ReviewCardActionInputs, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service, planMode planmode.Dependencies, asyncInputs AsyncUserInputActionInputs, pendingCancel PendingFormCancelActionInputs) appcardaction.Dependencies {
 	appHandlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
 	)
@@ -39,6 +39,7 @@ func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedR
 		bindingCardActionHandlers(bindingActions),
 		toolsCardActionHandlers(toolsActions),
 		threadForkCardActionHandlers(threadForkActions),
+		reviewCardActionHandlers(reviewActions),
 		pendingPortCardActionHandlers(serverRequests, claudeSupport, reviewCommands),
 		pendingPlanModeExitPortCardActionHandlers(planMode),
 		workspaceDeletePortCardActionHandlers(workspaceDeleteActions),
