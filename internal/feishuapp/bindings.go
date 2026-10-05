@@ -171,7 +171,7 @@ type Bindings struct {
 	MCP                       *feidexMCPService
 }
 
-func (a *App) AttachBindings(bindings *Bindings) { a.bindings = bindings }
+func (a *Frontend) AttachBindings(bindings *Bindings) { a.bindings = bindings }
 func BuildBackendConfiguration(inputs BackendConfigurationInputs) backend.ConfigurationService {
 	return buildBackendConfigurationService(inputs)
 }

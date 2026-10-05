@@ -21,7 +21,7 @@ import (
 )
 
 // These small ports keep the turn use case independent from the transitional
-// App aggregate. They are composed here, where runtime, continuation and
+// frontend shell. They are composed here, where runtime, continuation and
 // delivery owners are known.
 type turnRuntimePort struct {
 	lifecycle   *frontendruntime.FrontendRuntime

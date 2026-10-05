@@ -8,7 +8,7 @@ import (
 )
 
 // runtimeView narrows the frontend aggregate to the runtime owner that owns
-// the backend clients. Every helper in this cluster used to take *App and
+// the backend clients. Every helper in this cluster used to take *Frontend and
 // reach for a.runtimeOwner, so they now hang off this view instead and the
 // port factories can capture the owner rather than the aggregate.
 type runtimeView struct {

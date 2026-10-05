@@ -20,9 +20,9 @@ import (
 // the two backend clients, the dispatcher, and the six services the context
 // wires into it.
 //
-// It is exported so composition can obtain it from App and hand it to the port
+// It is exported so composition can obtain it from Frontend and hand it to the port
 // factories. That is the point: the factories stop taking the aggregate, and
-// the only place that still holds one is App.BackendRuntimeDeps().
+// the only place that still holds one is Frontend.BackendRuntimeDeps().
 type BackendRuntimeDeps struct {
 	view       frontendConfigView
 	cfg        *config.Config
@@ -48,8 +48,8 @@ type BackendRuntimeDeps struct {
 }
 
 // BackendRuntimeDeps snapshots the bundle. It is the single conversion point:
-// everything downstream takes BackendRuntimeDeps rather than *App.
-func (a *App) BackendRuntimeDeps() BackendRuntimeDeps {
+// everything downstream takes BackendRuntimeDeps rather than *Frontend.
+func (a *Frontend) BackendRuntimeDeps() BackendRuntimeDeps {
 	if a == nil {
 		return BackendRuntimeDeps{}
 	}

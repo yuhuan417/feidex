@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 30 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 0 |
 | 收 `*App` 的顶层函数 | 15 |
 | 收 `*App` 的 `*Ports` 工厂 | 0 |
 | **持有 `*App` 字段的结构体** | **0** |
@@ -949,6 +949,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 227 批量迁移整个 command/menu feature registry。命令 handler 与菜单 fallback renderer 改为 frontend-scoped 的预绑定函数，composition 先创建稳定的 `CommandRegistry` 入口以拆开 menu/card action 构造环，待 review、thread、workspace、model、upgrade 等 owner 就绪后一次性填充。全局 feature 元数据不再缓存带 frontend 状态的闭包；生产 compatibility 入口与 App adapter 全部移入 `_test.go`。命令 backend 选择、切换 guard、maintenance gate、passthrough queue、菜单回退和快速 card callback 语义保持不变。生产 `*App` 引用由 94 降至 34，depmap 中收 `*App` 的函数由 15 降至 4，structs/factories/lazy binding-read 保持 `0/0/0`。对照 SM-03/04/08/14/25，本批只改变依赖装配，没有改变 thread/turn/review/goal/pending request 状态转换。
 
 步骤 228 将 Feishu 应用配置自愈和 effect transport 绑定改为显式输入。自愈流程接收 config/state/context/notification owner，保留授权、patch、publish、轮询验证和 p2p 通知语义；effect runner 直接挂到 frontend runtime owner，业务服务接收 effect-backed transport，shell 继续持有 raw transport 用于生命周期与事件入口。删除生产 `AttachEffectRunner(*App)`，depmap 降至 `0/0/0`，生产 `*App` 引用由 34 降至 30。对照 SM-03/04/08/14/25，本批只改变配置自愈与 transport 装配边界，没有改变 callback ack、turn、review、goal 或 pending request 状态转换。
+
+步骤 229 将剩余 frontend shell 从 `App` 重命名为 `Frontend`，并把旧 `App` 名称仅保留为测试编译期别名。composition、生命周期、访问器、runtime view、bindings 和 Feishu handler 入口都指向同一薄壳对象；字段、方法、生命周期 admission、transport shutdown 和状态持有关系不变。生产 `internal/feishuapp` 的 `*App` 引用由 30 降至 0，depmap 保持 `0/0/0`，惰性 binding read 保持 0。对照 SM-03/04/08/14/25，本批只移除聚合类型名称耦合，不改变任何协议状态转换。
 
 ## 方法
 

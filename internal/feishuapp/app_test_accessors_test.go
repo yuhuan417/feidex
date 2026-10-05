@@ -1,8 +1,11 @@
 package feishuapp
 
-import appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+import (
+	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+	domainbackend "feidex/internal/domain/backend"
+)
 
-import domainbackend "feidex/internal/domain/backend"
+type App = Frontend
 
 // These test-only conveniences keep fixture setup readable without retaining
 // compatibility facades in the production App API.

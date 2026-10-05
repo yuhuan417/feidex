@@ -38,7 +38,7 @@ func BuildOutboundCardDemo(cfg *config.Config, opts OutboundCardDemoOptions) (ma
 		body = appcarddemo.DefaultBody(kind)
 	}
 
-	a := &App{
+	a := &Frontend{
 		cfg:    cfg,
 		feishu: feishu.New(cfg.Feishu),
 	}

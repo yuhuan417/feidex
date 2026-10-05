@@ -82,7 +82,7 @@ type Service[T runtime.ManagedFrontend] struct {
 	Frontends []T
 }
 
-func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
+func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 	if scope.StartedAt.IsZero() {
 		scope.StartedAt = time.Now()
 	}

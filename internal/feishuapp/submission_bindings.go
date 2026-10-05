@@ -68,7 +68,7 @@ func SubmissionLiveThreads(tracker *frontendruntime.LiveThreads, session func(st
 }
 
 // ---------------------------------------------------------------------------
-// App adapter — implements submission.App for *App
+// Frontend adapter implements submission.App for the frontend shell.
 // ---------------------------------------------------------------------------
 
 func inflightModeToInt(m sessionInflightMode) appsubmission.QueueInflightMode {
@@ -159,7 +159,7 @@ func (a sqBackendRuntimeAdapter) DeferQueuedSubmissionsDuringRecovery() bool {
 }
 
 // ---------------------------------------------------------------------------
-// PendingQueueApp adapter — implements submission.PendingQueueApp for *App
+// PendingQueueApp adapter implements submission.PendingQueueApp for the frontend shell.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------

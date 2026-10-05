@@ -10,7 +10,7 @@ import (
 
 // Feishu returns the Feishu client. Sub-packages should define narrow
 // interfaces for the methods they need rather than depending on this type.
-func (a *App) Feishu() FeishuClient {
+func (a *Frontend) Feishu() FeishuClient {
 	if a == nil {
 		return nil
 	}
@@ -18,7 +18,7 @@ func (a *App) Feishu() FeishuClient {
 }
 
 // Config returns the application configuration.
-func (a *App) Config() *config.Config {
+func (a *Frontend) Config() *config.Config {
 	if a == nil {
 		return nil
 	}
@@ -26,7 +26,7 @@ func (a *App) Config() *config.Config {
 }
 
 // State returns the frontend-scoped app state store.
-func (a *App) State() *appstate.Store {
+func (a *Frontend) State() *appstate.Store {
 	if a == nil {
 		return nil
 	}
@@ -34,7 +34,7 @@ func (a *App) State() *appstate.Store {
 }
 
 // FrontendID returns the configured frontend identifier.
-func (a *App) FrontendID() string {
+func (a *Frontend) FrontendID() string {
 	if a == nil {
 		return ""
 	}
@@ -42,7 +42,7 @@ func (a *App) FrontendID() string {
 }
 
 // ConfigMu returns the config read-write mutex.
-func (a *App) ConfigMu() *sync.RWMutex {
+func (a *Frontend) ConfigMu() *sync.RWMutex {
 	if a == nil {
 		return nil
 	}

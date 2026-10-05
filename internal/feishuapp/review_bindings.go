@@ -39,7 +39,8 @@ func reviewPendingPayloadFromPending(pending *state.PendingRequest) appreviewcmd
 }
 
 // ---------------------------------------------------------------------------
-// App adapters — satisfy reviewcmd.App without adding feature methods on *App
+// Frontend adapters satisfy reviewcmd.App without adding feature methods to
+// the frontend shell.
 // ---------------------------------------------------------------------------
 
 type ReviewCommandInputs struct {

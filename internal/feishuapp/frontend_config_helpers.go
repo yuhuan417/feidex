@@ -17,7 +17,7 @@ func normalizeRuntimeBackend(value string) string { return backend.NormalizeBack
 // frontend aggregate: its configuration, the mutex guarding it, the
 // frontend's identity, and which frontend entry of the config this scope is.
 //
-// They used to take *App and reach for a.Config(), a.ConfigMu(), a.Backend(),
+// They used to take *Frontend and reach for a.Config(), a.ConfigMu(), a.Backend(),
 // a.FrontendID() and a.FrontendConfigIndex(). Taking this view instead lets
 // the port factories capture five values rather than the aggregate.
 type frontendConfigView struct {
@@ -31,7 +31,7 @@ type frontendConfigView struct {
 // configView snapshots the values above. It is intentionally cheap and
 // lock-free: everything it reads is fixed after construction apart from the
 // config pointer itself, which the helpers below guard with mu.
-func (a *App) configView() frontendConfigView {
+func (a *Frontend) configView() frontendConfigView {
 	if a == nil {
 		return frontendConfigView{}
 	}
