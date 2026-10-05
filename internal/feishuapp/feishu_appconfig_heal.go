@@ -2,11 +2,14 @@ package feishuapp
 
 import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	frontendapp "feidex/internal/application/frontend"
 
 	"context"
 	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"feidex/internal/config"
@@ -45,6 +48,21 @@ var newAppConfigHealClient = func(cfg *config.FeishuConfig) appConfigHealClient 
 	return appconfig.NewClient(cfg)
 }
 
+type FeishuAppConfigHealInputs struct {
+	Client        FeishuClient
+	Config        *config.Config
+	ConfigMu      *sync.RWMutex
+	ConfigIndex   int
+	FrontendID    string
+	State         *appstate.Store
+	Context       func() context.Context
+	Notifications frontendapp.Notifications
+}
+
+func (i FeishuAppConfigHealInputs) feishuConfig() *config.FeishuConfig {
+	return (frontendConfigView{cfg: i.Config, mu: i.ConfigMu, frontendConfigIndex: i.ConfigIndex}).feishuConfig()
+}
+
 // runFeishuAppConfigHeal aligns the platform-side application configuration
 // (scopes and event subscriptions) with the requirements compiled into this
 // binary. It runs once per frontend at startup, asynchronously:
@@ -56,21 +74,25 @@ var newAppConfigHealClient = func(cfg *config.FeishuConfig) appConfigHealClient 
 //     version, verify, and report the outcome with a card.
 //
 // Every failure path only logs or notifies; it never blocks startup.
-func runFeishuAppConfigHeal(a *App) {
-	if a == nil || a.feishu == nil {
+func runFeishuAppConfigHealWith(inputs FeishuAppConfigHealInputs) {
+	if inputs.Client == nil {
 		return
 	}
-	cfg := a.configView().feishuConfig()
+	cfg := inputs.feishuConfig()
 	if cfg == nil || strings.TrimSpace(cfg.AppID) == "" {
 		return
 	}
-	ctx, cancel := context.WithTimeout(a.Context(), feishuAppConfigHealTimeout)
+	baseContext := context.Background()
+	if inputs.Context != nil && inputs.Context() != nil {
+		baseContext = inputs.Context()
+	}
+	ctx, cancel := context.WithTimeout(baseContext, feishuAppConfigHealTimeout)
 	defer cancel()
 	client := newAppConfigHealClient(cfg)
 	current, err := client.FetchState(ctx)
 	if err != nil {
 		slog.Warn("feishu app config heal: fetch state failed",
-			"frontend_id", strings.TrimSpace(a.frontendID),
+			"frontend_id", strings.TrimSpace(inputs.FrontendID),
 			"app_id", strings.TrimSpace(cfg.AppID),
 			"error", err,
 		)
@@ -79,7 +101,7 @@ func runFeishuAppConfigHeal(a *App) {
 	plan := buildAppConfigHealPlan(current)
 	if plan.Empty() {
 		slog.Info("feishu app config heal: configuration in sync",
-			"frontend_id", strings.TrimSpace(a.frontendID),
+			"frontend_id", strings.TrimSpace(inputs.FrontendID),
 			"app_id", strings.TrimSpace(cfg.AppID),
 			"version", current.OnlineVersion,
 		)
@@ -91,30 +113,30 @@ func runFeishuAppConfigHeal(a *App) {
 		// drift we see is measured against the online version, which only
 		// changes once that review passes.
 		slog.Info("feishu app config heal: version already under audit; waiting",
-			"frontend_id", strings.TrimSpace(a.frontendID),
+			"frontend_id", strings.TrimSpace(inputs.FrontendID),
 			"app_id", strings.TrimSpace(cfg.AppID),
 			"unaudit_version_id", unauditVersionID,
 		)
-		notifyFeishuAppConfigHeal(a, "orange", "飞书配置修复等待审核",
+		notifyFeishuAppConfigHeal(inputs, "orange", "飞书配置修复等待审核",
 			feishuAppConfigHealUnderAuditBody(plan, current.OnlineVersion, unauditVersionID))
 		return
 	}
 	if !current.HasScope(appconfig.PatchScope) {
 		slog.Warn("feishu app config heal: patch scope missing; requesting authorization",
-			"frontend_id", strings.TrimSpace(a.frontendID),
+			"frontend_id", strings.TrimSpace(inputs.FrontendID),
 			"app_id", strings.TrimSpace(cfg.AppID),
 		)
-		notifyFeishuAppConfigHeal(a, "red", "需要飞书授权",
+		notifyFeishuAppConfigHeal(inputs, "red", "需要飞书授权",
 			feishuAppConfigHealAuthBody(cfg, plan))
 		return
 	}
 	if err := client.ApplyFix(ctx, plan); err != nil {
 		slog.Error("feishu app config heal: apply fix failed",
-			"frontend_id", strings.TrimSpace(a.frontendID),
+			"frontend_id", strings.TrimSpace(inputs.FrontendID),
 			"app_id", strings.TrimSpace(cfg.AppID),
 			"error", err,
 		)
-		notifyFeishuAppConfigHeal(a, "red", "飞书配置自愈失败",
+		notifyFeishuAppConfigHeal(inputs, "red", "飞书配置自愈失败",
 			feishuAppConfigHealFailureBody(plan, err))
 		return
 	}
@@ -122,23 +144,23 @@ func runFeishuAppConfigHeal(a *App) {
 	version, err := client.Publish(ctx, "feidex 自动校准飞书应用配置: "+summary, summary)
 	if err != nil {
 		slog.Error("feishu app config heal: publish failed",
-			"frontend_id", strings.TrimSpace(a.frontendID),
+			"frontend_id", strings.TrimSpace(inputs.FrontendID),
 			"app_id", strings.TrimSpace(cfg.AppID),
 			"error", err,
 		)
-		notifyFeishuAppConfigHeal(a, "red", "飞书配置自愈失败",
+		notifyFeishuAppConfigHeal(inputs, "red", "飞书配置自愈失败",
 			feishuAppConfigHealFailureBody(plan, err))
 		return
 	}
 	slog.Info("feishu app config heal: published new version",
-		"frontend_id", strings.TrimSpace(a.frontendID),
+		"frontend_id", strings.TrimSpace(inputs.FrontendID),
 		"app_id", strings.TrimSpace(cfg.AppID),
 		"version", version,
 		"changes", summary,
 	)
 	outcome := waitForAppConfigHeal(ctx, client, plan, version)
 	slog.Info("feishu app config heal: verified published version",
-		"frontend_id", strings.TrimSpace(a.frontendID),
+		"frontend_id", strings.TrimSpace(inputs.FrontendID),
 		"app_id", strings.TrimSpace(cfg.AppID),
 		"published_version", version,
 		"outcome", outcome.kind.String(),
@@ -149,20 +171,20 @@ func runFeishuAppConfigHeal(a *App) {
 	)
 	switch outcome.kind {
 	case appConfigHealVerified:
-		_ = a.bindings.Notifications.Clear(feishuAppConfigHealKind)
-		notifyFeishuAppConfigHeal(a, "green", "飞书配置已自动修复",
+		_ = inputs.Notifications.Clear(feishuAppConfigHealKind)
+		notifyFeishuAppConfigHeal(inputs, "green", "飞书配置已自动修复",
 			feishuAppConfigHealSuccessBody(plan, version))
 	case appConfigHealUnderAudit:
-		notifyFeishuAppConfigHeal(a, "orange", "飞书配置修复等待审核",
+		notifyFeishuAppConfigHeal(inputs, "orange", "飞书配置修复等待审核",
 			feishuAppConfigHealUnderAuditBody(plan, version, outcome.unauditVersionID))
 	case appConfigHealNotPromoted:
-		notifyFeishuAppConfigHeal(a, "orange", "飞书配置修复已提交,等待生效",
+		notifyFeishuAppConfigHeal(inputs, "orange", "飞书配置修复已提交,等待生效",
 			feishuAppConfigHealPendingBody(plan, version, outcome.onlineVersion))
 	case appConfigHealVerifyFailed:
-		notifyFeishuAppConfigHeal(a, "orange", "飞书配置修复已提交,复查失败",
+		notifyFeishuAppConfigHeal(inputs, "orange", "飞书配置修复已提交,复查失败",
 			feishuAppConfigHealVerifyFailedBody(plan, version, outcome.err))
 	default:
-		notifyFeishuAppConfigHeal(a, "red", "飞书配置修复未完全生效",
+		notifyFeishuAppConfigHeal(inputs, "red", "飞书配置修复未完全生效",
 			feishuAppConfigHealMismatchBody(plan, version, outcome))
 	}
 }
@@ -411,8 +433,8 @@ func feishuAppConfigHealMismatchBody(plan appconfig.FixPlan, version string, out
 // notifyFeishuAppConfigHeal delivers one heal status card to every known
 // p2p chat of this frontend, falling back to the queued notification path
 // (delivered with the next inbound message) when nothing can be sent now.
-func notifyFeishuAppConfigHeal(a *App, color, title, body string) {
-	if a == nil || strings.TrimSpace(title) == "" || strings.TrimSpace(body) == "" {
+func notifyFeishuAppConfigHeal(inputs FeishuAppConfigHealInputs, color, title, body string) {
+	if strings.TrimSpace(title) == "" || strings.TrimSpace(body) == "" {
 		return
 	}
 	note := state.FrontendCardNotification{
@@ -423,10 +445,14 @@ func notifyFeishuAppConfigHeal(a *App, color, title, body string) {
 		Body:        body,
 	}
 	sent := false
-	for _, target := range feishuAppConfigHealTargets(a) {
-		if err := a.bindings.Notifications.Sender.DeliverNotification(a.Context(), target.ChatID, target.UserID, note); err != nil {
+	ctx := context.Background()
+	if inputs.Context != nil && inputs.Context() != nil {
+		ctx = inputs.Context()
+	}
+	for _, target := range feishuAppConfigHealTargets(inputs.State, inputs.FrontendID) {
+		if err := inputs.Notifications.Sender.DeliverNotification(ctx, target.ChatID, target.UserID, note); err != nil {
 			slog.Warn("feishu app config heal: notify failed",
-				"frontend_id", strings.TrimSpace(a.frontendID),
+				"frontend_id", strings.TrimSpace(inputs.FrontendID),
 				"chat_id", target.ChatID,
 				"error", err,
 			)
@@ -435,21 +461,21 @@ func notifyFeishuAppConfigHeal(a *App, color, title, body string) {
 		sent = true
 	}
 	if !sent {
-		a.bindings.Notifications.Queue(note)
+		inputs.Notifications.Queue(note)
 	}
 }
 
-func feishuAppConfigHealTargets(a *App) []appfeishuwrap.NotifyTarget {
-	if a == nil || a.store == nil {
+func feishuAppConfigHealTargets(store *appstate.Store, frontendID string) []appfeishuwrap.NotifyTarget {
+	if store == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
 	var targets []appfeishuwrap.NotifyTarget
-	for _, sess := range a.State().Sessions() {
+	for _, sess := range store.Sessions() {
 		if sess == nil {
 			continue
 		}
-		if !a.configView().sessionBelongsToFrontend(sess.Key) {
+		if !sessionBelongsToFrontend(frontendID, sess.Key) {
 			continue
 		}
 		if !strings.EqualFold(strings.TrimSpace(sess.ChatType), "p2p") {

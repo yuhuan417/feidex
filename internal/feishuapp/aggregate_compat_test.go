@@ -2,12 +2,15 @@ package feishuapp
 
 import (
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
+	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	workspacecards "feidex/internal/adapter/feishu/workspace"
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	conversationapp "feidex/internal/application/conversation"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	"feidex/internal/runtime"
 )
 
 func commandRegistryForApp(a *App) *CommandRegistry {
@@ -45,6 +48,31 @@ func commandRegistryForApp(a *App) *CommandRegistry {
 		QueuePassthrough:           CommandPassthroughQueue(a.bindings.Submissions),
 	})
 	return &registry
+}
+
+func runFeishuAppConfigHeal(a *App) {
+	if a == nil {
+		return
+	}
+	runFeishuAppConfigHealWith(FeishuAppConfigHealInputs{
+		Client: a.feishu, Config: a.cfg, ConfigMu: a.ConfigMu(), ConfigIndex: a.frontendConfigIndex,
+		FrontendID: a.frontendID, State: a.stateView, Context: a.Context,
+		Notifications: a.bindings.Notifications,
+	})
+}
+
+func AttachEffectRunner(a *App, runner runtime.EffectRunner) {
+	if a == nil || a.runtimeOwner == nil {
+		return
+	}
+	a.runtimeOwner.EffectRunner = &runner
+	if notifying, ok := a.feishu.(*appfeishuwrap.NotifyingFeishuClient); ok {
+		a.feishu = &appfeishuwrap.EffectClient{
+			NotifyingFeishuClient: notifying,
+			Frontend:              identity.FrontendID(a.frontendID),
+			Runner:                runner,
+		}
+	}
 }
 
 func HandleInboundCommand(a *App, msg *feishu.InboundMessage, raw string) error {

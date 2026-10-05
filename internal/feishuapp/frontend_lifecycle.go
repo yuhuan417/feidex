@@ -32,5 +32,10 @@ func (a *App) StartBackground() {
 	scheduleStartupGroupAnnouncementRefreshes(a.runtimeOwner.Announcements, a.bindings.AnnouncementQuery)
 	startupRecovery := a.bindings.StartupRecovery
 	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() { startupRecovery.SendStartupReadyNotifications() })
-	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() { runFeishuAppConfigHeal(a) })
+	healInputs := FeishuAppConfigHealInputs{
+		Client: a.feishu, Config: a.cfg, ConfigMu: a.ConfigMu(), ConfigIndex: a.frontendConfigIndex,
+		FrontendID: a.frontendID, State: a.stateView, Context: a.Context,
+		Notifications: a.bindings.Notifications,
+	}
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() { runFeishuAppConfigHealWith(healInputs) })
 }

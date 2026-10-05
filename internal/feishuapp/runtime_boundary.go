@@ -35,18 +35,18 @@ func InstallBackendRuntime(deps BackendRuntimeDeps, handle *BackendRuntimeHandle
 	}
 }
 
-func AttachEffectRunner(a *App, runner runtime.EffectRunner) {
-	if a == nil || a.runtimeOwner == nil {
-		return
+func AttachEffectRuntime(owner *runtime.FrontendOwner, client FeishuClient, frontendID string, runner runtime.EffectRunner) FeishuClient {
+	if owner != nil {
+		owner.EffectRunner = &runner
 	}
-	a.runtimeOwner.EffectRunner = &runner
-	if notifying, ok := a.feishu.(*appfeishuwrap.NotifyingFeishuClient); ok {
-		a.feishu = &appfeishuwrap.EffectClient{
+	if notifying, ok := client.(*appfeishuwrap.NotifyingFeishuClient); ok {
+		return &appfeishuwrap.EffectClient{
 			NotifyingFeishuClient: notifying,
-			Frontend:              identity.FrontendID(a.frontendID),
+			Frontend:              identity.FrontendID(frontendID),
 			Runner:                runner,
 		}
 	}
+	return client
 }
 
 // InstallFeishuPolicies installs the Feishu-specific routing policies after
