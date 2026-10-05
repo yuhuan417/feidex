@@ -26,13 +26,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (a *App) ServerRequestService() *serverrequest.Service {
-	if a == nil {
-		return nil
-	}
-	return a.bindings.ServerRequests
-}
-
 func BuildServerRequests(a *App) *serverrequest.Service {
 	// Read once at construction so the dependency is visible.
 	pendingReplies := a.bindings.PendingReplies

@@ -905,7 +905,7 @@ func TestCompleteApprovalActionUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "approve-1"},
 	}, "approval.command.accept_session")
@@ -1014,7 +1014,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-1", "question_id": "q1", "answer": "Fast"},
 	})
@@ -1072,7 +1072,7 @@ func TestCompleteUserInputAnswerUsesClaudeResolverForFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "question-form-1"},
 		FormValue: map[string]any{
@@ -1136,7 +1136,7 @@ func TestCompleteToolUserInputTextUsesClaudeResolver(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	if err := a.ServerRequestService().CompleteToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("question-text-1")); err != nil {
+	if err := a.bindings.ServerRequests.CompleteToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("question-text-1")); err != nil {
 		t.Fatalf("completeToolUserInputText() error = %v", err)
 	}
 	if len(claude.userInputCalls) != 1 {

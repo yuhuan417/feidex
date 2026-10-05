@@ -15,7 +15,7 @@ import (
 
 func completePendingFormCancelDispatch(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	return completePendingFormCancelWithInputs(PendingFormCancelActionInputs{
-		State: a.State(), ServerRequests: a.ServerRequestService(),
+		State: a.State(), ServerRequests: a.bindings.ServerRequests,
 		FinalizePending:   a.bindings.PendingReplies.Finalize,
 		WorkspaceMenuCard: a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
 		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
@@ -81,7 +81,7 @@ func TestPendingFormCancelPreservesToolUserInputBody(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompletePendingFormCancel(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "input-form-1"}})
+	resp, err := a.bindings.ServerRequests.CompletePendingFormCancel(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "input-form-1"}})
 	if err != nil || resp == nil || resp.Card == nil {
 		t.Fatalf("completePendingFormCancel() = %#v, %v", resp, err)
 	}

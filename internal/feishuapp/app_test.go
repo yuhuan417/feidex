@@ -799,7 +799,7 @@ func TestApprovalMentionIncludedOutsideGroupChats(t *testing.T) {
 		t.Fatalf("CreateSubmission() error = %v", err)
 	}
 
-	a.ServerRequestService().SendApprovalCard("command", json.RawMessage(`"req-p2p"`), "thread-p2p", "turn-p2p", "item-1", "命令审批\n`pwd`")
+	a.bindings.ServerRequests.SendApprovalCard("command", json.RawMessage(`"req-p2p"`), "thread-p2p", "turn-p2p", "item-1", "命令审批\n`pwd`")
 
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("approval card count = %d, want 1", len(ff.replyCards))
@@ -1353,7 +1353,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}
 
 	action := &feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-1"}}
-	resp, err := a.ServerRequestService().CompleteApprovalAction(action, "approval.command.accept_session")
+	resp, err := a.bindings.ServerRequests.CompleteApprovalAction(action, "approval.command.accept_session")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(command) = %#v, %v", resp, err)
 	}
@@ -1390,7 +1390,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(command-2) error = %v", err)
 	}
-	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-2"}}, "approval.command.accept")
+	resp, err = a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "command-2"}}, "approval.command.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(command-2) = %#v, %v", resp, err)
 	}
@@ -1402,7 +1402,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("command approval resolved-from-request card = %q", got)
 	}
 
-	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
+	resp, err = a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-1"}}, "approval.file.decline")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(file) = %#v, %v", resp, err)
 	}
@@ -1432,7 +1432,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(file-2) error = %v", err)
 	}
-	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-2"}}, "approval.file.accept")
+	resp, err = a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "file-2"}}, "approval.file.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(file-2) = %#v, %v", resp, err)
 	}
@@ -1444,7 +1444,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("file approval resolved-from-request card = %q", got)
 	}
 
-	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
+	resp, err = a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-1"}}, "approval.permissions.accept_session")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(permissions) = %#v, %v", resp, err)
 	}
@@ -1473,7 +1473,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(perm-2) error = %v", err)
 	}
-	resp, err = a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-2"}}, "approval.permissions.accept_turn")
+	resp, err = a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "perm-2"}}, "approval.permissions.accept_turn")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeApprovalAction(perm-2) = %#v, %v", resp, err)
 	}
@@ -1485,7 +1485,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 		t.Fatalf("permissions resolved-from-request card = %q", got)
 	}
 
-	resp, err = a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
+	resp, err = a.bindings.ServerRequests.CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-1", "question_id": "q-1", "answer": "A"},
 	})
@@ -1520,7 +1520,7 @@ func TestApprovalAndUserInputActions(t *testing.T) {
 func TestCompleteApprovalActionSupportsExtendedCommandDecisions(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	fc.replies = nil
-	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "missing"},
 	}, "approval.command.decline")
@@ -1562,7 +1562,7 @@ func TestCompleteUserInputAnswerSupportsFormSubmit(t *testing.T) {
 		t.Fatalf("UpsertPending(input-form-1) error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-form-1"},
 		FormValue: map[string]any{
@@ -1625,7 +1625,7 @@ func TestCompleteUserInputMultiTogglePatchesCard(t *testing.T) {
 		t.Fatalf("UpsertPending(input-toggle-1) error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteUserInputMultiToggle(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteUserInputMultiToggle(&feishu.CardAction{
 		UserID: "user-1",
 		ActionValue: map[string]any{
 			"request_id":   "input-toggle-1",
@@ -1670,7 +1670,7 @@ func TestCompleteApprovalActionSupportsFileCancelDecision(t *testing.T) {
 		t.Fatalf("UpsertPending(file-cancel) error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "file-cancel"},
 	}, "approval.file.cancel")
@@ -1729,7 +1729,7 @@ func TestCompleteApprovalActionPreservesNumericRequestID(t *testing.T) {
 		t.Fatalf("UpsertPending() error = %v", err)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "0"},
 	}, "approval.command.accept")
@@ -1780,7 +1780,7 @@ func TestCompleteApprovalActionKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "command-1"},
 	}, "approval.command.accept")
@@ -2243,7 +2243,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(tool form) error = %v", err)
 	}
-	if err := a.ServerRequestService().CompleteToolUserInputText(&feishu.InboundMessage{Text: "option-a"}, a.store.PendingByID("tool-form-1")); err != nil {
+	if err := a.bindings.ServerRequests.CompleteToolUserInputText(&feishu.InboundMessage{Text: "option-a"}, a.store.PendingByID("tool-form-1")); err != nil {
 		t.Fatalf("completeToolUserInputText() error = %v", err)
 	}
 	if len(fc.replies) == 0 {
@@ -2265,7 +2265,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(elicitation form) error = %v", err)
 	}
-	if err := a.ServerRequestService().CompleteElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicitation-form-1")); err != nil {
+	if err := a.bindings.ServerRequests.CompleteElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicitation-form-1")); err != nil {
 		t.Fatalf("completeElicitationFormText() error = %v", err)
 	}
 
@@ -2280,7 +2280,7 @@ func TestPendingFormCompletionHelpers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("UpsertPending(url) error = %v", err)
 	}
-	resp, err := a.ServerRequestService().CompleteElicitationURLAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
+	resp, err := a.bindings.ServerRequests.CompleteElicitationURLAction(&feishu.CardAction{UserID: "user-1", ActionValue: map[string]any{"request_id": "url-1"}}, "elicitation_url.accept")
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "success" {
 		t.Fatalf("completeElicitationURLAction() = %#v, %v", resp, err)
 	}

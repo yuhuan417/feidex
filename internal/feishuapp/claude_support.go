@@ -24,6 +24,7 @@ import (
 func BuildClaudeSupport(a *App) *claudesupport.Service {
 	// Read once at construction so the dependency is visible.
 	pendingReplies := a.bindings.PendingReplies
+	serverRequests := a.bindings.ServerRequests
 
 	return &claudesupport.Service{
 		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
@@ -80,7 +81,7 @@ func BuildClaudeSupport(a *App) *claudesupport.Service {
 			return pendingReplies.Finalize(pending)
 		},
 		CancelPending: func(pending *state.PendingRequest) error {
-			return a.ServerRequestService().AdapterForPending(pending).CancelPending(pending)
+			return serverRequests.AdapterForPending(pending).CancelPending(pending)
 		},
 		RawCard: rawCard,
 		PendingLookup: func(requestID string) *state.PendingRequest {

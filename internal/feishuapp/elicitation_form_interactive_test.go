@@ -45,7 +45,7 @@ func TestMcpElicitationInteractiveFormSubmitAndToggle(t *testing.T) {
 		t.Fatalf("elicitation toggle buttons = %+v, want 3", toggles)
 	}
 
-	toggleResp, err := a.ServerRequestService().CompleteElicitationMultiToggle(&feishu.CardAction{
+	toggleResp, err := a.bindings.ServerRequests.CompleteElicitationMultiToggle(&feishu.CardAction{
 		UserID: "user-1",
 		ActionValue: map[string]any{
 			"request_id":   "elicit-form-1",
@@ -76,7 +76,7 @@ func TestMcpElicitationInteractiveFormSubmitAndToggle(t *testing.T) {
 		t.Fatalf("toggle response did not mark Alpha selected: %#v", toggledCard)
 	}
 
-	resp, err := a.ServerRequestService().CompleteElicitationFormAnswer(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteElicitationFormAnswer(&feishu.CardAction{
 		UserID: "user-1",
 		ActionValue: map[string]any{
 			"request_id": "elicit-form-1",
@@ -132,7 +132,7 @@ func TestMcpElicitationDecisionCardQuickAnswer(t *testing.T) {
 	if form := elicitationAppFormOptional(ff.replyCards[0]); form != nil {
 		t.Fatalf("single boolean elicitation should render decision card, got form %#v", form)
 	}
-	resp, err := a.ServerRequestService().CompleteElicitationFormAnswer(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteElicitationFormAnswer(&feishu.CardAction{
 		UserID: "user-1",
 		ActionValue: map[string]any{
 			"request_id": "elicit-quick-1",
@@ -171,7 +171,7 @@ func TestMcpElicitationConfirmCardDirectActions(t *testing.T) {
 	if got := cardMarkdownContent(t, ff.replyCards[0]); !strings.Contains(got, "请直接点击下方按钮确认") {
 		t.Fatalf("confirm card body = %q", got)
 	}
-	resp, err := a.ServerRequestService().CompleteElicitationFormAnswer(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteElicitationFormAnswer(&feishu.CardAction{
 		UserID: "user-1",
 		ActionValue: map[string]any{
 			"request_id":         "elicit-confirm-1",

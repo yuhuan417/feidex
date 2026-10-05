@@ -306,7 +306,7 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
-	a.ServerRequestService().SendApprovalCardWithPayload("command", json.RawMessage(`"req-1"`), "thread-1", "turn-1", "item-1", "need approve", map[string]any{"command": "pwd"})
+	a.bindings.ServerRequests.SendApprovalCardWithPayload("command", json.RawMessage(`"req-1"`), "thread-1", "turn-1", "item-1", "need approve", map[string]any{"command": "pwd"})
 	if len(ff.replyCards) != 1 {
 		t.Fatalf("sendApprovalCardWithPayload() cards = %d, want 1", len(ff.replyCards))
 	}
@@ -318,12 +318,12 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 		t.Fatalf("submission status = %q, want waiting_approval", got.Status)
 	}
 
-	a.ServerRequestService().SendPermissionsCardWithPayload(json.RawMessage(`"perm-1"`), "thread-1", "turn-1", "item-2", "need perms", map[string]any{"mode": "read"}, map[string]any{"permissions": map[string]any{"mode": "read"}})
+	a.bindings.ServerRequests.SendPermissionsCardWithPayload(json.RawMessage(`"perm-1"`), "thread-1", "turn-1", "item-2", "need perms", map[string]any{"mode": "read"}, map[string]any{"permissions": map[string]any{"mode": "read"}})
 	if pending := a.store.PendingByID("perm-1"); pending == nil || pending.Kind != "permissions" || pending.Backend != domainbackend.BackendCodex {
 		t.Fatalf("permissions pending = %+v, want stored permissions request", pending)
 	}
 
-	a.ServerRequestService().SendUserInputCard(json.RawMessage(`"input-1"`), pendingforms.ToolUserInputPayload{
+	a.bindings.ServerRequests.SendUserInputCard(json.RawMessage(`"input-1"`), pendingforms.ToolUserInputPayload{
 		ThreadID: "thread-1",
 		TurnID:   "turn-1",
 		ItemID:   "item-3",
@@ -336,8 +336,8 @@ func TestSendApprovalAndUserInputCards(t *testing.T) {
 	}
 
 	empty := prepareTestApp(&App{store: a.store, feishu: ff, runtimeOwner: testOwnerWithCodex(fc)})
-	empty.ServerRequestService().SendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
-	empty.ServerRequestService().SendUserInputCard(json.RawMessage(`"missing-input"`), pendingforms.ToolUserInputPayload{})
+	empty.bindings.ServerRequests.SendApprovalCardWithPayload("command", json.RawMessage(`"missing"`), "thread-x", "turn-x", "", "body", nil)
+	empty.bindings.ServerRequests.SendUserInputCard(json.RawMessage(`"missing-input"`), pendingforms.ToolUserInputPayload{})
 	handleServerRequest(empty.BackendRuntimeDeps(), codexrpc.RequestEnvelope{ID: json.RawMessage(`"req"`), Method: "unknown"})
 	if len(fc.replyErrors) < 3 {
 		t.Fatalf("replyErrors = %+v, want errors for missing session/input/unknown method", fc.replyErrors)

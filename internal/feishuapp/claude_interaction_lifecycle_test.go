@@ -91,7 +91,7 @@ func TestClaudeApprovalCardAnswerableAfterTurnCleanup(t *testing.T) {
 		ID: "sub-2", SessionKey: "feishu:chat:chat-1", ThreadID: "claude-thread-1", TurnID: "claude-turn-1",
 	})
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{
 		ActionValue: map[string]any{"request_id": "claude-approval-2"},
 		UserID:      "user-1",
 	}, "approval.command.accept")
@@ -166,7 +166,7 @@ func TestSendDetachedApprovalCardDeliversAnswerableCard(t *testing.T) {
 		t.Fatalf("pending = %#v, want a Claude command approval bound to the anchor", pending)
 	}
 
-	resp, err := a.ServerRequestService().CompleteApprovalAction(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteApprovalAction(&feishu.CardAction{
 		ActionValue: map[string]any{"request_id": "req-detached-1"},
 		UserID:      "user-1",
 	}, "approval.command.accept")

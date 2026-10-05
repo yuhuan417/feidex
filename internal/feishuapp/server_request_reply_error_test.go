@@ -15,7 +15,7 @@ func TestCompleteUserInputAnswerKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "sess-1"
 	sub := seedActiveSubmission(t, a, sessionKey, "thread-1", "turn-1")
-	a.ServerRequestService().SendUserInputCard(json.RawMessage(`"input-1"`), pendingforms.ToolUserInputPayload{
+	a.bindings.ServerRequests.SendUserInputCard(json.RawMessage(`"input-1"`), pendingforms.ToolUserInputPayload{
 		ThreadID: "thread-1",
 		TurnID:   "turn-1",
 		ItemID:   "item-1",
@@ -25,7 +25,7 @@ func TestCompleteUserInputAnswerKeepsPendingWhenCodexReplyFails(t *testing.T) {
 	})
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-1", "question_id": "mode", "answer": "Fast"},
 	})
@@ -64,7 +64,7 @@ func TestCompleteUserInputFormAnswerKeepsPendingWhenCodexReplyFails(t *testing.T
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := a.ServerRequestService().CompleteUserInputAnswer(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteUserInputAnswer(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "input-form-1"},
 		FormValue:   map[string]any{"mode": "Fast"},
@@ -104,7 +104,7 @@ func TestCompleteToolUserInputTextKeepsPendingWhenCodexReplyFails(t *testing.T) 
 	}
 	fc.replyErr = errors.New("write failed")
 
-	err := a.ServerRequestService().CompleteToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("input-text-1"))
+	err := a.bindings.ServerRequests.CompleteToolUserInputText(&feishu.InboundMessage{Text: "Fast"}, a.store.PendingByID("input-text-1"))
 	if err == nil || err.Error() != "write failed" {
 		t.Fatalf("completeToolUserInputText() error = %v, want write failed", err)
 	}
@@ -132,7 +132,7 @@ func TestCompleteElicitationURLActionKeepsPendingWhenCodexReplyFails(t *testing.
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := a.ServerRequestService().CompleteElicitationURLAction(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompleteElicitationURLAction(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "url-1"},
 	}, "elicitation_url.accept")
@@ -163,7 +163,7 @@ func TestCompletePendingFormCancelKeepsPendingWhenCodexReplyFails(t *testing.T) 
 	}
 	fc.replyErr = errors.New("write failed")
 
-	resp, err := a.ServerRequestService().CompletePendingFormCancel(&feishu.CardAction{
+	resp, err := a.bindings.ServerRequests.CompletePendingFormCancel(&feishu.CardAction{
 		UserID:      "user-1",
 		ActionValue: map[string]any{"request_id": "form-1"},
 	})
@@ -200,7 +200,7 @@ func TestCompleteElicitationFormTextKeepsPendingWhenCodexReplyFails(t *testing.T
 	}
 	fc.replyErr = errors.New("write failed")
 
-	err := a.ServerRequestService().CompleteElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicit-form-1"))
+	err := a.bindings.ServerRequests.CompleteElicitationFormText(&feishu.InboundMessage{Text: "Feidex"}, a.store.PendingByID("elicit-form-1"))
 	if err == nil || err.Error() != "write failed" {
 		t.Fatalf("completeElicitationFormText() error = %v, want write failed", err)
 	}
