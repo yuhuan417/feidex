@@ -1,6 +1,7 @@
 package feishuapp
 
 import (
+	"context"
 	"encoding/json"
 	domainbackend "feidex/internal/domain/backend"
 	domainsubmission "feidex/internal/domain/submission"
@@ -9,7 +10,10 @@ import (
 
 	appcards "feidex/internal/adapter/feishu/cards"
 	"feidex/internal/adapter/feishu/pendingforms"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application/asyncinput"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -47,7 +51,33 @@ func (s asyncUserInputCardSender) Send(sub *domainsubmission.Submission, payload
 	return s.pending.Pending(requestID).FeishuMsgID
 }
 
-func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {
+type AsyncUserInputActionInputs struct {
+	State            *appstate.Store
+	Inputs           asyncinput.Service
+	Context          func() context.Context
+	FrontendID       string
+	EffectRunner     frontendruntime.EffectRunner
+	SimpleStatusCard func(string, string, string, []feishu.Button) map[string]any
+}
+
+type asyncUserInputActionService struct {
+	inputs AsyncUserInputActionInputs
+}
+
+func asyncUserInputPortCardActionHandlers(inputs AsyncUserInputActionInputs) map[string]cardActionPortHandler {
+	service := asyncUserInputActionService{inputs: inputs}
+	return map[string]cardActionPortHandler{
+		"async_user_input.answer": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return completeAsyncUserInputWithService(service, action, false)
+		},
+		"async_user_input.cancel": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return completeAsyncUserInputWithService(service, action, true)
+		},
+	}
+}
+
+func completeAsyncUserInputWithService(service asyncUserInputActionService, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {
+	inputs := service.inputs
 	warning := func(text string) (*callback.CardActionTriggerResponse, error) {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: text}}, nil
 	}
@@ -55,8 +85,8 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 		return warning("请求已过期")
 	}
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.State().Pending(requestID)
-	if err := a.bindings.AsyncInputs.Validate(pending, action.UserID, action.MessageID, action.ChatID, cancel); err != nil {
+	pending := inputs.State.Pending(requestID)
+	if err := inputs.Inputs.Validate(pending, action.UserID, action.MessageID, action.ChatID, cancel); err != nil {
 		return warning(err.Error())
 	}
 	var payload pendingforms.ToolUserInputPayload
@@ -75,27 +105,27 @@ func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*ca
 			}, nil
 		}
 	}
-	if err := a.bindings.AsyncInputs.Claim(pending, cancel); err != nil {
+	if err := inputs.Inputs.Claim(pending, cancel); err != nil {
 		return warning("请求已处理或正在提交")
 	}
 	if cancel {
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消"},
-			Card:  rawCard(a.feishu.SimpleStatusCard("输入请求已取消", "grey", pendingforms.RenderToolUserInputBody(payload), nil)),
+			Card:  rawCard(inputs.SimpleStatusCard("输入请求已取消", "grey", pendingforms.RenderToolUserInputBody(payload), nil)),
 		}, nil
 	}
 	// Only local validation/state changes run in the callback. The backend can
 	// take seconds to steer or start a turn, so acknowledge before doing I/O.
-	if err := a.bindings.AsyncInputs.Dispatch(pending, action.UserID, answerText, func(err error) {
+	if err := inputs.Inputs.Dispatch(pending, action.UserID, answerText, func(err error) {
 		var card map[string]any
 		if err != nil {
 			card = pendingforms.RenderAsyncUserInputFormCard(requestID, payload, drafts, pending.OwnerUserID)
 			appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "提交失败，请重试。\n" + err.Error()})
 			slog.Warn("async user input submission failed", "request_id", requestID, "error", err)
 		} else {
-			card = a.feishu.SimpleStatusCard("输入已提交", "green", answerText, nil)
+			card = inputs.SimpleStatusCard("输入已提交", "green", answerText, nil)
 		}
-		patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), pending.FeishuMsgID, card, "async user input patch failed", "request_id", requestID)
+		patchMaintenanceCard(inputs.Context(), inputs.FrontendID, inputs.EffectRunner, pending.FeishuMsgID, card, "async user input patch failed", "request_id", requestID)
 	}); err != nil {
 		return warning(err.Error())
 	}

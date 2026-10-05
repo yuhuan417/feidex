@@ -30,6 +30,7 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		{name: "server-request-ports", handlers: serverRequestCardActionHandlers(nil)},
 		{name: "path-picker-ports", handlers: pathPickerActionHandlers(PathPickerActionInputs{})},
 		{name: "thread-menu-ports", handlers: threadMenuPortCardActionHandlers(nil)},
+		{name: "async-user-input-ports", handlers: asyncUserInputPortCardActionHandlers(AsyncUserInputActionInputs{})},
 	}
 	appMaps := make([]map[string]cardActionHandler, 0, len(appSets))
 	for _, set := range appSets {

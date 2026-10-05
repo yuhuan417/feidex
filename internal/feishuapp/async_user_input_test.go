@@ -19,6 +19,23 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+func asyncUserInputActionInputsForTest(a *App) AsyncUserInputActionInputs {
+	return AsyncUserInputActionInputs{
+		State: a.State(), Inputs: a.bindings.AsyncInputs, Context: a.Context,
+		FrontendID: a.FrontendID(), EffectRunner: newEffectRunner(a.runtimeOwner),
+		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+			if client := a.Feishu(); client != nil {
+				return client.SimpleStatusCard(title, color, body, buttons)
+			}
+			return nil
+		},
+	}
+}
+
+func completeAsyncUserInput(a *App, action *feishu.CardAction, cancel bool) (*callback.CardActionTriggerResponse, error) {
+	return completeAsyncUserInputWithService(asyncUserInputActionService{inputs: asyncUserInputActionInputsForTest(a)}, action, cancel)
+}
+
 // Matches the Codex 0.153.4 item emitted by request_user_input_async.
 const asyncQuestionNotification = `{"threadId":"thread-1","turnId":"turn-1","item":{"id":"ask-1","type":"agentMessage","phase":"final_answer","delivery":"async","text":"Which behavior do you see?","questions":[{"title":"Which behavior do you see?","options":["Old bot responds","No bot responds","Several bots respond"]}]}}`
 
@@ -148,7 +165,7 @@ func TestAsyncUserInputAnswerAcknowledgesBeforeSteerAndRejectsDuplicates(t *test
 		return nil
 	}
 	resp, err := callActionWithTimeout(t, func() (*callback.CardActionTriggerResponse, error) {
-		return pendingCardActionHandlers()["async_user_input.answer"](cardActionService{app: a}, asyncAnswerAction(pending))
+		return asyncUserInputPortCardActionHandlers(asyncUserInputActionInputsForTest(a))["async_user_input.answer"](asyncAnswerAction(pending))
 	})
 	if err != nil || resp.Toast == nil || resp.Toast.Type != "info" || resp.Card != nil {
 		t.Fatalf("callback = %+v, %v; want fast toast only", resp, err)

@@ -507,7 +507,16 @@ func prepareTestApp(a *App) *App {
 				}
 				return nil
 			},
-		}, a.bindings.ThreadMenu,
+		}, a.bindings.ThreadMenu, AsyncUserInputActionInputs{
+			State: a.State(), Inputs: a.bindings.AsyncInputs, Context: a.Context,
+			FrontendID: a.FrontendID(), EffectRunner: newEffectRunner(a.runtimeOwner),
+			SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+				if client := a.Feishu(); client != nil {
+					return client.SimpleStatusCard(title, color, body, buttons)
+				}
+				return nil
+			},
+		},
 	))
 	dispatcher := newInputDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher

@@ -564,7 +564,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,
 			Upgrades: bindings.Upgrades, Debug: bindings.Debug,
 			SimpleStatusCard: frontend.Feishu().SimpleStatusCard,
-		}, bindings.ThreadMenu,
+		}, bindings.ThreadMenu, feishuapp.AsyncUserInputActionInputs{
+			State: frontend.State(), Inputs: bindings.AsyncInputs, Context: frontend.Context,
+			FrontendID: frontend.FrontendID(), EffectRunner: *scope.RuntimeOwner.EffectRunner,
+			SimpleStatusCard: frontend.Feishu().SimpleStatusCard,
+		},
 	))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
 	*autoRetryRuntimeDeps = frontend.BackendRuntimeDeps()
