@@ -4,6 +4,7 @@ import (
 	"errors"
 	"feidex/internal/adapter/feishu/backend"
 	modelcommands "feidex/internal/adapter/feishu/modelconfig"
+	tier "feidex/internal/adapter/feishu/servicetier"
 	domainbackend "feidex/internal/domain/backend"
 	"fmt"
 	"strings"
@@ -11,37 +12,51 @@ import (
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	applicationmodelconfig "feidex/internal/application/modelconfig"
 	applicationrouting "feidex/internal/application/routing"
+	"feidex/internal/compositionkit"
 	"feidex/internal/domain/routing"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func commandModelProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
+type ProfileCommandInputs struct {
+	BackendConfiguration       backend.ConfigurationService
+	ModelSettings              applicationmodelconfig.SettingsService
+	ScopedRoutingConfiguration compositionkit.ScopedRoutingConfiguration
+	ServiceTier                tier.Service
+	ConfiguredBackend          func() string
+	MakeSessionKey             func(*feishu.InboundMessage) string
+	Effects                    frontendruntime.EffectRunner
+	FrontendID                 string
+	ReplyInThread              bool
+}
+
+func handleModelProfileCommand(inputs ProfileCommandInputs, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") || len(args) == 0 {
-		return a.bindings.BackendConfiguration.HandleBackendModelCommand(msg, args)
+		return inputs.BackendConfiguration.HandleBackendModelCommand(msg, args)
 	}
 	if len(args) == 3 {
 		setting := routing.Setting(strings.ToLower(strings.TrimSpace(args[0])))
 		operation := strings.ToLower(strings.TrimSpace(args[1]))
 		if operation == "set" && setting.Auxiliary() && setting != routing.PlanEffort && setting != routing.SubagentEffort {
-			return saveAuxiliaryCommand(a, msg, setting, args[2], string(setting)+" model")
+			return saveAuxiliaryProfileCommand(inputs, msg, setting, args[2], string(setting)+" model")
 		}
-		if operation == "effort" && a.configView().configuredBackend() == domainbackend.BackendCodex {
+		if operation == "effort" && inputs.ConfiguredBackend() == domainbackend.BackendCodex {
 			switch setting {
 			case routing.PlanModel:
-				return saveAuxiliaryCommand(a, msg, routing.PlanEffort, args[2], "Plan reasoning effort")
+				return saveAuxiliaryProfileCommand(inputs, msg, routing.PlanEffort, args[2], "Plan reasoning effort")
 			case routing.SubagentModel:
-				return saveAuxiliaryCommand(a, msg, routing.SubagentEffort, args[2], "subagent reasoning effort")
+				return saveAuxiliaryProfileCommand(inputs, msg, routing.SubagentEffort, args[2], "subagent reasoning effort")
 			}
 		}
 	}
-	return a.bindings.BackendConfiguration.HandleBackendModelCommand(msg, args)
+	return inputs.BackendConfiguration.HandleBackendModelCommand(msg, args)
 }
 
-func saveAuxiliaryCommand(a *App, msg *feishu.InboundMessage, setting routing.Setting, value, label string) error {
-	result, err := a.bindings.ModelSettings.SaveAuxiliary(a.configView().makeSessionKey(msg), a.configView().configuredBackend(), setting, value)
+func saveAuxiliaryProfileCommand(inputs ProfileCommandInputs, msg *feishu.InboundMessage, setting routing.Setting, value, label string) error {
+	result, err := inputs.ModelSettings.SaveAuxiliary(inputs.MakeSessionKey(msg), inputs.ConfiguredBackend(), setting, value)
 	if err != nil {
 		return err
 	}
@@ -49,7 +64,7 @@ func saveAuxiliaryCommand(a *App, msg *feishu.InboundMessage, setting routing.Se
 	if result.Scope == applicationmodelconfig.SessionScope {
 		scope = "session"
 	}
-	return replyTextEffect(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, "已更新当前 "+scope+" 的 "+label)
+	return replyTextEffect(inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, "已更新当前 "+scope+" 的 "+label)
 }
 
 func commandEffortProfileAware(modelcommandsDep modelcommands.ModelConfigService, msg *feishu.InboundMessage, args []string) error {
@@ -62,9 +77,9 @@ func commandEffortProfileAware(modelcommandsDep modelcommands.ModelConfigService
 	return modelcommandsDep.CommandEffort(msg, args)
 }
 
-func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) error {
+func handleFastProfileCommand(inputs ProfileCommandInputs, msg *feishu.InboundMessage, args []string) error {
 	if msg == nil || strings.EqualFold(strings.TrimSpace(msg.ChatType), "group") || (len(args) == 1 && strings.EqualFold(strings.TrimSpace(args[0]), "config")) {
-		return commandFast(a.bindings.ServiceTier, msg, args)
+		return commandFast(inputs.ServiceTier, msg, args)
 	}
 	if len(args) > 1 {
 		return fmt.Errorf("usage: /fast | /fast fast | /fast default | /fast off | /fast toggle")
@@ -74,7 +89,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 		value = args[0]
 	}
 	toggle := len(args) == 0 || strings.EqualFold(strings.TrimSpace(value), "toggle")
-	result, err := a.bindings.ScopedRoutingConfiguration.ChangeServiceTier(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, value, toggle)
+	result, err := inputs.ScopedRoutingConfiguration.ChangeServiceTier(applicationrouting.Scope{ChatType: msg.ChatType, ChatID: msg.ChatID}, value, toggle)
 	if err != nil {
 		return err
 	}
@@ -82,7 +97,7 @@ func commandFastProfileAware(a *App, msg *feishu.InboundMessage, args []string) 
 	if result.Profile != nil {
 		updated = result.Profile.ServiceTier
 	}
-	return replyTextEffect(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(updated))
+	return replyTextEffect(inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, "已更新当前 Bot 的默认响应速度: "+renderOptionalBacktick(updated))
 }
 
 func effectiveBotProfile(store *appstate.Store) *state.BotProfile {

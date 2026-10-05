@@ -160,7 +160,3 @@ func currentThreadForMessage(workspaceConfiguration *workspacecmd.ConfigService,
 	}
 	return sessionKey, sess, ws, strings.TrimSpace(sess.ActiveThreadID), nil
 }
-
-func commandWorkspace(a *App, msg *feishu.InboundMessage, args []string) error {
-	return a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, args, a.bindings.WorkspaceManagement)
-}

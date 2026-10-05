@@ -23,12 +23,7 @@ func newMenuActionService(app *App) cardActionService {
 }
 
 func (s cardActionService) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
-	actionName = nearestVisibleMenuAction(actionName, s.app.configView().configuredBackend())
-	renderer := menuNodeRenderers()[actionName]
-	if renderer == nil {
-		return nil, false
-	}
-	return renderer(s.app, sessionKey)
+	return menuCommandServiceForApp(s.app).fallback(actionName, sessionKey)
 }
 
 func (s cardActionService) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

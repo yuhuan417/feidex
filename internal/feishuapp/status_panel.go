@@ -1,9 +1,11 @@
 package feishuapp
 
 import (
+	"feidex/internal/adapter/feishu/backend"
 	"feidex/internal/adapter/feishu/planmode"
-
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 )
 
 func renderStatusCard(state planmode.StateProvider, client FeishuClient, backendKind string, statusBody string, sessionKey string) map[string]any {
@@ -15,9 +17,9 @@ func renderStatusCard(state planmode.StateProvider, client FeishuClient, backend
 	return client.SimpleStatusCard(title, "blue", menuCardBodyForBackend(backendKind, "menu.status", statusBody), buttons)
 }
 
-func commandStatus(a *App, msg *feishu.InboundMessage) error {
-	sessionKey := a.configView().makeSessionKey(msg)
-	sess := a.State().Session(sessionKey)
-	card := renderStatusCard(a.State(), a.feishu, a.configView().configuredBackend(), a.bindings.BackendConfiguration.StatusCardBody(sess), sessionKey)
-	return replyCardEffect(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, card)
+func handleStatusCommand(state *appstate.Store, backendKind func() string, configuration backend.ConfigurationService, makeSessionKey func(*feishu.InboundMessage) string, renderer FeishuClient, effects frontendruntime.EffectRunner, frontendID string, replyInThread bool, msg *feishu.InboundMessage) error {
+	sessionKey := makeSessionKey(msg)
+	sess := state.Session(sessionKey)
+	card := renderStatusCard(state, renderer, backendKind(), configuration.StatusCardBody(sess), sessionKey)
+	return replyCardEffect(effects, frontendID, replyInThread, msg, card)
 }

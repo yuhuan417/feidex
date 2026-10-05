@@ -1,120 +1,44 @@
 package feishuapp
 
-import (
-	"feidex/internal/adapter/feishu/planmode"
-	"feidex/internal/feishu"
-)
-
-func appendFeatureBindingsTools(bindings map[string]featureBinding) {
+func appendFeatureBindingsTools(bindings map[string]featureBinding, inputs FeatureRegistryInputs) {
 	bindings["menu.review"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"review": {
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return a.bindings.ReviewCommands.CommandReview(msg, args)
-				},
-			},
-		},
+		Commands:      map[string]featureCommandBinding{"review": inputs.command("review")},
 		RenderActions: []string{"menu.review"},
-		Render: func(actionName string, a *App, sessionKey string) (map[string]any, bool) {
-			if actionName != "menu.review" {
-				return nil, false
-			}
-			return a.bindings.ReviewCommands.RenderReviewMenuCard(sessionKey), true
-		},
-		PortActions: []string{"menu.review", "menu.review.uncommitted", "menu.review.base", "menu.review.commit", "menu.review.custom"},
+		Render:        inputs.render("menu.review"),
+		PortActions:   []string{"menu.review", "menu.review.uncommitted", "menu.review.base", "menu.review.commit", "menu.review.custom"},
 	}
 	bindings["menu.quiet"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"quiet": {
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return commandQuiet(a, msg, args)
-				},
-			},
-		},
+		Commands:    map[string]featureCommandBinding{"quiet": inputs.command("quiet")},
 		PortActions: []string{"menu.quiet", "quiet.set"},
 	}
 	bindings["plan"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"plan": {
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return planmode.CommandPlan(newPlanModeAppAdapter(a), msg, args)
-				},
-			},
-		},
+		Commands:    map[string]featureCommandBinding{"plan": inputs.command("plan")},
 		PortActions: []string{"menu.plan"},
 	}
 	bindings["goal"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"goal": {
-				HandleRaw: func(a *App, msg *feishu.InboundMessage, raw string, args []string) error {
-					return commandGoalRaw(a.bindings.GoalCommands, msg, raw, args)
-				},
-			},
-		},
+		Commands:    map[string]featureCommandBinding{"goal": inputs.command("goal")},
 		PortActions: []string{"menu.goal", "goal.pause", "goal.resume", "goal.clear", "goal.edit", "goal.replace.confirm", "goal.replace.cancel", "goal.edit.submit"},
 	}
 	bindings["menu.compact"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"compact": {
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return commandCompact(a.bindings.BackendActions, a.bindings.Compaction, msg, args)
-				},
-			},
-		},
+		Commands:    map[string]featureCommandBinding{"compact": inputs.command("compact")},
 		PortActions: []string{"menu.compact"},
 	}
 	bindings["menu.download"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"download": {
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					if a.bindings.Download == nil {
-						return nil
-					}
-					return a.bindings.Download(msg, args)
-				},
-			},
-		},
+		Commands:    map[string]featureCommandBinding{"download": inputs.command("download")},
 		PortActions: []string{"menu.download"},
 	}
 	bindings["menu.history"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"history": {
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return a.bindings.History.CommandHistory(msg, args)
-				},
-			},
-		},
+		Commands:    map[string]featureCommandBinding{"history": inputs.command("history")},
 		PortActions: []string{"menu.history", "history.page", "history.detail", "history.detail.select"},
 	}
 	bindings["menu.skills"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"skills": {
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return a.bindings.SkillCommands.CommandSkills(msg, args)
-				},
-			},
-		},
+		Commands:      map[string]featureCommandBinding{"skills": inputs.command("skills")},
 		RenderActions: []string{"menu.skills"},
-		Render: func(actionName string, a *App, sessionKey string) (map[string]any, bool) {
-			if actionName != "menu.skills" {
-				return nil, false
-			}
-			card, err := a.bindings.SkillCommands.RenderSkillsCard(sessionKey, false)
-			if err != nil {
-				return nil, false
-			}
-			return card, true
-		},
-		PortActions: []string{"menu.skills", "skills.select", "skills.reload"},
+		Render:        inputs.render("menu.skills"),
+		PortActions:   []string{"menu.skills", "skills.select", "skills.reload"},
 	}
 	bindings["menu.usage"] = featureBinding{
-		Commands: map[string]featureCommandBinding{
-			"usage": {
-				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return a.bindings.Usage.CommandUsage(msg, args)
-				},
-			},
-		},
+		Commands:    map[string]featureCommandBinding{"usage": inputs.command("usage")},
 		PortActions: []string{"menu.usage"},
 	}
 }

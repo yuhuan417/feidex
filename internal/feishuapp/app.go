@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/application"
 	"feidex/internal/application/submission"
 	"feidex/internal/domain/identity"
@@ -193,14 +194,14 @@ func replyErrorWith(contextFn func() context.Context, frontend identity.Frontend
 	return runner.Run(ctx, []application.Effect{application.SendMessage{Frontend: frontend, Chat: identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)}, ReplyMessageID: msg.MessageID, Text: "执行失败: " + err.Error()}})
 }
 
-func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
-	sessionKey := a.configView().makeSessionKey(msg)
-	card := renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "主菜单"), a.feishu, sessionKey)
-	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
-		Frontend:       identity.FrontendID(a.FrontendID()),
+func sendCommandMenuWith(makeSessionKey func(*feishu.InboundMessage) string, backend func() string, state planmode.StateProvider, renderer bindingCardRenderer, runner frontendruntime.EffectRunner, frontendID string, replyInThread bool, msg *feishu.InboundMessage) error {
+	sessionKey := makeSessionKey(msg)
+	card := renderCommandMenuCardData(backend(), planModeTitleForSession(state, state != nil, sessionKey, "主菜单"), renderer, sessionKey)
+	return runner.Run(context.Background(), []application.Effect{application.SendCard{
+		Frontend:       identity.FrontendID(frontendID),
 		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 		ReplyMessageID: msg.MessageID,
 		View:           feishuoutbound.Card(card),
-		InThread:       a.configView().replyInThreadEnabled(),
+		InThread:       replyInThread,
 	}})
 }

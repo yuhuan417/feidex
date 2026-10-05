@@ -160,18 +160,6 @@ func sendLocalTurnFollowupCardWith(outbound effectOutbound, links messageLinkRec
 	return messageID, nil
 }
 
-func newPlanModeAppAdapter(a *App) planmode.Dependencies {
-	if a == nil {
-		return planmode.Dependencies{}
-	}
-	return PlanModePorts(PlanModePortInputs{
-		Runtime: a.BackendRuntimeDeps(), UseCase: a.bindings.Plan, Continuation: a.bindings.Continuation,
-		State: a.State(), ModelSnapshots: a.bindings.ModelSnapshots,
-		WorkspaceSelection: a.bindings.WorkspaceSelection, Submissions: a.bindings.Submissions,
-		Conversations: a.bindings.Conversations, Feishu: a.feishu, AsyncRunner: a.asyncRunner,
-	})
-}
-
 type planSettingsSource struct {
 	view      frontendConfigView
 	snapshots modelconfigapp.SnapshotService

@@ -340,7 +340,7 @@ builder 改成构造期参数后，这条边变成了正向的显式依赖。
 
 | 测试 | 起始值 | 当前 | 目标 |
 |---|---|---|---|
-| `TestFeishuAppAggregateDoesNotGrow` | 541 | **449** | **0** |
+| `TestFeishuAppAggregateDoesNotGrow` | 541 | **34** | **0** |
 | `TestFeishuAppLazyBindingReadsDoesNotGrow` | 86 | **0** | **0** |
 
 ### 分析口径的第三次修正：语句级图必须闭包到 wrapper 的实现

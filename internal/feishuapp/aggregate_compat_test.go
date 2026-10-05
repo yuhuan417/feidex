@@ -2,12 +2,95 @@ package feishuapp
 
 import (
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
+	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	workspacecards "feidex/internal/adapter/feishu/workspace"
 	appworkspacecmd "feidex/internal/adapter/feishu/workspacecmd"
 	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/feishu"
 )
+
+func commandRegistryForApp(a *App) *CommandRegistry {
+	if a == nil || a.bindings == nil {
+		return &CommandRegistry{}
+	}
+	configuredBackend := a.configView().configuredBackend
+	makeSessionKey := a.configView().makeSessionKey
+	registry := BuildCommandRegistry(CommandRegistryInputs{
+		Features: BuildFeatureRegistryInputs(BuildCommandFeatureInputs(CommandFeatureDependencies{
+			BindingScope: BindingScope{scope: a.bindings.BindingCommands.scope}, BindingCommands: a.bindings.BindingCommands,
+			BackendSelection: a.bindings.BackendSelection, BackendConfiguration: a.bindings.BackendConfiguration,
+			ReviewCommands: a.bindings.ReviewCommands, RuntimeSettings: a.bindings.RuntimeSettings,
+			QuietMode: ConfiguredQuietModeBuilder(a.Config(), a.ConfigMu(), a.frontendConfigIndex),
+			PlanMode:  newPlanModeAppAdapter(a), GoalCommands: a.bindings.GoalCommands,
+			BackendActions: a.bindings.BackendActions, Compaction: a.bindings.Compaction, Download: a.bindings.Download,
+			History: a.bindings.History, SkillCommands: a.bindings.SkillCommands, Usage: a.bindings.Usage,
+			ThreadMenu: a.bindings.ThreadMenu, WorkspaceConfiguration: a.bindings.WorkspaceConfiguration,
+			WorkspaceManagement: a.bindings.WorkspaceManagement, WorkspacePresentation: a.bindings.WorkspacePresentation,
+			ModelCommands: a.bindings.ModelCommands, ModelSettings: a.bindings.ModelSettings,
+			ScopedRoutingConfiguration: a.bindings.ScopedRoutingConfiguration, ServiceTier: a.bindings.ServiceTier,
+			Debug: a.bindings.Debug, BackendUpgrades: a.bindings.BackendUpgrades,
+			UpgradePresentation: a.bindings.UpgradePresentation, Upgrades: a.bindings.Upgrades,
+			State: a.State(), Config: a.Config(), ConfiguredBackend: configuredBackend,
+			MakeSessionKey: makeSessionKey, NormalizeSessionKey: a.configView().normalizeSessionKey,
+			ConversationQuery: a.bindings.ConversationQuery, Conversations: a.bindings.Conversations,
+			Renderer: a.Feishu(), Effects: newEffectRunner(a.runtimeOwner),
+			FrontendID: a.FrontendID(), ReplyInThread: a.configView().replyInThreadEnabled(),
+		})),
+		ConfiguredBackend: configuredBackend, MakeSessionKey: makeSessionKey,
+		WorkspaceConfigured:        func() bool { return a.Config() != nil && len(a.Config().Workspaces) > 0 },
+		ReplyBackendSelection:      a.bindings.BackendSelection.ReplyBackendSelectionCard,
+		BackendSwitchBlockedReason: a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
+		MaintenanceBlocksCommand:   CommandMaintenanceBlocker(a.BackendRuntimeDeps()),
+		QueuePassthrough:           CommandPassthroughQueue(a.bindings.Submissions),
+	})
+	return &registry
+}
+
+func HandleInboundCommand(a *App, msg *feishu.InboundMessage, raw string) error {
+	return commandRegistryForApp(a).Handle(msg, raw)
+}
+
+func RenderMenuCommandFallback(a *App, actionName, sessionKey string) (map[string]any, bool) {
+	return commandRegistryForApp(a).RenderFallback(actionName, sessionKey)
+}
+
+func findLocalCommandSpec(name string) *localCommandSpec {
+	bindings := buildFeatureBindings(BuildFeatureRegistryInputs(CommandFeatureInputs{}))
+	return findLocalCommandSpecIn(buildLocalCommandSpecs(bindings), name)
+}
+
+func newPlanModeAppAdapter(a *App) planmode.Dependencies {
+	if a == nil {
+		return planmode.Dependencies{}
+	}
+	return PlanModePorts(PlanModePortInputs{
+		Runtime: a.BackendRuntimeDeps(), UseCase: a.bindings.Plan, Continuation: a.bindings.Continuation,
+		State: a.State(), ModelSnapshots: a.bindings.ModelSnapshots,
+		WorkspaceSelection: a.bindings.WorkspaceSelection, Submissions: a.bindings.Submissions,
+		Conversations: a.bindings.Conversations, Feishu: a.feishu, AsyncRunner: a.asyncRunner,
+	})
+}
+
+func sendCommandMenu(a *App, msg *feishu.InboundMessage) error {
+	return sendCommandMenuWith(a.configView().makeSessionKey, a.configView().configuredBackend, a.State(), a.feishu, newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg)
+}
+
+func commandWorkspace(a *App, msg *feishu.InboundMessage, args []string) error {
+	return a.bindings.WorkspaceConfiguration.CommandWorkspace(msg, args, a.bindings.WorkspaceManagement)
+}
+
+func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {
+	return handleHelpCommand(a.bindings.BindingCommands.scope, a.configView().configuredBackend, a.configView().makeSessionKey, a.State(), a.feishu, newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, args)
+}
+
+func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
+	return handleQuietCommand(QuietCommandInputs{
+		Settings: a.bindings.RuntimeSettings, Mode: ConfiguredQuietModeBuilder(a.Config(), a.ConfigMu(), a.frontendConfigIndex),
+		MakeSessionKey: a.configView().makeSessionKey, State: a.State(), Renderer: a.feishu,
+		Effects: newEffectRunner(a.runtimeOwner), FrontendID: a.FrontendID(), ReplyInThread: a.configView().replyInThreadEnabled(),
+	}, msg, args)
+}
 
 func menuCommandServiceForApp(a *App) MenuCommandService {
 	if a == nil {

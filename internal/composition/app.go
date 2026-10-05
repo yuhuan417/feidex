@@ -190,14 +190,15 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindingScope := feishuapp.NewBindingScope(frontend.State(), func(key string) string {
 		return identity.CanonicalSessionKey(frontendIDForBindingScope, key)
 	}, bindings.Primary, frontendIDForBindingScope)
+	commandRegistry := &feishuapp.CommandRegistry{}
 	menuCommands := feishuapp.NewMenuCommandService(feishuapp.MenuCommandInputs{
 		BindingScope: bindingScope,
 		Capture:      frontend.Feishu(),
 		HandleCommand: func(msg *feishu.InboundMessage, raw string) error {
-			return feishuapp.HandleInboundCommand(frontend, msg, raw)
+			return commandRegistry.Handle(msg, raw)
 		},
 		RenderFallback: func(actionName, sessionKey string) (map[string]any, bool) {
-			return feishuapp.RenderMenuCommandFallback(frontend, actionName, sessionKey)
+			return commandRegistry.RenderFallback(actionName, sessionKey)
 		},
 	})
 	asyncCardActions := feishuapp.NewAsyncCardActionService(feishuapp.AsyncCardActionInputs{
@@ -632,7 +633,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		WorkspaceMenu: bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
 		LocalBackend:  inboundBackend,
 		HandleCommand: func(msg *application.InboundMessage, text string) error {
-			return feishuapp.HandleInboundCommand(frontend, msg, text)
+			return commandRegistry.Handle(msg, text)
 		},
 		SelectBackend: bindings.BackendSelection.ReplyBackendSelectionCard,
 		BlockedReason: scope.RuntimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
@@ -680,6 +681,36 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		State: frontend.State(), Effects: *scope.RuntimeOwner.EffectRunner, AsyncActions: asyncCardActions,
 	})
 	bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
+	*commandRegistry = feishuapp.BuildCommandRegistry(feishuapp.CommandRegistryInputs{
+		Features: feishuapp.BuildFeatureRegistryInputs(feishuapp.BuildCommandFeatureInputs(feishuapp.CommandFeatureDependencies{
+			BindingScope: bindingScope, BindingCommands: bindings.BindingCommands,
+			BackendSelection: bindings.BackendSelection, BackendConfiguration: bindings.BackendConfiguration,
+			ReviewCommands: bindings.ReviewCommands, RuntimeSettings: bindings.RuntimeSettings,
+			QuietMode: feishuapp.ConfiguredQuietModeBuilder(frontend.Config(), frontend.ConfigMu(), frontendConfigIndex),
+			PlanMode:  *turnPlanMode, GoalCommands: bindings.GoalCommands,
+			BackendActions: bindings.BackendActions, Compaction: bindings.Compaction, Download: bindings.Download,
+			History: bindings.History, SkillCommands: bindings.SkillCommands, Usage: bindings.Usage,
+			ThreadMenu: bindings.ThreadMenu, WorkspaceConfiguration: bindings.WorkspaceConfiguration,
+			WorkspaceManagement: bindings.WorkspaceManagement, WorkspacePresentation: bindings.WorkspacePresentation,
+			ModelCommands: bindings.ModelCommands, ModelSettings: bindings.ModelSettings,
+			ScopedRoutingConfiguration: bindings.ScopedRoutingConfiguration, ServiceTier: bindings.ServiceTier,
+			Debug: bindings.Debug, BackendUpgrades: bindings.BackendUpgrades,
+			UpgradePresentation: bindings.UpgradePresentation, Upgrades: bindings.Upgrades,
+			State: frontend.State(), Config: frontend.Config(), ConfiguredBackend: configuredBackend,
+			MakeSessionKey:      feishuapp.SessionKeyBuilder(frontend.FrontendID()),
+			NormalizeSessionKey: func(key string) string { return identity.CanonicalSessionKey(frontend.FrontendID(), key) },
+			ConversationQuery:   bindings.ConversationQuery, Conversations: bindings.Conversations,
+			Renderer: frontend.Feishu(), Effects: *scope.RuntimeOwner.EffectRunner,
+			FrontendID: frontend.FrontendID(), ReplyInThread: false,
+		})),
+		ConfiguredBackend:          configuredBackend,
+		MakeSessionKey:             feishuapp.SessionKeyBuilder(frontend.FrontendID()),
+		WorkspaceConfigured:        func() bool { return frontend.Config() != nil && len(frontend.Config().Workspaces) > 0 },
+		ReplyBackendSelection:      bindings.BackendSelection.ReplyBackendSelectionCard,
+		BackendSwitchBlockedReason: scope.RuntimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic,
+		MaintenanceBlocksCommand:   feishuapp.CommandMaintenanceBlocker(frontend.BackendRuntimeDeps()),
+		QueuePassthrough:           feishuapp.CommandPassthroughQueue(bindings.Submissions),
+	})
 	bindings.MCP, err = feishuapp.BuildMCP(feishuapp.MCPPorts(feishuapp.MCPPortInputs{
 		AttachmentSender: frontend.Feishu(), StateProvider: frontend.State(),
 		TurnItems: bindings.TurnItems, SubmissionLookup: bindings.SubmissionLookup,

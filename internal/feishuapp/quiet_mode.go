@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"strings"
 
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/application/runtimeconfig"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 )
 
 func shouldDeliverTurnItemInQuiet(mode config.QuietMode, itemType string, isFinalAnswer bool) bool {
@@ -70,10 +72,18 @@ func updateQuietMode(settings runtimeconfig.Service, mode config.QuietMode) erro
 	return settings.SetQuietMode(normalized.String())
 }
 
-func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
-	replyRunner := newEffectRunner(a.runtimeOwner)
-	frontendID := a.FrontendID()
-	replyInThread := a.configView().replyInThreadEnabled()
+type QuietCommandInputs struct {
+	Settings       runtimeconfig.Service
+	Mode           func() config.QuietMode
+	MakeSessionKey func(*feishu.InboundMessage) string
+	State          planmode.StateProvider
+	Renderer       bindingCardRenderer
+	Effects        frontendruntime.EffectRunner
+	FrontendID     string
+	ReplyInThread  bool
+}
+
+func handleQuietCommand(inputs QuietCommandInputs, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 1 {
 		return fmt.Errorf("usage: /quiet | /quiet <verbose|progress|normal|final> | /quiet config")
 	}
@@ -81,9 +91,9 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 		if msg == nil {
 			return nil
 		}
-		sessionKey := a.configView().makeSessionKey(msg)
-		card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a.State(), a != nil, sessionKey, "Quiet Mode"), a.feishu)
-		return replyCardEffect(replyRunner, frontendID, replyInThread, msg, card)
+		sessionKey := inputs.MakeSessionKey(msg)
+		card := renderQuietModeMenuCard(inputs.Mode(), sessionKey, planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, "Quiet Mode"), inputs.Renderer)
+		return replyCardEffect(inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, card)
 	}
 	arg := strings.TrimSpace(args[0])
 	if len(args) == 1 {
@@ -92,9 +102,9 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			if msg == nil {
 				return nil
 			}
-			sessionKey := a.configView().makeSessionKey(msg)
-			card := renderQuietModeMenuCard(quietmode.Mode(a.configView().feishuConfig()), sessionKey, planModeTitleForSession(a.State(), a != nil, sessionKey, "Quiet Mode"), a.feishu)
-			return replyCardEffect(replyRunner, frontendID, replyInThread, msg, card)
+			sessionKey := inputs.MakeSessionKey(msg)
+			card := renderQuietModeMenuCard(inputs.Mode(), sessionKey, planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, "Quiet Mode"), inputs.Renderer)
+			return replyCardEffect(inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, card)
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))
 			if err != nil {
@@ -103,10 +113,10 @@ func commandQuiet(a *App, msg *feishu.InboundMessage, args []string) error {
 			if msg == nil {
 				return nil
 			}
-			if err := updateQuietMode(a.bindings.RuntimeSettings, mode); err != nil {
+			if err := updateQuietMode(inputs.Settings, mode); err != nil {
 				return err
 			}
-			return replyTextEffect(replyRunner, frontendID, replyInThread, msg, "Quiet Mode 已切换为 `"+quietmode.StatusText(mode)+"`。")
+			return replyTextEffect(inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, "Quiet Mode 已切换为 `"+quietmode.StatusText(mode)+"`。")
 		}
 	}
 	return nil

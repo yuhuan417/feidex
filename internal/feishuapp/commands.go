@@ -1,48 +1,17 @@
 package feishuapp
 
 import (
+	appdebugview "feidex/internal/adapter/feishu/debugview"
+	"feidex/internal/adapter/feishu/planmode"
 	appfeatures "feidex/internal/application/features"
 	"feidex/internal/application/submission"
 	domainbackend "feidex/internal/domain/backend"
-	"feidex/internal/domain/conversation"
+	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/textutil"
 	"fmt"
 	"strings"
-
-	appdebugview "feidex/internal/adapter/feishu/debugview"
-	"feidex/internal/feishu"
 )
-
-func HandleInboundCommand(a *App, msg *feishu.InboundMessage, raw string) error {
-	raw = strings.TrimSpace(raw)
-	fields := strings.Fields(raw)
-	if len(fields) == 0 {
-		return nil
-	}
-	spec := findLocalCommandSpec(fields[0])
-	if spec == nil {
-		return fmt.Errorf("unknown command: %s", fields[0])
-	}
-	if !a.configView().hasConfiguredBackend() && !commandAllowedWithoutBackend(msg, fields[0]) {
-		return a.bindings.BackendSelection.ReplyBackendSelectionCard(msg, "")
-	}
-	backend := a.configView().configuredBackend()
-	if reason := a.runtimeOwner.BackendTransition.BackendSwitchBlockedReasonForTraffic(); reason != "" {
-		return conversation.NewWarning(reason)
-	}
-	if runtime := backendRuntime(backend); runtime != nil {
-		if err := runtime.MaintenanceBlocksCommand(backendRuntimeContextForApp(a.BackendRuntimeDeps()), raw); err != nil {
-			return err
-		}
-	}
-	if !commandHandlesLocallyForBackend(spec, backend, fields) {
-		return enqueuePassthroughCommand(a.bindings.Submissions, a.configView().makeSessionKey(msg), msg, raw)
-	}
-	if spec.HandleRaw != nil {
-		return spec.HandleRaw(a, msg, raw, fields[1:])
-	}
-	return spec.Handle(a, msg, fields[1:])
-}
 
 func commandAllowedWithoutBackend(msg *feishu.InboundMessage, name string) bool {
 	chatType := ""
@@ -65,6 +34,22 @@ func enqueuePassthroughCommand(submissions *submission.SubmissionQueueService, s
 	return enqueueSubmissionWithSessionKey(submissions, &cloned, sessionKey, false)
 }
 
+func CommandPassthroughQueue(submissions *submission.SubmissionQueueService) func(string, *feishu.InboundMessage, string) error {
+	return func(sessionKey string, msg *feishu.InboundMessage, raw string) error {
+		return enqueuePassthroughCommand(submissions, sessionKey, msg, raw)
+	}
+}
+
+func CommandMaintenanceBlocker(deps BackendRuntimeDeps) func(string, string) error {
+	return func(backend, raw string) error {
+		runtime := backendRuntime(backend)
+		if runtime == nil {
+			return nil
+		}
+		return runtime.MaintenanceBlocksCommand(backendRuntimeContextForApp(deps), raw)
+	}
+}
+
 func isLocalCommandForBackend(backend, raw string) bool {
 	return appfeatures.HandlesCommand(backend, raw)
 }
@@ -80,13 +65,14 @@ func isLocalCommand(raw string) bool {
 	return isLocalCommandForBackend(domainbackend.BackendCodex, raw)
 }
 
-func commandHelp(a *App, msg *feishu.InboundMessage, args []string) error {
+func handleHelpCommand(scope bindingSessionScope, backend func() string, makeSessionKey func(*feishu.InboundMessage) string, state planmode.StateProvider, renderer bindingCardRenderer, runner frontendruntime.EffectRunner, frontendID string, replyInThread bool, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /help")
 	}
-	sessionKey := a.configView().makeSessionKey(msg)
-	card := renderHelpCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "帮助说明"), a.feishu, a.bindings.BindingCommands.scope, sessionKey)
-	return replyCardEffect(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, card)
+	sessionKey := makeSessionKey(msg)
+	backendKind := backend()
+	card := renderHelpCardData(backendKind, planModeTitleForSession(state, state != nil, sessionKey, "帮助说明"), renderer, scope, sessionKey)
+	return replyCardEffect(runner, frontendID, replyInThread, msg, card)
 }
 
 func renderCommandMenuCardData(backend, title string, renderer bindingCardRenderer, sessionKey string) map[string]any {

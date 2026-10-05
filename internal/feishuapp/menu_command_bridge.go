@@ -147,15 +147,3 @@ func (s MenuCommandService) fallback(actionName, sessionKey string) (map[string]
 	}
 	return s.renderFallback(actionName, sessionKey)
 }
-
-func RenderMenuCommandFallback(a *App, actionName, sessionKey string) (map[string]any, bool) {
-	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
-		return nil, false
-	}
-	actionName = nearestVisibleMenuAction(actionName, a.configView().configuredBackend())
-	renderer := menuNodeRenderers()[actionName]
-	if renderer == nil {
-		return nil, false
-	}
-	return renderer(a, sessionKey)
-}
