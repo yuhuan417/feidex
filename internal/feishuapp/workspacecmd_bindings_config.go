@@ -4,8 +4,13 @@ import (
 	appbackend "feidex/internal/adapter/feishu/backend"
 	workspacecards "feidex/internal/adapter/feishu/workspace"
 	"feidex/internal/adapter/feishu/workspacecmd"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	conversationapp "feidex/internal/application/conversation"
+	"feidex/internal/application/interaction"
+	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/domain/conversation"
+	frontendruntime "feidex/internal/runtime"
+	"feidex/internal/state"
 	"fmt"
 	"strings"
 
@@ -15,29 +20,40 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func workspaceCommandApp(a *App, presentation *workspacecards.Presentation) workspacecmd.Dependencies {
-	if a == nil {
-		return workspacecmd.Dependencies{}
-	}
-	configProvider := newFrontendConfigProvider(a.BackendRuntimeDeps(), a.store, a.bindings.WorkspaceSelection)
-	backendDriver := appbackend.SelectedDriver{Selected: func() string { return a.configView().configuredBackend() }}
+type WorkspaceCommandInputs struct {
+	Runtime            BackendRuntimeDeps
+	Store              *state.Store
+	WorkspaceSelection workspaceapp.SelectionService
+	Settings           workspaceapp.SettingsService
+	Planning           *workspaceapp.PlanningService
+	Workflow           *workspaceapp.Workflow
+	Forms              *interaction.FormService
+	FrontendID         string
+	Effects            frontendruntime.EffectRunner
+	Feishu             FeishuClient
+	Presentation       *workspacecards.Presentation
+}
+
+func BuildWorkspaceCommandDependencies(inputs WorkspaceCommandInputs) workspacecmd.Dependencies {
+	configProvider := newFrontendConfigProvider(inputs.Runtime, inputs.Store, inputs.WorkspaceSelection)
+	backendDriver := appbackend.SelectedDriver{Selected: inputs.Runtime.view.configuredBackend}
 	return workspacecmd.Dependencies{
 		ConfigProvider: configProvider,
-		Settings:       a.bindings.WorkspaceSettings,
-		Planning:       a.bindings.WorkspacePlanning,
-		Workflow:       a.bindings.WorkspaceWorkflow,
-		Forms:          a.bindings.Forms,
-		Outbound:       newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)),
-		CardRenderer:   simpleStatusCardRenderer{client: a.feishu},
+		Settings:       inputs.Settings,
+		Planning:       inputs.Planning,
+		Workflow:       inputs.Workflow,
+		Forms:          inputs.Forms,
+		Outbound:       newEffectOutbound(inputs.FrontendID, inputs.Effects),
+		CardRenderer:   simpleStatusCardRenderer{client: inputs.Feishu},
 		BotNameFn: func() string {
-			if a == nil || a.feishu == nil {
+			if inputs.Feishu == nil {
 				return ""
 			}
-			return a.feishu.BotName()
+			return inputs.Feishu.BotName()
 		},
-		ContextProvider:  a,
+		ContextProvider:  configProvider,
 		BackendDriver:    backendDriver,
-		SettingsRenderer: presentation,
+		SettingsRenderer: inputs.Presentation,
 	}
 }
 
@@ -67,34 +83,37 @@ func workspaceBackendConfigDeps(driver appbackend.Driver) workspacecmd.BackendCo
 // service as construction-time inputs. Reading them through a.bindings inside
 // the closures would hide the dependency and force the caller to build this
 // service before those bindings are assigned.
-func BuildWorkspaceConfigurationWithMenu(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service, completeMenuCommand workspacecmd.CompleteMenuCommandFn) *workspacecmd.ConfigService {
-	if a == nil {
-		return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{})
-	}
+type WorkspaceConfigurationInputs struct {
+	Dependencies        workspacecmd.Dependencies
+	State               *appstate.Store
+	LiveThreads         *frontendruntime.LiveThreads
+	Conversations       *conversationapp.Service
+	Presentation        *workspacecards.Presentation
+	CompleteMenuCommand workspacecmd.CompleteMenuCommandFn
+	FrontendID          string
+	Effects             frontendruntime.EffectRunner
+	ReplyInThread       bool
+}
 
-	st := a.State()
-	liveThreads := a.runtimeOwner.LiveThreads
-	replyRunner := newEffectRunner(a.runtimeOwner)
-	frontendID := a.FrontendID()
-	replyInThread := a.configView().replyInThreadEnabled()
-	dependencies := workspaceCommandApp(a, presentation)
+func BuildWorkspaceConfigurationService(inputs WorkspaceConfigurationInputs) *workspacecmd.ConfigService {
+	dependencies := inputs.Dependencies
 	return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{
 		Dependencies: dependencies,
-		State:        workspaceStateDeps(st),
+		State:        workspaceStateDeps(inputs.State),
 		SessionContext: workspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
-			ClearSessionLiveThread: liveThreads.Clear,
+			ClearSessionLiveThread: inputs.LiveThreads.Clear,
 		},
 		Threads: workspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*workspacecmd.ThreadBinding, error) {
-				return conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+				return inputs.Conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 		},
 		Backend: workspaceBackendConfigDeps(dependencies.BackendDriver),
 		Actions: workspacecmd.ActionDeps{
-			CompleteMenuCommand: completeMenuCommand,
+			CompleteMenuCommand: inputs.CompleteMenuCommand,
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-				return replyCommandActionResponseWith(replyRunner, frontendID, replyInThread, msg, resp)
+				return replyCommandActionResponseWith(inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, resp)
 			},
 			CommandActionFromMessage: commandActionFromMessage,
 		},
@@ -103,28 +122,28 @@ func BuildWorkspaceConfigurationWithMenu(a *App, presentation *workspacecards.Pr
 		},
 		Render: workspacecmd.ConfigRenderDeps{
 			RenderMenuCard: func(sessionKey string) map[string]any {
-				return presentation.RenderWorkspaceMenuCard(sessionKey)
+				return inputs.Presentation.RenderWorkspaceMenuCard(sessionKey)
 			},
 			RenderChooseMenuCard: func(sessionKey string) map[string]any {
-				return presentation.RenderWorkspaceChooseCard(sessionKey)
+				return inputs.Presentation.RenderWorkspaceChooseCard(sessionKey)
 			},
 			RenderSandboxMenuCard: func(sessionKey string) (map[string]any, error) {
-				return presentation.RenderWorkspaceSandboxMenuCard(sessionKey)
+				return inputs.Presentation.RenderWorkspaceSandboxMenuCard(sessionKey)
 			},
 			RenderPolicyMenuCard: func(sessionKey string) (map[string]any, error) {
-				return presentation.RenderWorkspacePolicyMenuCard(sessionKey)
+				return inputs.Presentation.RenderWorkspacePolicyMenuCard(sessionKey)
 			},
 			RenderMultiAgentMenuCard: func(sessionKey string) (map[string]any, error) {
-				return presentation.RenderWorkspaceMultiAgentMenuCard(sessionKey)
+				return inputs.Presentation.RenderWorkspaceMultiAgentMenuCard(sessionKey)
 			},
 			RenderDeleteMenuCard: func(sessionKey string) (map[string]any, error) {
-				return presentation.RenderWorkspaceDeleteMenuCard(sessionKey)
+				return inputs.Presentation.RenderWorkspaceDeleteMenuCard(sessionKey)
 			},
 			RenderDeleteConfirmCard: func(sessionKey, workspaceID string) (map[string]any, error) {
-				return presentation.RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
+				return inputs.Presentation.RenderWorkspaceDeleteConfirmCard(sessionKey, workspaceID)
 			},
 			RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return presentation.RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+				return inputs.Presentation.RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
 			},
 		},
 	})

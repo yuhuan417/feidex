@@ -1,6 +1,8 @@
 package feishuapp
 
 import (
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	"feidex/internal/application/announcement"
 	conversationapp "feidex/internal/application/conversation"
 	"feidex/internal/domain/conversation"
 	appruntime "feidex/internal/runtime"
@@ -17,20 +19,30 @@ var workspaceGitClone = appworkspacecmd.GitClone
 
 // buildWorkspaceManagementService takes the card presentation and conversation
 // service as construction-time inputs; see buildWorkspaceConfigService.
-func BuildWorkspaceManagementWithMenu(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service, scope BindingScope, completeMenuCommand appworkspacecmd.CompleteMenuCommandFn) *appworkspacecmd.ManagementService {
-	if a == nil {
-		return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{})
-	}
+type WorkspaceManagementInputs struct {
+	Dependencies        appworkspacecmd.Dependencies
+	State               *appstate.Store
+	RuntimeOwner        *appruntime.FrontendOwner
+	AsyncRunner         func(func())
+	Conversations       *conversationapp.Service
+	BindingScope        BindingScope
+	AnnouncementQuery   announcement.Query
+	CompleteMenuCommand appworkspacecmd.CompleteMenuCommandFn
+	FrontendID          string
+	Effects             appruntime.EffectRunner
+	ReplyInThread       bool
+	Presentation        *workspacecards.Presentation
+}
 
-	st := a.State()
-	replyRunner := newEffectRunner(a.runtimeOwner)
-	frontendID := a.FrontendID()
-	replyInThread := a.configView().replyInThreadEnabled()
-	dependencies := workspaceCommandApp(a, presentation)
-	bindingScope := scope.scope
+func BuildWorkspaceManagementService(inputs WorkspaceManagementInputs) *appworkspacecmd.ManagementService {
+	dependencies := inputs.Dependencies
+	st := inputs.State
+	replyRunner := inputs.Effects
+	frontendID := inputs.FrontendID
+	bindingScope := inputs.BindingScope.scope
 	threadMarker := liveThreadMarker{
-		tracker: a.runtimeOwner.LiveThreads, state: st,
-		announcement: a.bindings.AnnouncementQuery, refreshes: a.runtimeOwner.Announcements,
+		tracker: inputs.RuntimeOwner.LiveThreads, state: st,
+		announcement: inputs.AnnouncementQuery, refreshes: inputs.RuntimeOwner.Announcements,
 	}
 	return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{
 		Dependencies: dependencies,
@@ -41,25 +53,25 @@ func BuildWorkspaceManagementWithMenu(a *App, presentation *workspacecards.Prese
 		},
 		Threads: appworkspacecmd.ThreadDeps{
 			EnsureWorkspaceThreadBinding: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-				return conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
+				return inputs.Conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 			MarkSessionThreadLive:  threadMarker.MarkSessionThreadLive,
 			ClearSessionLiveThread: threadMarker.tracker.Clear,
 			StartWorkspaceThread: func(sessionKey string, sess *conversation.Session, ws *config.Workspace) (*appworkspacecmd.ThreadBinding, error) {
-				return conversations.StartWorkspaceThread(sessionKey, sess, ws)
+				return inputs.Conversations.StartWorkspaceThread(sessionKey, sess, ws)
 			},
 		},
 		Clone: appworkspacecmd.CloneDeps{
-			SetCloneOp:   workspaceCloneSetOp(a.runtimeOwner),
-			GetCloneOp:   workspaceCloneGetOp(a.runtimeOwner),
-			ClearCloneOp: workspaceCloneClearOp(a.runtimeOwner),
+			SetCloneOp:   workspaceCloneSetOp(inputs.RuntimeOwner),
+			GetCloneOp:   workspaceCloneGetOp(inputs.RuntimeOwner),
+			ClearCloneOp: workspaceCloneClearOp(inputs.RuntimeOwner),
 			GitClone:     workspaceGitClone,
 		},
 		Backend: workspaceBackendConfigDeps(dependencies.BackendDriver),
 		Actions: appworkspacecmd.ActionDeps{
-			CompleteMenuCommand: completeMenuCommand,
+			CompleteMenuCommand: inputs.CompleteMenuCommand,
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-				return replyCommandActionResponseWith(replyRunner, frontendID, replyInThread, msg, resp)
+				return replyCommandActionResponseWith(replyRunner, frontendID, inputs.ReplyInThread, msg, resp)
 			},
 			CommandActionFromMessage: commandActionFromMessage,
 			CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
@@ -70,50 +82,50 @@ func BuildWorkspaceManagementWithMenu(a *App, presentation *workspacecards.Prese
 			FormatMenuBody: menuCardBody,
 		},
 		Async: appworkspacecmd.AsyncDeps{
-			RunAsync: func(fn func()) { runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, fn) },
+			RunAsync: func(fn func()) { runAsync(&inputs.RuntimeOwner.Lifecycle, inputs.AsyncRunner, fn) },
 		},
 		Render: appworkspacecmd.ManagementRenderDeps{
 			RenderNewCard: func(sessionKey, requestID string, payload appworkspacecmd.NewPayload) map[string]any {
-				return presentation.RenderWorkspaceNewCard(sessionKey, requestID, payload)
+				return inputs.Presentation.RenderWorkspaceNewCard(sessionKey, requestID, payload)
 			},
 			RenderCloneCard: func(sessionKey, requestID string, payload appworkspacecmd.ClonePayload) map[string]any {
-				return presentation.RenderWorkspaceCloneCard(sessionKey, requestID, payload)
+				return inputs.Presentation.RenderWorkspaceCloneCard(sessionKey, requestID, payload)
 			},
 			RenderClonePreparingCard: func(requestID string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-				return presentation.RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
+				return inputs.Presentation.RenderWorkspaceClonePreparingCard(requestID, payload, parentDir, snapshot)
 			},
 			RenderCloneSuccessCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return presentation.RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir)
+				return inputs.Presentation.RenderWorkspaceCloneSuccessCard(sessionKey, workspaceID, targetDir)
 			},
 			RenderWorktreeCard: func(sessionKey, requestID string, payload appworkspacecmd.WorktreePayload) map[string]any {
-				return presentation.RenderWorkspaceWorktreeCard(sessionKey, requestID, payload)
+				return inputs.Presentation.RenderWorkspaceWorktreeCard(sessionKey, requestID, payload)
 			},
 			RenderWorktreePreparingCard: func(requestID string, payload appworkspacecmd.WorktreePayload, plan *appworkspacecmd.WorktreePlan, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-				return presentation.RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, snapshot)
+				return inputs.Presentation.RenderWorkspaceWorktreePreparingCard(requestID, payload, plan, snapshot)
 			},
 			RenderWorktreeSuccessCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return presentation.RenderWorkspaceWorktreeSuccessCard(sessionKey, workspaceID, targetDir)
+				return inputs.Presentation.RenderWorkspaceWorktreeSuccessCard(sessionKey, workspaceID, targetDir)
 			},
 			RenderWorktreeManualHintCard: func(sessionKey, workspaceID, targetDir, errText string) map[string]any {
-				return presentation.RenderWorkspaceWorktreeManualHintCard(sessionKey, workspaceID, targetDir, errText)
+				return inputs.Presentation.RenderWorkspaceWorktreeManualHintCard(sessionKey, workspaceID, targetDir, errText)
 			},
 			RenderWorktreeCanceledCard: func(sessionKey string, payload appworkspacecmd.WorktreePayload, plan *appworkspacecmd.WorktreePlan, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-				return presentation.RenderWorkspaceWorktreeCanceledCard(sessionKey, payload, plan, snapshot)
+				return inputs.Presentation.RenderWorkspaceWorktreeCanceledCard(sessionKey, payload, plan, snapshot)
 			},
 			RenderSwitchExistingCard: func(sessionKey, workspaceID, targetDir, notice string) map[string]any {
-				return presentation.RenderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice)
+				return inputs.Presentation.RenderWorkspaceSwitchExistingCard(sessionKey, workspaceID, targetDir, notice)
 			},
 			RenderCloneSwitchExistingCard: func(sessionKey, workspaceID, targetDir string) map[string]any {
-				return presentation.RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
+				return inputs.Presentation.RenderWorkspaceCloneSwitchExistingCard(sessionKey, workspaceID, targetDir)
 			},
 			RenderCloneManualHintCard: func(sessionKey, workspaceID, targetDir, errText string) map[string]any {
-				return presentation.RenderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText)
+				return inputs.Presentation.RenderWorkspaceCloneManualHintCard(sessionKey, workspaceID, targetDir, errText)
 			},
 			RenderCloneCanceledCard: func(sessionKey string, payload appworkspacecmd.ClonePayload, parentDir string, snapshot appworkspacecmd.CloneProgressSnapshot) map[string]any {
-				return presentation.RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, snapshot)
+				return inputs.Presentation.RenderWorkspaceCloneCanceledCard(sessionKey, payload, parentDir, snapshot)
 			},
 			RenderMenuCard: func(sessionKey string) map[string]any {
-				return presentation.RenderWorkspaceMenuCard(sessionKey)
+				return inputs.Presentation.RenderWorkspaceMenuCard(sessionKey)
 			},
 		},
 	})

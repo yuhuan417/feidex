@@ -6,6 +6,7 @@ import (
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/approval"
 	appbackend "feidex/internal/adapter/feishu/backend"
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	"feidex/internal/adapter/feishu/finalcardpatch"
 	"feidex/internal/adapter/feishu/goalcmd"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
@@ -282,7 +283,16 @@ func prepareTestApp(a *App) *App {
 		Actors: a.runtimeOwner.SessionActors, Context: a.Context, FrontendID: a.FrontendID(),
 		Effects: newEffectRunner(a.runtimeOwner),
 	})
-	debugViewDependencies := BuildDebugViewDependencies(a, menuCommands.Complete)
+	buildDebugViewDependencies := func() appdebugviewcmd.Dependencies {
+		return BuildDebugViewDependencies(DebugViewInputs{
+			Runtime: a.BackendRuntimeDeps(), Store: a.store, WorkspaceSelection: a.bindings.WorkspaceSelection,
+			Feishu: a.Feishu(), FileSharing: a.bindings.FileSharing, State: a.State(),
+			TurnBindings: a.runtimeOwner.TurnBindings, WorkspaceConfiguration: a.bindings.WorkspaceConfiguration,
+			WorkspacePresentation: a.bindings.WorkspacePresentation, Effects: newEffectRunner(a.runtimeOwner),
+			CompleteMenuCommand: menuCommands.Complete,
+		})
+	}
+	debugViewDependencies := buildDebugViewDependencies()
 	sharedArtifacts, downloadPresentation, downloadRunner := FileSharePorts(a.feishu, debugViewDependencies, &a.runtimeOwner.Lifecycle, a.runtimeOwner.SessionActors, a.asyncRunner)
 	a.bindings.FileSharing = &fileshare.Service{Forms: a.bindings.Forms, Repository: a.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: a.Context, Run: downloadRunner}
 	debugViewDependencies.FileSharing = a.bindings.FileSharing
@@ -498,9 +508,26 @@ func prepareTestApp(a *App) *App {
 		ConversationConfiguration: a.bindings.ConversationConfiguration,
 		ContinueClaude:            a.bindings.Continuation.ContinueClaudeSessionWithText,
 	})}
-	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfigurationWithMenu(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, menuCommands.Complete)
-	a.bindings.WorkspaceManagement = BuildWorkspaceManagementWithMenu(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, bindingScope, menuCommands.Complete)
-	downloadDependencies := BuildDebugViewDependencies(a, menuCommands.Complete)
+	workspaceCommandDependencies := BuildWorkspaceCommandDependencies(WorkspaceCommandInputs{
+		Runtime: a.BackendRuntimeDeps(), Store: a.store, WorkspaceSelection: a.bindings.WorkspaceSelection,
+		Settings: a.bindings.WorkspaceSettings, Planning: a.bindings.WorkspacePlanning, Workflow: a.bindings.WorkspaceWorkflow,
+		Forms: a.bindings.Forms, FrontendID: a.FrontendID(), Effects: newEffectRunner(a.runtimeOwner),
+		Feishu: a.Feishu(), Presentation: a.bindings.WorkspacePresentation,
+	})
+	a.bindings.WorkspaceConfiguration = BuildWorkspaceConfigurationService(WorkspaceConfigurationInputs{
+		Dependencies: workspaceCommandDependencies, State: a.State(), LiveThreads: a.runtimeOwner.LiveThreads,
+		Conversations: a.bindings.Conversations, Presentation: a.bindings.WorkspacePresentation,
+		CompleteMenuCommand: menuCommands.Complete, FrontendID: a.FrontendID(),
+		Effects: newEffectRunner(a.runtimeOwner), ReplyInThread: a.configView().replyInThreadEnabled(),
+	})
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagementService(WorkspaceManagementInputs{
+		Dependencies: workspaceCommandDependencies, State: a.State(), RuntimeOwner: a.runtimeOwner,
+		AsyncRunner: a.asyncRunner, Conversations: a.bindings.Conversations, BindingScope: bindingScope,
+		AnnouncementQuery: a.bindings.AnnouncementQuery, CompleteMenuCommand: menuCommands.Complete,
+		FrontendID: a.FrontendID(), Effects: newEffectRunner(a.runtimeOwner),
+		ReplyInThread: a.configView().replyInThreadEnabled(), Presentation: a.bindings.WorkspacePresentation,
+	})
+	downloadDependencies := buildDebugViewDependencies()
 	downloadDependencies.FileSharing = a.bindings.FileSharing
 	a.bindings.Download = BuildDebug(downloadDependencies).CommandDownload
 	a.bindings.Upgrades = BuildUpgrades(UpgradeInputs{
@@ -585,7 +612,12 @@ func prepareTestApp(a *App) *App {
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Submissions: a.bindings.Submissions,
 		Conversations: a.bindings.Conversations, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
 	})
-	reviewCommandDependencies := BuildReviewCommandDependencies(a, asyncCardActions)
+	reviewCommandDependencies := BuildReviewCommandDependencies(ReviewCommandInputs{
+		Runtime: a.BackendRuntimeDeps(), Store: a.store, WorkspaceSelection: a.bindings.WorkspaceSelection,
+		UseCase: a.bindings.Review, Submissions: a.bindings.Submissions, BindingScope: bindingScope,
+		PendingQueue: a.bindings.PendingQueue, QueuedNotice: a.bindings.OutboundCards, Feishu: a.Feishu(),
+		State: a.State(), Effects: newEffectRunner(a.runtimeOwner), AsyncActions: asyncCardActions,
+	})
 	a.bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
 	cardActionFrontendID := a.FrontendID()
 	normalizeCardActionSessionKey := func(key string) string {

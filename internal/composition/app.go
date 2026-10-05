@@ -13,6 +13,7 @@ import (
 	configadapter "feidex/internal/adapter/config"
 	"feidex/internal/adapter/feishu/approval"
 	appbackend "feidex/internal/adapter/feishu/backend"
+	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/adapter/feishu/finalcardpatch"
 	"feidex/internal/adapter/feishu/goalcmd"
@@ -204,6 +205,15 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Actors: scope.RuntimeOwner.SessionActors, Context: frontend.Context, FrontendID: frontend.FrontendID(),
 		Effects: *scope.RuntimeOwner.EffectRunner,
 	})
+	buildDebugViewDependencies := func() appdebugviewcmd.Dependencies {
+		return feishuapp.BuildDebugViewDependencies(feishuapp.DebugViewInputs{
+			Runtime: frontend.BackendRuntimeDeps(), Store: store, WorkspaceSelection: bindings.WorkspaceSelection,
+			Feishu: frontend.Feishu(), FileSharing: bindings.FileSharing, State: frontend.State(),
+			TurnBindings: scope.RuntimeOwner.TurnBindings, WorkspaceConfiguration: bindings.WorkspaceConfiguration,
+			WorkspacePresentation: bindings.WorkspacePresentation, Effects: *scope.RuntimeOwner.EffectRunner,
+			CompleteMenuCommand: menuCommands.Complete,
+		})
+	}
 	platform, releases, artifacts, launcher := feishuapp.UpgradeWorkflowPorts(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner)
 	bindings.UpgradeWorkflow = &upgrade.Service{Forms: bindings.Forms, Platform: platform, Releases: releases, Artifacts: artifacts, Launcher: launcher}
 
@@ -310,7 +320,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		scope.RuntimeOwner.Lifecycle.Context, *scope.RuntimeOwner.EffectRunner,
 		feishuapp.SessionKeyBuilder(frontend.FrontendID()), func(string) bool { return false },
 	)
-	debugViewDependencies := feishuapp.BuildDebugViewDependencies(frontend, menuCommands.Complete)
+	debugViewDependencies := buildDebugViewDependencies()
 	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend.Feishu(), debugViewDependencies, &scope.RuntimeOwner.Lifecycle, scope.RuntimeOwner.SessionActors, asyncRunner)
 	bindings.FileSharing = &fileshare.Service{Forms: bindings.Forms, Repository: frontend.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: frontend.Context, Run: downloadRunner}
 	debugViewDependencies.FileSharing = bindings.FileSharing
@@ -520,9 +530,26 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// The workspace command services read the workspace card presentation and
 	// the conversation service at construction, so they are built once those
 	// bindings exist.
-	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfigurationWithMenu(frontend, bindings.WorkspacePresentation, bindings.Conversations, menuCommands.Complete)
-	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagementWithMenu(frontend, bindings.WorkspacePresentation, bindings.Conversations, bindingScope, menuCommands.Complete)
-	downloadDependencies := feishuapp.BuildDebugViewDependencies(frontend, menuCommands.Complete)
+	workspaceCommandDependencies := feishuapp.BuildWorkspaceCommandDependencies(feishuapp.WorkspaceCommandInputs{
+		Runtime: frontend.BackendRuntimeDeps(), Store: store, WorkspaceSelection: bindings.WorkspaceSelection,
+		Settings: bindings.WorkspaceSettings, Planning: bindings.WorkspacePlanning, Workflow: bindings.WorkspaceWorkflow,
+		Forms: bindings.Forms, FrontendID: frontend.FrontendID(), Effects: *scope.RuntimeOwner.EffectRunner,
+		Feishu: frontend.Feishu(), Presentation: bindings.WorkspacePresentation,
+	})
+	bindings.WorkspaceConfiguration = feishuapp.BuildWorkspaceConfigurationService(feishuapp.WorkspaceConfigurationInputs{
+		Dependencies: workspaceCommandDependencies, State: frontend.State(), LiveThreads: scope.RuntimeOwner.LiveThreads,
+		Conversations: bindings.Conversations, Presentation: bindings.WorkspacePresentation,
+		CompleteMenuCommand: menuCommands.Complete, FrontendID: frontend.FrontendID(),
+		Effects: *scope.RuntimeOwner.EffectRunner, ReplyInThread: false,
+	})
+	bindings.WorkspaceManagement = feishuapp.BuildWorkspaceManagementService(feishuapp.WorkspaceManagementInputs{
+		Dependencies: workspaceCommandDependencies, State: frontend.State(), RuntimeOwner: scope.RuntimeOwner,
+		AsyncRunner: asyncRunner, Conversations: bindings.Conversations, BindingScope: bindingScope,
+		AnnouncementQuery: bindings.AnnouncementQuery, CompleteMenuCommand: menuCommands.Complete,
+		FrontendID: frontend.FrontendID(), Effects: *scope.RuntimeOwner.EffectRunner,
+		ReplyInThread: false, Presentation: bindings.WorkspacePresentation,
+	})
+	downloadDependencies := buildDebugViewDependencies()
 	downloadDependencies.FileSharing = bindings.FileSharing
 	downloadService := feishuapp.BuildDebug(downloadDependencies)
 	bindings.Download = downloadService.CommandDownload
@@ -646,7 +673,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		WorkspaceSelection: bindings.WorkspaceSelection, Submissions: bindings.Submissions,
 		Conversations: bindings.Conversations, Feishu: frontend.Feishu(), AsyncRunner: asyncRunner,
 	})
-	reviewCommandDependencies := feishuapp.BuildReviewCommandDependencies(frontend, asyncCardActions)
+	reviewCommandDependencies := feishuapp.BuildReviewCommandDependencies(feishuapp.ReviewCommandInputs{
+		Runtime: frontend.BackendRuntimeDeps(), Store: store, WorkspaceSelection: bindings.WorkspaceSelection,
+		UseCase: bindings.Review, Submissions: bindings.Submissions, BindingScope: bindingScope,
+		PendingQueue: bindings.PendingQueue, QueuedNotice: bindings.OutboundCards, Feishu: frontend.Feishu(),
+		State: frontend.State(), Effects: *scope.RuntimeOwner.EffectRunner, AsyncActions: asyncCardActions,
+	})
 	bindings.ReviewCommands = appreviewcmd.NewReviewFormService(reviewCommandDependencies)
 	bindings.MCP, err = feishuapp.BuildMCP(feishuapp.MCPPorts(feishuapp.MCPPortInputs{
 		AttachmentSender: frontend.Feishu(), StateProvider: frontend.State(),

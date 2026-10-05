@@ -11,8 +11,11 @@ import (
 	appreview "feidex/internal/adapter/feishu/review"
 
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
+	appstate "feidex/internal/adapter/storage/json/scoped"
+	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -39,35 +42,49 @@ func reviewPendingPayloadFromPending(pending *state.PendingRequest) appreviewcmd
 // App adapters — satisfy reviewcmd.App without adding feature methods on *App
 // ---------------------------------------------------------------------------
 
-func BuildReviewCommandDependencies(a *App, asyncActions AsyncCardActionService) appreviewcmd.Dependencies {
-	if a == nil {
-		return appreviewcmd.Dependencies{}
-	}
-	submissions := a.bindings.Submissions
-	bindingScope := a.bindings.BindingCommands.scope
-	pendingQueue := a.bindings.PendingQueue
-	queuedNotice := a.bindings.OutboundCards
-	configProvider := newFrontendConfigProvider(a.BackendRuntimeDeps(), a.store, a.bindings.WorkspaceSelection)
+type ReviewCommandInputs struct {
+	Runtime            BackendRuntimeDeps
+	Store              *state.Store
+	WorkspaceSelection workspaceapp.SelectionService
+	UseCase            *reviewapp.Service
+	Submissions        *appsubmission.SubmissionQueueService
+	BindingScope       BindingScope
+	PendingQueue       *appsubmission.PendingQueueService
+	QueuedNotice       OutboundCardService
+	Feishu             FeishuClient
+	State              *appstate.Store
+	Effects            frontendruntime.EffectRunner
+	AsyncActions       AsyncCardActionService
+}
+
+func BuildReviewCommandDependencies(inputs ReviewCommandInputs) appreviewcmd.Dependencies {
+	runtimeDeps := inputs.Runtime
+	configProvider := newFrontendConfigProvider(runtimeDeps, inputs.Store, inputs.WorkspaceSelection)
+	bindingScope := inputs.BindingScope.scope
 	return appreviewcmd.Dependencies{
-		UseCase:        a.bindings.Review,
-		ConfigProvider: configProvider, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
-		ContextProvider:        a,
-		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{config: a.Config(), configView: a.configView(), session: a.State().Session}, GitProvider: reviewGitProviderAdapter{context: a.runtimeOwner.Lifecycle.Context},
-		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return runtimeViewOf(a.runtimeOwner).requireCodexGateway() },
-		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
+		UseCase:        inputs.UseCase,
+		ConfigProvider: configProvider, Outbound: newEffectOutbound(runtimeDeps.frontendID, inputs.Effects), CardRenderer: simpleStatusCardRenderer{client: inputs.Feishu}, StateProvider: inputs.State,
+		ContextProvider:        configProvider,
+		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{config: runtimeDeps.cfg, defaultWorkspaceID: runtimeDeps.view.defaultWorkspaceID, session: inputs.State.Session}, GitProvider: reviewGitProviderAdapter{context: configProvider.Context},
+		CodexClientFn: func() (appreviewcmd.CodexClient, error) {
+			return runtimeDeps.currentBackend().runtime.requireCodexGateway()
+		},
+		MakeSessionKeyFn: runtimeDeps.view.makeSessionKey, ReplyInThreadEnabledFn: func(string) bool { return runtimeDeps.view.replyInThreadEnabled() },
 		MenuCardBodyFn: menuCardBody, ActionStringValueFn: actionStringValue,
 		CommandMessageFromActionFn: func(x *feishu.CardAction, s, r string) *feishu.InboundMessage {
 			return commandMessageFromAction(bindingScope, x, s, r)
 		},
 		SessionHasActiveWorkFn: sessionHasActiveWork, SessionHasInFlightSubmissionFn: conversation.HasInFlightSubmission,
-		StartNextSubmissionFn:           func(s string) error { return startNextSubmission(submissions, s) },
-		SendSubmissionQueuedNoticeFn:    func(c context.Context, s *domainsubmission.Submission) { queuedNotice.sendSubmissionQueuedNotice(c, s) },
-		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { pendingQueue.MarkSubmissionQueuedReactions(s) },
+		StartNextSubmissionFn: func(s string) error { return startNextSubmission(inputs.Submissions, s) },
+		SendSubmissionQueuedNoticeFn: func(c context.Context, s *domainsubmission.Submission) {
+			inputs.QueuedNotice.sendSubmissionQueuedNotice(c, s)
+		},
+		MarkSubmissionQueuedReactionsFn: func(s *domainsubmission.Submission) { inputs.PendingQueue.MarkSubmissionQueuedReactions(s) },
 		CompleteAsyncCommandActionFn: func(x *feishu.CardAction, s, r, f, t string, p map[string]any, ok, fail func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
-			return asyncActions.CompleteCommand(x, s, r, f, t, p, ok, fail, w)
+			return inputs.AsyncActions.CompleteCommand(x, s, r, f, t, p, ok, fail, w)
 		},
 		CompleteAsyncRenderedCardActionFn: func(x *feishu.CardAction, s, t string, p map[string]any, r func() (*callback.CardActionTriggerResponse, error), f func(string, string) map[string]any, w string) (*callback.CardActionTriggerResponse, error) {
-			return asyncActions.CompleteRendered(x, s, t, p, r, f, w)
+			return inputs.AsyncActions.CompleteRendered(x, s, t, p, r, f, w)
 		},
 	}
 }
@@ -79,14 +96,14 @@ func BuildReviewCommandDependencies(a *App, asyncActions AsyncCardActionService)
 // reviewWorkspaceProviderAdapter wraps workspace access for the review
 // service.
 type reviewWorkspaceProviderAdapter struct {
-	config     *config.Config
-	configView frontendConfigView
-	session    func(string) *conversation.Session
+	config             *config.Config
+	defaultWorkspaceID func() string
+	session            func(string) *conversation.Session
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewWorkspaceForSessionKey(sessionKey string) *config.Workspace {
 	sess := a.session(sessionKey)
-	workspaceID := a.configView.defaultWorkspaceID()
+	workspaceID := a.defaultWorkspaceID()
 	if sess != nil {
 		if wid := sess.WorkspaceID; wid != "" {
 			workspaceID = wid
@@ -96,7 +113,7 @@ func (a reviewWorkspaceProviderAdapter) ReviewWorkspaceForSessionKey(sessionKey 
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewDefaultWorkspaceID() string {
-	return a.configView.defaultWorkspaceID()
+	return a.defaultWorkspaceID()
 }
 
 func (a reviewWorkspaceProviderAdapter) ReviewFindWorkspace(workspaceID string) *config.Workspace {

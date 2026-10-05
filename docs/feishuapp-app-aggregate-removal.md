@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 99 |
-| 收 `*App` 的顶层函数 | 20 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 94 |
+| 收 `*App` 的顶层函数 | 15 |
 | 收 `*App` 的 `*Ports` 工厂 | 0 |
 | **持有 `*App` 字段的结构体** | **0** |
 
@@ -943,6 +943,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 224 批量迁移 compact、download、model/auxiliary、fast/service-tier 和 daemon upgrade 的剩余 card actions。新增 `CompactCardActionInputs` 与 `ModelCardActionInputs`，复用 tools/maintenance owner handlers，并保留 group binding、p2p Bot profile、frontend global 三层模型配置分流，以及 compact/upgrade 的 fast-ack、lifecycle admission 和异步 patch。随后删除生产 `cardActionService`、App handler binder、feature `HandleAction` 回调、`CardActionPorts(*App, ...)` 参数和两个无调用方的 Bot profile action wrapper；feature action registry 增加全量 port-handler 覆盖检查。生产 `*App` 引用由 110 降至 106，App-bearing `*Ports` 工厂与结构体均由 1 降至 0，lazy binding-read 保持 0。`scripts/depmap` 当前报告 `funcs=26 structs=0 factories=0`；此前文档中的“收 `*App` 顶层函数”只统计 card-action 尾部，现改为分析器全包口径 26。对照 SM-04/SM-08/SM-25，本批没有改变 turn、compaction 或 goal protocol 状态边界。
 
 步骤 225 将菜单命令桥和异步 card action 迁移到显式 `MenuCommandService` / `AsyncCardActionService`。backend、review、workspace、debug、goal 与 thread-menu composition 共享构造期的命令执行、回退卡片、frontend lifecycle、session actors 和 effect runner；download command 延后到 workspace service 就绪后注入，避免构造顺序产生空 workspace owner。生产兼容 helper 移入 `_test.go`，命令仍保持快速返回、session 串行化、异步 patch 和原有命令 fallback。生产 `*App` 引用由 106 降至 99，depmap 中收 `*App` 的函数由 26 降至 20，structs/factories/lazy binding-read 保持 `0/0/0`。对照 SM-04/08/14/25，未改变 turn、review、goal 或 pending request 状态边界。
+
+步骤 226 将 review、debug/download、workspace command configuration 和 workspace management 的依赖工厂改成显式输入。composition 直接注入 runtime/config provider、scoped state、workspace/conversation owners、effect runner、session actors、异步 runner 和 menu command service；download 仍在 workspace configuration 就绪后单独构造。review 表单、debug/download、workspace 创建/克隆/配置的异步边界和卡片行为不变。生产 `*App` 引用由 99 降至 94，depmap 中收 `*App` 的函数由 20 降至 15，structs/factories/lazy binding-read 保持 `0/0/0`。对照 SM-03/04/08/14，未改变 thread、review、turn 或 pending request 状态转换。
 
 ## 方法
 

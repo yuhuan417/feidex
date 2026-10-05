@@ -5,8 +5,11 @@ import (
 	configadapter "feidex/internal/adapter/config"
 	appdebugviewcmd "feidex/internal/adapter/feishu/debugviewcmd"
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+	workspacecards "feidex/internal/adapter/feishu/workspace"
 	"feidex/internal/adapter/feishu/workspacecmd"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/fileshare"
+	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/config"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
@@ -14,6 +17,7 @@ import (
 	domainworkspace "feidex/internal/domain/workspace"
 	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
+	"feidex/internal/state"
 	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -42,27 +46,44 @@ func FileSharePorts(client debugFileSharer, dependencies appdebugviewcmd.Depende
 	}
 }
 
-func BuildDebugViewDependencies(app *App, completeMenuCommand func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)) appdebugviewcmd.Dependencies {
-	if app == nil {
-		return appdebugviewcmd.Dependencies{}
+type DebugViewInputs struct {
+	Runtime                BackendRuntimeDeps
+	Store                  *state.Store
+	WorkspaceSelection     workspaceapp.SelectionService
+	Feishu                 FeishuClient
+	FileSharing            *fileshare.Service
+	State                  *appstate.Store
+	TurnBindings           debugTurnBindingTracker
+	WorkspaceConfiguration *workspacecmd.ConfigService
+	WorkspacePresentation  *workspacecards.Presentation
+	Effects                frontendruntime.EffectRunner
+	CompleteMenuCommand    func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
+}
+
+func BuildDebugViewDependencies(inputs DebugViewInputs) appdebugviewcmd.Dependencies {
+	runtimeDeps := inputs.Runtime
+	configProvider := newFrontendConfigProvider(runtimeDeps, inputs.Store, inputs.WorkspaceSelection)
+	backend := runtimeDeps.view.configuredBackend
+	if owner := runtimeDeps.runtime.owner; owner != nil {
+		backend = ConfiguredBackendBuilder(runtimeDeps.cfg, runtimeDeps.view.mu, owner.Backend, runtimeDeps.frontendID, runtimeDeps.view.frontendConfigIndex)
 	}
-	configProvider := newFrontendConfigProvider(app.BackendRuntimeDeps(), app.store, app.bindings.WorkspaceSelection)
+	runtimeState := debugRuntimeStateAdapter{tracker: inputs.TurnBindings}
 	return appdebugviewcmd.Dependencies{
-		ConfigProvider: configProvider, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(configProvider), Outbound: newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)), FileSharing: app.bindings.FileSharing, CardRenderer: simpleStatusCardRenderer{client: app.feishu}, StateProvider: app.State(),
-		RuntimeStateProvider: debugRuntimeStateAdapter{tracker: app.runtimeOwner.TurnBindings},
+		ConfigProvider: configProvider, ContextProvider: configProvider, RuntimeConfigRepository: configadapter.NewRuntimeRepository(configProvider), Outbound: newEffectOutbound(runtimeDeps.frontendID, inputs.Effects), FileSharing: inputs.FileSharing, CardRenderer: simpleStatusCardRenderer{client: inputs.Feishu}, StateProvider: inputs.State,
+		RuntimeStateProvider: runtimeState,
 		ConversationBackendProvider: debugConversationBackendAdapter{
-			backend:      ConfiguredBackendBuilder(app.Config(), app.ConfigMu(), app.runtimeOwner.Backend, app.FrontendID(), app.frontendConfigIndex),
-			runtimeState: debugRuntimeStateAdapter{tracker: app.runtimeOwner.TurnBindings},
+			backend:      backend,
+			runtimeState: runtimeState,
 			threadLabel:  appthreadmenu.SessionCurrentThreadLabel,
 			missingLabel: primaryConversationMissingLabel,
 		},
-		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{configuration: app.bindings.WorkspaceConfiguration},
-		WorkspaceRenderProvider: debugWorkspaceRenderAdapter{render: app.bindings.WorkspacePresentation.RenderPathPickerCard},
-		MakeSessionKeyFn:        func(m *feishu.InboundMessage) string { return app.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return app.configView().replyInThreadEnabled() },
-		CompleteMenuCommandFn: completeMenuCommand,
+		WorkspaceConfigProvider: debugWorkspaceConfigAdapter{configuration: inputs.WorkspaceConfiguration},
+		WorkspaceRenderProvider: debugWorkspaceRenderAdapter{render: inputs.WorkspacePresentation.RenderPathPickerCard},
+		MakeSessionKeyFn:        runtimeDeps.view.makeSessionKey, ReplyInThreadEnabledFn: func(string) bool { return runtimeDeps.view.replyInThreadEnabled() },
+		CompleteMenuCommandFn: inputs.CompleteMenuCommand,
 		MenuCardBodyFn:        menuCardBody, MenuBreadcrumbLabelsFn: menuBreadcrumbLabels, CommandLabelFn: commandLabel,
 		CurrentThreadLabelFn: appthreadmenu.SessionCurrentThreadLabel, PrimaryConversationMissingLabelFn: primaryConversationMissingLabel,
-		DefaultWorkspaceIDFn: func() string { return app.configView().defaultWorkspaceID() }, ConfigPathFn: func() string { return app.cfgPath },
+		DefaultWorkspaceIDFn: runtimeDeps.view.defaultWorkspaceID, ConfigPathFn: func() string { return runtimeDeps.cfgPath },
 	}
 }
 
