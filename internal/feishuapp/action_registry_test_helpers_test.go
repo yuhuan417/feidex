@@ -1,6 +1,7 @@
 package feishuapp
 
 import (
+	"feidex/internal/adapter/feishu/goalcmd"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -110,4 +111,18 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 		ReplyInThread:       a.configView().replyInThreadEnabled(),
 		TransportAvailable:  a.feishu != nil,
 	})["menu.plan"](action)
+}
+
+func completeGoalRenderedActionAsync(a *App, action *feishu.CardAction, sessionKey, toastText string, run func(goalcmd.Service) (*callback.CardActionTriggerResponse, error)) (*callback.CardActionTriggerResponse, error) {
+	return runGoalCardActionAsync(GoalCardActionInputs{
+		Commands:           *a.bindings.GoalCommands,
+		Lifecycle:          &a.runtimeOwner.Lifecycle,
+		AsyncRunner:        a.asyncRunner,
+		Context:            a.Context,
+		FrontendID:         a.FrontendID(),
+		EffectRunner:       newEffectRunner(a.runtimeOwner),
+		State:              a.State(),
+		ReplyInThread:      a.configView().replyInThreadEnabled(),
+		TransportAvailable: a.feishu != nil,
+	}, action, sessionKey, toastText, "goal action patch failed", run)
 }

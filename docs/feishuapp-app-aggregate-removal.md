@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 113 |
-| 收 `*App` 的顶层函数 | 5 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 110 |
+| 收 `*App` 的顶层函数 | 2 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -937,6 +937,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 221 将 `menu.review` 及 uncommitted/base/commit/custom 四个子 action 迁移到 `ReviewCardActionInputs`。composition 只组装一次 `ReviewCommandDependencies`，同时供 `ReviewFormService` 与 card callbacks 使用，不再在 callback 时通过 `App` 重建 dependencies。review menu 的 backend 可见性与 fallback command、uncommitted/base/commit 的异步 command action、custom form 入口保持不变。文本棘轮保持 `114/6/1/1/0`；对照 SM-14，`review/start` payload、review item lifecycle、submission queue 与最终渲染边界不变。
 
 步骤 222 将 `menu.plan` card action 迁移到显式 `PlanCardActionInputs`。composition 注入 menu command、frontend lifecycle、effect runner、session state 和 transport 可用性；callback 仍立即返回处理中的 toast，后台命令返回卡片时 patch 原消息，只有文本结果时才按原 session reply policy 回复。生产 `completeMenuPlanAsync(*App)` 移除，测试兼容 helper 放入 `_test.go`。生产 `*App` 引用由 114 降至 113，收 `*App` 的顶层函数由 6 降至 5，其他棘轮保持 `1/1/0`；对照 SM-04，Plan collaboration mode 的命令、lifecycle admission、session 状态与 turn/item 协议边界不变。
+
+步骤 223 将 `menu.goal` 与 pause/resume/clear/edit/replace/edit-submit 七个 goal card actions 迁移到显式 `GoalCardActionInputs`。composition 注入已构造的 goal command service、frontend lifecycle、effect runner、session state 和 transport 可用性；callback 仍快速返回原 toast，后台 RPC 完成后 patch 原 goal 卡片，错误或纯文本结果继续走原 reply fallback。生产三个接收 `*App` 的异步 goal helper 移除，测试兼容入口放入 `_test.go`。生产 `*App` 引用由 113 降至 110，收 `*App` 的顶层函数由 5 降至 2，其他棘轮保持 `1/1/0`；对照 SM-25，goal 控制卡仍不绑定 Codex turn 回复，goal continuation 的 thread/turn anchor 与 lifecycle 未改变。
 
 ## 方法
 

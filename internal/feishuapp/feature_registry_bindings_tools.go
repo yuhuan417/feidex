@@ -2,10 +2,8 @@ package feishuapp
 
 import (
 	"feidex/internal/adapter/feishu/debugviewcmd"
-	"feidex/internal/adapter/feishu/goalcmd"
 	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
-	"feidex/internal/codexrpc"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -57,43 +55,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			sessionKey := actionSessionKey(action)
-			switch actionName {
-			case "menu.goal":
-				return completeMenuGoalAsync(s.app, action, sessionKey)
-			case "goal.pause":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
-					return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusPaused)
-				})
-			case "goal.resume":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在更新 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
-					return goalSvc.CompleteGoalStatusAction(action, codexrpc.ThreadGoalStatusActive)
-				})
-			case "goal.clear":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在清除 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
-					return goalSvc.CompleteGoalClearAction(action)
-				})
-			case "goal.edit":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在打开 goal 编辑", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
-					return goalSvc.CompleteGoalEditAction(action)
-				})
-			case "goal.replace.confirm":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在替换 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
-					return goalSvc.CompleteGoalReplaceConfirm(action)
-				})
-			case "goal.replace.cancel":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保留当前 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
-					return goalSvc.CompleteGoalReplaceCancel(action)
-				})
-			case "goal.edit.submit":
-				return completeGoalRenderedActionAsync(s.app, action, sessionKey, "正在保存 goal", func(goalSvc goalcmd.Service) (*callback.CardActionTriggerResponse, error) {
-					return goalSvc.CompleteGoalEditSubmit(action)
-				})
-			default:
-				return nil, nil
-			}
-		},
+		PortActions: []string{"menu.goal", "goal.pause", "goal.resume", "goal.clear", "goal.edit", "goal.replace.confirm", "goal.replace.cancel", "goal.edit.submit"},
 	}
 	bindings["menu.compact"] = featureBinding{
 		Commands: map[string]featureCommandBinding{

@@ -613,6 +613,16 @@ func prepareTestApp(a *App) *App {
 			State:               a.State(),
 			ReplyInThread:       a.configView().replyInThreadEnabled(),
 			TransportAvailable:  a.feishu != nil,
+		}, GoalCardActionInputs{
+			Commands:           *a.bindings.GoalCommands,
+			Lifecycle:          &a.runtimeOwner.Lifecycle,
+			AsyncRunner:        a.asyncRunner,
+			Context:            a.Context,
+			FrontendID:         a.FrontendID(),
+			EffectRunner:       newEffectRunner(a.runtimeOwner),
+			State:              a.State(),
+			ReplyInThread:      a.configView().replyInThreadEnabled(),
+			TransportAvailable: a.feishu != nil,
 		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,

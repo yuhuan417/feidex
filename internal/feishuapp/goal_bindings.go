@@ -14,7 +14,6 @@ import (
 	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -87,67 +86,4 @@ type goalAnchorPresenter struct{ outbound goalcmd.Outbound }
 
 func (p goalAnchorPresenter) SendContinuationAnchor(ctx context.Context, chatID string, goal conversation.ThreadGoal, ordinal int) (string, error) {
 	return p.outbound.SendCard(ctx, chatID, goalcmd.RenderContinuationCard(goal, ordinal))
-}
-
-func completeMenuGoalAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	commands := *a.bindings.GoalCommands
-	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return commands.CompleteMenuGoal(action, sessionKey)
-	}
-	messageID := strings.TrimSpace(action.MessageID)
-	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() {
-		resp, err := commands.CompleteMenuGoal(action, sessionKey)
-		completeGoalAsyncResult(a, action, sessionKey, messageID, resp, err, "goal menu patch failed")
-	})
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "正在处理 goal"},
-	}, nil
-}
-
-func completeGoalRenderedActionAsync(
-	a *App,
-	action *feishu.CardAction,
-	sessionKey, toastText string,
-	run func(goalcmd.Service) (*callback.CardActionTriggerResponse, error),
-) (*callback.CardActionTriggerResponse, error) {
-	commands := *a.bindings.GoalCommands
-	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return run(commands)
-	}
-	messageID := strings.TrimSpace(action.MessageID)
-	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() {
-		resp, err := run(commands)
-		completeGoalAsyncResult(a, action, sessionKey, messageID, resp, err, "goal action patch failed")
-	})
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: toastText},
-	}, nil
-}
-
-func completeGoalAsyncResult(a *App, action *feishu.CardAction, sessionKey, messageID string, resp *callback.CardActionTriggerResponse, err error, patchWarnMsg string) {
-	if a == nil || strings.TrimSpace(messageID) == "" {
-		return
-	}
-	if card := callbackResponseCard(resp); card != nil {
-		patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, patchWarnMsg,
-			"session_key", sessionKey,
-			"message_id", messageID,
-		)
-		return
-	}
-	text := callbackResponseToastText(resp)
-	if err != nil {
-		text = err.Error()
-	}
-	text = strings.TrimSpace(text)
-	if text == "" || a.feishu == nil {
-		return
-	}
-	if replyErr := newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)).ReplyText(context.Background(), messageID, text, actionReplyInThreadForSession(a.State().Session, sessionKey, a.configView().replyInThreadEnabled())); replyErr != nil {
-		slog.Warn("goal async text reply failed",
-			"session_key", sessionKey,
-			"message_id", messageID,
-			"error", replyErr,
-		)
-	}
 }
