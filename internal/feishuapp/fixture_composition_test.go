@@ -58,6 +58,7 @@ import (
 	"feidex/internal/runtime/turnbinding"
 	upgradeunits "feidex/internal/runtime/upgrade"
 	runtimeworkspace "feidex/internal/runtime/workspace"
+	"feidex/internal/state"
 	"time"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -275,7 +276,6 @@ func prepareTestApp(a *App) *App {
 		Context: a.Context, Tracker: a.bindings.FinalCardPatches, Finder: a.State(),
 		Patcher: a.Feishu(), RunAsync: a.AsyncRunner(), Config: a.Config(), State: a.State(),
 	})
-	a.bindings.ClaudeSupport = BuildClaudeSupport(a)
 	a.bindings.ThreadSettings = threadsettings.Service{Repository: a.State()}
 	permissionBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
 	permissionMenuRenderer := ClaudePermissionMenuRenderer(a.Config(), permissionBackend, a.State().Session)
@@ -314,7 +314,6 @@ func prepareTestApp(a *App) *App {
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Driver: appbackend.SelectedDriver{Selected: configuredBackend}, ModelCommands: a.bindings.ModelCommands,
 	})
 	a.bindings.BackendActions = BuildBackendActions(a)
-	a.bindings.ServerRequests = BuildServerRequests(a)
 	a.bindings.Skills = compositionkit.NewSkillService(SkillUseCasePorts(a.Config(), a.ConfigMu(), a.Context, a.State(), a.runtimeOwner.PendingSkills, a.FrontendID(), a.runtimeOwner))
 	a.bindings.SkillCommands = BuildSkillCommands(SkillCommandInputs{
 		Service: a.bindings.Skills, FrontendID: a.FrontendID(), EffectRunner: *a.runtimeOwner.EffectRunner,
@@ -403,6 +402,26 @@ func prepareTestApp(a *App) *App {
 		Tracker: a.bindings.TurnStreams, Finder: a.bindings.SubmissionLookup, Items: a.bindings.TurnItems,
 		Compaction: a.bindings.Compaction, SubmissionStatus: a.bindings.SubmissionStatus, Cards: a.bindings.OutboundCards,
 	}))
+	pendingCards := NewPendingCardDeliveryService(PendingCardDeliveryInputs{
+		Interactions: a.bindings.InteractionDelivery, Lifecycle: &a.runtimeOwner.Lifecycle,
+		Frontend: identity.FrontendID(a.FrontendID()), Deduper: a.runtimeOwner.EffectDeduper,
+		Turns: a.bindings.TurnPresentation, Runner: *a.runtimeOwner.EffectRunner, Ready: a.Feishu() != nil,
+	})
+	a.bindings.ServerRequests = BuildServerRequests(ServerRequestInputs{
+		State: a.State(), Feishu: a.Feishu(), PendingReplies: a.bindings.PendingReplies,
+		SubmissionLookup: a.bindings.SubmissionLookup, PendingCards: pendingCards, EffectRunner: *a.runtimeOwner.EffectRunner,
+		FrontendID: identity.FrontendID(a.FrontendID()), ConfiguredBackend: func() string { return a.configView().configuredBackend() },
+		RuntimeOwner: a.runtimeOwner, WorkspaceConfigured: true,
+	})
+	a.bindings.ClaudeSupport = BuildClaudeSupport(ClaudeSupportInputs{
+		State: a.State(), Feishu: a.Feishu(), PendingReplies: a.bindings.PendingReplies,
+		PendingCards: pendingCards, EffectRunner: *a.runtimeOwner.EffectRunner,
+		FrontendID: identity.FrontendID(a.FrontendID()), ClaudeCore: a.runtimeOwner.ClaudeCore,
+		WorkspaceConfigured: true,
+		CancelPending: func(pending *state.PendingRequest) error {
+			return a.bindings.ServerRequests.AdapterForPending(pending).CancelPending(pending)
+		},
+	})
 	a.bindings.TurnReconciliation = turn.Reconciliation{Gateway: TurnReconciliationGateway(a.BackendRuntimeDeps()), Session: a.State().Session, SawFinal: a.bindings.TurnPresentation.StreamSawFinal, Finish: a.bindings.Turns.FinishTurn, Context: a.Context}
 	a.bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: ClaudeSessionStopped(ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()), a.runtimeOwner.ClaudeCore), Session: a.State().Session, Finish: a.bindings.Turns.FinishTurn}
 	workspaceRepository := configadapter.NewWorkspaceRepository(a)

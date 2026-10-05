@@ -23,7 +23,7 @@ type asyncUserInputCardSender struct {
 	pending interface {
 		Pending(string) *state.PendingRequest
 	}
-	delivery pendingCardDeliveryService
+	delivery PendingCardDeliveryService
 }
 
 func (s asyncUserInputCardSender) Send(sub *domainsubmission.Submission, payload pendingforms.ToolUserInputPayload, reuseMessageID string) string {

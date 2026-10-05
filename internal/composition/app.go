@@ -304,7 +304,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Context: frontend.Context, Tracker: bindings.FinalCardPatches, Finder: frontend.State(),
 		Patcher: frontend.Feishu(), RunAsync: asyncRunner, Config: frontend.Config(), State: frontend.State(),
 	})
-	bindings.ClaudeSupport = feishuapp.BuildClaudeSupport(frontend)
 	bindings.ThreadSettings = threadsettings.Service{Repository: frontend.State()}
 	permissionBackend := feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontendConfigIndex)
 	permissionMenuRenderer := feishuapp.ClaudePermissionMenuRenderer(frontend.Config(), permissionBackend, frontend.State().Session)
@@ -330,7 +329,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		WorkspaceSelection: bindings.WorkspaceSelection, Driver: appbackend.SelectedDriver{Selected: configuredBackend}, ModelCommands: bindings.ModelCommands,
 	})
 	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
-	bindings.ServerRequests = feishuapp.BuildServerRequests(frontend)
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(feishuapp.SkillCommandInputs{
 		Service: bindings.Skills, FrontendID: frontend.FrontendID(), EffectRunner: *scope.RuntimeOwner.EffectRunner,
@@ -421,6 +419,26 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Tracker: bindings.TurnStreams, Finder: bindings.SubmissionLookup, Items: bindings.TurnItems,
 		Compaction: bindings.Compaction, SubmissionStatus: bindings.SubmissionStatus, Cards: bindings.OutboundCards,
 	}))
+	pendingCards := feishuapp.NewPendingCardDeliveryService(feishuapp.PendingCardDeliveryInputs{
+		Interactions: bindings.InteractionDelivery, Lifecycle: &scope.RuntimeOwner.Lifecycle,
+		Frontend: identity.FrontendID(frontend.FrontendID()), Deduper: scope.RuntimeOwner.EffectDeduper,
+		Turns: bindings.TurnPresentation, Runner: *scope.RuntimeOwner.EffectRunner, Ready: frontend.Feishu() != nil,
+	})
+	bindings.ServerRequests = feishuapp.BuildServerRequests(feishuapp.ServerRequestInputs{
+		State: frontend.State(), Feishu: frontend.Feishu(), PendingReplies: bindings.PendingReplies,
+		SubmissionLookup: bindings.SubmissionLookup, PendingCards: pendingCards, EffectRunner: *scope.RuntimeOwner.EffectRunner,
+		FrontendID: identity.FrontendID(frontend.FrontendID()), ConfiguredBackend: configuredBackend,
+		RuntimeOwner: scope.RuntimeOwner, WorkspaceConfigured: true,
+	})
+	bindings.ClaudeSupport = feishuapp.BuildClaudeSupport(feishuapp.ClaudeSupportInputs{
+		State: frontend.State(), Feishu: frontend.Feishu(), PendingReplies: bindings.PendingReplies,
+		PendingCards: pendingCards, EffectRunner: *scope.RuntimeOwner.EffectRunner,
+		FrontendID: identity.FrontendID(frontend.FrontendID()), ClaudeCore: scope.RuntimeOwner.ClaudeCore,
+		WorkspaceConfigured: true,
+		CancelPending: func(pending *state.PendingRequest) error {
+			return bindings.ServerRequests.AdapterForPending(pending).CancelPending(pending)
+		},
+	})
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend.BackendRuntimeDeps()), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
 	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontendConfigIndex), scope.RuntimeOwner.ClaudeCore), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}
 	workspaceRepository := configadapter.NewWorkspaceRepository(configSource)

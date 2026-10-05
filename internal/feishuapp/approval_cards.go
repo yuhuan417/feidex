@@ -36,11 +36,11 @@ func NewOutboundCardService(inputs OutboundCardInputs) OutboundCardService {
 	if owner == nil {
 		return OutboundCardService{}
 	}
-	pendingDelivery := pendingCardDeliveryService{
-		interactions: inputs.InteractionDelivery, lifecycle: &owner.Lifecycle,
-		frontend: identity.FrontendID(deps.frontendID), deduper: owner.EffectDeduper,
-		turns: inputs.TurnPresentation, runner: *owner.EffectRunner, ready: inputs.Feishu != nil,
-	}
+	pendingDelivery := NewPendingCardDeliveryService(PendingCardDeliveryInputs{
+		Interactions: inputs.InteractionDelivery, Lifecycle: &owner.Lifecycle,
+		Frontend: identity.FrontendID(deps.frontendID), Deduper: owner.EffectDeduper,
+		Turns: inputs.TurnPresentation, Runner: *owner.EffectRunner, Ready: inputs.Feishu != nil,
+	})
 	state := deps.stateView
 	outbound := newEffectOutbound(deps.frontendID, *owner.EffectRunner)
 	view := deps.view

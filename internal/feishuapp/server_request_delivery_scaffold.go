@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	appturnstream "feidex/internal/adapter/feishu/turnstream"
 	"feidex/internal/application"
 	applicationinteraction "feidex/internal/application/interaction"
 	"feidex/internal/domain/identity"
@@ -52,7 +53,21 @@ type pendingWorkingTurnState interface {
 	DiscardWorkingCard(string)
 }
 
-type pendingCardDeliveryService struct {
+// PendingCardDeliveryInputs contains the runtime-owned collaborators used to
+// deliver a pending interaction card.
+type PendingCardDeliveryInputs struct {
+	Interactions *applicationinteraction.DeliveryService
+	Lifecycle    *runtime.FrontendRuntime
+	Frontend     identity.FrontendID
+	Deduper      runtime.EffectDeduper
+	Turns        *appturnstream.Service
+	Runner       runtime.EffectRunner
+	Ready        bool
+}
+
+// PendingCardDeliveryService owns the pending-card delivery boundary shared by
+// Claude and Codex server requests.
+type PendingCardDeliveryService struct {
 	interactions *applicationinteraction.DeliveryService
 	lifecycle    *runtime.FrontendRuntime
 	frontend     identity.FrontendID
@@ -62,7 +77,19 @@ type pendingCardDeliveryService struct {
 	ready        bool
 }
 
-func (s pendingCardDeliveryService) Deliver(anchor pendingCardAnchor, card map[string]any, delivery pendingCardDelivery) error {
+func NewPendingCardDeliveryService(inputs PendingCardDeliveryInputs) PendingCardDeliveryService {
+	return PendingCardDeliveryService{
+		interactions: inputs.Interactions,
+		lifecycle:    inputs.Lifecycle,
+		frontend:     inputs.Frontend,
+		deduper:      inputs.Deduper,
+		turns:        inputs.Turns,
+		runner:       inputs.Runner,
+		ready:        inputs.Ready,
+	}
+}
+
+func (s PendingCardDeliveryService) Deliver(anchor pendingCardAnchor, card map[string]any, delivery pendingCardDelivery) error {
 	if !s.ready || s.lifecycle == nil {
 		return fmt.Errorf("pending card delivery unavailable")
 	}
@@ -106,33 +133,6 @@ func anchorForSubmission(sub *domainsubmission.Submission) pendingCardAnchor {
 		ownerUserID:      strings.TrimSpace(sub.UserID),
 		replyInThread:    replyInThreadForSubmission(sub),
 	}
-}
-
-func deliverPendingCard(a *App, sub *domainsubmission.Submission, card map[string]any, delivery pendingCardDelivery) error {
-	if sub == nil {
-		return fmt.Errorf("pending card delivery unavailable")
-	}
-	return deliverPendingCardWithAnchor(a, anchorForSubmission(sub), card, delivery)
-}
-
-// deliverDetachedPendingCard delivers a card for a request that outlived its
-// producing turn, so there is no submission left to attach it to. The card is
-// non-blocking by definition: it must not touch submission status.
-func deliverDetachedPendingCard(a *App, anchor pendingCardAnchor, card map[string]any, delivery pendingCardDelivery) error {
-	delivery.nonBlocking = true
-	return deliverPendingCardWithAnchor(a, anchor, card, delivery)
-}
-
-func deliverPendingCardWithAnchor(a *App, anchor pendingCardAnchor, card map[string]any, delivery pendingCardDelivery) error {
-	if a == nil || a.feishu == nil {
-		return fmt.Errorf("pending card delivery unavailable")
-	}
-	service := pendingCardDeliveryService{
-		interactions: a.bindings.InteractionDelivery, lifecycle: &a.runtimeOwner.Lifecycle,
-		frontend: identity.FrontendID(a.FrontendID()), deduper: a.runtimeOwner.EffectDeduper,
-		turns: a.bindings.TurnPresentation, runner: *a.runtimeOwner.EffectRunner, ready: true,
-	}
-	return service.Deliver(anchor, card, delivery)
 }
 
 type pendingCardPresenter struct {

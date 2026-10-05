@@ -15,7 +15,7 @@ import (
 // mirroring the shared chokepoint both backends use for question/approval cards.
 func deliverTestPendingUserInputCard(t *testing.T, a *App, sub *domainsubmission.Submission) {
 	t.Helper()
-	if err := deliverPendingCard(a, sub, a.feishu.SimpleStatusCard("需要补充输入", "orange", "你希望用哪种方案？", nil), pendingCardDelivery{
+	if err := newOutboundCardService(a).asyncInput.delivery.Deliver(anchorForSubmission(sub), a.feishu.SimpleStatusCard("需要补充输入", "orange", "你希望用哪种方案？", nil), pendingCardDelivery{
 		requestKey:    "req-1",
 		backend:       domainbackend.BackendCodex,
 		kind:          "tool_request_user_input",

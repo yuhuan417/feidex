@@ -9,28 +9,43 @@ import (
 	"time"
 
 	appapproval "feidex/internal/adapter/feishu/approval"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	apputil "feidex/internal/formatutil"
 
 	"feidex/internal/adapter/feishu/claudesupport"
 	"feidex/internal/adapter/feishu/pendingforms"
 	"feidex/internal/adapter/feishu/serverrequest"
+	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	appclauderuntime "feidex/internal/runtime/claude"
 	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func BuildClaudeSupport(a *App) *claudesupport.Service {
-	// Read once at construction so the dependency is visible.
-	pendingReplies := a.bindings.PendingReplies
-	serverRequests := a.bindings.ServerRequests
-	effectRunner := newEffectRunner(a.runtimeOwner)
-	frontendID := a.FrontendID()
+type ClaudeSupportInputs struct {
+	State               *appstate.Store
+	Feishu              FeishuClient
+	PendingReplies      PendingReplyAdapter
+	CancelPending       func(*state.PendingRequest) error
+	PendingCards        PendingCardDeliveryService
+	EffectRunner        frontendruntime.EffectRunner
+	FrontendID          identity.FrontendID
+	ClaudeCore          func() ClaudeCore
+	WorkspaceConfigured bool
+}
+
+func BuildClaudeSupport(inputs ClaudeSupportInputs) *claudesupport.Service {
+	effectRunner := inputs.EffectRunner
+	frontendID := inputs.FrontendID
 
 	return &claudesupport.Service{
 		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
-			return deliverPendingCard(a, sub, card, pendingCardDelivery{
+			if sub == nil {
+				return fmt.Errorf("pending card delivery unavailable")
+			}
+			return inputs.PendingCards.Deliver(anchorForSubmission(sub), card, pendingCardDelivery{
 				requestKey:      reqKey,
 				requestIDStored: reqIDStored,
 				backend:         backend,
@@ -47,7 +62,7 @@ func BuildClaudeSupport(a *App) *claudesupport.Service {
 			})
 		},
 		DeliverDetachedPendingCard: func(card map[string]any, target appclauderuntime.InteractionTarget, reqKey, reqIDStored, backend, kind, payloadJSON, linkKind string) error {
-			return deliverDetachedPendingCard(a, detachedCardAnchor(target), card, pendingCardDelivery{
+			delivery := pendingCardDelivery{
 				requestKey:      reqKey,
 				requestIDStored: reqIDStored,
 				backend:         backend,
@@ -59,35 +74,53 @@ func BuildClaudeSupport(a *App) *claudesupport.Service {
 				ownerUserID:     strings.TrimSpace(target.UserID),
 				payloadJSON:     payloadJSON,
 				linkKind:        linkKind,
-			})
+			}
+			delivery.nonBlocking = true
+			return inputs.PendingCards.Deliver(detachedCardAnchor(target), card, delivery)
 		},
 		RenderApprovalCard: func(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
-			return renderApprovalCard(a.State(), a.feishu, sub, title, color, body, buttons)
+			return renderApprovalCard(inputs.State, inputs.Feishu, sub, title, color, body, buttons)
 		},
 		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
-			return a.feishu.SimpleStatusCard(title, color, body, buttons)
+			if inputs.Feishu == nil {
+				return nil
+			}
+			return inputs.Feishu.SimpleStatusCard(title, color, body, buttons)
 		},
 		PatchCard: func(messageID string, card map[string]any) error {
-			return patchCardEffect(context.Background(), effectRunner, frontendID, messageID, card)
+			return patchCardEffect(context.Background(), effectRunner, string(frontendID), messageID, card)
 		},
 		PrepareMentionText: apputil.PrependAttentionMentionMarkdown,
 		RenderFormCard:     pendingforms.RenderToolUserInputFormCard,
 		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
-			return contentCardTitleForSession(a.State(), a != nil, sessionKey, workspaceID, title)
+			return contentCardTitleForSession(inputs.State, inputs.WorkspaceConfigured, sessionKey, workspaceID, title)
 		},
 		BackendClaude: domainbackend.BackendClaude,
 		ResolvePlanFeedback: func(pendingID, feedback string) error {
-			return runtimeViewOf(a.runtimeOwner).currentClaudeCore().ResolvePlanFeedback(pendingID, feedback)
+			if inputs.ClaudeCore == nil {
+				return fmt.Errorf("Claude runtime unavailable")
+			}
+			core := inputs.ClaudeCore()
+			if core == nil {
+				return fmt.Errorf("Claude runtime unavailable")
+			}
+			return core.ResolvePlanFeedback(pendingID, feedback)
 		},
 		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
-			return pendingReplies.Finalize(pending)
+			return inputs.PendingReplies.Finalize(pending)
 		},
 		CancelPending: func(pending *state.PendingRequest) error {
-			return serverRequests.AdapterForPending(pending).CancelPending(pending)
+			if inputs.CancelPending == nil {
+				return fmt.Errorf("pending request cancellation unavailable")
+			}
+			return inputs.CancelPending(pending)
 		},
 		RawCard: rawCard,
 		PendingLookup: func(requestID string) *state.PendingRequest {
-			return a.State().Pending(requestID)
+			if inputs.State == nil {
+				return nil
+			}
+			return inputs.State.Pending(requestID)
 		},
 	}
 }

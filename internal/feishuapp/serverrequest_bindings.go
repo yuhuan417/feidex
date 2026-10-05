@@ -6,11 +6,13 @@ import (
 	"feidex/internal/application"
 	"feidex/internal/application/backendops"
 	"feidex/internal/application/interaction"
+	"feidex/internal/application/submission"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	domainsubmission "feidex/internal/domain/submission"
 	apputil "feidex/internal/formatutil"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -26,58 +28,71 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func BuildServerRequests(a *App) *serverrequest.Service {
-	// Read once at construction so the dependency is visible.
-	pendingReplies := a.bindings.PendingReplies
-	submissionLookup := a.bindings.SubmissionLookup
+type ServerRequestInputs struct {
+	State               *appstate.Store
+	Feishu              FeishuClient
+	PendingReplies      PendingReplyAdapter
+	SubmissionLookup    submission.SubmissionLookupService
+	PendingCards        PendingCardDeliveryService
+	EffectRunner        appruntime.EffectRunner
+	FrontendID          identity.FrontendID
+	ConfiguredBackend   func() string
+	RuntimeOwner        *appruntime.FrontendOwner
+	WorkspaceConfigured bool
+}
 
-	if a == nil {
-		return nil
-	}
-	effectRunner := newEffectRunner(a.runtimeOwner)
-	frontendID := a.FrontendID()
+func BuildServerRequests(inputs ServerRequestInputs) *serverrequest.Service {
+	effectRunner := inputs.EffectRunner
+	frontendID := inputs.FrontendID
 	service := &serverrequest.Service{
 		// State access
-		PendingRequests: func() []*state.PendingRequest { return a.State().PendingRequests() },
-		Pending:         func(id string) *state.PendingRequest { return a.State().Pending(id) },
-		Submission:      func(id string) *domainsubmission.Submission { return a.State().Submission(id) },
-		Session:         func(key string) *conversation.Session { return a.State().Session(key) },
+		PendingRequests: func() []*state.PendingRequest { return inputs.State.PendingRequests() },
+		Pending:         func(id string) *state.PendingRequest { return inputs.State.Pending(id) },
+		Submission:      func(id string) *domainsubmission.Submission { return inputs.State.Submission(id) },
+		Session:         func(key string) *conversation.Session { return inputs.State.Session(key) },
 		SessionKeysEqual: func(left, right string) bool {
 			return sessionKeysEqual(left, right)
 		},
 
 		// Feishu
 		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
-			if a.feishu == nil {
+			if inputs.Feishu == nil {
 				return nil
 			}
-			return a.feishu.SimpleStatusCard(title, color, body, buttons)
+			return inputs.Feishu.SimpleStatusCard(title, color, body, buttons)
 		},
 		PatchCard: func(messageID string, card map[string]any) error {
-			if a.feishu == nil {
+			if inputs.Feishu == nil {
 				return nil
 			}
-			return patchCardEffect(context.Background(), effectRunner, frontendID, messageID, card)
+			return patchCardEffect(context.Background(), effectRunner, string(frontendID), messageID, card)
 		},
 		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
-			return contentCardTitleForSession(a.State(), a != nil, sessionKey, workspaceID, title)
+			return contentCardTitleForSession(inputs.State, inputs.WorkspaceConfigured, sessionKey, workspaceID, title)
 		},
 
 		// Backend adapter factory
 		AdapterForPending: func(pending *state.PendingRequest) serverrequest.BackendAdapter {
-			backend := pendingBackend(a.configView(), pending)
+			backend := ""
+			if pending != nil {
+				backend = strings.TrimSpace(pending.Backend)
+			}
+			if backend == "" && inputs.ConfiguredBackend != nil {
+				backend = inputs.ConfiguredBackend()
+			}
+			backend = normalizeRuntimeBackend(backend)
 			switch normalizeRuntimeBackend(backend) {
 			case domainbackend.BackendCodex:
-				client := runtimeViewOf(a.runtimeOwner).currentCodexClient()
+				client := runtimeViewOf(inputs.RuntimeOwner).currentCodexClient()
 				if client == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
-				return interactionreply.NewCodexAdapter(codexEffectReplyClient{runtimeOwner: a.runtimeOwner, frontendID: identity.FrontendID(a.FrontendID())}, backend)
+				return interactionreply.NewCodexAdapter(codexEffectReplyClient{runtimeOwner: inputs.RuntimeOwner, frontendID: frontendID}, backend)
 			case domainbackend.BackendClaude:
-				if runtimeViewOf(a.runtimeOwner).currentClaudeCore() == nil {
+				if runtimeViewOf(inputs.RuntimeOwner).currentClaudeCore() == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
-				return interactionreply.NewClaudeAdapter(claudeReplyClientShim{claude: runtimeViewOf(a.runtimeOwner).currentClaudeCore()}, backend)
+				return interactionreply.NewClaudeAdapter(claudeReplyClientShim{claude: runtimeViewOf(inputs.RuntimeOwner).currentClaudeCore()}, backend)
 			default:
 				return interactionreply.NewUnsupportedAdapter(backend)
 			}
@@ -85,13 +100,16 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 
 		// Root service delegation
 		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
-			return pendingReplies.Finalize(pending)
+			return inputs.PendingReplies.Finalize(pending)
 		},
 		FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
-			return submissionLookup.FindSubmissionByTurn(threadID, turnID)
+			return inputs.SubmissionLookup.FindSubmissionByTurn(threadID, turnID)
 		},
 		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, delivery serverrequest.PendingCardDelivery) error {
-			return deliverPendingCard(a, sub, card, pendingCardDelivery{
+			if sub == nil {
+				return fmt.Errorf("pending card delivery unavailable")
+			}
+			return inputs.PendingCards.Deliver(anchorForSubmission(sub), card, pendingCardDelivery{
 				requestKey:      delivery.RequestKey,
 				requestIDStored: delivery.RequestIDStored,
 				backend:         delivery.Backend,
@@ -108,13 +126,13 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 			})
 		},
 		RenderApprovalCard: func(sub *domainsubmission.Submission, title, color, body string, buttons []feishu.Button) map[string]any {
-			return renderApprovalCard(a.State(), a.feishu, sub, title, color, body, buttons)
+			return renderApprovalCard(inputs.State, inputs.Feishu, sub, title, color, body, buttons)
 		},
 		PrepareMentionText: func(text, userID string) string {
 			return apputil.PrependAttentionMentionMarkdown(text, userID)
 		},
 		ReplyCodexError: func(requestID json.RawMessage, code int, message string) {
-			replyCodexError(runtimeViewOf(a.runtimeOwner), requestID, code, message)
+			replyCodexError(runtimeViewOf(inputs.RuntimeOwner), requestID, code, message)
 		},
 		RawCard: rawCard,
 
