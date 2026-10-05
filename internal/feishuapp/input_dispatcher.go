@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"feidex/internal/adapter/backend/codex"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
 	"feidex/internal/application/backendops"
+	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/codexrpc"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/identity"
@@ -122,58 +124,61 @@ func newEffectRunner(runtimeowner *appruntime.FrontendOwner) appruntime.EffectRu
 	return *runtimeowner.EffectRunner
 }
 
-func buildEffectRunner(a *App) appruntime.EffectRunner {
-	if a == nil {
+type EffectRunnerInputs struct {
+	Transport           FeishuClient
+	FrontendID          string
+	State               *appstate.Store
+	RuntimeOwner        *appruntime.FrontendOwner
+	Submissions         *appsubmission.SubmissionQueueService
+	AnnouncementRefresh *appruntime.CoalescedRefresh
+}
+
+func buildEffectRunner(inputs EffectRunnerInputs) appruntime.EffectRunner {
+	if inputs.RuntimeOwner == nil {
 		return appruntime.EffectRunner{}
 	}
-	transport := a.feishu
-	if a.transport != nil {
-		transport = a.transport
-	}
-	runner := feishuoutbound.NewEffectRunner(transport)
-	submissions := a.bindings.Submissions
-	if owner := a.runtimeView().ensureRuntimeOwner(); owner != nil {
-		runner.Deduper = owner.EffectDeduper
-	}
+	view := runtimeView{owner: inputs.RuntimeOwner}
+	runner := feishuoutbound.NewEffectRunner(inputs.Transport)
+	runner.Deduper = inputs.RuntimeOwner.EffectDeduper
 	runner.Save = func(ctx context.Context, e application.SaveState) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if string(e.Frontend) != a.FrontendID() {
+		if string(e.Frontend) != inputs.FrontendID {
 			return fmt.Errorf("state effect frontend mismatch")
 		}
-		return a.State().SaveSession(e.Session)
+		return inputs.State.SaveSession(e.Session)
 	}
 	runner.StartWithResult = func(ctx context.Context, e application.StartTurn) (backendops.TurnResult, error) {
-		if string(e.Frontend) != a.FrontendID() {
+		if string(e.Frontend) != inputs.FrontendID {
 			return backendops.TurnResult{}, fmt.Errorf("turn effect frontend mismatch")
 		}
-		client, err := a.runtimeView().requireCodexGateway()
+		client, err := view.requireCodexGateway()
 		if err != nil {
 			return backendops.TurnResult{}, err
 		}
 		return client.StartTurn(ctx, e.Request)
 	}
 	runner.Resolve = func(ctx context.Context, e application.ResolveBackendRequest) error {
-		if string(e.Frontend) != a.FrontendID() {
+		if string(e.Frontend) != inputs.FrontendID {
 			return fmt.Errorf("response effect frontend mismatch")
 		}
 		if e.Backend != domainbackend.BackendCodex {
 			return fmt.Errorf("unsupported response backend %q", e.Backend)
 		}
-		client, err := a.runtimeView().requireCodexClient()
+		client, err := view.requireCodexClient()
 		if err != nil {
 			return err
 		}
 		return codex.Respond(ctx, client, e.Response)
 	}
 	runner.Steer = func(ctx context.Context, e application.SteerTurn) error {
-		if string(e.Frontend) != a.FrontendID() {
+		if string(e.Frontend) != inputs.FrontendID {
 			return fmt.Errorf("steer effect frontend mismatch")
 		}
 		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		gateway, err := a.runtimeView().requireCodexGateway()
+		gateway, err := view.requireCodexGateway()
 		if err != nil {
 			return err
 		}
@@ -183,19 +188,19 @@ func buildEffectRunner(a *App) appruntime.EffectRunner {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if string(e.Frontend) != a.FrontendID() {
+		if string(e.Frontend) != inputs.FrontendID {
 			return fmt.Errorf("enqueue effect frontend mismatch")
 		}
-		return submissions.EnqueueSubmission(&e.Message, e.SessionKey, e.BindOnlyCurrentRoot)
+		return inputs.Submissions.EnqueueSubmission(&e.Message, e.SessionKey, e.BindOnlyCurrentRoot)
 	}
 	runner.RefreshGroup = func(ctx context.Context, e application.RefreshGroupStatus) error {
-		if string(e.Frontend) != a.FrontendID() {
+		if string(e.Frontend) != inputs.FrontendID {
 			return fmt.Errorf("group refresh effect frontend mismatch")
 		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		scheduleGroupAnnouncementStatusRefresh(a.runtimeOwner.Announcements, e.ChatID)
+		scheduleGroupAnnouncementStatusRefresh(inputs.AnnouncementRefresh, e.ChatID)
 		return nil
 	}
 	return runner

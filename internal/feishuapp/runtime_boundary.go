@@ -12,7 +12,9 @@ type BackendRuntimeHandle = runtime.BackendHandle
 
 // NewEffectRunner creates the frontend effect executor after the shell and its
 // transport have been composed.
-func NewEffectRunner(a *App) runtime.EffectRunner { return buildEffectRunner(a) }
+func NewEffectRunner(inputs EffectRunnerInputs) runtime.EffectRunner {
+	return buildEffectRunner(inputs)
+}
 
 // NewDispatcher creates the application input dispatcher for this frontend.
 func NewDispatcher(a *App) application.Dispatcher { return newInputDispatcher(a) }

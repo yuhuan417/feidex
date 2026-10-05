@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 144 |
-| 收 `*App` 的顶层函数 | 36 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 142 |
+| 收 `*App` 的顶层函数 | 34 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -893,6 +893,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 199 将 skill commands 与 upgrade view 工厂改为显式输入。skill commands 捕获既有 service、effect runner、frontend owner 与 identity；upgrade view 捕获 config/state/workspace owners，并通过 configured-backend provider 保持动态 backend 读取。session actor、lifecycle admission、upgrade workspace/path-picker 和 daemon config 语义不变。生产 `*App` 引用由 151 降至 149，收 `*App` 的函数数由 43 降至 41，其他棘轮保持 1/1/0。
 
 步骤 200 将 Feishu policy 安装和 async input 的 session task runner 改为显式输入。group message policy、bot-added handler、primary initialization 和 announcement refresh 仍使用同一组 owners；async input 仍先经过 lifecycle admission，再进入同一 session actor，测试 runner 保持动态读取。生产 `*App` 引用由 149 降至 144，收 `*App` 的函数数由 41 降至 36，其他棘轮保持 1/1/0。
+
+步骤 201 将 effect runner 构造改为显式输入，并在 composition 中复用同一个已装配 runner。transport、scoped state、submission queue、deduper 和 announcement refresh 仍由原 owner 提供，Codex client/gateway 仍在 effect 执行时动态解析。生产 `*App` 引用由 144 降至 142，收 `*App` 的函数数由 36 降至 34，其他棘轮保持 1/1/0。
 
 ## 方法
 

@@ -914,6 +914,13 @@ func testFeishuPolicyInputs(a *App) FeishuPolicyInputs {
 	}
 }
 
+func testEffectRunnerInputs(a *App) EffectRunnerInputs {
+	return EffectRunnerInputs{
+		Transport: a.transport, FrontendID: a.FrontendID(), State: a.State(), RuntimeOwner: a.runtimeOwner,
+		Submissions: a.bindings.Submissions, AnnouncementRefresh: a.runtimeOwner.Announcements,
+	}
+}
+
 func testOwnerWithCodex(client CodexClient) *frontendruntime.FrontendOwner {
 	o := frontendruntime.NewFrontendOwner()
 	o.SetCodexClient(client)

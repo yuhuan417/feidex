@@ -26,7 +26,7 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 		return nil, err
 	}
 	prepareTestApp(a)
-	AttachEffectRunner(a, NewEffectRunner(a))
+	AttachEffectRunner(a, NewEffectRunner(testEffectRunnerInputs(a)))
 	a.bindings.WorkspacePresentation = testWorkspacePresentation(a)
 	dispatcher := NewDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher

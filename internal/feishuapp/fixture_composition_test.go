@@ -104,7 +104,7 @@ func prepareTestApp(a *App) *App {
 		Interactions: &interaction.Service{}, BackendEvents: &backendevents.Service{}, Plan: &planapp.Service{},
 	}
 	if a.runtimeOwner.EffectRunner == nil {
-		runner := buildEffectRunner(a)
+		runner := NewEffectRunner(testEffectRunnerInputs(a))
 		a.runtimeOwner.EffectRunner = &runner
 	}
 	a.bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(a)}
@@ -320,7 +320,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.Compaction.Deps = CompactionPorts(a.Context, a.State(), a.runtimeOwner, a.FrontendID(), a.feishu != nil)
 	a.bindings.GoalContinuation.Deps = goal.Dependencies{
 		Context: a.Context, Repository: a.State(), Tracker: a.bindings.Goals,
-		Presenter: GoalContinuationPresenter(GoalCommandOutbound(identity.FrontendID(a.FrontendID()), NewEffectRunner(a))),
+		Presenter: GoalContinuationPresenter(GoalCommandOutbound(identity.FrontendID(a.FrontendID()), newEffectRunner(a.runtimeOwner))),
 		Bindings:  a.runtimeOwner.TurnBindings, Replies: a.bindings.Continuation, Streams: a.bindings.TurnPresentation,
 		Live:               GoalContinuationLiveThreads(a.runtimeOwner.LiveThreads, a.State(), a.bindings.AnnouncementQuery, a.runtimeOwner.Announcements),
 		DefaultWorkspaceID: DefaultWorkspaceID(a.Config(), a.ConfigMu()),
