@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 189 |
-| 收 `*App` 的顶层函数 | 68 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 187 |
+| 收 `*App` 的顶层函数 | 66 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -859,6 +859,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 182 将 thread menu 的 reply callback 从 `App.ReplyCommandActionResponse` 改为显式 frontend ID、effect runner 与 thread-reply setting。card 优先于 toast 的选择、消息 chat/reply anchor 与 effect 类型保持一致；其他仍使用 App wrapper 的调用复用同一窄 effect helper。生产 `*App` 引用由 191 降至 190，收 `*App` 的函数数由 70 降至 69，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 步骤 183 删除 `App.WorkspaceSelection()` 转发 facade；composition、debugview、review 与 workspace command 现使用同一显式 `frontendConfigProvider`，它只持有配置、锁、动态 backend、frontend metadata、store 与 selection service。配置 backend 仍按 frontend runtime owner 在使用时读取。生产 `*App` 引用由 190 降至 189，收 `*App` 的函数数由 69 降至 68，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
+
+步骤 184 删除没有调用方的 `App.BotProfile()` 和 `App.AgentBindingsForChat()` 转发 facade；profile/binding 读取继续由 scoped state repositories 提供。生产 `*App` 引用由 189 降至 187，收 `*App` 的函数数由 68 降至 66，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 ## 方法
 

@@ -66,27 +66,6 @@ func (a *App) State() *appstate.Store {
 	return a.stateView
 }
 
-// BotProfile returns the current frontend's persisted default profile.
-func (a *App) BotProfile() *state.BotProfile {
-	if a == nil || a.State() == nil {
-		return nil
-	}
-	return a.State().BotProfile()
-}
-
-// AgentBindingsForChat returns local binding configuration for one logical
-// chat. It is a frontend-scoped capability used by binding-aware helpers.
-func (a *App) AgentBindingsForChat(chatType, chatID string) []*state.AgentBinding {
-	if a == nil {
-		return nil
-	}
-	st := a.State()
-	if st == nil {
-		return nil
-	}
-	return st.AgentBindingsForChat(chatType, chatID)
-}
-
 // ConfigPath returns the filesystem path to the configuration file.
 func (a *App) ConfigPath() string {
 	if a == nil {
