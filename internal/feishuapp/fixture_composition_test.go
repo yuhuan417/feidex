@@ -583,6 +583,13 @@ func prepareTestApp(a *App) *App {
 		}, SystemCardActionInputs{
 			Debug: a.bindings.Debug, BackendUpgrades: a.bindings.BackendUpgrades,
 			BackendActions: a.bindings.BackendActions, CompleteMenuCommand: a.CompleteMenuCommand,
+		}, MenuCoreCardActionInputs{
+			Backend: configuredBackend, State: a.State(), Renderer: a.Feishu(),
+			BackendSelection: a.bindings.BackendSelection, AutoRetry: a.bindings.AutoRetry,
+			CompleteMenuCommand: a.CompleteMenuCommand,
+		}, BindingCardActionInputs{
+			Backend: configuredBackend, State: a.State(), Renderer: a.Feishu(),
+			BindingCommands: a.bindings.BindingCommands, CompleteMenuCommand: a.CompleteMenuCommand,
 		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,

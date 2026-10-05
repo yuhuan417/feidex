@@ -11,41 +11,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (s cardActionService) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已返回命令菜单"},
-		Card:  rawCard(renderCommandMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, "主菜单"), s.app.feishu, sessionKey)),
-	}, nil
-}
-
-func (s cardActionService) completeMenuTools(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	spec, _ := menuGroupSpec("menu.tools")
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开常用工具"},
-		Card:  rawCard(renderToolsMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, spec.Label), s.app.feishu, sessionKey)),
-	}, nil
-}
-
-func (s cardActionService) completeMenuGroupModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	// 直接打开模型配置界面，而不是显示中间菜单
-	return s.completeMenuModel(action, sessionKey)
-}
-
-func (s cardActionService) completeMenuGroupSystem(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	spec, _ := menuGroupSpec("menu.group.system")
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开 system"},
-		Card:  rawCard(renderSystemMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, spec.Label), s.app.feishu, sessionKey)),
-	}, nil
-}
-
-func (s cardActionService) completeMenuBackendSwitch(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "已打开切换后端"},
-		Card:  rawCard(s.app.bindings.BackendSelection.RenderBackendSelectionCard(sessionKey, "")),
-	}, nil
-}
-
 func (s cardActionService) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
 	actionName = nearestVisibleMenuAction(actionName, s.app.configView().configuredBackend())
 	renderer := menuNodeRenderers()[actionName]
@@ -117,14 +82,6 @@ func (s cardActionService) completeQuietSet(action *feishu.CardAction, mode conf
 
 func (s cardActionService) completeMenuModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/model", "menu.group.model")
-}
-
-func (s cardActionService) completeMenuStatus(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(s.app, action, sessionKey, "/status", "menu.group.system")
-}
-
-func (s cardActionService) completeMenuHelp(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(s.app, action, sessionKey, "/help", "menu.group.system")
 }
 
 func (s cardActionService) completeMenuHistory(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

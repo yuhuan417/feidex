@@ -651,6 +651,13 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		}, feishuapp.SystemCardActionInputs{
 			Debug: bindings.Debug, BackendUpgrades: bindings.BackendUpgrades,
 			BackendActions: bindings.BackendActions, CompleteMenuCommand: frontend.CompleteMenuCommand,
+		}, feishuapp.MenuCoreCardActionInputs{
+			Backend: configuredBackend, State: frontend.State(), Renderer: frontend.Feishu(),
+			BackendSelection: bindings.BackendSelection, AutoRetry: bindings.AutoRetry,
+			CompleteMenuCommand: frontend.CompleteMenuCommand,
+		}, feishuapp.BindingCardActionInputs{
+			Backend: configuredBackend, State: frontend.State(), Renderer: frontend.Feishu(),
+			BindingCommands: bindings.BindingCommands, CompleteMenuCommand: frontend.CompleteMenuCommand,
 		}, feishuapp.PathPickerActionInputs{
 			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,

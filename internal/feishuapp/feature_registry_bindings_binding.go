@@ -2,8 +2,6 @@ package feishuapp
 
 import (
 	"feidex/internal/feishu"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
@@ -22,16 +20,7 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 			}
 			return renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "主菜单"), a.feishu, sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.current_bot" {
-				return nil, nil
-			}
-			sessionKey := actionSessionKey(action)
-			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "info", Content: "已返回命令菜单"},
-				Card:  rawCard(renderCommandMenuCardData(s.app.configView().configuredBackend(), planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, "主菜单"), s.app.feishu, sessionKey)),
-			}, nil
-		},
+		PortActions: []string{"menu.current_bot"},
 	}
 
 	bindings["menu.current_workspace"] = featureBinding{
@@ -42,18 +31,6 @@ func appendFeatureBindingsBinding(bindings map[string]featureBinding) {
 			}
 			return a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			sessionKey := actionSessionKey(action)
-			switch actionName {
-			case "menu.current_workspace":
-				return completeMenuCommand(s.app, action, sessionKey, "/workspace", "menu.root")
-			case "current_workspace.choose":
-				return completeMenuCommand(s.app, action, sessionKey, "/workspace choose", "menu.workspace")
-			case "current_workspace.use":
-				return s.app.bindings.BindingCommands.completeBindingUse(action, sessionKey, actionStringValue(action, "workspace_id"))
-			default:
-				return nil, nil
-			}
-		},
+		PortActions: []string{"menu.current_workspace", "current_workspace.choose", "current_workspace.use"},
 	}
 }

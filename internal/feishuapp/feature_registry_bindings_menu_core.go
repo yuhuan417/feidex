@@ -1,12 +1,6 @@
 package feishuapp
 
-import (
-	"strings"
-
-	"feidex/internal/feishu"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
-)
+import "feidex/internal/feishu"
 
 func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 	bindings["menu.root"] = featureBinding{
@@ -24,12 +18,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			}
 			return renderCommandMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "主菜单"), a.feishu, sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.root" {
-				return nil, nil
-			}
-			return s.completeMenuRoot(action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.root"},
 	}
 	bindings["menu.tools"] = featureBinding{
 		RenderActions: []string{"menu.tools"},
@@ -40,12 +29,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			spec, _ := menuGroupSpec("menu.tools")
 			return renderToolsMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, spec.Label), a.feishu, sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.tools" {
-				return nil, nil
-			}
-			return s.completeMenuTools(action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.tools"},
 	}
 	bindings["menu.group.model"] = featureBinding{
 		RenderActions: []string{"menu.group.model"},
@@ -55,12 +39,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			}
 			return a.bindings.BackendConfiguration.RenderModelMenuCard(sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.group.model" {
-				return nil, nil
-			}
-			return s.completeMenuGroupModel(action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.group.model"},
 	}
 	bindings["menu.group.system"] = featureBinding{
 		RenderActions: []string{"menu.group.system"},
@@ -71,12 +50,7 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			spec, _ := menuGroupSpec("menu.group.system")
 			return renderSystemMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, spec.Label), a.feishu, sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.group.system" {
-				return nil, nil
-			}
-			return s.completeMenuGroupSystem(action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.group.system"},
 	}
 	bindings["menu.group.backend"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -94,22 +68,6 @@ func appendFeatureBindingsMenuCore(bindings map[string]featureBinding) {
 			spec, _ := menuGroupSpec("menu.group.backend")
 			return renderBackendMenuCardData(a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, spec.Label), a.feishu, sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			sessionKey := actionSessionKey(action)
-			switch actionName {
-			case "menu.group.backend":
-				return s.app.bindings.BackendSelection.CompleteMenuBackend(action, sessionKey)
-			case "menu.backend", "menu.backend.switch":
-				return s.completeMenuBackendSwitch(action, sessionKey)
-			case "menu.auto_retry":
-				return completeMenuCommand(s.app, action, sessionKey, "/backend retry", "menu.group.backend")
-			case "backend.select":
-				return s.app.bindings.BackendSelection.CompleteBackendSelect(action, sessionKey, actionStringValue(action, "backend"))
-			case "auto_retry.set":
-				return s.app.bindings.AutoRetry.CompleteAutoRetrySet(action, strings.EqualFold(actionStringValue(action, "enabled"), "on"))
-			default:
-				return nil, nil
-			}
-		},
+		PortActions: []string{"menu.group.backend", "menu.backend", "menu.backend.switch", "menu.auto_retry", "backend.select", "auto_retry.set"},
 	}
 }

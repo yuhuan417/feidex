@@ -928,6 +928,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 217 将 debug、status、help 与 Codex/Claude upgrade 六个 system card actions 从 feature registry 的 App handler 迁移到 `SystemCardActionInputs`。debug service、backend upgrade/action owners 和 menu command callback 由 composition 显式注入；feature registry 继续保留命令与菜单渲染元数据，并将这些 action 标记为 port-owned。`menu.upgrade` 仍保留原异步 admission/patch 路径。文本棘轮保持 `115/7/1/1/0`；不改变菜单顺序、升级流程或 Codex 状态机。
 
+步骤 218 将 root/tools/model/system/backend 菜单核心 action 与 current bot/workspace action 迁移到 `MenuCoreCardActionInputs` / `BindingCardActionInputs`。composition 显式注入动态 backend supplier、session state、card renderer、backend selection、auto-retry、binding commands 和 menu command callback；feature registry 只保留命令/渲染元数据并标记 14 个 port-owned action。已无生产调用方的菜单聚合方法移到 `_test.go` 兼容层。菜单结构、顺序、toast、fallback command 与 backend 切换 guard 不变；文本棘轮保持 `115/7/1/1/0`，不涉及 Codex lifecycle 或 approval 语义。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、
