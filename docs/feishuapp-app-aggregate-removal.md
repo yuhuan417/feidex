@@ -926,6 +926,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 216 将 maintenance card-action family 迁移到显式 `MaintenanceCardActionInputs`，由 upgrade service、backend upgrade owner 和已组合的 backend action command port 执行。`upgrade.dev` 与 Codex/Claude upgrade/restart callbacks 不再接收 `cardActionService`；异步命令仍使用原 frontend lifecycle、session actor、command capture 和 card patch 路径。action name、toast、preparing/failure card 与后台维护边界不变。文本棘轮保持 `115/7/1/1/0`；不涉及 Codex turn lifecycle 或 pending request 状态转换。
 
+步骤 217 将 debug、status、help 与 Codex/Claude upgrade 六个 system card actions 从 feature registry 的 App handler 迁移到 `SystemCardActionInputs`。debug service、backend upgrade/action owners 和 menu command callback 由 composition 显式注入；feature registry 继续保留命令与菜单渲染元数据，并将这些 action 标记为 port-owned。`menu.upgrade` 仍保留原异步 admission/patch 路径。文本棘轮保持 `115/7/1/1/0`；不改变菜单顺序、升级流程或 Codex 状态机。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

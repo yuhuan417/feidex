@@ -27,17 +27,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			}
 			return a.bindings.Debug.RenderDebugLogsCard(sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			sessionKey := actionSessionKey(action)
-			switch actionName {
-			case "menu.debug":
-				return s.app.bindings.Debug.CompleteMenuDebug(action, sessionKey)
-			case "menu.debug.logs":
-				return s.app.bindings.Debug.CompleteMenuDebugLogs(action, sessionKey)
-			default:
-				return nil, nil
-			}
-		},
+		PortActions: []string{"menu.debug", "menu.debug.logs"},
 	}
 	bindings["menu.status"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -47,12 +37,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.status" {
-				return nil, nil
-			}
-			return s.completeMenuStatus(action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.status"},
 	}
 	bindings["menu.help"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -62,12 +47,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.help" {
-				return nil, nil
-			}
-			return s.completeMenuHelp(action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.help"},
 	}
 	bindings["menu.codex_upgrade"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -90,12 +70,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			}
 			return a.bindings.UpgradePresentation.renderUpgradeStatusCard(upgraderender.CodexSpec, sessionKey, view, false), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.codex_upgrade" {
-				return nil, nil
-			}
-			return s.app.bindings.BackendUpgrades.completeMenuUpgrade(backendUpgradeCodex, action, backendUpgradeCommandCompleter(s.app.bindings.BackendActions))
-		},
+		PortActions: []string{"menu.codex_upgrade"},
 	}
 	bindings["menu.claude_upgrade"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -118,12 +93,7 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 			}
 			return a.bindings.UpgradePresentation.renderUpgradeStatusCard(upgraderender.ClaudeSpec, sessionKey, view, false), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.claude_upgrade" {
-				return nil, nil
-			}
-			return s.app.bindings.BackendUpgrades.completeMenuUpgrade(backendUpgradeClaude, action, backendUpgradeCommandCompleter(s.app.bindings.BackendActions))
-		},
+		PortActions: []string{"menu.claude_upgrade"},
 	}
 	bindings["menu.upgrade"] = featureBinding{
 		Commands: map[string]featureCommandBinding{

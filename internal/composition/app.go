@@ -648,6 +648,9 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		feishuapp.MaintenanceCardActionInputs{
 			Upgrades: bindings.Upgrades, BackendUpgrades: bindings.BackendUpgrades,
 			BackendActions: bindings.BackendActions,
+		}, feishuapp.SystemCardActionInputs{
+			Debug: bindings.Debug, BackendUpgrades: bindings.BackendUpgrades,
+			BackendActions: bindings.BackendActions, CompleteMenuCommand: frontend.CompleteMenuCommand,
 		}, feishuapp.PathPickerActionInputs{
 			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,

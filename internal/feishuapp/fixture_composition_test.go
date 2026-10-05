@@ -580,6 +580,9 @@ func prepareTestApp(a *App) *App {
 		MaintenanceCardActionInputs{
 			Upgrades: a.bindings.Upgrades, BackendUpgrades: a.bindings.BackendUpgrades,
 			BackendActions: a.bindings.BackendActions,
+		}, SystemCardActionInputs{
+			Debug: a.bindings.Debug, BackendUpgrades: a.bindings.BackendUpgrades,
+			BackendActions: a.bindings.BackendActions, CompleteMenuCommand: a.CompleteMenuCommand,
 		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,
