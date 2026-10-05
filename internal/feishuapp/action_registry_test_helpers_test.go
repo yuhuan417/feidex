@@ -8,12 +8,23 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
+type cardActionService struct{ app *App }
+
 func newCardActionService(app *App) cardActionDispatcher {
 	return cardActionDispatcher{inner: app.bindings.CardActions}
 }
 
 func newMenuActionService(app *App) cardActionService {
 	return cardActionService{app: app}
+}
+
+func (s cardActionService) renderMenuNodeCard(actionName, sessionKey string) (map[string]any, bool) {
+	actionName = nearestVisibleMenuAction(actionName, s.app.configView().configuredBackend())
+	renderer := menuNodeRenderers()[actionName]
+	if renderer == nil {
+		return nil, false
+	}
+	return renderer(s.app, sessionKey)
 }
 
 func (s cardActionService) completeMenuRoot(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -26,6 +37,44 @@ func (s cardActionService) completeMenuTools(action *feishu.CardAction, sessionK
 
 func (s cardActionService) completeMenuGroupModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return s.completeMenuModel(action, sessionKey)
+}
+
+func (s cardActionService) modelActionInputs() ModelCardActionInputs {
+	return ModelCardActionInputs{
+		Backend:                    s.app.configView().configuredBackend,
+		BindingCommands:            s.app.bindings.BindingCommands,
+		BackendConfiguration:       s.app.bindings.BackendConfiguration,
+		ModelCommands:              s.app.bindings.ModelCommands,
+		ModelSettings:              s.app.bindings.ModelSettings,
+		ScopedRoutingConfiguration: s.app.bindings.ScopedRoutingConfiguration,
+		ThreadSettings:             s.app.bindings.ThreadSettings,
+		State:                      s.app.State(),
+		CompleteMenuCommand:        s.app.CompleteMenuCommand,
+	}
+}
+
+func (s cardActionService) completeMenuModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	setTestActionSessionKey(action, sessionKey)
+	return modelCardActionHandlers(s.modelActionInputs())["menu.model"](action)
+}
+
+func (s cardActionService) completeMenuFast(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	setTestActionSessionKey(action, sessionKey)
+	return modelCardActionHandlers(s.modelActionInputs())["menu.fast"](action)
+}
+
+func (s cardActionService) completeServiceTierSet(action *feishu.CardAction, sessionKey, threadID, serviceTier string) (*callback.CardActionTriggerResponse, error) {
+	setTestActionSessionKey(action, sessionKey)
+	action.ActionValue["thread_id"] = threadID
+	action.ActionValue["service_tier"] = serviceTier
+	return modelCardActionHandlers(s.modelActionInputs())["service_tier.set"](action)
+}
+
+func setTestActionSessionKey(action *feishu.CardAction, sessionKey string) {
+	if action.ActionValue == nil {
+		action.ActionValue = map[string]any{}
+	}
+	action.ActionValue["session_key"] = sessionKey
 }
 
 func (s cardActionService) completeMenuGroupSystem(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
@@ -125,4 +174,32 @@ func completeGoalRenderedActionAsync(a *App, action *feishu.CardAction, sessionK
 		ReplyInThread:      a.configView().replyInThreadEnabled(),
 		TransportAvailable: a.feishu != nil,
 	}, action, sessionKey, toastText, "goal action patch failed", run)
+}
+
+func (s cardActionService) completeMenuCompact(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if action != nil {
+		if action.ActionValue == nil {
+			action.ActionValue = map[string]any{}
+		}
+		action.ActionValue["session_key"] = sessionKey
+	}
+	return compactCardActionHandlers(CompactCardActionInputs{
+		CompleteMenuCommand: s.app.CompleteMenuCommand,
+		Actions:             s.app.bindings.BackendActions,
+		Compaction:          s.app.bindings.Compaction,
+		State:               s.app.State(),
+		Lifecycle:           &s.app.runtimeOwner.Lifecycle,
+		AsyncRunner:         s.app.asyncRunner,
+		Context:             s.app.Context(),
+		FrontendID:          s.app.FrontendID(),
+		EffectRunner:        newEffectRunner(s.app.runtimeOwner),
+	})["menu.compact"](action)
+}
+
+func (s cardActionService) completeMenuUpgrade(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return maintenanceCardActionHandlers(MaintenanceCardActionInputs{
+		Upgrades:        s.app.bindings.Upgrades,
+		BackendUpgrades: s.app.bindings.BackendUpgrades,
+		BackendActions:  s.app.bindings.BackendActions,
+	})["menu.upgrade"](action)
 }

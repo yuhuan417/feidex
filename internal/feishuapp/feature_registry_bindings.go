@@ -6,8 +6,6 @@ import (
 
 	appfeatures "feidex/internal/application/features"
 	"feidex/internal/feishu"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type featureCommandBinding struct {
@@ -19,7 +17,6 @@ type featureBinding struct {
 	Commands      map[string]featureCommandBinding
 	RenderActions []string
 	Render        func(actionName string, a *App, sessionKey string) (map[string]any, bool)
-	HandleAction  func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
 	PortActions   []string
 }
 
@@ -39,14 +36,12 @@ func featureBindingForID(id string) (featureBinding, bool) {
 }
 
 var (
-	featureBindingsOnce          sync.Once
-	cachedFeatureBindings        map[string]featureBinding
-	localCommandSpecsOnce        sync.Once
-	cachedLocalCommandSpecs      []localCommandSpec
-	menuNodeRenderersOnce        sync.Once
-	cachedMenuNodeRenderers      map[string]menuNodeRenderer
-	menuCardActionHandlersOnce   sync.Once
-	cachedMenuCardActionHandlers map[string]cardActionHandler
+	featureBindingsOnce     sync.Once
+	cachedFeatureBindings   map[string]featureBinding
+	localCommandSpecsOnce   sync.Once
+	cachedLocalCommandSpecs []localCommandSpec
+	menuNodeRenderersOnce   sync.Once
+	cachedMenuNodeRenderers map[string]menuNodeRenderer
 )
 
 func featureBindingsRegistry() map[string]featureBinding {
@@ -68,13 +63,6 @@ func menuNodeRenderers() map[string]menuNodeRenderer {
 		cachedMenuNodeRenderers = buildMenuNodeRenderers()
 	})
 	return cachedMenuNodeRenderers
-}
-
-func menuCardActionHandlers() map[string]cardActionHandler {
-	menuCardActionHandlersOnce.Do(func() {
-		cachedMenuCardActionHandlers = buildMenuCardActionHandlers()
-	})
-	return cachedMenuCardActionHandlers
 }
 
 func buildLocalCommandSpecs() []localCommandSpec {
@@ -123,49 +111,6 @@ func buildMenuNodeRenderers() map[string]menuNodeRenderer {
 		}
 	}
 	return renderers
-}
-
-func buildMenuCardActionHandlers() map[string]cardActionHandler {
-	handlers := map[string]cardActionHandler{}
-	for _, feature := range appfeatures.All() {
-		if len(feature.ActionNames) == 0 {
-			continue
-		}
-		binding, ok := featureBindingForID(feature.ID)
-		if !ok {
-			panic("missing feature action binding for " + feature.ID)
-		}
-		for _, actionName := range feature.ActionNames {
-			name := strings.TrimSpace(actionName.String())
-			if name == "" {
-				continue
-			}
-			if containsActionName(binding.PortActions, name) {
-				continue
-			}
-			if binding.HandleAction == nil {
-				panic("missing feature action handler for " + feature.ID + ": " + name)
-			}
-			handlers[name] = func(actionName string, binding featureBinding) cardActionHandler {
-				return func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-					return binding.HandleAction(actionName, s, action)
-				}
-			}(name, binding)
-		}
-	}
-	delete(handlers, "history.page")
-	delete(handlers, "history.detail")
-	delete(handlers, "history.detail.select")
-	return handlers
-}
-
-func containsActionName(names []string, target string) bool {
-	for _, name := range names {
-		if name == target {
-			return true
-		}
-	}
-	return false
 }
 
 type menuNodeRenderer func(a *App, sessionKey string) (map[string]any, bool)

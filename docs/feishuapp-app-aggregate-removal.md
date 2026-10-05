@@ -28,10 +28,10 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 110 |
-| 收 `*App` 的顶层函数 | 2 |
-| 收 `*App` 的 `*Ports` 工厂 | 1 |
-| **持有 `*App` 字段的结构体** | **1** |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 106 |
+| 收 `*App` 的顶层函数 | 26 |
+| 收 `*App` 的 `*Ports` 工厂 | 0 |
+| **持有 `*App` 字段的结构体** | **0** |
 
 棘轮只有一个方向：任何一次提交都不许让这些数字变大。惰性读取另有单独的
 预算（`TestFeishuAppLazyBindingReadsDoesNotGrow`，见构造环文档），当前 0。`*App`
@@ -939,6 +939,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 222 将 `menu.plan` card action 迁移到显式 `PlanCardActionInputs`。composition 注入 menu command、frontend lifecycle、effect runner、session state 和 transport 可用性；callback 仍立即返回处理中的 toast，后台命令返回卡片时 patch 原消息，只有文本结果时才按原 session reply policy 回复。生产 `completeMenuPlanAsync(*App)` 移除，测试兼容 helper 放入 `_test.go`。生产 `*App` 引用由 114 降至 113，收 `*App` 的顶层函数由 6 降至 5，其他棘轮保持 `1/1/0`；对照 SM-04，Plan collaboration mode 的命令、lifecycle admission、session 状态与 turn/item 协议边界不变。
 
 步骤 223 将 `menu.goal` 与 pause/resume/clear/edit/replace/edit-submit 七个 goal card actions 迁移到显式 `GoalCardActionInputs`。composition 注入已构造的 goal command service、frontend lifecycle、effect runner、session state 和 transport 可用性；callback 仍快速返回原 toast，后台 RPC 完成后 patch 原 goal 卡片，错误或纯文本结果继续走原 reply fallback。生产三个接收 `*App` 的异步 goal helper 移除，测试兼容入口放入 `_test.go`。生产 `*App` 引用由 113 降至 110，收 `*App` 的顶层函数由 5 降至 2，其他棘轮保持 `1/1/0`；对照 SM-25，goal 控制卡仍不绑定 Codex turn 回复，goal continuation 的 thread/turn anchor 与 lifecycle 未改变。
+
+步骤 224 批量迁移 compact、download、model/auxiliary、fast/service-tier 和 daemon upgrade 的剩余 card actions。新增 `CompactCardActionInputs` 与 `ModelCardActionInputs`，复用 tools/maintenance owner handlers，并保留 group binding、p2p Bot profile、frontend global 三层模型配置分流，以及 compact/upgrade 的 fast-ack、lifecycle admission 和异步 patch。随后删除生产 `cardActionService`、App handler binder、feature `HandleAction` 回调、`CardActionPorts(*App, ...)` 参数和两个无调用方的 Bot profile action wrapper；feature action registry 增加全量 port-handler 覆盖检查。生产 `*App` 引用由 110 降至 106，App-bearing `*Ports` 工厂与结构体均由 1 降至 0，lazy binding-read 保持 0。`scripts/depmap` 当前报告 `funcs=26 structs=0 factories=0`；此前文档中的“收 `*App` 顶层函数”只统计 card-action 尾部，现改为分析器全包口径 26。对照 SM-04/SM-08/SM-25，本批没有改变 turn、compaction 或 goal protocol 状态边界。
 
 ## 方法
 

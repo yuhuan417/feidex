@@ -43,6 +43,9 @@ func toolsCardActionHandlers(inputs ToolsCardActionInputs) map[string]cardAction
 		"menu.usage": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return inputs.CompleteMenuCommand(action, actionSessionKey(action), "/usage", "menu.tools")
 		},
+		"menu.download": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return inputs.CompleteMenuCommand(action, actionSessionKey(action), "/download", "menu.tools")
+		},
 		"menu.skills": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if !menuActionVisibleForBackend("menu.skills", inputs.Backend()) {
 				return inputs.CompleteMenuCommand(action, actionSessionKey(action), "/skills", "menu.tools")

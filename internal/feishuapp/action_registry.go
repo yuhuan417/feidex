@@ -19,18 +19,11 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-type cardActionService struct {
-	app *App
-}
-
 type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceActions WorkspaceCardActionInputs, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, maintenanceActions MaintenanceCardActionInputs, systemActions SystemCardActionInputs, menuActions MenuCoreCardActionInputs, bindingActions BindingCardActionInputs, toolsActions ToolsCardActionInputs, threadForkActions ThreadForkCardActionInputs, reviewActions ReviewCardActionInputs, planActions PlanCardActionInputs, goalActions GoalCardActionInputs, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service, planMode planmode.Dependencies, asyncInputs AsyncUserInputActionInputs, pendingCancel PendingFormCancelActionInputs) appcardaction.Dependencies {
-	appHandlers := mergeCardActionHandlerSets(
-		menuCardActionHandlers(),
-	)
+func CardActionPorts(normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceActions WorkspaceCardActionInputs, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, maintenanceActions MaintenanceCardActionInputs, systemActions SystemCardActionInputs, menuActions MenuCoreCardActionInputs, bindingActions BindingCardActionInputs, toolsActions ToolsCardActionInputs, threadForkActions ThreadForkCardActionInputs, reviewActions ReviewCardActionInputs, planActions PlanCardActionInputs, goalActions GoalCardActionInputs, compactActions CompactCardActionInputs, modelActions ModelCardActionInputs, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service, planMode planmode.Dependencies, asyncInputs AsyncUserInputActionInputs, pendingCancel PendingFormCancelActionInputs) appcardaction.Dependencies {
 	portHandlers := mergeCardActionPortHandlerSets(
 		workspaceCardActionHandlers(workspaceActions),
 		maintenanceCardActionHandlers(maintenanceActions),
@@ -42,6 +35,8 @@ func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedR
 		reviewCardActionHandlers(reviewActions),
 		planCardActionHandlers(planActions),
 		goalCardActionHandlers(goalActions),
+		compactCardActionHandlers(compactActions),
+		modelCardActionHandlers(modelActions),
 		pendingPortCardActionHandlers(serverRequests, claudeSupport, reviewCommands),
 		pendingPlanModeExitPortCardActionHandlers(planMode),
 		workspaceDeletePortCardActionHandlers(workspaceDeleteActions),
@@ -52,10 +47,7 @@ func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedR
 		asyncUserInputPortCardActionHandlers(asyncInputs),
 		pendingFormCancelPortCardActionHandlers(pendingCancel),
 	)
-	bound := bindAppCardActionHandlers(cardActionService{app: app}, appHandlers)
-	for name, handler := range bindCardActionPortHandlers(portHandlers) {
-		bound[name] = handler
-	}
+	bound := bindCardActionPortHandlers(portHandlers)
 	return appcardaction.Dependencies{
 		NormalizeSessionKey: func(action *application.CardAction) {
 			if action == nil {
@@ -73,18 +65,6 @@ func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedR
 		BlockedReason:     blockedReason,
 		Handlers:          bound,
 	}
-}
-
-func bindAppCardActionHandlers(service cardActionService, handlers map[string]cardActionHandler) map[string]appcardaction.Handler {
-	bound := make(map[string]appcardaction.Handler, len(handlers))
-	for name, handler := range handlers {
-		h := handler
-		bound[name] = func(action application.CardAction) (any, error) {
-			response, err := h(service, fromApplicationCardAction(action))
-			return response, err
-		}
-	}
-	return bound
 }
 
 func bindCardActionPortHandlers(handlers map[string]cardActionPortHandler) map[string]appcardaction.Handler {
@@ -140,7 +120,6 @@ func resolvedApplicationCardActionName(action application.CardAction) string {
 	return strings.TrimSpace(action.Name)
 }
 
-type cardActionHandler func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
 type cardActionPortHandler func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
 
 // Card action handlers run on the Feishu callback ack path.
@@ -192,16 +171,6 @@ func serverRequestElicitationAction(service *serverrequest.Service, name string)
 
 func mergeCardActionPortHandlerSets(sets ...map[string]cardActionPortHandler) map[string]cardActionPortHandler {
 	merged := make(map[string]cardActionPortHandler)
-	for _, set := range sets {
-		for name, handler := range set {
-			merged[name] = handler
-		}
-	}
-	return merged
-}
-
-func mergeCardActionHandlerSets(sets ...map[string]cardActionHandler) map[string]cardActionHandler {
-	merged := make(map[string]cardActionHandler)
 	for _, set := range sets {
 		for name, handler := range set {
 			merged[name] = handler

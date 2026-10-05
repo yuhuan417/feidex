@@ -112,5 +112,10 @@ func renderMenuCommandFallback(a *App, actionName, sessionKey string) (map[strin
 	if a == nil || a.cfg == nil || len(a.cfg.Workspaces) == 0 {
 		return nil, false
 	}
-	return (cardActionService{app: a}).renderMenuNodeCard(actionName, sessionKey)
+	actionName = nearestVisibleMenuAction(actionName, a.configView().configuredBackend())
+	renderer := menuNodeRenderers()[actionName]
+	if renderer == nil {
+		return nil, false
+	}
+	return renderer(a, sessionKey)
 }

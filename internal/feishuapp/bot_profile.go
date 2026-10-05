@@ -100,8 +100,8 @@ func completeBotProfileEffortSet(backendconfiguration backend.ConfigurationServi
 	return backendconfiguration.CompleteGlobalReasoningEffortSet(action, effort)
 }
 
-func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
-	result, err := a.bindings.ModelSettings.SaveAuxiliary(actionSessionKey(action), a.configView().configuredBackend(), routing.Setting(role), value)
+func completeBotProfileAuxiliaryModelSetWith(settings applicationmodelconfig.SettingsService, backend string, action *feishu.CardAction, role, value string) (*callback.CardActionTriggerResponse, error) {
+	result, err := settings.SaveAuxiliary(actionSessionKey(action), backend, routing.Setting(role), value)
 	if err != nil {
 		kind := "error"
 		if errors.Is(err, applicationmodelconfig.ErrSaveBlocked) {
@@ -114,12 +114,4 @@ func completeBotProfileAuxiliaryModelSet(a *App, action *feishu.CardAction, role
 		scope = "session"
 	}
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存当前 " + scope + " 的辅助模型配置；待对应会话边界生效"}}, nil
-}
-
-func completeBotProfileServiceTierSet(a *App, action *feishu.CardAction, serviceTier string) (*callback.CardActionTriggerResponse, error) {
-	_, err := a.bindings.ScopedRoutingConfiguration.ChangeServiceTier(applicationrouting.Scope{ChatType: "p2p", ChatID: "profile"}, serviceTier, false)
-	if err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
-	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已更新当前 Bot 默认响应速度"}, Card: rawCard(renderServiceTierMenuCard(a.State(), actionSessionKey(action)))}, nil
 }

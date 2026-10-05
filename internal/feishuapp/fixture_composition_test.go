@@ -568,7 +568,7 @@ func prepareTestApp(a *App) *App {
 		return identity.CanonicalSessionKey(cardActionFrontendID, key)
 	}
 	a.bindings.CardActions = cardaction.NewService(CardActionPorts(
-		a, normalizeCardActionSessionKey,
+		normalizeCardActionSessionKey,
 		a.runtimeOwner.BackendTransition.BackendSwitchBlocksCardAction,
 		WorkspaceCardActionInputs{
 			BindingCommands: a.bindings.BindingCommands, WorkspaceManagement: a.bindings.WorkspaceManagement,
@@ -623,6 +623,26 @@ func prepareTestApp(a *App) *App {
 			State:              a.State(),
 			ReplyInThread:      a.configView().replyInThreadEnabled(),
 			TransportAvailable: a.feishu != nil,
+		}, CompactCardActionInputs{
+			CompleteMenuCommand: a.CompleteMenuCommand,
+			Actions:             a.bindings.BackendActions,
+			Compaction:          a.bindings.Compaction,
+			State:               a.State(),
+			Lifecycle:           &a.runtimeOwner.Lifecycle,
+			AsyncRunner:         a.asyncRunner,
+			Context:             a.Context(),
+			FrontendID:          a.FrontendID(),
+			EffectRunner:        newEffectRunner(a.runtimeOwner),
+		}, ModelCardActionInputs{
+			Backend:                    a.configView().configuredBackend,
+			BindingCommands:            a.bindings.BindingCommands,
+			BackendConfiguration:       a.bindings.BackendConfiguration,
+			ModelCommands:              a.bindings.ModelCommands,
+			ModelSettings:              a.bindings.ModelSettings,
+			ScopedRoutingConfiguration: a.bindings.ScopedRoutingConfiguration,
+			ThreadSettings:             a.bindings.ThreadSettings,
+			State:                      a.State(),
+			CompleteMenuCommand:        a.CompleteMenuCommand,
 		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,

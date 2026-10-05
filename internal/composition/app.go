@@ -636,7 +636,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		return identity.CanonicalSessionKey(cardActionFrontendID, key)
 	}
 	bindings.CardActions = cardaction.NewService(feishuapp.CardActionPorts(
-		frontend, normalizeCardActionSessionKey,
+		normalizeCardActionSessionKey,
 		scope.RuntimeOwner.BackendTransition.BackendSwitchBlocksCardAction,
 		feishuapp.WorkspaceCardActionInputs{
 			BindingCommands: bindings.BindingCommands, WorkspaceManagement: bindings.WorkspaceManagement,
@@ -691,6 +691,26 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			State:              frontend.State(),
 			ReplyInThread:      false,
 			TransportAvailable: frontend.Feishu() != nil,
+		}, feishuapp.CompactCardActionInputs{
+			CompleteMenuCommand: frontend.CompleteMenuCommand,
+			Actions:             bindings.BackendActions,
+			Compaction:          bindings.Compaction,
+			State:               frontend.State(),
+			Lifecycle:           &scope.RuntimeOwner.Lifecycle,
+			AsyncRunner:         asyncRunner,
+			Context:             frontend.Context(),
+			FrontendID:          frontend.FrontendID(),
+			EffectRunner:        *scope.RuntimeOwner.EffectRunner,
+		}, feishuapp.ModelCardActionInputs{
+			Backend:                    configuredBackend,
+			BindingCommands:            bindings.BindingCommands,
+			BackendConfiguration:       bindings.BackendConfiguration,
+			ModelCommands:              bindings.ModelCommands,
+			ModelSettings:              bindings.ModelSettings,
+			ScopedRoutingConfiguration: bindings.ScopedRoutingConfiguration,
+			ThreadSettings:             bindings.ThreadSettings,
+			State:                      frontend.State(),
+			CompleteMenuCommand:        frontend.CompleteMenuCommand,
 		}, feishuapp.PathPickerActionInputs{
 			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,

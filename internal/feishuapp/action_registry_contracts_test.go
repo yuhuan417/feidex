@@ -7,15 +7,10 @@ import (
 	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/workspacecmd"
+	appfeatures "feidex/internal/application/features"
 )
 
 func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
-	appSets := []struct {
-		name     string
-		handlers map[string]cardActionHandler
-	}{
-		{name: "menu", handlers: menuCardActionHandlers()},
-	}
 	portSets := []struct {
 		name     string
 		handlers map[string]cardActionPortHandler
@@ -30,6 +25,8 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		{name: "review", handlers: reviewCardActionHandlers(ReviewCardActionInputs{})},
 		{name: "plan", handlers: planCardActionHandlers(PlanCardActionInputs{})},
 		{name: "goal", handlers: goalCardActionHandlers(GoalCardActionInputs{})},
+		{name: "compact", handlers: compactCardActionHandlers(CompactCardActionInputs{})},
+		{name: "model", handlers: modelCardActionHandlers(ModelCardActionInputs{})},
 		{name: "pending-ports", handlers: pendingPortCardActionHandlers(nil, nil, appreviewcmd.ReviewFormService{})},
 		{name: "pending-plan-exit-ports", handlers: pendingPlanModeExitPortCardActionHandlers(planmode.Dependencies{})},
 		{name: "workspace-delete-ports", handlers: workspaceDeletePortCardActionHandlers(workspacecmd.WorkspaceDeleteActions{})},
@@ -40,11 +37,6 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		{name: "async-user-input-ports", handlers: asyncUserInputPortCardActionHandlers(AsyncUserInputActionInputs{})},
 		{name: "pending-form-cancel-ports", handlers: pendingFormCancelPortCardActionHandlers(PendingFormCancelActionInputs{})},
 	}
-	appMaps := make([]map[string]cardActionHandler, 0, len(appSets))
-	for _, set := range appSets {
-		appMaps = append(appMaps, set.handlers)
-	}
-	allAppHandlers := mergeCardActionHandlerSets(appMaps...)
 	portMaps := make([]map[string]cardActionPortHandler, 0, len(portSets))
 	for _, set := range portSets {
 		portMaps = append(portMaps, set.handlers)
@@ -61,15 +53,6 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 			seen[actionName] = setName
 		}
 	}
-	for _, set := range appSets {
-		total += len(set.handlers)
-		for actionName := range set.handlers {
-			register(set.name, []string{actionName})
-			if _, ok := allAppHandlers[actionName]; !ok {
-				t.Fatalf("merged app handlers missing %q from %s", actionName, set.name)
-			}
-		}
-	}
 	for _, set := range portSets {
 		total += len(set.handlers)
 		for actionName := range set.handlers {
@@ -79,7 +62,14 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 			}
 		}
 	}
-	if len(allAppHandlers)+len(allPortHandlers) != total {
-		t.Fatalf("merged card action handlers size = %d, want %d unique handlers", len(allAppHandlers)+len(allPortHandlers), total)
+	if len(allPortHandlers) != total {
+		t.Fatalf("merged card action handlers size = %d, want %d unique handlers", len(allPortHandlers), total)
+	}
+	for _, feature := range appfeatures.All() {
+		for _, actionName := range feature.ActionNames {
+			if _, ok := allPortHandlers[actionName.String()]; !ok {
+				t.Errorf("feature %q action %q has no registered port handler", feature.ID, actionName)
+			}
+		}
 	}
 }

@@ -5,8 +5,6 @@ import (
 	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/feishu"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 func appendFeatureBindingsTools(bindings map[string]featureBinding) {
@@ -65,12 +63,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.compact" {
-				return nil, nil
-			}
-			return s.completeMenuCompact(action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.compact"},
 	}
 	bindings["menu.download"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -80,12 +73,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.download" {
-				return nil, nil
-			}
-			return debugviewcmd.CompleteMenuDownload(DebugViewDependencies(s.app), action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.download"},
 	}
 	bindings["menu.history"] = featureBinding{
 		Commands: map[string]featureCommandBinding{

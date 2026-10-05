@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"feidex/internal/feishu"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
@@ -103,11 +101,6 @@ func appendFeatureBindingsSystem(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.upgrade" {
-				return nil, nil
-			}
-			return s.completeMenuUpgrade(action)
-		},
+		PortActions: []string{"menu.upgrade"},
 	}
 }
