@@ -37,7 +37,7 @@ func completeAsyncCommandAction(
 		return completeMenuCommand(a, action, sessionKey, rawCommand, fallbackAction)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
-	runSessionAsync(a, sessionKey, func() {
+	runSessionAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, a.runtimeOwner.SessionActors, sessionKey, func() {
 		text, card, err := runCommandFromCardAction(a, action, sessionKey, rawCommand)
 		switch {
 		case err != nil:
@@ -72,7 +72,7 @@ func completeAsyncRenderedCardAction(
 		return run()
 	}
 	messageID := strings.TrimSpace(action.MessageID)
-	runSessionAsync(a, sessionKey, func() {
+	runSessionAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, a.runtimeOwner.SessionActors, sessionKey, func() {
 		resp, err := run()
 		card := callbackResponseCard(resp)
 		if card == nil {
