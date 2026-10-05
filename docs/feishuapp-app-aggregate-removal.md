@@ -28,7 +28,7 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 206 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 196 |
 | 收 `*App` 的顶层函数 | 76 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
@@ -849,6 +849,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 177 删除无生产调用方的 `App.AutoRetries()`、`App.RunAsync()`、`App.MenuCardBody()`、`App.SessionHasActiveWork()` 与 `App.LockAutoRetryDispatch()` facade。ThreadMenu 在构造期直接取 auto-retry tracker 的 `LockDispatch` 方法值；auto-retry executor 显式通过 frontend lifecycle admission 后再交给 async runner，关闭期间拒绝新任务的行为保持不变。生产 `*App` 引用由 213 降至 208，收 `*App` 的顶层函数由 83 降至 78，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 步骤 178 删除无生产调用方的 `App.ActionStringValue()` 和 `App.MenuCardBodyForBackend()` 转发 facade。goal、planmode、threadmenu 以及菜单 renderer 已直接使用相应纯函数，生产 `*App` 引用由 208 降至 206，收 `*App` 的顶层函数由 78 降至 76，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
+
+步骤 179 将 thread menu 的 config provider、frontend state、effective session key、conversation/runtime、pending queue、workspace 与 backend action capabilities 改为构造期显式值；生命周期 context 直接从 frontend owner 读取，避免 `BackendRuntimeDeps` 默认携带的 `App.Context` 方法值。configured backend builder 仍在调用时读取当前 frontend/backend 配置，未把 backend 选择固化为快照。自动重试取消改为直接调用既有 retry engine，并删除对应 App facade。对照 SM-03/04/06：thread resume、active turn reconcile 与 interrupt 请求/终态收口顺序不变，仅改变 dependency assembly；`CommandFork`、通用菜单命令与 Claude 权限菜单的 App-bound 路由回调仍待后续拆分。生产 `*App` 引用由 206 降至 196，收 `*App` 的顶层函数保持 76，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 ## 方法
 

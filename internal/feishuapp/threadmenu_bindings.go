@@ -5,15 +5,17 @@ import (
 	backendruntime "feidex/internal/runtime"
 
 	"context"
-	"strings"
+	"sync"
 
 	appbackend "feidex/internal/adapter/feishu/backend"
 
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/adapter/feishu/workspacecmd"
 	conversationapp "feidex/internal/application/conversation"
+	"feidex/internal/application/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
+	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -22,19 +24,51 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 	if a == nil {
 		return appthreadmenu.Dependencies{}
 	}
-	permissionBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
-	permissionMenuRenderer := ClaudePermissionMenuRenderer(a.Config(), permissionBackend, a.State().Session)
-	autoRetryTracker := a.runtimeOwner.AutoRetries
+	runtimeDeps := a.BackendRuntimeDeps()
+	owner := a.runtimeOwner
+	runtimeDeps.contextFn = owner.Lifecycle.Context
+	backend := ConfiguredBackendBuilder(runtimeDeps.cfg, runtimeDeps.view.mu, owner.Backend, runtimeDeps.frontendID, runtimeDeps.view.frontendConfigIndex)
+	state := a.State()
+	conversations := a.bindings.Conversations
+	bindingScope := a.bindings.BindingCommands.scope
+	conversationQuery := a.bindings.ConversationQuery
+	pendingQueue := a.bindings.PendingQueue
+	workspaceConfiguration := a.bindings.WorkspaceConfiguration
+	workspaceSelection := a.bindings.WorkspaceSelection
+	conversationControls := a.bindings.ConversationControls
+	threadSettings := a.bindings.ThreadSettings
+	permissionSettings := a.bindings.PermissionSettings
+	backendActions := a.bindings.BackendActions
+	autoRetry := a.bindings.AutoRetry
+	effectiveSessionKey := func(sessionKey string) string {
+		return threadMenuEffectiveSessionKey(runtimeDeps.view.normalizeSessionKey, bindingScope, conversationQuery, sessionKey)
+	}
+	permissionMenuRenderer := ClaudePermissionMenuRenderer(runtimeDeps.cfg, backend, state.Session)
+	autoRetryTracker := owner.AutoRetries
 	return appthreadmenu.Dependencies{
-		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), Controls: a.bindings.ConversationControls, Settings: a.bindings.ThreadSettings,
-		PermissionSettings: a.bindings.PermissionSettings,
-		AppStateFn:         a.ThreadMenuAppState, EffectiveSessionKeyFn: a.ThreadMenuEffectiveSessionKey,
-		ConversationBackendFn: a.ThreadMenuConversationBackend, BackendRuntimeFn: a.ThreadMenuBackendRuntime,
-		PendingQueueFn: a.ThreadMenuPendingQueue, WorkspaceThreadFn: a.ThreadMenuWorkspaceThread,
-		WorkspaceConfigFn: a.ThreadMenuWorkspaceConfig, BackendActionsFn: a.ThreadMenuBackendActions,
-		BackendDriver:          a.BackendDriver(),
+		ConfigProvider: threadMenuConfigProvider{runtime: runtimeDeps, store: a.store, workspaces: workspaceSelection}, Outbound: newEffectOutbound(runtimeDeps.frontendID, newEffectRunner(owner)), Controls: conversationControls, Settings: threadSettings,
+		PermissionSettings: permissionSettings,
+		AppStateFn:         func() appthreadmenu.StateProvider { return state }, EffectiveSessionKeyFn: effectiveSessionKey,
+		ConversationBackendFn: func() appthreadmenu.ConversationBackendProvider {
+			return threadMenuConversationBackendAdapter{
+				threadCards:   threadCardInputs{Repository: state, Config: runtimeDeps.cfg, Backend: backend, Conversations: conversations},
+				conversations: conversations, runtimeDeps: runtimeDeps,
+			}
+		},
+		BackendRuntimeFn: func() appthreadmenu.BackendRuntimeProvider {
+			return threadMenuBackendRuntimeAdapter{deps: runtimeDeps, runtime: backendRuntime(runtimeDeps.view.configuredBackend())}
+		},
+		PendingQueueFn:    func() appthreadmenu.PendingQueueProvider { return pendingQueue },
+		WorkspaceThreadFn: func() appthreadmenu.WorkspaceThreadProvider { return conversations },
+		WorkspaceConfigFn: func() appthreadmenu.WorkspaceConfigProvider {
+			return threadMenuWorkspaceConfigAdapter{workspaceConfiguration: workspaceConfiguration, backend: backend}
+		},
+		BackendActionsFn: func() appthreadmenu.BackendActionProvider {
+			return threadMenuBackendActionAdapter{service: backendActions}
+		},
+		BackendDriver:          appbackend.SelectedDriver{Selected: runtimeDeps.view.configuredBackend},
 		SessionHasActiveWorkFn: sessionHasActiveWork,
-		CancelAutoRetryFn:      a.CancelAutoRetry, LockAutoRetryDispatchFn: autoRetryTracker.LockDispatch,
+		CancelAutoRetryFn:      autoRetry.Engine.CancelAutoRetry, LockAutoRetryDispatchFn: autoRetryTracker.LockDispatch,
 		ReplyCommandActionResponseFn: a.ReplyCommandActionResponse, CommandForkFn: a.CommandFork,
 		CompleteMenuCommandFn: a.CompleteMenuCommand, ActionStringValueFn: actionStringValue,
 		MenuCardBodyFn: menuCardBody, MenuCardBodyForBackendFn: menuCardBodyForBackend,
@@ -96,59 +130,27 @@ func (a threadMenuBackendActionAdapter) CompleteMenuInterrupt(action *feishu.Car
 	return a.service.CompleteMenuInterrupt(action, sessionKey, targetTurnID)
 }
 
-// ---------------------------------------------------------------------------
-// *App methods satisfying threadmenu.App
-// ---------------------------------------------------------------------------
+type threadMenuConfigProvider struct {
+	runtime    BackendRuntimeDeps
+	store      *state.Store
+	workspaces workspace.SelectionService
+}
 
-func (a *App) ThreadMenuAppState() appthreadmenu.StateProvider {
-	if a == nil {
-		return nil
+func (p threadMenuConfigProvider) Config() *config.Config  { return p.runtime.cfg }
+func (p threadMenuConfigProvider) ConfigMu() *sync.RWMutex { return p.runtime.view.mu }
+func (p threadMenuConfigProvider) Backend() string {
+	if p.runtime.runtime.owner == nil {
+		return p.runtime.view.configuredBackend()
 	}
-	return a.State()
+	return p.runtime.runtime.owner.Backend()
 }
-
-func (a *App) ThreadMenuEffectiveSessionKey(sessionKey string) string {
-	if a == nil {
-		return strings.TrimSpace(sessionKey)
-	}
-	return threadMenuEffectiveSessionKey(a.configView().normalizeSessionKey, a.bindings.BindingCommands.scope, a.bindings.ConversationQuery, sessionKey)
+func (p threadMenuConfigProvider) FrontendID() string { return p.runtime.frontendID }
+func (p threadMenuConfigProvider) FrontendConfigIndex() int {
+	return p.runtime.view.frontendConfigIndex
 }
-
-func (a *App) ThreadMenuConversationBackend() appthreadmenu.ConversationBackendProvider {
-	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
-	conversations := a.bindings.Conversations
-	return threadMenuConversationBackendAdapter{
-		threadCards:   threadCardInputs{Repository: a.State(), Config: a.Config(), Backend: backend, Conversations: conversations},
-		conversations: conversations, runtimeDeps: a.BackendRuntimeDeps(),
-	}
-}
-
-func (a *App) ThreadMenuBackendRuntime() appthreadmenu.BackendRuntimeProvider {
-	if a == nil {
-		return threadMenuBackendRuntimeAdapter{}
-	}
-	return threadMenuBackendRuntimeAdapter{
-		deps: a.BackendRuntimeDeps(), runtime: backendRuntime(a.configView().configuredBackend()),
-	}
-}
-
-func (a *App) ThreadMenuPendingQueue() appthreadmenu.PendingQueueProvider {
-	return a.bindings.PendingQueue
-}
-
-func (a *App) ThreadMenuWorkspaceThread() appthreadmenu.WorkspaceThreadProvider {
-	return a.bindings.Conversations
-}
-
-func (a *App) ThreadMenuWorkspaceConfig() appthreadmenu.WorkspaceConfigProvider {
-	return threadMenuWorkspaceConfigAdapter{
-		workspaceConfiguration: a.bindings.WorkspaceConfiguration,
-		backend:                ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
-	}
-}
-
-func (a *App) ThreadMenuBackendActions() appthreadmenu.BackendActionProvider {
-	return threadMenuBackendActionAdapter{service: a.bindings.BackendActions}
+func (p threadMenuConfigProvider) Store() *state.Store { return p.store }
+func (p threadMenuConfigProvider) WorkspaceSelection() workspace.SelectionService {
+	return p.workspaces
 }
 
 func (a *App) CommandFork(msg *feishu.InboundMessage, args []string) error {
@@ -157,10 +159,6 @@ func (a *App) CommandFork(msg *feishu.InboundMessage, args []string) error {
 
 func (a *App) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
-}
-
-func (a *App) CancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice string) bool {
-	return a.bindings.AutoRetry.CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
 }
 
 func (a *App) ShowClaudeSessionPermissionMenuFromApp(msg *feishu.InboundMessage) error {

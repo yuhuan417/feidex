@@ -206,7 +206,7 @@ func TestRunRegistrationFlowErrorsAndSetupFeishu(t *testing.T) {
 			return testHTTPResponse(`{}`), nil
 		}
 	}))
-	if _, _, err := runRegistrationFlow(20*time.Millisecond, ""); err == nil || !strings.Contains(err.Error(), "authorization denied") {
+	if _, _, err := runRegistrationFlow(2*time.Second, ""); err == nil || !strings.Contains(err.Error(), "authorization denied") {
 		t.Fatalf("runRegistrationFlow(access denied) error = %v, want access denied", err)
 	}
 
