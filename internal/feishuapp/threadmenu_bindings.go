@@ -50,6 +50,8 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 	}
 	permissionMenuRenderer := ClaudePermissionMenuRenderer(runtimeDeps.cfg, backend, state.Session)
 	autoRetryTracker := owner.AutoRetries
+	threadMenuReplyRunner := newEffectRunner(owner)
+	threadMenuReplyInThread := forkConfigView.replyInThreadEnabled()
 	forkDependencies := threadForkDependencies{
 		repository: state, config: runtimeDeps.cfg, effectiveSessionKey: effectiveSessionKey,
 		makeSessionKey: forkConfigView.makeSessionKey, backend: backend,
@@ -81,7 +83,9 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		BackendDriver:          appbackend.SelectedDriver{Selected: runtimeDeps.view.configuredBackend},
 		SessionHasActiveWorkFn: sessionHasActiveWork,
 		CancelAutoRetryFn:      autoRetry.Engine.CancelAutoRetry, LockAutoRetryDispatchFn: autoRetryTracker.LockDispatch,
-		ReplyCommandActionResponseFn: a.ReplyCommandActionResponse,
+		ReplyCommandActionResponseFn: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+			return replyCommandActionResponseWith(threadMenuReplyRunner, runtimeDeps.frontendID, threadMenuReplyInThread, msg, resp)
+		},
 		CommandForkFn: func(msg *feishu.InboundMessage, args []string) error {
 			return commandFork(forkDependencies, msg, args)
 		},

@@ -69,7 +69,3 @@ func AutoRetryPorts(inputs AutoRetryPortInputs) retry.Dependencies {
 		Presenter: inputs.Presenter,
 	}
 }
-
-func (a *App) ReplyCommandActionResponse(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-	return replyCommandActionResponse(a, msg, resp)
-}

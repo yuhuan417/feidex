@@ -32,18 +32,10 @@ func commandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string
 }
 
 func replyCommandActionResponse(a *App, msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-	if msg == nil || resp == nil {
+	if a == nil || msg == nil || resp == nil {
 		return nil
 	}
-	if resp.Card != nil {
-		if card, ok := resp.Card.Data.(map[string]any); ok && len(card) > 0 {
-			return replyCardEffect(a, msg, card)
-		}
-	}
-	if resp.Toast != nil && strings.TrimSpace(resp.Toast.Content) != "" {
-		return replyTextEffect(a, msg, strings.TrimSpace(resp.Toast.Content))
-	}
-	return nil
+	return replyCommandActionResponseWith(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, resp)
 }
 
 func commandMessageFromAction(scope bindingSessionScope, action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {

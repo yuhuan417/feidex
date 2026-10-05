@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
+	"strings"
 
 	"feidex/internal/application"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 // replyCardEffect routes a user-visible card through the application effect
@@ -37,6 +41,29 @@ func replyTextEffect(a *App, msg *feishu.InboundMessage, text string) error {
 		Text:           text,
 		InThread:       a.configView().replyInThreadEnabled(),
 	}})
+}
+
+func replyCommandActionResponseWith(runner frontendruntime.EffectRunner, frontendID string, inThread bool, msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
+	if msg == nil || resp == nil {
+		return nil
+	}
+	frontend := identity.FrontendID(frontendID)
+	chat := identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)}
+	if resp.Card != nil {
+		if card, ok := resp.Card.Data.(map[string]any); ok && len(card) > 0 {
+			return runner.Run(context.Background(), []application.Effect{application.SendCard{
+				Frontend: frontend, Chat: chat, ReplyMessageID: msg.MessageID,
+				View: feishuoutbound.Card(card), InThread: inThread,
+			}})
+		}
+	}
+	if resp.Toast != nil && strings.TrimSpace(resp.Toast.Content) != "" {
+		return runner.Run(context.Background(), []application.Effect{application.SendMessage{
+			Frontend: frontend, Chat: chat, ReplyMessageID: msg.MessageID,
+			Text: strings.TrimSpace(resp.Toast.Content), InThread: inThread,
+		}})
+	}
+	return nil
 }
 
 func replyCardWithIDEffect(ctx context.Context, a *App, parentMessageID string, card map[string]any, inThread bool) (string, error) {
