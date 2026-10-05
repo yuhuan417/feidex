@@ -85,6 +85,9 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		return nil, err
 	}
 	store := scope.Store
+	configuredBackend := feishuapp.ConfiguredBackendBuilder(
+		scope.Config, scope.ConfigMutex, scope.RuntimeOwner.Backend, scope.Frontend.ID, scope.Frontend.ConfigIndex,
+	)
 	// All production objects are assembled here. internal/app only binds the
 	// already composed Feishu event transport to the frontend entrypoint.
 	feishuapp.AttachStateView(frontend, feishuapp.NewStateView(frontend))
@@ -103,7 +106,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	feishuapp.AttachEffectRunner(frontend, feishuapp.NewEffectRunner(frontend))
 	bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(frontend)}
 	bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
-	bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: frontend.State(), Backend: func() string { return feishuapp.BackendKind(frontend) }, Context: frontend.Context, Run: feishuapp.SessionTaskRunner(frontend), Effects: feishuapp.NewEffectRunner(frontend)}}
+	bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: frontend.State(), Backend: configuredBackend, Context: frontend.Context, Run: feishuapp.SessionTaskRunner(frontend), Effects: feishuapp.NewEffectRunner(frontend)}}
 	bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: scoped.WorkspaceSelections{Store: frontend.State()}, DefaultWorkspaceID: feishuapp.DefaultWorkspaceID(frontend.Config(), frontend.ConfigMu())}
 	bindings.SubmissionLookup = submission.SubmissionLookupService{State: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings}
 	bindings.SubmissionStatus = submission.StatusService{Lookup: bindings.SubmissionLookup, Repository: frontend.State()}
@@ -117,7 +120,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}
 	routingConfiguration := routing.ConfigurationService{Repository: frontend.State(), Frontend: identity.FrontendID(frontend.FrontendID())}
 	bindings.RoutingConfiguration = compositionkit.RoutingConfiguration{ConfigurationService: routingConfiguration, Runner: feishuapp.NewEffectRunner(frontend), Context: frontend.Context()}
-	bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: func() string { return feishuapp.BackendKind(frontend) }}, Runner: feishuapp.NewEffectRunner(frontend), Context: frontend.Context()}
+	bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: configuredBackend}, Runner: feishuapp.NewEffectRunner(frontend), Context: frontend.Context()}
 	primaryRepository := statejson.NewGroupPrimaryRepository(store, frontend.FrontendID())
 	bindings.Primary = routing.Service{Repository: primaryRepository}
 	bindings.GroupMessages = routing.GroupMessages{Frontend: frontend.FrontendID(), Primary: bindings.Primary, Links: frontend.State(), SelfOpenID: feishuapp.LiveBotOpenID(frontend.Feishu())}
@@ -583,7 +586,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	if err := feishuapp.CanonicalizeStoredSessionKeys(store); err != nil {
 		return nil, err
 	}
-	if backend := feishuapp.BackendKind(frontend); backend != "" {
+	if backend := configuredBackend(); backend != "" {
 		handle, err := feishuapp.BuildBackendRuntimeHandle(frontend.BackendRuntimeDeps(), backend)
 		if err != nil {
 			return nil, err

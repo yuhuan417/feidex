@@ -41,8 +41,6 @@ func CanonicalizeStoredSessionKeys(store *state.Store) error {
 	return canonicalizeStoredSessionKeys(store)
 }
 
-func BackendKind(a *App) string { return a.configView().configuredBackend() }
-
 func BuildBackendRuntimeHandle(deps BackendRuntimeDeps, target string) (*BackendRuntimeHandle, error) {
 	return buildBackendRuntimeHandle(deps, target)
 }

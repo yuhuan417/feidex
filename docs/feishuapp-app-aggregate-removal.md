@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 186 |
-| 收 `*App` 的顶层函数 | 65 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 185 |
+| 收 `*App` 的顶层函数 | 64 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -863,6 +863,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 184 删除没有调用方的 `App.BotProfile()` 和 `App.AgentBindingsForChat()` 转发 facade；profile/binding 读取继续由 scoped state repositories 提供。生产 `*App` 引用由 189 降至 187，收 `*App` 的函数数由 68 降至 66，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 步骤 185 删除 `App.Store()` 转发 accessor，composition 直接使用 frontend scope 已提供的 scoped store，测试 fixture 读取 package 内部字段。backend selection 的配置来源改为共享 `frontendConfigProvider`，补充 frontend lifecycle context 与 runtime backend 更新能力，保持原 backend 切换时 runtime owner/state view 的同步更新。生产 `*App` 引用由 187 降至 186，收 `*App` 的函数数由 66 降至 65，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0；不改变 backend transition 顺序或 app-server lifecycle。
+
+步骤 186 删除 `BackendKind(*App)` composition facade。composition 使用 `FrontendScope` 中已有的 config、锁、frontend identity/index 和 runtime owner 构造动态 `ConfiguredBackendBuilder`，供 async input、scoped routing configuration 与 startup backend 检查共用；backend 仍在每次读取时从 runtime owner/config 解析。生产 `*App` 引用由 186 降至 185，收 `*App` 的函数数由 65 降至 64，其他棘轮保持 1/1/0。
 
 ## 方法
 

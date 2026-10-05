@@ -33,7 +33,7 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 	if err := CanonicalizeStoredSessionKeys(a.store); err != nil {
 		return nil, err
 	}
-	if backend := BackendKind(a); backend != "" {
+	if backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())(); backend != "" {
 		handle, err := BuildBackendRuntimeHandle(a.BackendRuntimeDeps(), backend)
 		if err != nil {
 			return nil, err
