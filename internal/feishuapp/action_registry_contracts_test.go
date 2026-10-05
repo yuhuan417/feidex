@@ -16,13 +16,13 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		handlers map[string]cardActionHandler
 	}{
 		{name: "menu", handlers: menuCardActionHandlers()},
-		{name: "workspace", handlers: workspaceCardActionHandlers()},
 		{name: "maintenance", handlers: maintenanceCardActionHandlers()},
 	}
 	portSets := []struct {
 		name     string
 		handlers map[string]cardActionPortHandler
 	}{
+		{name: "workspace", handlers: workspaceCardActionHandlers(WorkspaceCardActionInputs{})},
 		{name: "maintenance-ports", handlers: maintenancePortCardActionHandlers(appupgradecmd.UpgradeService{}, backendUpgradeService{}, nil)},
 		{name: "pending-ports", handlers: pendingPortCardActionHandlers(nil, nil, appreviewcmd.ReviewFormService{})},
 		{name: "pending-plan-exit-ports", handlers: pendingPlanModeExitPortCardActionHandlers(planmode.Dependencies{})},

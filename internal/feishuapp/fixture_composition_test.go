@@ -569,6 +569,11 @@ func prepareTestApp(a *App) *App {
 	a.bindings.CardActions = cardaction.NewService(CardActionPorts(
 		a, normalizeCardActionSessionKey,
 		a.runtimeOwner.BackendTransition.BackendSwitchBlocksCardAction,
+		WorkspaceCardActionInputs{
+			BindingCommands: a.bindings.BindingCommands, WorkspaceManagement: a.bindings.WorkspaceManagement,
+			WorkspaceConfiguration: a.bindings.WorkspaceConfiguration, ThreadMenu: a.bindings.ThreadMenu,
+			CompleteMenuCommand: a.CompleteMenuCommand,
+		},
 		a.bindings.WorkspaceConfiguration.WorkspaceDeleteActions(),
 		a.bindings.History,
 		a.bindings.ServerRequests, a.bindings.ClaudeSupport, a.bindings.ReviewCommands,

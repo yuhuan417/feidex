@@ -922,6 +922,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 214 将只被测试调用的 Codex plan-mode pending 查询与清理 wrapper 移入 `_test.go`。生产路径继续直接使用同一 `planmode.Dependencies`，测试覆盖与 plan-mode 状态行为不变。生产 `*App` 引用由 117 降至 115，收 `*App` 的函数数由 9 降至 7，lazy binding-read 保持 0。
 
+步骤 215 将 26 个 workspace card-action handler 从 `cardActionService` 上下文迁移到显式 `WorkspaceCardActionInputs`。binding commands、workspace management/configuration、thread menu 和 menu command callback 由 composition 与测试 fixture 在构造期注入，owner-only callback 闭包不再捕获 `App`。action name、群绑定分流、workspace 选择/创建/克隆/配置和 thread menu 行为不变。本步是移除最后 `cardActionService` 前的 family 级拆分，文本棘轮保持 `115/7/1/1/0`；不涉及 Codex turn lifecycle、approval 或 pending request 状态转换。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、
