@@ -564,7 +564,7 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 		<-release
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
-	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 
 	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
 		switch method {
@@ -752,7 +752,7 @@ func TestWorkspaceCloneSubmitCanCreateWorktree(t *testing.T) {
 		gotCloneTarget = targetDir
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
-	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 	var gotWorktreeBase string
 	var gotWorktreeBranch string
 	var gotWorktreeTarget string
@@ -965,7 +965,7 @@ func TestWorkspaceCloneSubmitFailurePatchesRetryForm(t *testing.T) {
 	workspaceGitClone = func(_ context.Context, _, _ string, _ appworkspacecmd.CloneProgressReporter) error {
 		return context.DeadlineExceeded
 	}
-	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "workspace-clone-fail",
@@ -1034,7 +1034,7 @@ func TestWorkspaceCloneSubmitCreateWorkspaceFailurePatchesManualHint(t *testing.
 	workspaceGitClone = func(_ context.Context, _, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
 		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
 	}
-	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "workspace-clone-manual",
@@ -1113,7 +1113,7 @@ func TestWorkspaceCloneSubmitPatchesProgressAndSupportsCancel(t *testing.T) {
 		<-ctx.Done()
 		return ctx.Err()
 	}
-	a.bindings.WorkspaceManagement = buildWorkspaceManagementService(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
 
 	if err := a.store.UpsertPending(&state.PendingRequest{
 		ID:          "workspace-clone-cancel",

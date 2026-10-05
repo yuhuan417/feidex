@@ -9,7 +9,7 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func buildBackendActionService(app *App) appbackend.ActionService {
+func BuildBackendActions(app *App) appbackend.ActionService {
 	if app == nil {
 		return appbackend.ActionService{}
 	}

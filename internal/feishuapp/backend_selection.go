@@ -20,7 +20,7 @@ import (
 // backendLookPath is testable indirection for exec.LookPath.
 var backendLookPath = exec.LookPath
 
-func buildBackendSelectionService(app *App) backend.SelectionService {
+func BuildBackendSelection(app *App) backend.SelectionService {
 	if app == nil {
 		return backend.SelectionService{}
 	}

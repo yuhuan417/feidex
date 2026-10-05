@@ -173,14 +173,6 @@ func (a *App) AttachBindings(bindings *Bindings) { a.bindings = bindings }
 func BuildBackendConfiguration(inputs BackendConfigurationInputs) backend.ConfigurationService {
 	return buildBackendConfigurationService(inputs)
 }
-func BuildBackendActions(a *App) backend.ActionService      { return buildBackendActionService(a) }
-func BuildBackendSelection(a *App) backend.SelectionService { return buildBackendSelectionService(a) }
-func BuildWorkspaceConfiguration(a *App, presentation *workspacecards.Presentation, conversations *conversation.Service) *workspacecmd.ConfigService {
-	return buildWorkspaceConfigService(a, presentation, conversations)
-}
-func BuildWorkspaceManagement(a *App, presentation *workspacecards.Presentation, conversations *conversation.Service, scope BindingScope) *workspacecmd.ManagementService {
-	return buildWorkspaceManagementService(a, presentation, conversations, scope)
-}
 func BuildThreadMenu(a *App) *threadmenu.Service {
 	return threadmenu.NewService(newThreadMenuDependencies(a))
 }

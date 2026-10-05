@@ -67,7 +67,7 @@ func workspaceBackendConfigDeps(driver appbackend.Driver) workspacecmd.BackendCo
 // service as construction-time inputs. Reading them through a.bindings inside
 // the closures would hide the dependency and force the caller to build this
 // service before those bindings are assigned.
-func buildWorkspaceConfigService(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service) *workspacecmd.ConfigService {
+func BuildWorkspaceConfiguration(a *App, presentation *workspacecards.Presentation, conversations *conversationapp.Service) *workspacecmd.ConfigService {
 	if a == nil {
 		return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{})
 	}
