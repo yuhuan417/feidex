@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 119 |
-| 收 `*App` 的顶层函数 | 11 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 117 |
+| 收 `*App` 的顶层函数 | 9 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -917,6 +917,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 211 删除 review command 的纯转发构造 facade，composition 和 fixture 直接用导出的 review 依赖组装 adapter service。review 表单、异步 card action 和提交队列行为不变。生产 `*App` 引用由 121 降至 120，收 `*App` 的函数数由 13 降至 12，lazy binding-read 保持 0。
 
 步骤 212 将 thread menu 依赖组装改为显式输入，composition 直接传入 conversation、pending queue、workspace、settings、backend action 与 auto-retry owners；测试只保留 test-only App 适配 helper。动态 backend/session key 读取、fork、interrupt、reply 和 auto-retry 锁语义不变。生产 `*App` 引用由 120 降至 119，收 `*App` 的函数数由 12 降至 11，lazy binding-read 保持 0。
+
+步骤 213 删除已无生产调用方的 `sendReplyMessagesWithReuse(*App)` 与 `scheduleLocalFileLinkPatch(*App)` 兼容 helper。实际回复路径继续使用 `OutboundCardService`、`replyChunkDelivery` 和 `localFileLinkPatcher`；等价 fallback、quiet-mode、reuse 与本地链接 patch 测试保留在窄 service 上。生产 `*App` 引用由 119 降至 117，收 `*App` 的函数数由 11 降至 9，lazy binding-read 保持 0。
 
 ## 方法
 

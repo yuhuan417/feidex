@@ -13,9 +13,8 @@ import (
 )
 
 func TestDeliveryAdditionalBranches(t *testing.T) {
-	a, ff, _ := newTestApp(t)
+	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Quiet = config.QuietModeVerbose
-	sub := seedActiveSubmission(t, a, "sess-1", "thread-1", "turn-1")
 
 	if got := workspaceCwd(a.cfg, a.cfg.Workspaces[0].ID); got != a.cfg.Workspaces[0].Cwd {
 		t.Fatalf("workspaceCwd(default) = %q", got)
@@ -47,29 +46,6 @@ func TestDeliveryAdditionalBranches(t *testing.T) {
 	})
 	if meta != "" || body != "summary" {
 		t.Fatalf("turnitem.CompactTurnItemCardContent(default) = %q / %q", meta, body)
-	}
-
-	ff.replyCardErr = errors.New("boom")
-	ff.replyTextWithIDs = nil
-	if ids := sendReplyMessagesWithReuse(a, context.Background(), sub, "", false, "turn_reasoning", ""); len(ids) != 1 {
-		t.Fatalf("sendReplyMessages(fallback ids) = %#v", ids)
-	}
-	if len(ff.replyTextWithIDs) != 1 || ff.replyTextWithIDs[0] != "任务已结束。" {
-		t.Fatalf("sendReplyMessages(fallback texts) = %#v", ff.replyTextWithIDs)
-	}
-
-	ff.replyCardErr = nil
-	before := len(ff.replyCards)
-	if ids := sendReplyMessagesWithReuse(a, context.Background(), sub, "agent body", false, "turn_output", ""); len(ids) != 1 {
-		t.Fatalf("sendReplyMessages(turn_output) = %#v", ids)
-	}
-	if len(ff.replyCards) != before+1 {
-		t.Fatalf("replyCards after turn_output = %d, want %d", len(ff.replyCards), before+1)
-	}
-
-	a.cfg.Feishu.Quiet = config.QuietModeProgress
-	if ids := sendReplyMessagesWithReuse(a, context.Background(), sub, "hidden", false, "turn_reasoning", ""); ids != nil {
-		t.Fatalf("sendReplyMessages(quiet gated) = %#v, want nil", ids)
 	}
 
 	if title, color, replyClass, showHeader := outboundMessageCardMeta("mystery"); title != "状态更新" || color != "blue" || replyClass || !showHeader {

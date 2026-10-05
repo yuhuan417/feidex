@@ -109,10 +109,3 @@ func prepareReplyCardMarkdown(cfg *config.Config, ctx context.Context, sub *doma
 	}
 	return newCardRenderer(cfg).prepareCardMarkdown(sub, text)
 }
-
-func scheduleLocalFileLinkPatch(a *App, sub *domainsubmission.Submission, messageID, title, color string, showHeader bool, body string, footerLines []string) {
-	if a == nil {
-		return
-	}
-	newLocalFileLinkPatcher(a.Config(), a.State(), a.feishu, &a.runtimeOwner.Lifecycle, a.asyncRunner, a.bindings.FinalCardPatch, newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), a.feishu != nil).Schedule(sub, messageID, title, color, showHeader, body, footerLines)
-}

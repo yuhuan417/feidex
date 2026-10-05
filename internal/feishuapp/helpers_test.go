@@ -3,7 +3,6 @@ package feishuapp
 import (
 	"context"
 	"feidex/internal/config"
-	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/feishu"
 	"os"
 	"path/filepath"
@@ -46,9 +45,5 @@ func TestResolveInboundAttachmentsUsesForwardedMessageID(t *testing.T) {
 func TestDeliveryHelpers(t *testing.T) {
 	if got := (replyChunkDelivery{}).SendFinalMessagesWithFooter(context.Background(), nil, "ignored", nil, false, ""); len(got) != 0 {
 		t.Fatalf("zero-value replyChunkDelivery final messages = %+v, want none", got)
-	}
-	a := prepareTestApp(&App{cfg: config.Default()})
-	if got := sendReplyMessagesWithReuse(a, nil, &domainsubmission.Submission{}, "ignored", false, "final_message", ""); got != nil {
-		t.Fatalf("sendReplyMessages(without feishu) = %+v, want nil", got)
 	}
 }
