@@ -29,9 +29,10 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 	startupRecovery := app.bindings.StartupRecovery
 	autoRetry := app.bindings.AutoRetry
 	frontendQuery := app.bindings.FrontendQuery
+	source := newFrontendConfigProvider(app.BackendRuntimeDeps(), app.store, app.bindings.WorkspaceSelection)
 
 	return backend.NewSelectionService(backend.SelectionDeps{
-		Source:  app,
+		Source:  source,
 		UseCase: app.bindings.BackendSwitch,
 		Runtime: backend.SelectionRuntimeDeps{
 			ListAvailableBackends: func() []backend.AvailableBackend {

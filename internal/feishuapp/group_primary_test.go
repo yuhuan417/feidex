@@ -17,14 +17,14 @@ func ensureGroupPrimaryInitialized(ctx context.Context, a *App, chatType, chatID
 }
 
 func groupPrimaryForChat(a *App, chatType, chatID string) *state.GroupPrimary {
-	if a == nil || a.Store() == nil {
+	if a == nil || a.store == nil {
 		return nil
 	}
 	return lookupGroupPrimary(a.bindings.Primary, a.FrontendID(), chatType, chatID)
 }
 
 func isGroupPrimary(a *App, chatType, chatID string) bool {
-	return a != nil && a.Store() != nil && groupPrimaryEnabled(a.bindings.Primary, a.FrontendID(), chatType, chatID)
+	return a != nil && a.store != nil && groupPrimaryEnabled(a.bindings.Primary, a.FrontendID(), chatType, chatID)
 }
 
 func setGroupPrimaryState(a *App, chatType, chatID string, enabled bool, assignment *feishu.InboundMessage) (*state.GroupPrimary, error) {

@@ -101,7 +101,7 @@ func prepareTestApp(a *App) *App {
 	routingConfiguration := routing.ConfigurationService{Repository: a.State(), Frontend: identity.FrontendID(a.FrontendID())}
 	a.bindings.RoutingConfiguration = compositionkit.RoutingConfiguration{ConfigurationService: routingConfiguration, Runner: newEffectRunner(a.runtimeOwner), Context: a.Context()}
 	a.bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: func() string { return a.configView().configuredBackend() }}, Runner: newEffectRunner(a.runtimeOwner), Context: a.Context()}
-	primaryRepository := statejson.NewGroupPrimaryRepository(a.Store(), a.FrontendID())
+	primaryRepository := statejson.NewGroupPrimaryRepository(a.store, a.FrontendID())
 	a.bindings.Primary = routing.Service{Repository: primaryRepository}
 	feishuClient := a.feishu
 	a.bindings.GroupMessages = routing.GroupMessages{Frontend: a.FrontendID(), Primary: a.bindings.Primary, Links: a.State(), SelfOpenID: LiveBotOpenID(feishuClient)}
@@ -270,7 +270,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BindingPending = routing.PendingService{Configuration: a.bindings.RoutingConfiguration.ConfigurationService, Repository: a.State()}
 	a.bindings.BackendConfiguration = BuildBackendConfiguration(BackendConfigurationInputs{
 		Config: a.Config(), ConfigMu: a.ConfigMu(), Backend: a.runtimeOwner.Backend,
-		FrontendConfigIndex: a.FrontendConfigIndex(), Store: a.Store(),
+		FrontendConfigIndex: a.FrontendConfigIndex(), Store: a.store,
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Driver: a.BackendDriver(), ModelCommands: a.bindings.ModelCommands,
 	})
 	a.bindings.BackendActions = BuildBackendActions(a)
@@ -451,7 +451,7 @@ func prepareTestApp(a *App) *App {
 		CompleteWorkspaceText: a.bindings.WorkspaceManagement.CompleteWorkspaceNewText,
 		ClaudeSupport:         a.bindings.ClaudeSupport, Continuation: a.bindings.Continuation,
 		PendingQueue: a.bindings.PendingQueue, Config: a.Config(), BindingPending: a.bindings.BindingPending,
-		StoreReady: a.Store() != nil, StateReady: a.State() != nil,
+		StoreReady: a.store != nil, StateReady: a.State() != nil,
 		GateContext: a.runtimeOwner.Lifecycle.Context, Effects: *a.runtimeOwner.EffectRunner,
 		WorkspaceMenu: a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
 		LocalBackend:  inboundBackend,
@@ -463,7 +463,7 @@ func prepareTestApp(a *App) *App {
 		RuntimeDeps:   a.BackendRuntimeDeps(), Queue: a.bindings.Submissions,
 		RefreshGroup: func(chatID, _ string) { scheduleGroupAnnouncementStatusRefresh(a.runtimeOwner.Announcements, chatID) },
 		FlushNotifications: func(msg *application.InboundMessage) {
-			if msg != nil && a.Feishu() != nil && a.Store() != nil {
+			if msg != nil && a.Feishu() != nil && a.store != nil {
 				a.bindings.Notifications.Flush(msg.ChatID, msg.UserID)
 			}
 		},

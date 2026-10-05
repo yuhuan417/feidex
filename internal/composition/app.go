@@ -84,6 +84,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	if err != nil {
 		return nil, err
 	}
+	store := scope.Store
 	// All production objects are assembled here. internal/app only binds the
 	// already composed Feishu event transport to the frontend entrypoint.
 	feishuapp.AttachStateView(frontend, feishuapp.NewStateView(frontend))
@@ -117,7 +118,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	routingConfiguration := routing.ConfigurationService{Repository: frontend.State(), Frontend: identity.FrontendID(frontend.FrontendID())}
 	bindings.RoutingConfiguration = compositionkit.RoutingConfiguration{ConfigurationService: routingConfiguration, Runner: feishuapp.NewEffectRunner(frontend), Context: frontend.Context()}
 	bindings.ScopedRoutingConfiguration = compositionkit.ScopedRoutingConfiguration{Service: routing.ScopedConfigurationService{ConfigurationService: routingConfiguration, BackendSource: func() string { return feishuapp.BackendKind(frontend) }}, Runner: feishuapp.NewEffectRunner(frontend), Context: frontend.Context()}
-	primaryRepository := statejson.NewGroupPrimaryRepository(frontend.Store(), frontend.FrontendID())
+	primaryRepository := statejson.NewGroupPrimaryRepository(store, frontend.FrontendID())
 	bindings.Primary = routing.Service{Repository: primaryRepository}
 	bindings.GroupMessages = routing.GroupMessages{Frontend: frontend.FrontendID(), Primary: bindings.Primary, Links: frontend.State(), SelfOpenID: feishuapp.LiveBotOpenID(frontend.Feishu())}
 	bindings.Announcements = announcement.Service{Repository: frontend.State(), Gateway: feishuapp.AnnouncementGateway(frontend.Feishu()), Frontend: frontend.FrontendID(), Primary: func(chatID string) bool {
@@ -287,7 +288,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BindingPending = routing.PendingService{Configuration: bindings.RoutingConfiguration.ConfigurationService, Repository: frontend.State()}
 	bindings.BackendConfiguration = feishuapp.BuildBackendConfiguration(feishuapp.BackendConfigurationInputs{
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), Backend: scope.RuntimeOwner.Backend,
-		FrontendConfigIndex: frontend.FrontendConfigIndex(), Store: frontend.Store(),
+		FrontendConfigIndex: frontend.FrontendConfigIndex(), Store: store,
 		WorkspaceSelection: bindings.WorkspaceSelection, Driver: frontend.BackendDriver(), ModelCommands: bindings.ModelCommands,
 	})
 	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
@@ -503,7 +504,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		CompleteWorkspaceText: bindings.WorkspaceManagement.CompleteWorkspaceNewText,
 		ClaudeSupport:         bindings.ClaudeSupport, Continuation: bindings.Continuation,
 		PendingQueue: bindings.PendingQueue, Config: frontend.Config(), BindingPending: bindings.BindingPending,
-		StoreReady: frontend.Store() != nil, StateReady: frontend.State() != nil,
+		StoreReady: store != nil, StateReady: frontend.State() != nil,
 		GateContext: scope.RuntimeOwner.Lifecycle.Context, Effects: inboundRunner,
 		WorkspaceMenu: bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
 		LocalBackend:  inboundBackend,
@@ -517,7 +518,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			feishuapp.ScheduleGroupAnnouncementStatusRefresh(scope.RuntimeOwner.Announcements, chatID)
 		},
 		FlushNotifications: func(msg *application.InboundMessage) {
-			if msg != nil && frontend.Feishu() != nil && frontend.Store() != nil {
+			if msg != nil && frontend.Feishu() != nil && store != nil {
 				bindings.Notifications.Flush(msg.ChatID, msg.UserID)
 			}
 		},
@@ -579,7 +580,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
 	*autoRetryRuntimeDeps = frontend.BackendRuntimeDeps()
-	if err := feishuapp.CanonicalizeStoredSessionKeys(frontend.Store()); err != nil {
+	if err := feishuapp.CanonicalizeStoredSessionKeys(store); err != nil {
 		return nil, err
 	}
 	if backend := feishuapp.BackendKind(frontend); backend != "" {

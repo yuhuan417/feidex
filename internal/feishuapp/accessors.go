@@ -8,7 +8,6 @@ import (
 	frontendruntime "feidex/internal/runtime"
 
 	"feidex/internal/config"
-	"feidex/internal/state"
 )
 
 // Feishu returns the Feishu client. Sub-packages should define narrow
@@ -35,14 +34,6 @@ func (a *App) Config() *config.Config {
 		return nil
 	}
 	return a.cfg
-}
-
-// Store returns the state store.
-func (a *App) Store() *state.Store {
-	if a == nil {
-		return nil
-	}
-	return a.store
 }
 
 // Backend returns the name of the currently active backend.
