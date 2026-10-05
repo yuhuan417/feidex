@@ -73,6 +73,9 @@ func buildWorkspaceConfigService(a *App, presentation *workspacecards.Presentati
 
 	st := a.State()
 	liveThreads := a.runtimeOwner.LiveThreads
+	replyRunner := newEffectRunner(a.runtimeOwner)
+	frontendID := a.FrontendID()
+	replyInThread := a.configView().replyInThreadEnabled()
 	return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{
 		Dependencies: workspaceCommandApp(a, presentation),
 		State:        workspaceStateDeps(st),
@@ -91,7 +94,7 @@ func buildWorkspaceConfigService(a *App, presentation *workspacecards.Presentati
 				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 			},
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-				return replyCommandActionResponse(a, msg, resp)
+				return replyCommandActionResponseWith(replyRunner, frontendID, replyInThread, msg, resp)
 			},
 			CommandActionFromMessage: commandActionFromMessage,
 		},

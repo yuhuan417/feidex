@@ -23,6 +23,9 @@ func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presen
 	}
 
 	st := a.State()
+	replyRunner := newEffectRunner(a.runtimeOwner)
+	frontendID := a.FrontendID()
+	replyInThread := a.configView().replyInThreadEnabled()
 	bindingScope := scope.scope
 	threadMarker := liveThreadMarker{
 		tracker: a.runtimeOwner.LiveThreads, state: st,
@@ -57,7 +60,7 @@ func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presen
 				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 			},
 			ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-				return replyCommandActionResponse(a, msg, resp)
+				return replyCommandActionResponseWith(replyRunner, frontendID, replyInThread, msg, resp)
 			},
 			CommandActionFromMessage: commandActionFromMessage,
 			CommandMessageFromAction: func(action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {

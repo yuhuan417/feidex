@@ -24,6 +24,8 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 	statusBackend := app.runtimeOwner.Backend
 	statusFrontendID := app.frontendID
 	statusFrontendConfigIndex := app.frontendConfigIndex
+	replyRunner := newEffectRunner(app.runtimeOwner)
+	replyInThread := app.configView().replyInThreadEnabled()
 	sessionConfig := sessionModelConfigSource{
 		cfg: app.cfg, configMu: app.ConfigMu(), store: app.State(), snapshots: app.bindings.ModelSnapshots,
 		view:    frontendConfigView{cfg: app.cfg, mu: app.ConfigMu(), frontendID: app.frontendID, frontendConfigIndex: app.frontendConfigIndex},
@@ -67,7 +69,7 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 			return modelConfigStatus(statusSnapshots, statusStore, view, sessionKey)
 		},
 		ReplyCommandActionResponse: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-			return replyCommandActionResponse(app, msg, resp)
+			return replyCommandActionResponseWith(replyRunner, app.frontendID, replyInThread, msg, resp)
 		},
 	}
 }

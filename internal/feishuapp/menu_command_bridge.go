@@ -31,13 +31,6 @@ func commandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string
 	}
 }
 
-func replyCommandActionResponse(a *App, msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-	if a == nil || msg == nil || resp == nil {
-		return nil
-	}
-	return replyCommandActionResponseWith(newEffectRunner(a.runtimeOwner), a.FrontendID(), a.configView().replyInThreadEnabled(), msg, resp)
-}
-
 func commandMessageFromAction(scope bindingSessionScope, action *feishu.CardAction, sessionKey, rawCommand string) *feishu.InboundMessage {
 	msg := &feishu.InboundMessage{
 		SessionKey: strings.TrimSpace(sessionKey),
