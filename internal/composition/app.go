@@ -177,7 +177,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Publisher: feishuapp.ModelDefaultsPublisher(scope.RuntimeOwner, frontend.Config(), frontend.ConfigMu()),
 	}
 	bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: configSource}}
-	bindings.ModelCommands = feishuapp.BuildModelCommands(frontend)
+	bindings.ModelCommands = feishuapp.BuildModelCommands(feishuapp.ModelCommandInputs{
+		Defaults: &bindings.ModelDefaults, Options: &bindings.ModelOptions, Snapshots: bindings.ModelSnapshots,
+		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), State: frontend.State(), RuntimeOwner: scope.RuntimeOwner,
+		FrontendID: frontend.FrontendID(), FrontendConfigIndex: frontendConfigIndex,
+		ConfiguredBackend: configuredBackend,
+	})
 	frontendIDForBindingScope := frontend.FrontendID()
 	bindingScope := feishuapp.NewBindingScope(frontend.State(), func(key string) string {
 		return identity.CanonicalSessionKey(frontendIDForBindingScope, key)

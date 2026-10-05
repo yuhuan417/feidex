@@ -298,7 +298,12 @@ func prepareTestApp(a *App) *App {
 		Publisher: ModelDefaultsPublisher(a.runtimeOwner, a.Config(), a.ConfigMu()),
 	}
 	a.bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: a}}
-	a.bindings.ModelCommands = BuildModelCommands(a)
+	a.bindings.ModelCommands = BuildModelCommands(ModelCommandInputs{
+		Defaults: &a.bindings.ModelDefaults, Options: &a.bindings.ModelOptions, Snapshots: a.bindings.ModelSnapshots,
+		Config: a.Config(), ConfigMu: a.ConfigMu(), State: a.State(), RuntimeOwner: a.runtimeOwner,
+		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(),
+		ConfiguredBackend: func() string { return a.configView().configuredBackend() },
+	})
 	a.bindings.ConversationConfiguration = conversation.Configuration{Models: a.bindings.ModelSnapshots, ServiceName: CodexServiceName(a.Config(), a.ConfigMu())}
 	a.bindings.TurnStarter = submission.TurnStarter{Frontend: identity.FrontendID(a.FrontendID()), Effects: newEffectRunner(a.runtimeOwner), Collaboration: a.bindings.Plan}
 	a.bindings.BindingPending = routing.PendingService{Configuration: a.bindings.RoutingConfiguration.ConfigurationService, Repository: a.State()}
