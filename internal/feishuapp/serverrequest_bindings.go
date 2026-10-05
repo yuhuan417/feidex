@@ -34,6 +34,8 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 	if a == nil {
 		return nil
 	}
+	effectRunner := newEffectRunner(a.runtimeOwner)
+	frontendID := a.FrontendID()
 	service := &serverrequest.Service{
 		// State access
 		PendingRequests: func() []*state.PendingRequest { return a.State().PendingRequests() },
@@ -55,7 +57,7 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 			if a.feishu == nil {
 				return nil
 			}
-			return patchCardEffect(context.Background(), a, messageID, card)
+			return patchCardEffect(context.Background(), effectRunner, frontendID, messageID, card)
 		},
 		ContentCardTitle: func(sessionKey, workspaceID, title string) string {
 			return contentCardTitleForSession(a.State(), a != nil, sessionKey, workspaceID, title)

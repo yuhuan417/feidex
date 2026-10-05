@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 168 |
-| 收 `*App` 的顶层函数 | 47 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 165 |
+| 收 `*App` 的顶层函数 | 44 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -883,6 +883,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 194 删除 `replyCommandActionResponse(*App)` 转发 helper。workspace config/management 与 model config 在构造时捕获已有 effect runner、frontend ID 和 thread-reply 设置，再调用窄 `replyCommandActionResponseWith`；卡片优先于 toast 的回复顺序不变。生产 `*App` 引用由 171 降至 170，收 `*App` 的函数数由 50 降至 49，其他棘轮保持 1/1/0。
 
 步骤 195 将 `replyCardEffect` 与 `replyTextEffect` 改为接收显式 effect runner、frontend ID 和 thread-reply 设置，命令入口不再通过 effect helper 传递 App。发送 effect 仍保留原 chat type/id、reply message ID 与 in-thread 字段。生产 `*App` 引用由 170 降至 168，收 `*App` 的函数数由 49 降至 47，其他棘轮保持 1/1/0。
+
+步骤 196 将带 message ID 的 card reply/send/patch effect helper 改为接收显式 effect runner 与 frontend ID，并复用 `effectOutbound`。调用工厂在构造期捕获这两个值，effect 的 reply/chat target 和 patch idempotency key 保持不变。生产 `*App` 引用由 168 降至 165，收 `*App` 的函数数由 47 降至 44，其他棘轮保持 1/1/0。
 
 ## 方法
 

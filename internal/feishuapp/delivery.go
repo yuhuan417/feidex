@@ -62,6 +62,8 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 	if quietmode.Enabled(a.configView().feishuConfig()) && !quietmode.ShouldDeliverTurnKind(quietmode.Mode(a.configView().feishuConfig()), kind) {
 		return nil
 	}
+	effectRunner := newEffectRunner(a.runtimeOwner)
+	frontendID := a.FrontendID()
 	appState := a.State()
 	enablePreview := strings.TrimSpace(kind) == "final_message"
 	if !enablePreview {
@@ -88,7 +90,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 
 	card := newCardRenderer(a.Config()).renderCompactMarkdownCard(sub, contentCardTitleForSubmission(a.State(), sub, title), color, "", text, nil)
 	if strings.TrimSpace(reuseMessageID) != "" {
-		if err := patchCardEffect(ctx, a, reuseMessageID, card); err == nil {
+		if err := patchCardEffect(ctx, effectRunner, frontendID, reuseMessageID, card); err == nil {
 			_ = appState.SaveMessageLink(&state.MessageLink{
 				MessageID:    reuseMessageID,
 				SessionKey:   sub.SessionKey,
@@ -100,7 +102,7 @@ func sendReplyMessagesWithReuse(a *App, ctx context.Context, sub *domainsubmissi
 		}
 	}
 	cardID := ""
-	id, err := replyCardWithIDEffect(ctx, a, sub.TriggerMessageID, card, inThread)
+	id, err := replyCardWithIDEffect(ctx, effectRunner, frontendID, sub.TriggerMessageID, card, inThread)
 	if err == nil {
 		cardID = strings.TrimSpace(id)
 	}

@@ -162,7 +162,7 @@ func (s cardActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 			} else if card == nil {
 				card = s.app.bindings.Upgrades.RenderUpgradeFailedCard(sessionKey, "升级命令没有返回卡片")
 			}
-			if err := patchCardEffect(s.app.Context(), s.app, messageID, card); err != nil {
+			if err := patchCardEffect(s.app.Context(), newEffectRunner(s.app.runtimeOwner), s.app.FrontendID(), messageID, card); err != nil {
 				slog.Warn("upgrade panel patch failed",
 					"session_key", sessionKey,
 					"user_id", action.UserID,

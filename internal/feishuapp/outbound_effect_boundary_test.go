@@ -51,7 +51,7 @@ func TestComposedOutboundEffectsPreserveDeliveryAndCapture(t *testing.T) {
 	}
 	capture := a.feishu.(appfeishuwrap.CommandCaptureFeishuClient)
 	_, captured, err := capture.CaptureCommandOutput("parent", func() error {
-		_, err := replyCardWithIDEffect(ctx, a, "parent", card, true)
+		_, err := replyCardWithIDEffect(ctx, newEffectRunner(a.runtimeOwner), a.FrontendID(), "parent", card, true)
 		return err
 	})
 	if err != nil || captured["test"] != "card" || len(base.replyCards) != 1 {

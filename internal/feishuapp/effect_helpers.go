@@ -66,30 +66,16 @@ func replyCommandActionResponseWith(runner frontendruntime.EffectRunner, fronten
 	return nil
 }
 
-func replyCardWithIDEffect(ctx context.Context, a *App, parentMessageID string, card map[string]any, inThread bool) (string, error) {
-	if a == nil {
-		return "", nil
-	}
-	return newEffectRunner(a.runtimeOwner).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), ReplyMessageID: parentMessageID, View: feishuoutbound.Card(card), InThread: inThread})
+func replyCardWithIDEffect(ctx context.Context, runner frontendruntime.EffectRunner, frontendID, parentMessageID string, card map[string]any, inThread bool) (string, error) {
+	return newEffectOutbound(frontendID, runner).ReplyCard(ctx, parentMessageID, card, inThread)
 }
 
-func sendCardWithIDEffect(ctx context.Context, a *App, chatID string, card map[string]any) (string, error) {
-	if a == nil {
-		return "", nil
-	}
-	return newEffectRunner(a.runtimeOwner).RunSendCard(ctx, application.SendCard{Frontend: identity.FrontendID(a.FrontendID()), Chat: identity.ChatRef{ID: chatID}, View: feishuoutbound.Card(card)})
+func sendCardWithIDEffect(ctx context.Context, runner frontendruntime.EffectRunner, frontendID, chatID string, card map[string]any) (string, error) {
+	return newEffectOutbound(frontendID, runner).SendCard(ctx, chatID, card)
 }
 
-func patchCardEffect(ctx context.Context, a *App, messageID string, card map[string]any) error {
-	if a == nil {
-		return nil
-	}
-	return newEffectRunner(a.runtimeOwner).Run(ctx, []application.Effect{application.PatchCard{
-		Frontend:       identity.FrontendID(a.FrontendID()),
-		MessageID:      messageID,
-		View:           feishuoutbound.Card(card),
-		IdempotencyKey: cardEffectKey("patch-card", a.FrontendID(), messageID, card),
-	}})
+func patchCardEffect(ctx context.Context, runner frontendruntime.EffectRunner, frontendID, messageID string, card map[string]any) error {
+	return newEffectOutbound(frontendID, runner).PatchCard(ctx, messageID, card)
 }
 
 func cardEffectKey(kind, frontendID, target string, card map[string]any) string {

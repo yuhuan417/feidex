@@ -25,6 +25,8 @@ func BuildClaudeSupport(a *App) *claudesupport.Service {
 	// Read once at construction so the dependency is visible.
 	pendingReplies := a.bindings.PendingReplies
 	serverRequests := a.bindings.ServerRequests
+	effectRunner := newEffectRunner(a.runtimeOwner)
+	frontendID := a.FrontendID()
 
 	return &claudesupport.Service{
 		DeliverPendingCard: func(sub *domainsubmission.Submission, card map[string]any, reqKey, reqIDStored, backend, kind, sessionKey, threadID, turnID, itemID, ownerUserID, payloadJSON, waitingStatus, linkKind string, ttl time.Duration) error {
@@ -66,7 +68,7 @@ func BuildClaudeSupport(a *App) *claudesupport.Service {
 			return a.feishu.SimpleStatusCard(title, color, body, buttons)
 		},
 		PatchCard: func(messageID string, card map[string]any) error {
-			return patchCardEffect(context.Background(), a, messageID, card)
+			return patchCardEffect(context.Background(), effectRunner, frontendID, messageID, card)
 		},
 		PrepareMentionText: apputil.PrependAttentionMentionMarkdown,
 		RenderFormCard:     pendingforms.RenderToolUserInputFormCard,

@@ -29,6 +29,8 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 	startupRecovery := app.bindings.StartupRecovery
 	autoRetry := app.bindings.AutoRetry
 	frontendQuery := app.bindings.FrontendQuery
+	effectRunner := newEffectRunner(app.runtimeOwner)
+	frontendID := app.FrontendID()
 	source := newFrontendConfigProvider(app.BackendRuntimeDeps(), app.store, app.bindings.WorkspaceSelection)
 
 	return backend.NewSelectionService(backend.SelectionDeps{
@@ -69,13 +71,13 @@ func buildBackendSelectionService(app *App) backend.SelectionService {
 		},
 		Effects: backend.SelectionEffectDeps{
 			ReplyCard: func(ctx context.Context, messageID string, card map[string]any, inThread bool) (string, error) {
-				return replyCardWithIDEffect(ctx, app, messageID, card, inThread)
+				return replyCardWithIDEffect(ctx, effectRunner, frontendID, messageID, card, inThread)
 			},
 			SendCard: func(ctx context.Context, chatID string, card map[string]any) (string, error) {
-				return sendCardWithIDEffect(ctx, app, chatID, card)
+				return sendCardWithIDEffect(ctx, effectRunner, frontendID, chatID, card)
 			},
 			PatchCard: func(ctx context.Context, messageID string, card map[string]any) error {
-				return patchCardEffect(ctx, app, messageID, card)
+				return patchCardEffect(ctx, effectRunner, frontendID, messageID, card)
 			},
 			RunAsync: func(sessionKey string, fn func()) { runSessionAsync(app, sessionKey, fn) },
 		},

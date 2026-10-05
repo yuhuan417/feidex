@@ -41,7 +41,7 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 			return newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)).ReplyText(ctx, msgID, text, replyInThread)
 		},
 		ReplyCard: func(ctx context.Context, msgID string, card map[string]any, replyInThread bool) (string, error) {
-			return replyCardWithIDEffect(ctx, app, msgID, card, replyInThread)
+			return replyCardWithIDEffect(ctx, replyRunner, statusFrontendID, msgID, card, replyInThread)
 		},
 		RequireCodexClient: func() (modelconfig.CodexClient, error) {
 			return app.runtimeView().requireCodexGateway()
