@@ -152,7 +152,8 @@ func prepareTestApp(a *App) *App {
 	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(AutoRetryPortInputs{
 		Context: a.Context, Tracker: a.runtimeOwner.AutoRetries, Repository: a.State(), Live: liveThreads,
 		Enabled: func() bool { return a.bindings.AutoRetry.Settings().Enabled }, SaveEnabled: a.bindings.RuntimeSettings.SetAutoRetry,
-		RuntimeDeps: autoRetryRuntimeDeps, RuntimeOwner: a.runtimeOwner, RunAsync: a.RunAsync,
+		RuntimeDeps: autoRetryRuntimeDeps, RuntimeOwner: a.runtimeOwner,
+		RunAsync:   func(fn func()) { a.runtimeOwner.Lifecycle.Run(fn, a.AsyncRunner()) },
 		FrontendID: a.FrontendID(), Config: a.Config(), ConfigMu: a.ConfigMu(),
 		Starter: a.bindings.Submissions, Presenter: a.bindings.AutoRetry,
 	}))

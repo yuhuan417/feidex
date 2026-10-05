@@ -24,6 +24,7 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 	}
 	permissionBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
 	permissionMenuRenderer := ClaudePermissionMenuRenderer(a.Config(), permissionBackend, a.State().Session)
+	autoRetryTracker := a.runtimeOwner.AutoRetries
 	return appthreadmenu.Dependencies{
 		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), Controls: a.bindings.ConversationControls, Settings: a.bindings.ThreadSettings,
 		PermissionSettings: a.bindings.PermissionSettings,
@@ -33,7 +34,7 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		WorkspaceConfigFn: a.ThreadMenuWorkspaceConfig, BackendActionsFn: a.ThreadMenuBackendActions,
 		BackendDriver:          a.BackendDriver(),
 		SessionHasActiveWorkFn: sessionHasActiveWork,
-		CancelAutoRetryFn:      a.CancelAutoRetry, LockAutoRetryDispatchFn: a.LockAutoRetryDispatch,
+		CancelAutoRetryFn:      a.CancelAutoRetry, LockAutoRetryDispatchFn: autoRetryTracker.LockDispatch,
 		ReplyCommandActionResponseFn: a.ReplyCommandActionResponse, CommandForkFn: a.CommandFork,
 		CompleteMenuCommandFn: a.CompleteMenuCommand, ActionStringValueFn: actionStringValue,
 		MenuCardBodyFn: menuCardBody, MenuCardBodyForBackendFn: menuCardBodyForBackend,
@@ -181,8 +182,4 @@ type threadMenuWorkspaceConfigAdapter struct {
 
 func (a threadMenuWorkspaceConfigAdapter) CurrentThreadForMessage(msg *feishu.InboundMessage) (sessionKey string, sess *conversation.Session, ws *config.Workspace, threadID string, err error) {
 	return currentThreadForMessage(a.workspaceConfiguration, a.backend, msg)
-}
-
-func (a *App) LockAutoRetryDispatch(sessionKey string) func() {
-	return a.AutoRetries().LockDispatch(sessionKey)
 }

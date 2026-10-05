@@ -9,7 +9,6 @@ import (
 	"feidex/internal/application"
 	retry "feidex/internal/application/autoretry"
 	"feidex/internal/config"
-	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
@@ -71,18 +70,6 @@ func AutoRetryPorts(inputs AutoRetryPortInputs) retry.Dependencies {
 	}
 }
 
-func (a *App) AutoRetries() *retry.Tracker {
-	if a == nil {
-		return nil
-	}
-	owner := a.runtimeView().ensureRuntimeOwner()
-	return owner.AutoRetries
-}
-func (a *App) RunAsync(fn func())                      { runAsync(a, fn) }
-func (a *App) MenuCardBody(action, body string) string { return menuCardBody(action, body) }
-func (a *App) SessionHasActiveWork(sess *conversation.Session) bool {
-	return conversation.HasActiveWork(sess)
-}
 func (a *App) ReplyCommandActionResponse(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
 	return replyCommandActionResponse(a, msg, resp)
 }

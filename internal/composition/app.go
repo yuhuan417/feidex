@@ -176,7 +176,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.AutoRetry.Engine = retry.NewEngine(feishuapp.AutoRetryPorts(feishuapp.AutoRetryPortInputs{
 		Context: frontend.Context, Tracker: scope.RuntimeOwner.AutoRetries, Repository: frontend.State(), Live: liveThreads,
 		Enabled: func() bool { return bindings.AutoRetry.Settings().Enabled }, SaveEnabled: bindings.RuntimeSettings.SetAutoRetry,
-		RuntimeDeps: autoRetryRuntimeDeps, RuntimeOwner: scope.RuntimeOwner, RunAsync: frontend.RunAsync,
+		RuntimeDeps: autoRetryRuntimeDeps, RuntimeOwner: scope.RuntimeOwner,
+		RunAsync:   func(fn func()) { scope.RuntimeOwner.Lifecycle.Run(fn, frontend.AsyncRunner()) },
 		FrontendID: frontend.FrontendID(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
 		Starter: bindings.Submissions, Presenter: bindings.AutoRetry,
 	}))
