@@ -59,14 +59,6 @@ func codexPlanModeExitPendingRequest(a *App, sessionKey string) *state.PendingRe
 	return planmode.ExitPendingRequest(newPlanModeAppAdapter(a), sessionKey)
 }
 
-func processCodexPlanModeExitOnTurnCompleted(a *App, sessionKey string, sub *domainsubmission.Submission, threadID, turnID, status string, flush turnStreamFlushResult) bool {
-	return planmode.ProcessCodexPlanModeExitOnTurnCompleted(newPlanModeAppAdapter(a), sessionKey, sub, threadID, turnID, status, planmode.TurnStreamFlushResult{
-		ShouldUsePlanExitPrompt: flush.ShouldUsePlanExitPrompt,
-		PlanMarkdown:            flush.PlanMarkdown,
-		PlanMessageID:           flush.PlanMessageID,
-	})
-}
-
 type PlanModePortInputs struct {
 	Runtime            BackendRuntimeDeps
 	UseCase            *planapp.Service

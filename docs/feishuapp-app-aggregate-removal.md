@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 163 |
-| 收 `*App` 的顶层函数 | 44 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 151 |
+| 收 `*App` 的顶层函数 | 43 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -887,6 +887,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 196 将带 message ID 的 card reply/send/patch effect helper 改为接收显式 effect runner 与 frontend ID，并复用 `effectOutbound`。调用工厂在构造期捕获这两个值，effect 的 reply/chat target 和 patch idempotency key 保持不变。生产 `*App` 引用由 168 降至 165，收 `*App` 的函数数由 47 降至 44，其他棘轮保持 1/1/0。
 
 步骤 197 删除 `App.sessionActorRuntime()` 与 `App.BackendDriver()` accessor。session-owned work 直接交给已有 `runSessionOnActor` 和 frontend owner 的 actor；backend driver 由动态 configured-backend provider 构造，workspace 服务复用 dependencies 中的同一 driver。actor 串行化和 backend 动态选择语义不变。生产 `*App` 引用由 165 降至 163，其他棘轮保持 1/1/0。
+
+步骤 198 删除无调用方的 `turnlifecycle_bindings.go` App method 兼容层，以及随之暴露为死代码的 `processCodexPlanModeExitOnTurnCompleted(*App)` 转发 helper。turn service 已由 `turnDeliveryPort`、`turnContinuationPort` 和 `turnDiagnosticsPort` 连接相同 owners，旧方法不再实现任何被装配的接口。对照状态机审计，本次没有改变 turn start/completion、compaction、goal continuation 或 final delivery 路径。生产 `*App` 引用由 163 降至 151，收 `*App` 的函数数由 44 降至 43，其他棘轮保持 1/1/0。
 
 ## 方法
 
