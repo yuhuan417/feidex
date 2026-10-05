@@ -91,3 +91,23 @@ func (s cardActionService) completeMenuReview(action *feishu.CardAction, session
 		Backend: s.app.configView().configuredBackend, CompleteMenuCommand: s.app.CompleteMenuCommand,
 	})["menu.review"](action)
 }
+
+func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if action != nil {
+		if action.ActionValue == nil {
+			action.ActionValue = map[string]any{}
+		}
+		action.ActionValue["session_key"] = sessionKey
+	}
+	return planCardActionHandlers(PlanCardActionInputs{
+		CompleteMenuCommand: a.CompleteMenuCommand,
+		Lifecycle:           &a.runtimeOwner.Lifecycle,
+		AsyncRunner:         a.asyncRunner,
+		Context:             a.Context,
+		FrontendID:          a.FrontendID(),
+		EffectRunner:        newEffectRunner(a.runtimeOwner),
+		State:               a.State(),
+		ReplyInThread:       a.configView().replyInThreadEnabled(),
+		TransportAvailable:  a.feishu != nil,
+	})["menu.plan"](action)
+}

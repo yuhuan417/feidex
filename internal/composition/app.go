@@ -671,6 +671,16 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		}, feishuapp.ReviewCardActionInputs{
 			Dependencies: reviewCommandDependencies, ReviewCommands: bindings.ReviewCommands,
 			Backend: configuredBackend, CompleteMenuCommand: frontend.CompleteMenuCommand,
+		}, feishuapp.PlanCardActionInputs{
+			CompleteMenuCommand: frontend.CompleteMenuCommand,
+			Lifecycle:           &scope.RuntimeOwner.Lifecycle,
+			AsyncRunner:         asyncRunner,
+			Context:             frontend.Context,
+			FrontendID:          frontend.FrontendID(),
+			EffectRunner:        *scope.RuntimeOwner.EffectRunner,
+			State:               frontend.State(),
+			ReplyInThread:       false,
+			TransportAvailable:  frontend.Feishu() != nil,
 		}, feishuapp.PathPickerActionInputs{
 			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,

@@ -47,12 +47,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.plan" {
-				return nil, nil
-			}
-			return completeMenuPlanAsync(s.app, action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.plan"},
 	}
 	bindings["goal"] = featureBinding{
 		Commands: map[string]featureCommandBinding{

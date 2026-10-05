@@ -13,16 +13,12 @@ import (
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
-	"log/slog"
 	"strings"
 	"sync"
 
 	"feidex/internal/config"
-	"feidex/internal/feishu"
 	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 const (
@@ -162,41 +158,6 @@ func sendLocalTurnFollowupCardWith(outbound effectOutbound, links messageLinkRec
 		links.Record(messageID, kind, anchorForSubmission(sub), "")
 	}
 	return messageID, nil
-}
-
-func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	if action == nil || strings.TrimSpace(action.MessageID) == "" {
-		return completeMenuCommand(a, action, sessionKey, "/plan", "menu.tools")
-	}
-	messageID := strings.TrimSpace(action.MessageID)
-	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() {
-		resp, err := completeMenuCommand(a, action, sessionKey, "/plan", "menu.tools")
-		if card := callbackResponseCard(resp); card != nil {
-			patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, "plan menu patch failed",
-				"session_key", sessionKey,
-				"message_id", messageID,
-			)
-			return
-		}
-		text := callbackResponseToastText(resp)
-		if err != nil {
-			text = err.Error()
-		}
-		text = strings.TrimSpace(text)
-		if text == "" || a == nil || a.feishu == nil {
-			return
-		}
-		if replyErr := newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)).ReplyText(context.Background(), messageID, text, actionReplyInThreadForSession(a.State().Session, sessionKey, a.configView().replyInThreadEnabled())); replyErr != nil {
-			slog.Warn("plan async text reply failed",
-				"session_key", sessionKey,
-				"message_id", messageID,
-				"error", replyErr,
-			)
-		}
-	})
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "info", Content: "正在处理 plan mode"},
-	}, nil
 }
 
 func newPlanModeAppAdapter(a *App) planmode.Dependencies {

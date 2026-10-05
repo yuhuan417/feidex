@@ -603,6 +603,16 @@ func prepareTestApp(a *App) *App {
 		}, ReviewCardActionInputs{
 			Dependencies: reviewCommandDependencies, ReviewCommands: a.bindings.ReviewCommands,
 			Backend: configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
+		}, PlanCardActionInputs{
+			CompleteMenuCommand: a.CompleteMenuCommand,
+			Lifecycle:           &a.runtimeOwner.Lifecycle,
+			AsyncRunner:         a.asyncRunner,
+			Context:             a.Context,
+			FrontendID:          a.FrontendID(),
+			EffectRunner:        newEffectRunner(a.runtimeOwner),
+			State:               a.State(),
+			ReplyInThread:       a.configView().replyInThreadEnabled(),
+			TransportAvailable:  a.feishu != nil,
 		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,
