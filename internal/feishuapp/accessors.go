@@ -58,16 +58,6 @@ func (a *App) BackendDriver() appbackend.Driver {
 	return appbackend.SelectedDriver{Selected: func() string { return a.configView().configuredBackend() }}
 }
 
-// Claude returns the Claude core client.
-func (a *App) Claude() ClaudeCore {
-	return a.runtimeView().currentClaudeCore()
-}
-
-// Codex returns the Codex client.
-func (a *App) Codex() CodexClient {
-	return a.runtimeView().getCodex()
-}
-
 // State returns the frontend-scoped app state store.
 func (a *App) State() *appstate.Store {
 	if a == nil {
@@ -111,14 +101,6 @@ func (a *App) FrontendID() string {
 		return ""
 	}
 	return a.frontendID
-}
-
-// BackendRuntime returns the runtime facade for the currently configured backend.
-func (a *App) BackendRuntime() frontendruntime.BackendFacade {
-	if a == nil {
-		return nil
-	}
-	return backendRuntime(a.configView().configuredBackend())
 }
 
 func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {

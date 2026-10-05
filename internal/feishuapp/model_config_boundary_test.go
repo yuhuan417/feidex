@@ -375,7 +375,7 @@ func TestModelConfigFailedSaveDoesNotPublish(t *testing.T) {
 			if err == nil || a.cfg.Codex.Model != before.Codex.Model || a.cfg.Claude.Model != before.Claude.Model {
 				t.Fatalf("failed save published settings: %v", err)
 			}
-			if len(a.Claude().(*fakeClaudeCore).updatedConfigs) != 0 {
+			if len(a.runtimeView().currentClaudeCore().(*fakeClaudeCore).updatedConfigs) != 0 {
 				t.Fatal("failed save updated runtime")
 			}
 		})

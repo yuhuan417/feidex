@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 216 |
-| 收 `*App` 的顶层函数 | 86 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 213 |
+| 收 `*App` 的顶层函数 | 83 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -843,6 +843,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 174 将 Codex plan-exit 的 implement-current、implement-fresh、stay callbacks 移入显式 `planmode.Dependencies` handler map，并删除仅转发到 `PlanModePorts` 的 `completeCodexPlanModeExit(*App)`。composition 复用同时交给 turn lifecycle 的同一份 plan-mode capability；plan exit 的 pending 校验、stay 分支、fresh/current 实现、async lifecycle admission、follow-up card 与 active-turn steer 顺序仍由原 `planmode.CompleteCodexPlanModeExit` 处理。对照审计中的 plan item 与 turn completion 边界，本次只改变依赖传递。生产 `*App` 引用由 218 降至 217，收 `*App` 的顶层函数由 88 降至 87，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 步骤 175 删除只转出 `Bindings.ServerRequests` 的 `App.ServerRequestService()` 兼容 accessor。Claude support 在构造时捕获已就绪的 server-request owner，pending cancel 仍调用相同 backend adapter；测试 fixture 直接访问绑定的 owner。对照 SM-09/10/11/22/23，本次不改变 reply/resolved 或 pending 状态边界。生产 `*App` 引用由 217 降至 216，收 `*App` 的顶层函数由 87 降至 86，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
+
+步骤 176 删除无生产调用方的 `App.Claude()`、`App.Codex()` 与 `App.BackendRuntime()` facade；composition 的 goal gateway 直接从已持有的 frontend runtime owner 获取当前 Codex client，测试 fixture 和断言直接读取已有 `runtimeView`。owner 的 client 来源与 `App.Codex()` 相同。生产 `*App` 引用由 216 降至 213，收 `*App` 的顶层函数由 86 降至 83，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 ## 方法
 
