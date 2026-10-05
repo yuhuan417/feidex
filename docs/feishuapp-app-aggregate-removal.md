@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 117 |
-| 收 `*App` 的顶层函数 | 9 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 115 |
+| 收 `*App` 的顶层函数 | 7 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -919,6 +919,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 212 将 thread menu 依赖组装改为显式输入，composition 直接传入 conversation、pending queue、workspace、settings、backend action 与 auto-retry owners；测试只保留 test-only App 适配 helper。动态 backend/session key 读取、fork、interrupt、reply 和 auto-retry 锁语义不变。生产 `*App` 引用由 120 降至 119，收 `*App` 的函数数由 12 降至 11，lazy binding-read 保持 0。
 
 步骤 213 删除已无生产调用方的 `sendReplyMessagesWithReuse(*App)` 与 `scheduleLocalFileLinkPatch(*App)` 兼容 helper。实际回复路径继续使用 `OutboundCardService`、`replyChunkDelivery` 和 `localFileLinkPatcher`；等价 fallback、quiet-mode、reuse 与本地链接 patch 测试保留在窄 service 上。生产 `*App` 引用由 119 降至 117，收 `*App` 的函数数由 11 降至 9，lazy binding-read 保持 0。
+
+步骤 214 将只被测试调用的 Codex plan-mode pending 查询与清理 wrapper 移入 `_test.go`。生产路径继续直接使用同一 `planmode.Dependencies`，测试覆盖与 plan-mode 状态行为不变。生产 `*App` 引用由 117 降至 115，收 `*App` 的函数数由 9 降至 7，lazy binding-read 保持 0。
 
 ## 方法
 

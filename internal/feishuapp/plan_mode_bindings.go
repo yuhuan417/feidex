@@ -55,10 +55,6 @@ func normalizeThreadCollaborationMode(mode *conversation.SessionCollaborationMod
 	return conversation.NormalizeCollaborationMode(mode)
 }
 
-func codexPlanModeExitPendingRequest(a *App, sessionKey string) *state.PendingRequest {
-	return planmode.ExitPendingRequest(newPlanModeAppAdapter(a), sessionKey)
-}
-
 type PlanModePortInputs struct {
 	Runtime            BackendRuntimeDeps
 	UseCase            *planapp.Service
@@ -201,10 +197,6 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "info", Content: "正在处理 plan mode"},
 	}, nil
-}
-
-func clearCodexPlanModeForSession(a *App, sessionKey string) (bool, error) {
-	return planmode.ClearCodexPlanModeForSession(newPlanModeAppAdapter(a), sessionKey)
 }
 
 func newPlanModeAppAdapter(a *App) planmode.Dependencies {
