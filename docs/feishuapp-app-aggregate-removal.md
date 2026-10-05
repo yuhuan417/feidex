@@ -834,6 +834,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 170 将 `pending_form.plan_reject` 移入 App-free pending handler map，显式注入 Claude support 与 server-request owners。拒绝仍先调用对应 backend adapter 的 `CancelPending`，成功后再 finalize pending 并渲染原状态卡；owner 校验、失败 toast 与 pending 状态边界不变。对照状态机审计的 pending interaction 约束，本次仅改变依赖传递。生产 `*App` 引用由 222 降至 221，收 `*App` 的顶层函数由 92 降至 91，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持。
 
+步骤 171 将 `menu.interrupt`、`menu.thread` 和 `menu.new` 从 feature 生成的 App-bound handler map 移入 `ThreadMenu` owner map；同一 `menu.thread` feature 的 `menu.fork` 仍留在 App-bound map。菜单结构、action name 和顺序不变。对照 SM-06，中断仍只发起请求，turn 终态仍由 `turn/completed(interrupted)` 收口；本次仅改 callback owner 的传递。`*App` 文本引用、App-taking 函数及 lazy binding-read 预算保持 221/91/0，因为其它 callback 仍依赖 `cardActionService`。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

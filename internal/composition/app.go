@@ -564,7 +564,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,
 			Upgrades: bindings.Upgrades, Debug: bindings.Debug,
 			SimpleStatusCard: frontend.Feishu().SimpleStatusCard,
-		},
+		}, bindings.ThreadMenu,
 	))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
 	*autoRetryRuntimeDeps = frontend.BackendRuntimeDeps()

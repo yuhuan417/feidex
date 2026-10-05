@@ -4,6 +4,7 @@ import (
 	claudesupport "feidex/internal/adapter/feishu/claudesupport"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
+	"feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -48,6 +49,20 @@ func pendingPortCardActionHandlers(requests *serverrequest.Service, claude *clau
 		},
 		"review.form.submit": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return review.CompleteReviewFormSubmit(action)
+		},
+	}
+}
+
+func threadMenuPortCardActionHandlers(service *threadmenu.Service) map[string]cardActionPortHandler {
+	return map[string]cardActionPortHandler{
+		"menu.interrupt": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
+		},
+		"menu.thread": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteMenuThread(action, actionSessionKey(action))
+		},
+		"menu.new": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return service.CompleteMenuNew(action, actionSessionKey(action))
 		},
 	}
 }

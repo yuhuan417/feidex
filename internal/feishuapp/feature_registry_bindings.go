@@ -20,6 +20,7 @@ type featureBinding struct {
 	RenderActions []string
 	Render        func(actionName string, a *App, sessionKey string) (map[string]any, bool)
 	HandleAction  func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error)
+	PortActions   []string
 }
 
 func buildFeatureBindings() map[string]featureBinding {
@@ -131,13 +132,19 @@ func buildMenuCardActionHandlers() map[string]cardActionHandler {
 			continue
 		}
 		binding, ok := featureBindingForID(feature.ID)
-		if !ok || binding.HandleAction == nil {
+		if !ok {
 			panic("missing feature action binding for " + feature.ID)
 		}
 		for _, actionName := range feature.ActionNames {
 			name := strings.TrimSpace(actionName.String())
 			if name == "" {
 				continue
+			}
+			if containsActionName(binding.PortActions, name) {
+				continue
+			}
+			if binding.HandleAction == nil {
+				panic("missing feature action handler for " + feature.ID + ": " + name)
 			}
 			handlers[name] = func(actionName string, binding featureBinding) cardActionHandler {
 				return func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -150,6 +157,15 @@ func buildMenuCardActionHandlers() map[string]cardActionHandler {
 	delete(handlers, "history.detail")
 	delete(handlers, "history.detail.select")
 	return handlers
+}
+
+func containsActionName(names []string, target string) bool {
+	for _, name := range names {
+		if name == target {
+			return true
+		}
+	}
+	return false
 }
 
 type menuNodeRenderer func(a *App, sessionKey string) (map[string]any, bool)

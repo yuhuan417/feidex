@@ -9,6 +9,7 @@ import (
 	history "feidex/internal/adapter/feishu/history"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
+	"feidex/internal/adapter/feishu/threadmenu"
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/application"
@@ -26,7 +27,7 @@ type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService, pathPicker PathPickerActionInputs) appcardaction.Dependencies {
+func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service) appcardaction.Dependencies {
 	appHandlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
 		workspaceCardActionHandlers(),
@@ -40,6 +41,7 @@ func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedR
 		historyCardActionHandlers(historyService),
 		serverRequestCardActionHandlers(serverRequests),
 		pathPickerActionHandlers(pathPicker),
+		threadMenuPortCardActionHandlers(threadMenu),
 	)
 	bound := bindAppCardActionHandlers(cardActionService{app: app}, appHandlers)
 	for name, handler := range bindCardActionPortHandlers(portHandlers) {

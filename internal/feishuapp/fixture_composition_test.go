@@ -507,7 +507,7 @@ func prepareTestApp(a *App) *App {
 				}
 				return nil
 			},
-		},
+		}, a.bindings.ThreadMenu,
 	))
 	dispatcher := newInputDispatcher(a)
 	a.runtimeOwner.Dispatcher = &dispatcher

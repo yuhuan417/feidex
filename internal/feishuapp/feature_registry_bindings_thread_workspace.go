@@ -20,12 +20,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.interrupt" {
-				return nil, nil
-			}
-			return s.app.bindings.ThreadMenu.CompleteMenuInterrupt(action, actionSessionKey(action), actionStringValue(action, "turn_id"))
-		},
+		PortActions: []string{"menu.interrupt"},
 	}
 	bindings["menu.thread"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -73,18 +68,12 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			}
 			return card, true
 		},
+		PortActions: []string{"menu.thread", "menu.new"},
 		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			sessionKey := actionSessionKey(action)
-			switch actionName {
-			case "menu.thread":
-				return s.app.bindings.ThreadMenu.CompleteMenuThread(action, sessionKey)
-			case "menu.new":
-				return s.app.bindings.ThreadMenu.CompleteMenuNew(action, sessionKey)
-			case "menu.fork":
-				return completeMenuFork(s.app, action, sessionKey)
-			default:
-				return nil, nil
+			if actionName == "menu.fork" {
+				return completeMenuFork(s.app, action, actionSessionKey(action))
 			}
+			return nil, nil
 		},
 	}
 	bindings["menu.workspace"] = featureBinding{
