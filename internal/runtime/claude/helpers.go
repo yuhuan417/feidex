@@ -1,5 +1,5 @@
 // Package clauderuntime provides pure helper functions and types for the
-// Claude runtime subsystem. These functions have no dependency on *App.
+// Claude runtime subsystem. These functions have no dependency on the frontend aggregate.
 package clauderuntime
 
 import (
