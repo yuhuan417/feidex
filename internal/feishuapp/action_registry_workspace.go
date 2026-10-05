@@ -20,6 +20,9 @@ type WorkspaceCardActionInputs struct {
 
 func workspaceCardActionHandlers(inputs WorkspaceCardActionInputs) map[string]cardActionPortHandler {
 	return map[string]cardActionPortHandler{
+		"menu.workspace": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return inputs.CompleteMenuCommand(action, actionSessionKey(action), "/workspace", "menu.root")
+		},
 		"workspace.use.select": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			if groupBindingSessionScopeActive(inputs.BindingCommands.scope, actionSessionKey(action)) {
 				return inputs.BindingCommands.completeBindingUse(action, actionSessionKey(action), strings.TrimSpace(action.Option))

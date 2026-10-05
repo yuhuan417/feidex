@@ -13,8 +13,6 @@ import (
 	"strings"
 
 	"feidex/internal/feishu"
-
-	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
 type threadForkDependencies struct {
@@ -84,9 +82,4 @@ func startThreadFork(deps threadForkDependencies, sessionKey string) (int, strin
 		return 0, "", err
 	}
 	return discarded, forkedID, nil
-}
-
-func completeMenuFork(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	sessionKey = threadMenuEffectiveSessionKey(a.configView().normalizeSessionKey, a.bindings.BindingCommands.scope, a.bindings.ConversationQuery, sessionKey)
-	return completeMenuCommand(a, action, sessionKey, primaryConversationSlash(a.configView().configuredBackend())+" fork", "menu.thread")
 }

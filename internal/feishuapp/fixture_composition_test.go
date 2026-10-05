@@ -595,6 +595,10 @@ func prepareTestApp(a *App) *App {
 			Backend: configuredBackend, State: a.State(), Renderer: a.Feishu(),
 			RuntimeSettings: a.bindings.RuntimeSettings,
 			QuietMode:       ConfiguredQuietModeBuilder(a.Config(), a.ConfigMu(), a.FrontendConfigIndex()),
+		}, ThreadForkCardActionInputs{
+			BindingCommands: a.bindings.BindingCommands, ConversationQuery: a.bindings.ConversationQuery,
+			NormalizeSessionKey: normalizeCardActionSessionKey,
+			Backend:             configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
 		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,

@@ -67,3 +67,15 @@ func (s cardActionService) completeMenuHistory(action *feishu.CardAction, sessio
 func (s cardActionService) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return toolsCardActionHandlers(s.toolsActionInputs())["menu.usage"](action)
 }
+
+func completeMenuFork(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
+	if action.ActionValue == nil {
+		action.ActionValue = map[string]any{}
+	}
+	action.ActionValue["session_key"] = sessionKey
+	return threadForkCardActionHandlers(ThreadForkCardActionInputs{
+		BindingCommands: a.bindings.BindingCommands, ConversationQuery: a.bindings.ConversationQuery,
+		NormalizeSessionKey: a.configView().normalizeSessionKey,
+		Backend:             a.configView().configuredBackend, CompleteMenuCommand: a.CompleteMenuCommand,
+	})["menu.fork"](action)
+}

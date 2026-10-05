@@ -6,10 +6,28 @@ import (
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/adapter/feishu/threadmenu"
+	appconversation "feidex/internal/application/conversation"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
+
+type ThreadForkCardActionInputs struct {
+	BindingCommands     bindingService
+	ConversationQuery   appconversation.Query
+	NormalizeSessionKey func(string) string
+	Backend             func() string
+	CompleteMenuCommand func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
+}
+
+func threadForkCardActionHandlers(inputs ThreadForkCardActionInputs) map[string]cardActionPortHandler {
+	return map[string]cardActionPortHandler{
+		"menu.fork": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			sessionKey := threadMenuEffectiveSessionKey(inputs.NormalizeSessionKey, inputs.BindingCommands.scope, inputs.ConversationQuery, actionSessionKey(action))
+			return inputs.CompleteMenuCommand(action, sessionKey, primaryConversationSlash(inputs.Backend())+" fork", "menu.thread")
+		},
+	}
+}
 
 func pendingPlanModeExitPortCardActionHandlers(deps planmode.Dependencies) map[string]cardActionPortHandler {
 	return map[string]cardActionPortHandler{

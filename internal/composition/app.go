@@ -663,6 +663,10 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			Backend: configuredBackend, State: frontend.State(), Renderer: frontend.Feishu(),
 			RuntimeSettings: bindings.RuntimeSettings,
 			QuietMode:       feishuapp.ConfiguredQuietModeBuilder(frontend.Config(), frontend.ConfigMu(), frontendConfigIndex),
+		}, feishuapp.ThreadForkCardActionInputs{
+			BindingCommands: bindings.BindingCommands, ConversationQuery: bindings.ConversationQuery,
+			NormalizeSessionKey: normalizeCardActionSessionKey,
+			Backend:             configuredBackend, CompleteMenuCommand: frontend.CompleteMenuCommand,
 		}, feishuapp.PathPickerActionInputs{
 			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,

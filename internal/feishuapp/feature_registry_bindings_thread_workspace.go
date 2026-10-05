@@ -68,13 +68,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			}
 			return card, true
 		},
-		PortActions: []string{"menu.thread", "menu.new"},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName == "menu.fork" {
-				return completeMenuFork(s.app, action, actionSessionKey(action))
-			}
-			return nil, nil
-		},
+		PortActions: []string{"menu.thread", "menu.new", "menu.fork"},
 	}
 	bindings["menu.workspace"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -94,12 +88,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding) {
 			}
 			return a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(sessionKey), true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.workspace" {
-				return nil, nil
-			}
-			return completeMenuCommand(s.app, action, actionSessionKey(action), "/workspace", "menu.root")
-		},
+		PortActions: []string{"menu.workspace"},
 	}
 	bindings["menu.model"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
