@@ -50,10 +50,7 @@ func AttachEffectRunner(a *App, runner runtime.EffectRunner) {
 // InstallFeishuPolicies installs the Feishu-specific routing policies after
 // composition has created the application/runtime graph. Event callback
 // binding itself lives in internal/app's thin boundary.
-func InstallFeishuPolicies(a *App) {
-	if a == nil {
-		return
-	}
-	configureGroupMessagePolicy(a)
-	configureGroupPrimaryEvents(a)
+func InstallFeishuPolicies(inputs FeishuPolicyInputs) {
+	configureGroupMessagePolicy(inputs.Client, inputs.GroupMessages)
+	configureGroupPrimaryEvents(inputs)
 }

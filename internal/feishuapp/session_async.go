@@ -6,9 +6,12 @@ import (
 	frontendruntime "feidex/internal/runtime"
 )
 
-func SessionTaskRunner(a *App) func(string, func()) bool {
+func SessionTaskRunner(actors *frontendruntime.SessionActors, runAsync func(func()) bool) func(string, func()) bool {
 	return func(key string, fn func()) bool {
-		return runAsync(a, func() { runSession(a, key, fn) })
+		if runAsync == nil {
+			return false
+		}
+		return runAsync(func() { runSessionOnActor(actors, key, fn) })
 	}
 }
 

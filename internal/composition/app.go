@@ -112,7 +112,9 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	feishuapp.AttachEffectRunner(frontend, feishuapp.NewEffectRunner(frontend))
 	bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(configSource)}
 	bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
-	bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: frontend.State(), Backend: configuredBackend, Context: frontend.Context, Run: feishuapp.SessionTaskRunner(frontend), Effects: feishuapp.NewEffectRunner(frontend)}}
+	bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: frontend.State(), Backend: configuredBackend, Context: frontend.Context, Run: feishuapp.SessionTaskRunner(scope.RuntimeOwner.SessionActors, func(fn func()) bool {
+		return scope.RuntimeOwner.Lifecycle.Run(fn, asyncRunner)
+	}), Effects: feishuapp.NewEffectRunner(frontend)}}
 	bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: scoped.WorkspaceSelections{Store: frontend.State()}, DefaultWorkspaceID: feishuapp.DefaultWorkspaceID(frontend.Config(), frontend.ConfigMu())}
 	bindings.SubmissionLookup = submission.SubmissionLookupService{State: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings}
 	bindings.SubmissionStatus = submission.StatusService{Lookup: bindings.SubmissionLookup, Repository: frontend.State()}
@@ -640,7 +642,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		TurnMetadata: bindings.TurnMetadata, ConversationQuery: bindings.ConversationQuery,
 		Conversations: bindings.Conversations,
 	}
-	feishuapp.InstallFeishuPolicies(frontend)
+	feishuapp.InstallFeishuPolicies(feishuapp.FeishuPolicyInputs{
+		Client: frontend.Feishu(), GroupMessages: bindings.GroupMessages, Context: frontend.Context,
+		PrimaryInitialization: bindings.PrimaryInitialization, FrontendID: frontend.FrontendID(),
+		Announcements: bindings.Announcements, AnnouncementRefresh: scope.RuntimeOwner.Announcements,
+	})
 	transport, ok := scope.FeishuTransport.(app.HandlerSet)
 	if !ok {
 		return nil, fmt.Errorf("frontend composition has no Feishu handler transport")

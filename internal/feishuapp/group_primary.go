@@ -7,10 +7,12 @@ import (
 	"strings"
 
 	statejson "feidex/internal/adapter/storage/json"
+	"feidex/internal/application/announcement"
 	approuting "feidex/internal/application/routing"
 	"feidex/internal/domain/identity"
 	domainrouting "feidex/internal/domain/routing"
 	"feidex/internal/feishu"
+	frontendruntime "feidex/internal/runtime"
 	"feidex/internal/state"
 )
 
@@ -30,38 +32,48 @@ type botNameProvider interface {
 	BotName() string
 }
 
-func configureGroupPrimaryEvents(a *App) {
-	if a == nil || a.feishu == nil {
+type FeishuPolicyInputs struct {
+	Client                FeishuClient
+	GroupMessages         approuting.GroupMessages
+	Context               func() context.Context
+	PrimaryInitialization approuting.InitializationService
+	FrontendID            string
+	Announcements         announcement.Service
+	AnnouncementRefresh   *frontendruntime.CoalescedRefresh
+}
+
+func configureGroupPrimaryEvents(inputs FeishuPolicyInputs) {
+	if inputs.Client == nil {
 		return
 	}
-	configurer, ok := a.feishu.(botGroupAddedConfigurer)
+	configurer, ok := inputs.Client.(botGroupAddedConfigurer)
 	if !ok {
 		return
 	}
 	configurer.SetBotGroupAddedHandler(func(event *feishu.BotGroupEvent) {
-		handleBotGroupAdded(a, event)
+		handleBotGroupAdded(inputs, event)
 	})
 }
 
-func handleBotGroupAdded(a *App, event *feishu.BotGroupEvent) {
-	if a == nil || event == nil {
+func handleBotGroupAdded(inputs FeishuPolicyInputs, event *feishu.BotGroupEvent) {
+	if event == nil {
 		return
 	}
 	chatID := strings.TrimSpace(event.ChatID)
 	if chatID == "" {
 		return
 	}
-	if _, err := initializeGroupPrimary(a.Context(), a.bindings.PrimaryInitialization, a.FrontendID(), a.feishu, "group", chatID); err != nil {
+	if _, err := initializeGroupPrimary(inputs.Context(), inputs.PrimaryInitialization, inputs.FrontendID, inputs.Client, "group", chatID); err != nil {
 		slog.Warn("group primary auto init failed after bot added",
-			"frontend_id", strings.TrimSpace(a.FrontendID()),
+			"frontend_id", strings.TrimSpace(inputs.FrontendID),
 			"chat_id", chatID,
 			"error", err,
 		)
 	}
 	// The bot is in this chat again, so undo any earlier "no longer a member"
 	// mark; otherwise its announcement would stay disabled forever.
-	clearGroupAnnouncementBotAbsent(a.bindings.Announcements, chatID)
-	scheduleGroupAnnouncementStatusRefresh(a.runtimeOwner.Announcements, chatID)
+	clearGroupAnnouncementBotAbsent(inputs.Announcements, chatID)
+	scheduleGroupAnnouncementStatusRefresh(inputs.AnnouncementRefresh, chatID)
 }
 
 func initializeGroupPrimary(ctx context.Context, initializer approuting.InitializationService, frontendID string, client FeishuClient, chatType, chatID string) (*state.GroupPrimary, error) {

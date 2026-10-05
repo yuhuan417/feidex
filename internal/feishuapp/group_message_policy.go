@@ -19,15 +19,14 @@ type groupMessagePolicyConfigurer interface {
 	SetGroupMessagePolicy(feishu.GroupMessagePolicy)
 }
 
-func configureGroupMessagePolicy(a *App) {
-	if a == nil || a.feishu == nil {
+func configureGroupMessagePolicy(client FeishuClient, groupMessages routing.GroupMessages) {
+	if client == nil {
 		return
 	}
-	configurer, ok := a.feishu.(groupMessagePolicyConfigurer)
+	configurer, ok := client.(groupMessagePolicyConfigurer)
 	if !ok {
 		return
 	}
-	groupMessages := a.bindings.GroupMessages
 	configurer.SetGroupMessagePolicy(func(input feishu.GroupMessagePolicyInput) bool {
 		return shouldDeliverGroupMessageToApp(groupMessages, input)
 	})

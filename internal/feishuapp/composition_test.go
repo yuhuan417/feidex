@@ -40,7 +40,7 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 		}
 		InstallBackendRuntime(a.BackendRuntimeDeps(), handle)
 	}
-	InstallFeishuPolicies(a)
+	InstallFeishuPolicies(testFeishuPolicyInputs(a))
 	a.feishu.SetHandlers(a.HandleFeishuMessage, a.HandleCardAction, a.HandleFeishuRecall, a.HandleFeishuReaction)
 	a.feishu.ConfigureLocalFileLinks("", "")
 	return a, nil

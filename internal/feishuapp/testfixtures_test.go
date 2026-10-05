@@ -901,9 +901,17 @@ func newTestApp(t *testing.T) (*App, *fakeFeishuClient, *fakeCodexClient) {
 	a.runtimeOwner.TurnBindings = turnbinding.NewTracker(a.State().Submission)
 	prepareTestApp(a)
 	replaceCodexClient(a.bindings.CodexRecovery, fc)
-	configureGroupPrimaryEvents(a)
+	configureGroupPrimaryEvents(testFeishuPolicyInputs(a))
 	t.Cleanup(asyncWG.Wait)
 	return a, ff, fc
+}
+
+func testFeishuPolicyInputs(a *App) FeishuPolicyInputs {
+	return FeishuPolicyInputs{
+		Client: a.feishu, GroupMessages: a.bindings.GroupMessages, Context: a.Context,
+		PrimaryInitialization: a.bindings.PrimaryInitialization, FrontendID: a.FrontendID(),
+		Announcements: a.bindings.Announcements, AnnouncementRefresh: a.runtimeOwner.Announcements,
+	}
 }
 
 func testOwnerWithCodex(client CodexClient) *frontendruntime.FrontendOwner {

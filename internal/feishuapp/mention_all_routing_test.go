@@ -14,7 +14,7 @@ func TestMentionAllIsDeliveredToEveryBot(t *testing.T) {
 	store := newGroupAnnouncementStore(t)
 	ff := &fakeFeishuClient{botOpenID: "bot-open"}
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
-	configureGroupMessagePolicy(a)
+	configureGroupMessagePolicy(a.feishu, a.bindings.GroupMessages)
 	// A group with no primary state goes through the probe path, which delivers
 	// plain messages so a bot can observe the group before /primary is set.
 	// Establish the state so the baseline below is the post-setup behaviour.
@@ -50,7 +50,7 @@ func TestSpecificMentionStillBlocksDelivery(t *testing.T) {
 	store := newGroupAnnouncementStore(t)
 	ff := &fakeFeishuClient{botOpenID: "bot-open"}
 	a := newGroupAnnouncementTestApp(t, store, ff, "bot-a")
-	configureGroupMessagePolicy(a)
+	configureGroupMessagePolicy(a.feishu, a.bindings.GroupMessages)
 	if _, err := setGroupPrimaryState(a, "group", "chat-1", false, nil); err != nil {
 		t.Fatalf("setGroupPrimaryState() error = %v", err)
 	}

@@ -147,7 +147,7 @@ func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) 
 	ffA.groupBotCounts = map[string]int{"chat-primary": 1}
 	fb := &fakeFeishuClient{botOpenID: "bot-b-open", groupBotCounts: map[string]int{"chat-primary": 2}}
 	b := prepareTestApp(&App{cfg: a.cfg, cfgPath: a.cfgPath, store: a.store, frontendID: "bot-b", feishu: appfeishuwrap.WrapFeishuClient(fb)})
-	configureGroupPrimaryEvents(b)
+	configureGroupPrimaryEvents(testFeishuPolicyInputs(b))
 
 	msgA := &feishu.InboundMessage{ChatType: "group", ChatID: "chat-primary", MessageID: "msg-a", UserID: "user-1"}
 	if err := a.bindings.BindingCommands.commandWorkspace(msgA, nil); err != nil {
@@ -157,8 +157,8 @@ func TestGroupPrimaryAutoInitializesFromBotCountAndManualOverride(t *testing.T) 
 	if err := b.bindings.BindingCommands.commandWorkspace(msgB, nil); err != nil {
 		t.Fatalf("bot-b /workspace error = %v", err)
 	}
-	handleBotGroupAdded(a, &feishu.BotGroupEvent{ChatID: "chat-primary"})
-	handleBotGroupAdded(b, &feishu.BotGroupEvent{ChatID: "chat-primary"})
+	handleBotGroupAdded(testFeishuPolicyInputs(a), &feishu.BotGroupEvent{ChatID: "chat-primary"})
+	handleBotGroupAdded(testFeishuPolicyInputs(b), &feishu.BotGroupEvent{ChatID: "chat-primary"})
 
 	primary := groupPrimaryForChat(a, "group", "chat-primary")
 	if primary == nil || !primary.Enabled || !isGroupPrimary(a, "group", "chat-primary") {
