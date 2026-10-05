@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 121 |
-| 收 `*App` 的顶层函数 | 13 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 120 |
+| 收 `*App` 的顶层函数 | 12 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -913,6 +913,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 209 删除 thread menu 的纯转发构造 facade，composition 直接用导出的窄依赖构造函数创建 adapter service。依赖组装与 handler 行为不变。生产 `*App` 引用由 127 降至 126，收 `*App` 的函数数由 19 降至 18，其他棘轮保持 1/1/0。
 
 步骤 210 将 pending-card delivery 抽成显式运行期 service，并让 Claude support 与 server-request 工厂接收窄输入。卡片投递的 lifecycle admission、dedupe、reasoning-only 工作卡复用、提交关联和非阻塞 detached request 语义不变；Claude core、configured backend 与当前 runtime owner 仍在执行时动态解析。生产 `*App` 引用由 126 降至 121，收 `*App` 的函数数由 18 降至 13，lazy binding-read 保持 0。
+
+步骤 211 删除 review command 的纯转发构造 facade，composition 和 fixture 直接用导出的 review 依赖组装 adapter service。review 表单、异步 card action 和提交队列行为不变。生产 `*App` 引用由 121 降至 120，收 `*App` 的函数数由 13 降至 12，lazy binding-read 保持 0。
 
 ## 方法
 

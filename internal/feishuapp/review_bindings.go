@@ -39,7 +39,7 @@ func reviewPendingPayloadFromPending(pending *state.PendingRequest) appreviewcmd
 // App adapters — satisfy reviewcmd.App without adding feature methods on *App
 // ---------------------------------------------------------------------------
 
-func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
+func ReviewCommandDependencies(a *App) appreviewcmd.Dependencies {
 	if a == nil {
 		return appreviewcmd.Dependencies{}
 	}
@@ -70,10 +70,6 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 			return completeAsyncRenderedCardAction(a, x, s, t, p, r, f, w)
 		},
 	}
-}
-
-func BuildReviewCommands(app *App) appreviewcmd.ReviewFormService {
-	return appreviewcmd.NewReviewFormService(newReviewAppAdapter(app))
 }
 
 // ---------------------------------------------------------------------------

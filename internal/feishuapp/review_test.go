@@ -43,7 +43,7 @@ func TestCommandReviewUncommittedCallsReviewStart(t *testing.T) {
 		return nil
 	}
 
-	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, nil); err != nil {
+	if err := appreviewcmd.CommandReview(ReviewCommandDependencies(a), msg, nil); err != nil {
 		t.Fatalf("commandReview() error = %v", err)
 	}
 	if gotMethod != "review/start" {
@@ -105,7 +105,7 @@ func TestCommandReviewWithoutActiveThreadUsesGenericThreadStart(t *testing.T) {
 		return nil
 	}
 
-	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, nil); err != nil {
+	if err := appreviewcmd.CommandReview(ReviewCommandDependencies(a), msg, nil); err != nil {
 		t.Fatalf("commandReview() error = %v", err)
 	}
 	if len(methods) < 2 || methods[0] != "thread/start" || methods[1] != "review/start" {
@@ -132,7 +132,7 @@ func TestCommandReviewBaseOpensBranchPicker(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, []string{"base"}); err != nil {
+	if err := appreviewcmd.CommandReview(ReviewCommandDependencies(a), msg, []string{"base"}); err != nil {
 		t.Fatalf("commandReview(base) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -170,7 +170,7 @@ func TestCommandReviewCommitOpensRecentCommitPicker(t *testing.T) {
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, []string{"commit"}); err != nil {
+	if err := appreviewcmd.CommandReview(ReviewCommandDependencies(a), msg, []string{"commit"}); err != nil {
 		t.Fatalf("commandReview(commit) error = %v", err)
 	}
 	if len(ff.replyCards) != 1 {
@@ -329,7 +329,7 @@ func TestReviewTurnStartedNotificationDoesNotOverrideResponseTurnID(t *testing.T
 		return nil
 	}
 
-	if err := appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, nil); err != nil {
+	if err := appreviewcmd.CommandReview(ReviewCommandDependencies(a), msg, nil); err != nil {
 		t.Fatalf("commandReview() error = %v", err)
 	}
 	handleNotification(a.BackendRuntimeDeps(), "turn/started", json.RawMessage(`{"threadId":"thread-1","turn":{"id":"persisted-turn-b"}}`))

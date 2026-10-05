@@ -17,7 +17,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 		Commands: map[string]featureCommandBinding{
 			"review": {
 				Handle: func(a *App, msg *feishu.InboundMessage, args []string) error {
-					return appreviewcmd.CommandReview(newReviewAppAdapter(a), msg, args)
+					return appreviewcmd.CommandReview(ReviewCommandDependencies(a), msg, args)
 				},
 			},
 		},
@@ -34,11 +34,11 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			case "menu.review":
 				return s.completeMenuReview(action, sessionKey)
 			case "menu.review.uncommitted":
-				return appreviewcmd.CompleteMenuReviewUncommitted(newReviewAppAdapter(s.app), action, sessionKey)
+				return appreviewcmd.CompleteMenuReviewUncommitted(ReviewCommandDependencies(s.app), action, sessionKey)
 			case "menu.review.base":
-				return appreviewcmd.CompleteMenuReviewBase(newReviewAppAdapter(s.app), action, sessionKey)
+				return appreviewcmd.CompleteMenuReviewBase(ReviewCommandDependencies(s.app), action, sessionKey)
 			case "menu.review.commit":
-				return appreviewcmd.CompleteMenuReviewCommit(newReviewAppAdapter(s.app), action, sessionKey)
+				return appreviewcmd.CompleteMenuReviewCommit(ReviewCommandDependencies(s.app), action, sessionKey)
 			case "menu.review.custom":
 				return completeMenuCommand(s.app, action, sessionKey, "/review custom", "menu.review")
 			default:

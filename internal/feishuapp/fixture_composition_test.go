@@ -10,6 +10,7 @@ import (
 	"feidex/internal/adapter/feishu/goalcmd"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/adapter/feishu/planmode"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/adapter/feishu/turnmeta"
@@ -560,7 +561,7 @@ func prepareTestApp(a *App) *App {
 		WorkspaceSelection: a.bindings.WorkspaceSelection, Submissions: a.bindings.Submissions,
 		Conversations: a.bindings.Conversations, Feishu: a.Feishu(), AsyncRunner: a.AsyncRunner(),
 	})
-	a.bindings.ReviewCommands = BuildReviewCommands(a)
+	a.bindings.ReviewCommands = appreviewcmd.NewReviewFormService(ReviewCommandDependencies(a))
 	cardActionFrontendID := a.FrontendID()
 	normalizeCardActionSessionKey := func(key string) string {
 		return identity.CanonicalSessionKey(cardActionFrontendID, key)

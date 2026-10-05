@@ -19,6 +19,7 @@ import (
 	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/adapter/feishu/planmode"
+	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/adapter/feishu/turnitem"
 	"feidex/internal/adapter/feishu/turnmeta"
@@ -612,7 +613,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		WorkspaceSelection: bindings.WorkspaceSelection, Submissions: bindings.Submissions,
 		Conversations: bindings.Conversations, Feishu: frontend.Feishu(), AsyncRunner: asyncRunner,
 	})
-	bindings.ReviewCommands = feishuapp.BuildReviewCommands(frontend)
+	bindings.ReviewCommands = appreviewcmd.NewReviewFormService(feishuapp.ReviewCommandDependencies(frontend))
 	bindings.MCP, err = feishuapp.BuildMCP(feishuapp.MCPPorts(feishuapp.MCPPortInputs{
 		AttachmentSender: frontend.Feishu(), StateProvider: frontend.State(),
 		TurnItems: bindings.TurnItems, SubmissionLookup: bindings.SubmissionLookup,

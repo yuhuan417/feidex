@@ -249,7 +249,7 @@ func TestCompleteMenuReviewUncommittedReturnsPreparingCardAndPatchesAsync(t *tes
 		return nil
 	}
 
-	resp, err := appreviewcmd.CompleteMenuReviewUncommitted(newReviewAppAdapter(a), &feishu.CardAction{
+	resp, err := appreviewcmd.CompleteMenuReviewUncommitted(ReviewCommandDependencies(a), &feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   msg.MessageID,
@@ -283,7 +283,7 @@ func TestCompleteMenuReviewBaseReturnsPreparingCardAndPatchesAsync(t *testing.T)
 	mustUpsertReviewSession(t, a, sessionKey, msg.ChatID, msg.ChatType, msg.UserID, "thread-1")
 	markSessionThreadLive(a, sessionKey, "thread-1")
 
-	resp, err := appreviewcmd.CompleteMenuReviewBase(newReviewAppAdapter(a), &feishu.CardAction{
+	resp, err := appreviewcmd.CompleteMenuReviewBase(ReviewCommandDependencies(a), &feishu.CardAction{
 		UserID:      msg.UserID,
 		ChatID:      msg.ChatID,
 		MessageID:   msg.MessageID,
