@@ -7,10 +7,13 @@ import (
 	"sync"
 
 	configadapter "feidex/internal/adapter/config"
+	retryview "feidex/internal/adapter/feishu/autoretry"
 	"feidex/internal/adapter/feishu/backend"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/announcement"
 	"feidex/internal/application/backendselection"
 	"feidex/internal/application/frontend"
+	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/runtime/maintenance"
@@ -20,50 +23,61 @@ import (
 // backendLookPath is testable indirection for exec.LookPath.
 var backendLookPath = exec.LookPath
 
-func BuildBackendSelection(app *App) backend.SelectionService {
-	if app == nil {
+type BackendSelectionInputs struct {
+	RuntimeDeps        BackendRuntimeDeps
+	RuntimeOwner       *backendruntime.FrontendOwner
+	AsyncRunner        func(func())
+	State              *appstate.Store
+	Feishu             FeishuClient
+	WorkspaceSelection workspaceapp.SelectionService
+	UseCase            *backendselection.Service
+	AnnouncementQuery  announcement.Query
+	StartupRecovery    maintenance.StartupRecovery
+	AutoRetry          retryview.Service
+	FrontendQuery      frontend.Query
+}
+
+func BuildBackendSelection(inputs BackendSelectionInputs) backend.SelectionService {
+	if inputs.RuntimeOwner == nil {
 		return backend.SelectionService{}
 	}
-	announcementRefresh := app.runtimeOwner.Announcements
-	announcementQuery := app.bindings.AnnouncementQuery
-	startupRecovery := app.bindings.StartupRecovery
-	autoRetry := app.bindings.AutoRetry
-	frontendQuery := app.bindings.FrontendQuery
-	effectRunner := newEffectRunner(app.runtimeOwner)
-	frontendID := app.FrontendID()
-	source := newFrontendConfigProvider(app.BackendRuntimeDeps(), app.store, app.bindings.WorkspaceSelection)
+	runtimeDeps := inputs.RuntimeDeps
+	owner := inputs.RuntimeOwner
+	effectRunner := newEffectRunner(owner)
+	frontendID := runtimeDeps.frontendID
+	source := newFrontendConfigProvider(runtimeDeps, runtimeDeps.store, inputs.WorkspaceSelection)
 
 	return backend.NewSelectionService(backend.SelectionDeps{
 		Source:  source,
-		UseCase: app.bindings.BackendSwitch,
+		UseCase: inputs.UseCase,
 		Runtime: backend.SelectionRuntimeDeps{
 			ListAvailableBackends: func() []backend.AvailableBackend {
-				return availableBackendsForApp(app.BackendRuntimeDeps())
+				return availableBackendsForApp(runtimeDeps)
 			},
 			PrepareRuntime: func(ctx context.Context, target string) (*backend.BackendRuntimeHandle, error) {
-				return prepareRuntimeForApp(app.BackendRuntimeDeps(), ctx, target)
+				return prepareRuntimeForApp(runtimeDeps, ctx, target)
 			},
 			SnapshotRuntime: func() *backend.BackendRuntimeHandle {
-				return snapshotRuntimeForApp(app.BackendRuntimeDeps())
+				return snapshotRuntimeForApp(runtimeDeps)
 			},
 			RecoverState: func() {
-				recoverFrontendRuntimeState(startupRecovery)
-				scheduleAllGroupAnnouncementStatusRefreshes(announcementRefresh, announcementQuery)
+				recoverFrontendRuntimeState(inputs.StartupRecovery)
+				scheduleAllGroupAnnouncementStatusRefreshes(owner.Announcements, inputs.AnnouncementQuery)
 			},
 			IdleBlockedReason: func() string {
-				return frontendIdleBlockedReason(frontendQuery)
+				return frontendIdleBlockedReason(inputs.FrontendQuery)
 			},
 			RuntimeReady: func(target string) bool {
-				return backendRuntimeReadyForApp(app.BackendRuntimeDeps(), target)
+				return backendRuntimeReadyForApp(runtimeDeps, target)
 			},
 		},
 		Render: backend.SelectionRenderDeps{
 			BuildStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
-				return app.Feishu().SimpleStatusCard(title, color, body, buttons)
+				return inputs.Feishu.SimpleStatusCard(title, color, body, buttons)
 			},
 			BuildMenuCard: func(sessionKey string) map[string]any {
 				spec, _ := menuGroupSpec("menu.group.backend")
-				return renderBackendMenuCardData(app.configView().configuredBackend(), planModeTitleForSession(app.State(), app != nil, sessionKey, spec.Label), app.feishu, sessionKey)
+				return renderBackendMenuCardData(runtimeDeps.currentBackend().view.configuredBackend(), planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, spec.Label), inputs.Feishu, sessionKey)
 			},
 			BuildCardBody: func(action, body string) string {
 				return menuCardBody(action, body)
@@ -80,12 +94,12 @@ func BuildBackendSelection(app *App) backend.SelectionService {
 				return patchCardEffect(ctx, effectRunner, frontendID, messageID, card)
 			},
 			RunAsync: func(sessionKey string, fn func()) {
-				_ = runSessionAsync(&app.runtimeOwner.Lifecycle, app.asyncRunner, app.runtimeOwner.SessionActors, sessionKey, fn)
+				_ = runSessionAsync(&owner.Lifecycle, inputs.AsyncRunner, owner.SessionActors, sessionKey, fn)
 			},
 		},
 		Commands: backend.SelectionCommandDeps{
 			CommandAutoRetry: func(msg *feishu.InboundMessage, args []string) error {
-				return autoRetry.CommandAutoRetry(msg, args)
+				return inputs.AutoRetry.CommandAutoRetry(msg, args)
 			},
 		},
 	})

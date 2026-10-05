@@ -483,7 +483,12 @@ func prepareTestApp(a *App) *App {
 		Announcements: a.runtimeOwner.Announcements, AnnouncementQuery: a.bindings.AnnouncementQuery,
 	}))
 	a.bindings.BackendSwitch = &backendSwitch
-	a.bindings.BackendSelection = BuildBackendSelection(a)
+	a.bindings.BackendSelection = BuildBackendSelection(BackendSelectionInputs{
+		RuntimeDeps: a.BackendRuntimeDeps(), RuntimeOwner: a.runtimeOwner, AsyncRunner: a.asyncRunner,
+		State: a.State(), Feishu: a.Feishu(), WorkspaceSelection: a.bindings.WorkspaceSelection,
+		UseCase: a.bindings.BackendSwitch, AnnouncementQuery: a.bindings.AnnouncementQuery,
+		StartupRecovery: a.bindings.StartupRecovery, AutoRetry: a.bindings.AutoRetry, FrontendQuery: a.bindings.FrontendQuery,
+	})
 	inboundBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
 	inboundSessionKey := SessionKeyBuilder(a.FrontendID())
 	inboundService.Deps = InboundPorts(InboundPortInputs{

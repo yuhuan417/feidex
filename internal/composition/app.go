@@ -529,7 +529,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Announcements: scope.RuntimeOwner.Announcements, AnnouncementQuery: bindings.AnnouncementQuery,
 	}))
 	bindings.BackendSwitch = &backendSwitch
-	bindings.BackendSelection = feishuapp.BuildBackendSelection(frontend)
+	bindings.BackendSelection = feishuapp.BuildBackendSelection(feishuapp.BackendSelectionInputs{
+		RuntimeDeps: frontend.BackendRuntimeDeps(), RuntimeOwner: scope.RuntimeOwner, AsyncRunner: asyncRunner,
+		State: frontend.State(), Feishu: frontend.Feishu(), WorkspaceSelection: bindings.WorkspaceSelection,
+		UseCase: bindings.BackendSwitch, AnnouncementQuery: bindings.AnnouncementQuery,
+		StartupRecovery: bindings.StartupRecovery, AutoRetry: bindings.AutoRetry, FrontendQuery: bindings.FrontendQuery,
+	})
 	inboundFrontendID := frontend.FrontendID()
 	inboundRunner := *scope.RuntimeOwner.EffectRunner
 	inboundBackend := feishuapp.ConfiguredBackendBuilder(
