@@ -87,8 +87,7 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		},
 		CompleteMenuCommandFn: a.CompleteMenuCommand, ActionStringValueFn: actionStringValue,
 		MenuCardBodyFn: menuCardBody, MenuCardBodyForBackendFn: menuCardBodyForBackend,
-		RenderClaudeSessionPermissionMenuCardFn:  permissionMenuRenderer,
-		ShowClaudeSessionPermissionMenuFromAppFn: a.ShowClaudeSessionPermissionMenuFromApp,
+		RenderClaudeSessionPermissionMenuCardFn: permissionMenuRenderer,
 	}
 }
 
@@ -170,10 +169,6 @@ func (p threadMenuConfigProvider) WorkspaceSelection() workspace.SelectionServic
 
 func (a *App) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
-}
-
-func (a *App) ShowClaudeSessionPermissionMenuFromApp(msg *feishu.InboundMessage) error {
-	return showClaudeSessionPermissionMenu(a, msg)
 }
 
 type threadMenuWorkspaceConfigAdapter struct {

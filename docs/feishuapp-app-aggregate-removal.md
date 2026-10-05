@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 193 |
-| 收 `*App` 的顶层函数 | 72 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 191 |
+| 收 `*App` 的顶层函数 | 70 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -853,6 +853,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 179 将 thread menu 的 config provider、frontend state、effective session key、conversation/runtime、pending queue、workspace 与 backend action capabilities 改为构造期显式值；生命周期 context 直接从 frontend owner 读取，避免 `BackendRuntimeDeps` 默认携带的 `App.Context` 方法值。configured backend builder 仍在调用时读取当前 frontend/backend 配置，未把 backend 选择固化为快照。自动重试取消改为直接调用既有 retry engine，并删除对应 App facade。对照 SM-03/04/06：thread resume、active turn reconcile 与 interrupt 请求/终态收口顺序不变，仅改变 dependency assembly；`CommandFork`、通用菜单命令与 Claude 权限菜单的 App-bound 路由回调仍待后续拆分。生产 `*App` 引用由 206 降至 196，收 `*App` 的函数数由 76 降至 75，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 步骤 180 将 `/fork`、`/thread fork` 与 `/session fork` 共用的 fork command 改为显式接收 scoped session repository、动态 backend/config providers、pending queue、conversation service 和 effect runner。thread menu service 暴露 `CommandFork`，feature command 直接路由到该 owner；fork 前的 active-work 检查、workspace 解析、queue discard、fork 后 session 刷新及回复顺序不变。对照 SM-03：仍由同一 conversation service 发起 `thread/fork` 并使用 RPC 返回的 thread 更新 session；本次不改变 SM-04/06 lifecycle。生产 `*App` 引用由 196 降至 193，收 `*App` 的函数数由 75 降至 72，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
+
+步骤 181 删除没有调用点的 `ShowClaudeSessionPermissionMenuFromApp` callback、App facade 与发送 helper；session permission renderer 保持由 thread menu 正常使用。生产 `*App` 引用由 193 降至 191，收 `*App` 的函数数由 72 降至 70，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 ## 方法
 

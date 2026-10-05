@@ -15,7 +15,6 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
-	"feidex/internal/feishu"
 )
 
 func renderClaudeWorkspacePermissionMenuCard(workspacepresentation *workspacecards.Presentation, sessionKey string) (map[string]any, error) {
@@ -88,20 +87,4 @@ func ClaudePermissionMenuRenderer(cfg *config.Config, backend func() string, ses
 			},
 		})
 	}
-}
-
-func showClaudeSessionPermissionMenu(a *App, msg *feishu.InboundMessage) error {
-	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
-	render := ClaudePermissionMenuRenderer(a.Config(), backend, a.State().Session)
-	card, err := render(a.configView().makeSessionKey(msg))
-	if err != nil {
-		return err
-	}
-	return newEffectRunner(a.runtimeOwner).Run(context.Background(), []application.Effect{application.SendCard{
-		Frontend:       identity.FrontendID(a.FrontendID()),
-		Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
-		ReplyMessageID: msg.MessageID,
-		View:           feishuoutbound.Card(card),
-		InThread:       a.configView().replyInThreadEnabled(),
-	}})
 }

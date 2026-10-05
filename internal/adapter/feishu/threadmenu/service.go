@@ -46,27 +46,26 @@ type Dependencies struct {
 		Store() *state.Store
 		WorkspaceSelection() workspace.SelectionService
 	}
-	Outbound                                 Outbound
-	AppStateFn                               func() StateProvider
-	EffectiveSessionKeyFn                    func(string) string
-	ConversationBackendFn                    func() ConversationBackendProvider
-	BackendRuntimeFn                         func() BackendRuntimeProvider
-	PendingQueueFn                           func() PendingQueueProvider
-	WorkspaceThreadFn                        func() WorkspaceThreadProvider
-	WorkspaceConfigFn                        func() WorkspaceConfigProvider
-	BackendActionsFn                         func() BackendActionProvider
-	BackendDriver                            appbackend.Driver
-	SessionHasActiveWorkFn                   func(*conversation.Session) bool
-	CancelAutoRetryFn                        func(string, bool, string) bool
-	LockAutoRetryDispatchFn                  func(string) func()
-	ReplyCommandActionResponseFn             func(*feishu.InboundMessage, *callback.CardActionTriggerResponse) error
-	CommandForkFn                            func(*feishu.InboundMessage, []string) error
-	CompleteMenuCommandFn                    func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
-	ActionStringValueFn                      func(*feishu.CardAction, string) string
-	MenuCardBodyFn                           func(string, string) string
-	MenuCardBodyForBackendFn                 func(string, string, string) string
-	RenderClaudeSessionPermissionMenuCardFn  func(string) (map[string]any, error)
-	ShowClaudeSessionPermissionMenuFromAppFn func(*feishu.InboundMessage) error
+	Outbound                                Outbound
+	AppStateFn                              func() StateProvider
+	EffectiveSessionKeyFn                   func(string) string
+	ConversationBackendFn                   func() ConversationBackendProvider
+	BackendRuntimeFn                        func() BackendRuntimeProvider
+	PendingQueueFn                          func() PendingQueueProvider
+	WorkspaceThreadFn                       func() WorkspaceThreadProvider
+	WorkspaceConfigFn                       func() WorkspaceConfigProvider
+	BackendActionsFn                        func() BackendActionProvider
+	BackendDriver                           appbackend.Driver
+	SessionHasActiveWorkFn                  func(*conversation.Session) bool
+	CancelAutoRetryFn                       func(string, bool, string) bool
+	LockAutoRetryDispatchFn                 func(string) func()
+	ReplyCommandActionResponseFn            func(*feishu.InboundMessage, *callback.CardActionTriggerResponse) error
+	CommandForkFn                           func(*feishu.InboundMessage, []string) error
+	CompleteMenuCommandFn                   func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
+	ActionStringValueFn                     func(*feishu.CardAction, string) string
+	MenuCardBodyFn                          func(string, string) string
+	MenuCardBodyForBackendFn                func(string, string, string) string
+	RenderClaudeSessionPermissionMenuCardFn func(string) (map[string]any, error)
 }
 
 type Outbound interface {
@@ -218,12 +217,6 @@ func (d Dependencies) RenderClaudeSessionPermissionMenuCard(s string) (map[strin
 		return nil, fmt.Errorf("permission menu unavailable")
 	}
 	return d.RenderClaudeSessionPermissionMenuCardFn(s)
-}
-func (d Dependencies) ShowClaudeSessionPermissionMenuFromApp(m *feishu.InboundMessage) error {
-	if d.ShowClaudeSessionPermissionMenuFromAppFn == nil {
-		return fmt.Errorf("permission menu unavailable")
-	}
-	return d.ShowClaudeSessionPermissionMenuFromAppFn(m)
 }
 
 // StateProvider narrows app state access to the methods used by the service.
