@@ -6,7 +6,6 @@ import (
 	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/codexrpc"
-	"feidex/internal/config"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -54,16 +53,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			switch actionName {
-			case "menu.quiet":
-				return s.completeMenuQuiet(action, actionSessionKey(action))
-			case "quiet.set":
-				return s.completeQuietSet(action, config.QuietMode(actionStringValue(action, "mode")))
-			default:
-				return nil, nil
-			}
-		},
+		PortActions: []string{"menu.quiet", "quiet.set"},
 	}
 	bindings["plan"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -164,15 +154,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			sessionKey := actionSessionKey(action)
-			switch actionName {
-			case "menu.history":
-				return s.completeMenuHistory(action, sessionKey)
-			default:
-				return nil, nil
-			}
-		},
+		PortActions: []string{"menu.history", "history.page", "history.detail", "history.detail.select"},
 	}
 	bindings["menu.skills"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -193,22 +175,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 			}
 			return card, true
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			sessionKey := actionSessionKey(action)
-			switch actionName {
-			case "menu.skills":
-				if !menuActionVisibleForBackend(actionName, s.app.configView().configuredBackend()) {
-					return completeMenuCommand(s.app, action, sessionKey, "/skills", "menu.tools")
-				}
-				return s.app.bindings.SkillCommands.CompleteSkillsOpen(action, sessionKey)
-			case "skills.select":
-				return s.app.bindings.SkillCommands.CompleteSkillsSelect(action, sessionKey, action.Option)
-			case "skills.reload":
-				return s.app.bindings.SkillCommands.CompleteSkillsReload(action, sessionKey)
-			default:
-				return nil, nil
-			}
-		},
+		PortActions: []string{"menu.skills", "skills.select", "skills.reload"},
 	}
 	bindings["menu.usage"] = featureBinding{
 		Commands: map[string]featureCommandBinding{
@@ -218,11 +185,6 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding) {
 				},
 			},
 		},
-		HandleAction: func(actionName string, s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			if actionName != "menu.usage" {
-				return nil, nil
-			}
-			return s.completeMenuUsage(action, actionSessionKey(action))
-		},
+		PortActions: []string{"menu.usage"},
 	}
 }

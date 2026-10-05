@@ -930,6 +930,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 218 将 root/tools/model/system/backend 菜单核心 action 与 current bot/workspace action 迁移到 `MenuCoreCardActionInputs` / `BindingCardActionInputs`。composition 显式注入动态 backend supplier、session state、card renderer、backend selection、auto-retry、binding commands 和 menu command callback；feature registry 只保留命令/渲染元数据并标记 14 个 port-owned action。已无生产调用方的菜单聚合方法移到 `_test.go` 兼容层。菜单结构、顺序、toast、fallback command 与 backend 切换 guard 不变；文本棘轮保持 `115/7/1/1/0`，不涉及 Codex lifecycle 或 approval 语义。
 
+步骤 219 将 quiet、history、usage 和 skills tools actions 迁移到 `ToolsCardActionInputs`。skills 选择/刷新继续由既有 service 管理异步 admission 与 card patch；quiet 设置显式注入 runtime settings、frontend-scoped quiet-mode supplier、session state 和 renderer，history/usage 仍走原 menu command callback。feature registry 将这些 action 标记为 port-owned，已无生产调用的四个 `cardActionService` 方法移入 `_test.go` 兼容层。行为、toast、fallback 和 frontend 配置隔离不变；文本棘轮保持 `115/7/1/1/0`，不涉及 Codex lifecycle 或 approval 语义。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

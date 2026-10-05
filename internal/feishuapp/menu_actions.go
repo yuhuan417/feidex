@@ -4,8 +4,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"feidex/internal/adapter/feishu/quietmode"
-	"feidex/internal/config"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -57,35 +55,8 @@ func (s cardActionService) completeMenuReview(action *feishu.CardAction, session
 	}, nil
 }
 
-func (s cardActionService) completeMenuQuiet(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(s.app, action, sessionKey, "/quiet config", "menu.tools")
-}
-
-func (s cardActionService) completeMenuUsage(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(s.app, action, sessionKey, "/usage", "menu.tools")
-}
-
-func (s cardActionService) completeQuietSet(action *feishu.CardAction, mode config.QuietMode) (*callback.CardActionTriggerResponse, error) {
-	sessionKey, _ := action.ActionValue["session_key"].(string)
-	if err := updateQuietMode(s.app.bindings.RuntimeSettings, mode); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
-	}
-	configView := s.app.configView()
-	return &callback.CardActionTriggerResponse{
-		Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 模式为 " + quietmode.StatusText(mode)},
-		Card: rawCard(renderQuietModeMenuCard(
-			quietmode.Mode(configView.feishuConfig()), sessionKey,
-			planModeTitleForSession(s.app.State(), s.app != nil, sessionKey, "Quiet Mode"), s.app.feishu,
-		)),
-	}, nil
-}
-
 func (s cardActionService) completeMenuModel(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	return completeMenuCommand(s.app, action, sessionKey, "/model", "menu.group.model")
-}
-
-func (s cardActionService) completeMenuHistory(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
-	return completeMenuCommand(s.app, action, sessionKey, "/history", "menu.tools")
 }
 
 func (s cardActionService) completeMenuFast(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

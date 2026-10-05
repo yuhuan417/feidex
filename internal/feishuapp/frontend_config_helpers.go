@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync"
 
+	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/config"
 	"feidex/internal/domain/backend"
 	"feidex/internal/domain/identity"
@@ -161,5 +162,22 @@ func ConfiguredBackendBuilder(cfg *config.Config, mu *sync.RWMutex, backend func
 			cfg: cfg, mu: mu, backend: active,
 			frontendID: frontendID, frontendConfigIndex: frontendConfigIndex,
 		}).configuredBackend()
+	}
+}
+
+func ConfiguredQuietModeBuilder(cfg *config.Config, mu *sync.RWMutex, frontendConfigIndex int) func() config.QuietMode {
+	return func() config.QuietMode {
+		if cfg == nil {
+			return config.QuietModeProgress
+		}
+		if mu != nil {
+			mu.RLock()
+			defer mu.RUnlock()
+		}
+		feishuConfig := &cfg.Feishu
+		if frontendConfigIndex >= 0 && frontendConfigIndex < len(cfg.Frontends) {
+			feishuConfig = &cfg.Frontends[frontendConfigIndex].FeishuConfig
+		}
+		return quietmode.Mode(feishuConfig)
 	}
 }

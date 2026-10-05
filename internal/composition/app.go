@@ -658,6 +658,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		}, feishuapp.BindingCardActionInputs{
 			Backend: configuredBackend, State: frontend.State(), Renderer: frontend.Feishu(),
 			BindingCommands: bindings.BindingCommands, CompleteMenuCommand: frontend.CompleteMenuCommand,
+		}, feishuapp.ToolsCardActionInputs{
+			CompleteMenuCommand: frontend.CompleteMenuCommand, Skills: bindings.SkillCommands,
+			Backend: configuredBackend, State: frontend.State(), Renderer: frontend.Feishu(),
+			RuntimeSettings: bindings.RuntimeSettings,
+			QuietMode:       feishuapp.ConfiguredQuietModeBuilder(frontend.Config(), frontend.ConfigMu(), frontendConfigIndex),
 		}, feishuapp.PathPickerActionInputs{
 			State: frontend.State(), Forms: bindings.Forms, Picker: bindings.PathPicker,
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,
