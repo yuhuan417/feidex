@@ -12,9 +12,6 @@ import (
 
 func pendingCardActionHandlers() map[string]cardActionHandler {
 	return map[string]cardActionHandler{
-		"pending_form.cancel": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completePendingFormCancelDispatch(s.app, action)
-		},
 		codexPlanModeExitImplementCurrentAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return completeCodexPlanModeExit(s.app, action, codexPlanModeExitImplementCurrentAction)
 		},

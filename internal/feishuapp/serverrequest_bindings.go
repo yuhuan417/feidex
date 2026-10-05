@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	appreview "feidex/internal/adapter/feishu/review"
+	appstate "feidex/internal/adapter/storage/json/scoped"
 
 	"feidex/internal/adapter/backend/interactionreply"
 	"feidex/internal/adapter/feishu/serverrequest"
@@ -129,11 +130,28 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 	return service
 }
 
-// completePendingFormCancelDispatch routes pending_form.cancel to either
-// serverrequest (for server-resolved kinds) or root (for workspace_*/review_form/claude_exit_plan_mode).
-func completePendingFormCancelDispatch(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+type PendingFormCancelActionInputs struct {
+	State               *appstate.Store
+	ServerRequests      *serverrequest.Service
+	FinalizePending     func(*state.PendingRequest) *state.PendingRequest
+	WorkspaceMenuCard   func(string) map[string]any
+	SimpleStatusCard    func(string, string, string, []feishu.Button) map[string]any
+	WorkspaceConfigured bool
+}
+
+func pendingFormCancelPortCardActionHandlers(inputs PendingFormCancelActionInputs) map[string]cardActionPortHandler {
+	return map[string]cardActionPortHandler{
+		"pending_form.cancel": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return completePendingFormCancelWithInputs(inputs, action)
+		},
+	}
+}
+
+// completePendingFormCancelWithInputs routes serverrequest-owned kinds through
+// their backend adapter and handles workspace/review/Claude plan forms locally.
+func completePendingFormCancelWithInputs(inputs PendingFormCancelActionInputs, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	requestID, _ := action.ActionValue["request_id"].(string)
-	pending := a.State().Pending(requestID)
+	pending := inputs.State.Pending(requestID)
 	if pending == nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请求已过期"}}, nil
 	}
@@ -142,17 +160,16 @@ func completePendingFormCancelDispatch(a *App, action *feishu.CardAction) (*call
 	}
 	switch pending.Kind {
 	case "workspace_new", "workspace_clone", "workspace_worktree", "review_form", "claude_exit_plan_mode":
-		return completeRootPendingFormCancel(a, pending)
+		return completeRootPendingFormCancelWithInputs(inputs, pending)
 	default:
-		return a.ServerRequestService().CompletePendingFormCancel(action)
+		return inputs.ServerRequests.CompletePendingFormCancel(action)
 	}
 }
 
-// completeRootPendingFormCancel handles cancel for kinds whose logic stays in root.
-func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, error) {
+func completeRootPendingFormCancelWithInputs(inputs PendingFormCancelActionInputs, pending *state.PendingRequest) (*callback.CardActionTriggerResponse, error) {
 	// claude_exit_plan_mode needs backend cancel via the Claude adapter.
 	if pending.Kind == "claude_exit_plan_mode" {
-		adapter := a.ServerRequestService().AdapterForPending(pending)
+		adapter := inputs.ServerRequests.AdapterForPending(pending)
 		if err := adapter.CancelPending(pending); err != nil {
 			slog.Error("root cancel backend reply failed", "kind", pending.Kind, "request_id", pending.ID, "error", err)
 			return &callback.CardActionTriggerResponse{
@@ -160,12 +177,12 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 			}, nil
 		}
 	}
-	a.bindings.PendingReplies.Finalize(pending)
+	inputs.FinalizePending(pending)
 	switch pending.Kind {
 	case "workspace_new", "workspace_clone", "workspace_worktree":
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已返回工作区"},
-			Card:  rawCard(a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard(pending.SessionKey)),
+			Card:  rawCard(inputs.WorkspaceMenuCard(pending.SessionKey)),
 		}, nil
 	case "review_form":
 		body := reviewCancelledBody(pending)
@@ -174,17 +191,17 @@ func completeRootPendingFormCancel(a *App, pending *state.PendingRequest) (*call
 		}
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消"},
-			Card:  rawCard(a.feishu.SimpleStatusCard("Review 已取消", "grey", body, nil)),
+			Card:  rawCard(inputs.SimpleStatusCard("Review 已取消", "grey", body, nil)),
 		}, nil
 	case "claude_exit_plan_mode":
 		body := claudePlanCancelledBody(pending)
 		if body == "" {
 			body = "该请求已取消。"
 		}
-		title := contentCardTitleForSession(a.State(), a != nil, pending.SessionKey, "", "计划确认已取消")
+		title := contentCardTitleForSession(inputs.State, inputs.WorkspaceConfigured, pending.SessionKey, "", "计划确认已取消")
 		return &callback.CardActionTriggerResponse{
 			Toast: &callback.Toast{Type: "success", Content: "已取消"},
-			Card:  rawCard(a.feishu.SimpleStatusCard(title, "grey", body, nil)),
+			Card:  rawCard(inputs.SimpleStatusCard(title, "grey", body, nil)),
 		}, nil
 	default:
 		slog.Warn("completeRootPendingFormCancel: unhandled kind", "kind", pending.Kind)

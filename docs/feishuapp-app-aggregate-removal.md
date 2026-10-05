@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 220 |
-| 收 `*App` 的顶层函数 | 90 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 218 |
+| 收 `*App` 的顶层函数 | 88 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -837,6 +837,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 171 将 `menu.interrupt`、`menu.thread` 和 `menu.new` 从 feature 生成的 App-bound handler map 移入 `ThreadMenu` owner map；同一 `menu.thread` feature 的 `menu.fork` 仍留在 App-bound map。菜单结构、action name 和顺序不变。对照 SM-06，中断仍只发起请求，turn 终态仍由 `turn/completed(interrupted)` 收口；本次仅改 callback owner 的传递。`*App` 文本引用、App-taking 函数及 lazy binding-read 预算保持 221/91/0，因为其它 callback 仍依赖 `cardActionService`。
 
 步骤 172 将 `completeAsyncUserInput` 改为显式接收 scoped state、`asyncinput.Service`、frontend context/identity、effect runner 与 status-card renderer；answer/cancel callbacks 移入 owner-bound action map。同步校验、原子 claim、快速 ack、lifecycle admission、active turn 时 steer、空闲时同 thread queue、后端接受后 resolve、失败恢复 pending 草稿及 cancel 不打断 turn 的顺序均不变。对照 SM-26：async question 仍是本地 pending form，不创建 server request reply/resolved 边界。生产 `*App` 引用由 221 降至 220，收 `*App` 的顶层函数由 91 降至 90，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
+
+步骤 173 将 `pending_form.cancel` 从 App-bound handler 移至显式 `PendingFormCancelActionInputs`，由 composition 注入 scoped state、server-request service、pending finalizer 和对应 renderer。server-request 所有的 pending 仍交由原 service 完成；root workspace/review form 仍先 finalize 再返回原卡片，Claude plan cancel 仍先调用 backend cancel，成功后才 finalize。对照 SM-09/11/23 的 reply/resolved 边界，本次不改变 protocol 完成路径。生产 `*App` 引用由 220 降至 218，收 `*App` 的顶层函数由 90 降至 88，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 ## 方法
 

@@ -516,6 +516,17 @@ func prepareTestApp(a *App) *App {
 				}
 				return nil
 			},
+		}, PendingFormCancelActionInputs{
+			State: a.State(), ServerRequests: a.bindings.ServerRequests,
+			FinalizePending:   a.bindings.PendingReplies.Finalize,
+			WorkspaceMenuCard: a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
+			SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+				if client := a.Feishu(); client != nil {
+					return client.SimpleStatusCard(title, color, body, buttons)
+				}
+				return nil
+			},
+			WorkspaceConfigured: a.Config() != nil,
 		},
 	))
 	dispatcher := newInputDispatcher(a)

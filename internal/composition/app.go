@@ -568,6 +568,12 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			State: frontend.State(), Inputs: bindings.AsyncInputs, Context: frontend.Context,
 			FrontendID: frontend.FrontendID(), EffectRunner: *scope.RuntimeOwner.EffectRunner,
 			SimpleStatusCard: frontend.Feishu().SimpleStatusCard,
+		}, feishuapp.PendingFormCancelActionInputs{
+			State: frontend.State(), ServerRequests: bindings.ServerRequests,
+			FinalizePending:     bindings.PendingReplies.Finalize,
+			WorkspaceMenuCard:   bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
+			SimpleStatusCard:    frontend.Feishu().SimpleStatusCard,
+			WorkspaceConfigured: frontend.Config() != nil,
 		},
 	))
 	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))

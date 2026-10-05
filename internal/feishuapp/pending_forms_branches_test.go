@@ -9,7 +9,24 @@ import (
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+
+	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
+
+func completePendingFormCancelDispatch(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return completePendingFormCancelWithInputs(PendingFormCancelActionInputs{
+		State: a.State(), ServerRequests: a.ServerRequestService(),
+		FinalizePending:   a.bindings.PendingReplies.Finalize,
+		WorkspaceMenuCard: a.bindings.WorkspacePresentation.RenderWorkspaceMenuCard,
+		SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
+			if client := a.Feishu(); client != nil {
+				return client.SimpleStatusCard(title, color, body, buttons)
+			}
+			return nil
+		},
+		WorkspaceConfigured: a.Config() != nil,
+	}, action)
+}
 
 func TestPendingFormCancelBranches(t *testing.T) {
 	a, ff, fc := newTestApp(t)
