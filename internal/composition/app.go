@@ -153,7 +153,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Frontend: identity.FrontendID(scope.Frontend.ID), Config: scope.Config, ConfigPath: scope.ConfigPath,
 		Mutex: scope.ConfigMutex, Scopes: frontend.State(), Backend: configuredBackend,
 	})
-	feishuapp.AttachWorkspacePresentation(frontend, workspacePresentation)
+	bindings.WorkspacePresentation = workspacePresentation
 	bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: feishuapp.ModelSnapshotRepository(frontend.Config(), frontend.ConfigMu(), frontend.State())}
 	bindings.ModelDefaults = modelconfig.DefaultsService{
 		Repository: configadapter.ModelDefaultsRepository{Source: frontend, Scope: frontend.State()},
@@ -584,7 +584,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			WorkspaceConfigured: frontend.Config() != nil,
 		},
 	))
-	feishuapp.AttachDispatcher(frontend, feishuapp.NewDispatcher(frontend))
+	dispatcher := feishuapp.NewDispatcher(frontend)
+	scope.RuntimeOwner.Dispatcher = &dispatcher
 	*autoRetryRuntimeDeps = frontend.BackendRuntimeDeps()
 	if err := feishuapp.CanonicalizeStoredSessionKeys(store); err != nil {
 		return nil, err

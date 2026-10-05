@@ -27,8 +27,9 @@ func newTestFrontend(scope frontendruntime.FrontendScope) (*App, error) {
 	}
 	prepareTestApp(a)
 	AttachEffectRunner(a, NewEffectRunner(a))
-	AttachWorkspacePresentation(a, testWorkspacePresentation(a))
-	AttachDispatcher(a, NewDispatcher(a))
+	a.bindings.WorkspacePresentation = testWorkspacePresentation(a)
+	dispatcher := NewDispatcher(a)
+	a.runtimeOwner.Dispatcher = &dispatcher
 	if err := CanonicalizeStoredSessionKeys(a.store); err != nil {
 		return nil, err
 	}

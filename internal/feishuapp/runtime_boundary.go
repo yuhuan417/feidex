@@ -6,8 +6,6 @@ import (
 	"feidex/internal/domain/identity"
 	"feidex/internal/runtime"
 	"feidex/internal/state"
-
-	workspacecards "feidex/internal/adapter/feishu/workspace"
 )
 
 type BackendRuntimeHandle = runtime.BackendHandle
@@ -46,18 +44,6 @@ func AttachEffectRunner(a *App, runner runtime.EffectRunner) {
 			Frontend:              identity.FrontendID(a.frontendID),
 			Runner:                runner,
 		}
-	}
-}
-
-func AttachWorkspacePresentation(a *App, presentation *workspacecards.Presentation) {
-	if a != nil {
-		a.bindings.WorkspacePresentation = presentation
-	}
-}
-
-func AttachDispatcher(a *App, dispatcher application.Dispatcher) {
-	if a != nil && a.runtimeOwner != nil {
-		a.runtimeOwner.Dispatcher = &dispatcher
 	}
 }
 

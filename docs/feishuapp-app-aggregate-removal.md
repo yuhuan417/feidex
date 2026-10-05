@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 179 |
-| 收 `*App` 的顶层函数 | 58 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 177 |
+| 收 `*App` 的顶层函数 | 56 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -871,6 +871,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 188 删除生产 `App.Backend()` 与 `App.SetBackend()` 兼容 facade。动态配置视图直接读取 runtime owner；backend 切换测试便利方法移入 `_test.go`，继续同步 scoped state view。生产 `*App` 引用由 183 降至 181，收 `*App` 的函数数由 62 降至 60，其他棘轮保持 1/1/0。
 
 步骤 189 将 frontend-scoped state view 移入 `NewFeishuShell` 一次性构造，删除 composition 的 `NewStateView(*App)` / `AttachStateView(*App)` 反向装配。view 仍使用相同 store、frontend ID、configured backend 和共享 revision mutex；测试 fixture 用 test-only helper 支持手工 App。生产 `*App` 引用由 181 降至 179，收 `*App` 的函数数由 60 降至 58，其他棘轮保持 1/1/0。
+
+步骤 190 删除 `AttachWorkspacePresentation(*App)` 与 `AttachDispatcher(*App)`。composition 和测试直接把已构造的 workspace presentation 写入 bindings，并把 dispatcher 写入当前 runtime owner；attach facade 不再让已就绪对象绕回 App。生产 `*App` 引用由 179 降至 177，收 `*App` 的函数数由 58 降至 56，其他棘轮保持 1/1/0。
 
 ## 方法
 
