@@ -507,7 +507,7 @@ func prepareTestApp(a *App) *App {
 				}
 				return nil
 			},
-		}, a.bindings.ThreadMenu, AsyncUserInputActionInputs{
+		}, a.bindings.ThreadMenu, *turnPlanMode, AsyncUserInputActionInputs{
 			State: a.State(), Inputs: a.bindings.AsyncInputs, Context: a.Context,
 			FrontendID: a.FrontendID(), EffectRunner: newEffectRunner(a.runtimeOwner),
 			SimpleStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {

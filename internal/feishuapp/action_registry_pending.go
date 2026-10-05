@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	claudesupport "feidex/internal/adapter/feishu/claudesupport"
+	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/adapter/feishu/threadmenu"
@@ -10,16 +11,16 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func pendingCardActionHandlers() map[string]cardActionHandler {
-	return map[string]cardActionHandler{
-		codexPlanModeExitImplementCurrentAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completeCodexPlanModeExit(s.app, action, codexPlanModeExitImplementCurrentAction)
+func pendingPlanModeExitPortCardActionHandlers(deps planmode.Dependencies) map[string]cardActionPortHandler {
+	return map[string]cardActionPortHandler{
+		codexPlanModeExitImplementCurrentAction: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return planmode.CompleteCodexPlanModeExit(deps, action, codexPlanModeExitImplementCurrentAction)
 		},
-		codexPlanModeExitImplementFreshAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completeCodexPlanModeExit(s.app, action, codexPlanModeExitImplementFreshAction)
+		codexPlanModeExitImplementFreshAction: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return planmode.CompleteCodexPlanModeExit(deps, action, codexPlanModeExitImplementFreshAction)
 		},
-		codexPlanModeExitStayAction: func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return completeCodexPlanModeExit(s.app, action, codexPlanModeExitStayAction)
+		codexPlanModeExitStayAction: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			return planmode.CompleteCodexPlanModeExit(deps, action, codexPlanModeExitStayAction)
 		},
 	}
 }

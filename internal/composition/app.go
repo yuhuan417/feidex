@@ -564,7 +564,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			Planning: bindings.WorkspacePlanning, WorkspaceCards: bindings.WorkspacePresentation,
 			Upgrades: bindings.Upgrades, Debug: bindings.Debug,
 			SimpleStatusCard: frontend.Feishu().SimpleStatusCard,
-		}, bindings.ThreadMenu, feishuapp.AsyncUserInputActionInputs{
+		}, bindings.ThreadMenu, *turnPlanMode, feishuapp.AsyncUserInputActionInputs{
 			State: frontend.State(), Inputs: bindings.AsyncInputs, Context: frontend.Context,
 			FrontendID: frontend.FrontendID(), EffectRunner: *scope.RuntimeOwner.EffectRunner,
 			SimpleStatusCard: frontend.Feishu().SimpleStatusCard,

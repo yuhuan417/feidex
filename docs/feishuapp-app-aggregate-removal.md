@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 218 |
-| 收 `*App` 的顶层函数 | 88 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 217 |
+| 收 `*App` 的顶层函数 | 87 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -839,6 +839,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 172 将 `completeAsyncUserInput` 改为显式接收 scoped state、`asyncinput.Service`、frontend context/identity、effect runner 与 status-card renderer；answer/cancel callbacks 移入 owner-bound action map。同步校验、原子 claim、快速 ack、lifecycle admission、active turn 时 steer、空闲时同 thread queue、后端接受后 resolve、失败恢复 pending 草稿及 cancel 不打断 turn 的顺序均不变。对照 SM-26：async question 仍是本地 pending form，不创建 server request reply/resolved 边界。生产 `*App` 引用由 221 降至 220，收 `*App` 的顶层函数由 91 降至 90，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 步骤 173 将 `pending_form.cancel` 从 App-bound handler 移至显式 `PendingFormCancelActionInputs`，由 composition 注入 scoped state、server-request service、pending finalizer 和对应 renderer。server-request 所有的 pending 仍交由原 service 完成；root workspace/review form 仍先 finalize 再返回原卡片，Claude plan cancel 仍先调用 backend cancel，成功后才 finalize。对照 SM-09/11/23 的 reply/resolved 边界，本次不改变 protocol 完成路径。生产 `*App` 引用由 220 降至 218，收 `*App` 的顶层函数由 90 降至 88，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
+
+步骤 174 将 Codex plan-exit 的 implement-current、implement-fresh、stay callbacks 移入显式 `planmode.Dependencies` handler map，并删除仅转发到 `PlanModePorts` 的 `completeCodexPlanModeExit(*App)`。composition 复用同时交给 turn lifecycle 的同一份 plan-mode capability；plan exit 的 pending 校验、stay 分支、fresh/current 实现、async lifecycle admission、follow-up card 与 active-turn steer 顺序仍由原 `planmode.CompleteCodexPlanModeExit` 处理。对照审计中的 plan item 与 turn completion 边界，本次只改变依赖传递。生产 `*App` 引用由 218 降至 217，收 `*App` 的顶层函数由 88 降至 87，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 ## 方法
 

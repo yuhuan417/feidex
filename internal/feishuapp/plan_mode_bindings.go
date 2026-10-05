@@ -176,10 +176,6 @@ func sendLocalTurnFollowupCardWith(outbound effectOutbound, links messageLinkRec
 	return messageID, nil
 }
 
-func completeCodexPlanModeExit(a *App, action *feishu.CardAction, actionName string) (*callback.CardActionTriggerResponse, error) {
-	return planmode.CompleteCodexPlanModeExit(newPlanModeAppAdapter(a), action, actionName)
-}
-
 func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	if action == nil || strings.TrimSpace(action.MessageID) == "" {
 		return completeMenuCommand(a, action, sessionKey, "/plan", "menu.tools")

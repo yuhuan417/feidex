@@ -3,6 +3,7 @@ package feishuapp
 import (
 	"context"
 	"encoding/json"
+	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/codexrpc"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
@@ -179,7 +180,7 @@ func TestCodexPlanModeExitStayKeepsOriginalPromptCard(t *testing.T) {
 		t.Fatalf("initial prompt title = %q", got)
 	}
 
-	resp, err := completeCodexPlanModeExit(a, &feishu.CardAction{
+	resp, err := planmode.CompleteCodexPlanModeExit(newPlanModeAppAdapter(a), &feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   pending.FeishuMsgID,
 		ActionValue: map[string]any{"request_id": pending.ID},
@@ -258,7 +259,7 @@ func TestCodexPlanModeExitImplementCurrentFollowupReplySteersActiveTurn(t *testi
 		}
 	}
 
-	resp, err := completeCodexPlanModeExit(a, &feishu.CardAction{
+	resp, err := planmode.CompleteCodexPlanModeExit(newPlanModeAppAdapter(a), &feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   pending.FeishuMsgID,
 		ActionValue: map[string]any{"request_id": pending.ID},

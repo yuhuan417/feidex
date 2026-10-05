@@ -7,6 +7,7 @@ import (
 
 	claudesupport "feidex/internal/adapter/feishu/claudesupport"
 	history "feidex/internal/adapter/feishu/history"
+	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/adapter/feishu/threadmenu"
@@ -27,16 +28,16 @@ type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service, asyncInputs AsyncUserInputActionInputs, pendingCancel PendingFormCancelActionInputs) appcardaction.Dependencies {
+func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service, planMode planmode.Dependencies, asyncInputs AsyncUserInputActionInputs, pendingCancel PendingFormCancelActionInputs) appcardaction.Dependencies {
 	appHandlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
 		workspaceCardActionHandlers(),
 		maintenanceCardActionHandlers(),
-		pendingCardActionHandlers(),
 	)
 	portHandlers := mergeCardActionPortHandlerSets(
 		maintenancePortCardActionHandlers(upgrades, backendUpgrades, backendUpgradeCommandCompleter(cardActionService{app: app})),
 		pendingPortCardActionHandlers(serverRequests, claudeSupport, reviewCommands),
+		pendingPlanModeExitPortCardActionHandlers(planMode),
 		workspaceDeletePortCardActionHandlers(workspaceDeleteActions),
 		historyCardActionHandlers(historyService),
 		serverRequestCardActionHandlers(serverRequests),
