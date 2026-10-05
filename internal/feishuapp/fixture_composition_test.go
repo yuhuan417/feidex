@@ -166,9 +166,20 @@ func prepareTestApp(a *App) *App {
 	)
 	a.bindings.StartupState = conversation.StartupState{Repository: a.State(), DefaultWorkspaceID: func() string { return a.bindings.WorkspaceSelection.ResolveSession(nil) }}
 	a.bindings.UpgradePoller = upgrade.Poller{Repository: a.State(), Units: upgradeunits.Units{}}
-	a.bindings.MaintenanceCommands = BuildMaintenanceCommands(a)
+	a.bindings.Notifications = frontendapp.Notifications{Repository: a.State(), Sender: NotificationSender(a.feishu, a.FrontendID(), *a.runtimeOwner.EffectRunner), Context: a.Context}
+	a.bindings.MaintenanceCommands = BuildMaintenanceCommands(MaintenanceCommandInputs{
+		Context: a.Context, Repository: a.State(), Poller: a.bindings.UpgradePoller,
+		Feishu: a.Feishu(), FrontendID: a.FrontendID(), EffectRunner: *a.runtimeOwner.EffectRunner,
+		Config: a.Config(), QueueNotification: a.bindings.Notifications.Queue, ReadyChatIDs: maintenance.StartupReadyChatIDs,
+		RunAsync: func(fn func()) { a.runtimeOwner.Lifecycle.Run(fn, a.AsyncRunner()) },
+	})
 	a.bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: a.State(), Runtime: a.runtimeOwner.TurnBindings, Items: a.bindings.TurnItems}
-	a.bindings.AutoRetry = AutoRetryView(a)
+	configuredBackend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex())
+	a.bindings.AutoRetry = AutoRetryView(AutoRetryViewInputs{
+		Context: a.Context, Config: a.Config(), ConfigMu: a.ConfigMu(), ConfiguredBackend: configuredBackend,
+		FrontendID: a.FrontendID(), FrontendConfigIndex: a.FrontendConfigIndex(), BackendDriver: appbackend.SelectedDriver{Selected: configuredBackend},
+		EffectRunner: *a.runtimeOwner.EffectRunner, Feishu: a.Feishu(),
+	})
 	autoRetryRuntimeDeps := &BackendRuntimeDeps{}
 	a.bindings.AutoRetry.Engine = retry.NewEngine(AutoRetryPorts(AutoRetryPortInputs{
 		Context: a.Context, Tracker: a.runtimeOwner.AutoRetries, Repository: a.State(), Live: liveThreads,
@@ -443,7 +454,6 @@ func prepareTestApp(a *App) *App {
 	a.bindings.WorkspaceWorkflow.Effects = a.bindings.WorkspaceEffects
 	a.bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(a.FrontendID()), Repository: a.State(), Creation: a.bindings.WorkspaceCreation, Planning: a.bindings.WorkspacePlanning, Effects: a.bindings.WorkspaceEffects}
 	a.bindings.BindingCommands = BuildBindingCommands(bindingCommandInputsForTest(a, bindingScope))
-	a.bindings.Notifications = frontendapp.Notifications{Repository: a.State(), Sender: NotificationSender(a.feishu, a.FrontendID(), *a.runtimeOwner.EffectRunner), Context: a.Context}
 	a.bindings.ConversationRecovery = conversation.NewRecovery(ConversationRecoveryPorts(
 		a.Config(), a.ConfigMu(), a.FrontendConfigIndex(), a.State(),
 		a.bindings.Conversations, a.runtimeOwner, a.bindings.CodexRecovery, a.bindings.ConversationConfiguration,

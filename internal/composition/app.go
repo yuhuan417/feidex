@@ -182,9 +182,19 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	)
 	bindings.StartupState = conversation.StartupState{Repository: frontend.State(), DefaultWorkspaceID: func() string { return bindings.WorkspaceSelection.ResolveSession(nil) }}
 	bindings.UpgradePoller = upgrade.Poller{Repository: frontend.State(), Units: upgradeunits.Units{}}
-	bindings.MaintenanceCommands = feishuapp.BuildMaintenanceCommands(frontend)
+	bindings.Notifications = frontendapp.Notifications{Repository: frontend.State(), Sender: feishuapp.NotificationSender(frontend.Feishu(), frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner), Context: frontend.Context}
+	bindings.MaintenanceCommands = feishuapp.BuildMaintenanceCommands(feishuapp.MaintenanceCommandInputs{
+		Context: scope.RuntimeOwner.Lifecycle.Context, Repository: frontend.State(), Poller: bindings.UpgradePoller,
+		Feishu: frontend.Feishu(), FrontendID: frontend.FrontendID(), EffectRunner: *scope.RuntimeOwner.EffectRunner,
+		Config: scope.Config, QueueNotification: bindings.Notifications.Queue, ReadyChatIDs: maintenance.StartupReadyChatIDs,
+		RunAsync: func(fn func()) { scope.RuntimeOwner.Lifecycle.Run(fn, asyncRunner) },
+	})
 	bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings, Items: bindings.TurnItems}
-	bindings.AutoRetry = feishuapp.AutoRetryView(frontend)
+	bindings.AutoRetry = feishuapp.AutoRetryView(feishuapp.AutoRetryViewInputs{
+		Context: scope.RuntimeOwner.Lifecycle.Context, Config: scope.Config, ConfigMu: scope.ConfigMutex,
+		ConfiguredBackend: configuredBackend, FrontendID: scope.Frontend.ID, FrontendConfigIndex: frontendConfigIndex,
+		BackendDriver: appbackend.SelectedDriver{Selected: configuredBackend}, EffectRunner: *scope.RuntimeOwner.EffectRunner, Feishu: frontend.Feishu(),
+	})
 	// The queue captures AutoRetry by value before the dispatcher is wired.
 	autoRetryRuntimeDeps := &feishuapp.BackendRuntimeDeps{}
 	bindings.AutoRetry.Engine = retry.NewEngine(feishuapp.AutoRetryPorts(feishuapp.AutoRetryPortInputs{
@@ -483,7 +493,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		ServiceTier: bindings.ServiceTier, WorkspaceConfiguration: bindings.WorkspaceConfiguration,
 		WorkspaceManagement: bindings.WorkspaceManagement, WorkspacePresentation: bindings.WorkspacePresentation, WorkspaceWorkflow: bindings.WorkspaceWorkflow,
 	})
-	bindings.Notifications = frontendapp.Notifications{Repository: frontend.State(), Sender: feishuapp.NotificationSender(frontend.Feishu(), frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner), Context: frontend.Context}
 	bindings.ConversationRecovery = conversation.NewRecovery(feishuapp.ConversationRecoveryPorts(
 		frontend.Config(), frontend.ConfigMu(), frontendConfigIndex, frontend.State(),
 		bindings.Conversations, scope.RuntimeOwner, bindings.CodexRecovery, bindings.ConversationConfiguration,

@@ -5,7 +5,9 @@ import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	appmaintenance "feidex/internal/adapter/feishu/maintenance"
 	"feidex/internal/application/conversation"
+	"feidex/internal/application/upgrade"
 	"feidex/internal/config"
+	domainconversation "feidex/internal/domain/conversation"
 	backendruntime "feidex/internal/runtime"
 	"feidex/internal/runtime/maintenance"
 	"feidex/internal/state"
@@ -45,23 +47,37 @@ func StartupRecoveryPorts(inputs StartupRecoveryPortInputs) maintenance.Recovery
 		SendText:           inputs.SendText,
 	}
 }
-func BuildMaintenanceCommands(a *App) appmaintenance.RuntimeMaintenanceService {
+
+type MaintenanceCommandInputs struct {
+	Context           func() context.Context
+	Repository        maintenance.StateProvider
+	Poller            upgrade.Poller
+	Feishu            FeishuClient
+	FrontendID        string
+	EffectRunner      backendruntime.EffectRunner
+	Config            *config.Config
+	QueueNotification func(state.FrontendCardNotification)
+	ReadyChatIDs      func([]*domainconversation.Session) []string
+	RunAsync          func(func())
+}
+
+func BuildMaintenanceCommands(inputs MaintenanceCommandInputs) appmaintenance.RuntimeMaintenanceService {
 	return appmaintenance.NewRuntimeMaintenanceService(appmaintenance.Dependencies{
-		Context: a.Context, Repository: a.State(), Poller: a.bindings.UpgradePoller,
-		ArtifactClient:   a.feishu,
-		Outbound:         newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)),
-		Renderer:         simpleStatusCardRenderer{client: a.feishu},
-		PermissionNotify: maintenancePermissionNotifier{client: a.feishu},
+		Context: inputs.Context, Repository: inputs.Repository, Poller: inputs.Poller,
+		ArtifactClient:   inputs.Feishu,
+		Outbound:         newEffectOutbound(inputs.FrontendID, inputs.EffectRunner),
+		Renderer:         simpleStatusCardRenderer{client: inputs.Feishu},
+		PermissionNotify: maintenancePermissionNotifier{client: inputs.Feishu},
 		MenuBody:         menuCardBody,
 		Workspaces: func() []config.Workspace {
-			if a.cfg == nil {
+			if inputs.Config == nil {
 				return nil
 			}
-			return a.cfg.Workspaces
+			return inputs.Config.Workspaces
 		},
-		QueueNotification: func(note state.FrontendCardNotification) { queueFrontendCardNotification(a, note) },
-		ReadyChatIDs:      a.bindings.StartupRecovery.FrontendStartupReadyChatIDs,
-		RunAsync:          func(fn func()) { runAsync(a, fn) },
+		QueueNotification: inputs.QueueNotification,
+		ReadyChatIDs:      inputs.ReadyChatIDs,
+		RunAsync:          inputs.RunAsync,
 	})
 }
 

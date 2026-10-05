@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 174 |
-| 收 `*App` 的顶层函数 | 53 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 172 |
+| 收 `*App` 的顶层函数 | 51 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -875,6 +875,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 190 删除 `AttachWorkspacePresentation(*App)` 与 `AttachDispatcher(*App)`。composition 和测试直接把已构造的 workspace presentation 写入 bindings，并把 dispatcher 写入当前 runtime owner；attach facade 不再让已就绪对象绕回 App。生产 `*App` 引用由 179 降至 177，收 `*App` 的函数数由 58 降至 56，其他棘轮保持 1/1/0。
 
 步骤 191 删除 production `App.ConfigPath()`、`App.FrontendConfigIndex()` 与 `App.AsyncRunner()` accessor。composition 直接使用 `FrontendScope` 的 config path/index，并从这些构造输入创建窄 `config.FrontendSource` 供配置仓库使用，不再依靠 `App` 隐式实现配置 source 接口；production async runner 原本从未赋值，现以同样的 nil executor 交给 lifecycle/runtime ports。测试便利方法移入 `_test.go`。生产 `*App` 引用由 177 降至 174，收 `*App` 的函数数由 56 降至 53，其他棘轮保持 1/1/0。
+
+步骤 192 将自动重试视图和 runtime maintenance command 工厂改为接收显式构造输入。自动重试动态读取同一 frontend backend/config，回复仍走同一 effect runner；notification owner 在 maintenance command 之前构造，维护任务直接捕获它和 lifecycle runner，不再通过 App bindings 延迟查找。startup-ready chat 仍从 frontend-scoped repository 的 sessions 计算。本次仅改变依赖装配，不改变重试或维护任务的生命周期边界。生产 `*App` 引用由 174 降至 172，收 `*App` 的函数数由 53 降至 51，其他棘轮保持 1/1/0。
 
 ## 方法
 

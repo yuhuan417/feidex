@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	retryview "feidex/internal/adapter/feishu/autoretry"
+	appbackend "feidex/internal/adapter/feishu/backend"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
 	retry "feidex/internal/application/autoretry"
@@ -16,19 +17,42 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func AutoRetryView(a *App) retryview.Service {
-	view := retryview.Service{
-		Context: a.Context, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), Renderer: simpleStatusCardRenderer{client: a.feishu}, MenuBody: menuCardBody,
+type AutoRetryViewInputs struct {
+	Context             func() context.Context
+	Config              *config.Config
+	ConfigMu            *sync.RWMutex
+	ConfiguredBackend   func() string
+	FrontendID          string
+	FrontendConfigIndex int
+	BackendDriver       appbackend.Driver
+	EffectRunner        frontendruntime.EffectRunner
+	Feishu              FeishuClient
+}
+
+func AutoRetryView(inputs AutoRetryViewInputs) retryview.Service {
+	configView := frontendConfigView{
+		cfg: inputs.Config, mu: inputs.ConfigMu,
+		frontendID: inputs.FrontendID, frontendConfigIndex: inputs.FrontendConfigIndex,
+	}
+	service := retryview.Service{
+		Context: inputs.Context, Outbound: newEffectOutbound(inputs.FrontendID, inputs.EffectRunner), Renderer: simpleStatusCardRenderer{client: inputs.Feishu}, MenuBody: menuCardBody,
 		Settings: func() retryview.Settings {
-			cfg := a.configView().feishuConfig()
-			return retryview.Settings{FrontendID: a.FrontendID(), Backend: a.configView().configuredBackend(), Title: a.BackendDriver().Runtime().AutoRetryTitle(), Enabled: cfg != nil && cfg.AutoRetry}
+			cfg := configView.feishuConfig()
+			backend, title := "", ""
+			if inputs.ConfiguredBackend != nil {
+				backend = inputs.ConfiguredBackend()
+			}
+			if inputs.BackendDriver != nil {
+				title = inputs.BackendDriver.Runtime().AutoRetryTitle()
+			}
+			return retryview.Settings{FrontendID: inputs.FrontendID, Backend: backend, Title: title, Enabled: cfg != nil && cfg.AutoRetry}
 		},
-		SessionKey: func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
+		SessionKey: configView.makeSessionKey,
 		ReplyAction: func(msg *feishu.InboundMessage, resp *callback.CardActionTriggerResponse) error {
-			return replyCommandActionResponse(a, msg, resp)
+			return replyCommandActionResponseWith(inputs.EffectRunner, inputs.FrontendID, configView.replyInThreadEnabled(), msg, resp)
 		},
 	}
-	return view
+	return service
 }
 
 type AutoRetryPortInputs struct {
