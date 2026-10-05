@@ -1015,8 +1015,8 @@ func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(
 	recomposeTestApp(a)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.SetBackend(domainbackend.BackendClaude)
-	a.runtimeView().setCodex(nil)
-	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(&fakeClaudeCore{})
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
 	sessionID := "12345678abcdef-claude"
@@ -1278,7 +1278,7 @@ func TestGroupModelSetSavesClaudeModelForNextTurn(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "opus"
 	claude := &fakeClaudeCore{setModelApplied: true}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	const chatID = "chat-hot-apply"
 	sessionKey := "feishu:frontend:" + a.frontendID + ":chat:" + chatID

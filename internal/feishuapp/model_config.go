@@ -44,7 +44,7 @@ func BuildModelCommands(app *App) modelconfig.ModelConfigService {
 			return replyCardWithIDEffect(ctx, replyRunner, statusFrontendID, msgID, card, replyInThread)
 		},
 		RequireCodexClient: func() (modelconfig.CodexClient, error) {
-			return app.runtimeView().requireCodexGateway()
+			return runtimeViewOf(app.runtimeOwner).requireCodexGateway()
 		},
 		MakeSessionKey: func(msg *feishu.InboundMessage) string {
 			return app.configView().makeSessionKey(msg)

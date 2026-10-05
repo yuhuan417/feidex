@@ -458,9 +458,9 @@ func TestHandleCommandPassthroughsUnsupportedLocalCommandsToClaude(t *testing.T)
 		t.Run(raw, func(t *testing.T) {
 			a, _, _ := newTestApp(t)
 			a.cfg.Feishu.Backend = domainbackend.BackendClaude
-			a.runtimeView().setCodex(nil)
+			runtimeViewOf(a.runtimeOwner).setCodex(nil)
 			claude := &fakeClaudeCore{}
-			a.runtimeView().setClaudeCore(claude)
+			runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 			msg := &feishu.InboundMessage{
 				MessageID: "m-1",
@@ -785,9 +785,9 @@ func TestClaudeNewCommandsBindSessionAfterFirstInput(t *testing.T) {
 		t.Run(raw, func(t *testing.T) {
 			a, ff, _ := newTestApp(t)
 			a.cfg.Feishu.Backend = domainbackend.BackendClaude
-			a.runtimeView().setCodex(nil)
+			runtimeViewOf(a.runtimeOwner).setCodex(nil)
 			claude := &fakeClaudeCore{ensureSessionSet: true}
-			a.runtimeView().setClaudeCore(claude)
+			runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 			sessionKey := "feishu:chat:chat"
 			if err := a.store.UpsertSession(&conversation.Session{
 				Key: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID,
@@ -858,12 +858,12 @@ func TestClaudeForkCommandsStartNewSession(t *testing.T) {
 			a, ff, _ := newTestApp(t)
 			a.cfg.Feishu.Backend = domainbackend.BackendClaude
 			a.cfg.Claude.Model = "mimo-v2-pro"
-			a.runtimeView().setCodex(nil)
+			runtimeViewOf(a.runtimeOwner).setCodex(nil)
 			claude := &fakeClaudeCore{
 				forkSessionID:  "claude-forked",
 				forkSessionSet: true,
 			}
-			a.runtimeView().setClaudeCore(claude)
+			runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 			sessionKey := "feishu:chat:chat"
 			if err := a.store.UpsertSession(&conversation.Session{
@@ -906,12 +906,12 @@ func TestClaudeForkCommandsPreparePendingSessionWhenIDNotReady(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "mimo-v2-pro"
-	a.runtimeView().setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 	claude := &fakeClaudeCore{
 		forkSessionID:  "",
 		forkSessionSet: true,
 	}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	sessionKey := "feishu:chat:chat"
 	if err := a.store.UpsertSession(&conversation.Session{

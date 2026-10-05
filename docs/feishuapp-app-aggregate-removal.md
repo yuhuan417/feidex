@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 131 |
-| 收 `*App` 的顶层函数 | 23 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 129 |
+| 收 `*App` 的顶层函数 | 21 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -903,6 +903,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 204 删除 backend actions、backend selection、workspace config 和 workspace management 的纯转发构造 facade，由原实现直接作为导出构造函数。调用点与行为不变。生产 `*App` 引用由 138 降至 134，收 `*App` 的函数数由 30 降至 26，其他棘轮保持 1/1/0。
 
 步骤 205 将通用 lifecycle admission、card dispatch 与 submission enqueue helper 改为显式 owner/service 输入。Feishu entrypoint 仍使用同一 BackendRuntimeDeps、frontend identity、submission queue 和 session-key builder，异步 admission 仍由同一 lifecycle 与 runner 执行。生产 `*App` 引用由 134 降至 131，收 `*App` 的函数数由 26 降至 23，其他棘轮保持 1/1/0。
+
+步骤 206 将 MCP startup helper 改为显式 runtime owner 与 BackendRuntimeDeps 输入，并删除只包装 runtime owner 的 `App.runtimeView()` 访问器。resource 启动、当前 Codex/Claude client 动态查询和 publication 顺序不变，frontend Prepare 的失败取消语义保持原样。生产 `*App` 引用由 131 降至 129，收 `*App` 的函数数由 23 降至 21，其他棘轮保持 1/1/0。
 
 ## 方法
 

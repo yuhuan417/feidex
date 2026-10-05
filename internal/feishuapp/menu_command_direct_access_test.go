@@ -309,7 +309,7 @@ func TestCommandModelDirectSetAndEffortForClaude(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 
@@ -356,7 +356,7 @@ func TestCommandModelOptionAddAndRemoveForClaude(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
 	a.runtimeOwner.BeginMessageTraffic()
@@ -385,7 +385,7 @@ func TestCommandModelDirectSetRawClaudeModelDuringMessageTraffic(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "p2p", UserID: "user-1", Text: "/model set deepseek-v4-pro"}
 	a.runtimeOwner.BeginMessageTraffic()
@@ -407,7 +407,7 @@ func TestCommandModelDirectSetClaudeModelRejectsConcurrentMessageTraffic(t *test
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	claude := &fakeClaudeCore{}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", UserID: "user-1", Text: "/model set deepseek-v4-pro"}
 	a.runtimeOwner.

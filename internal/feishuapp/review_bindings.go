@@ -53,7 +53,7 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 		ConfigProvider: configProvider, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
 		ContextProvider:        a,
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{config: a.Config(), configView: a.configView(), session: a.State().Session}, GitProvider: reviewGitProviderAdapter{context: a.runtimeOwner.Lifecycle.Context},
-		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return a.runtimeView().requireCodexGateway() },
+		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return runtimeViewOf(a.runtimeOwner).requireCodexGateway() },
 		MakeSessionKeyFn: func(m *feishu.InboundMessage) string { return a.configView().makeSessionKey(m) }, ReplyInThreadEnabledFn: func(v string) bool { return a.configView().replyInThreadEnabled() },
 		MenuCardBodyFn: menuCardBody, ActionStringValueFn: actionStringValue,
 		CommandMessageFromActionFn: func(x *feishu.CardAction, s, r string) *feishu.InboundMessage {

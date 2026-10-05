@@ -15,7 +15,7 @@ func testAppLiveThreadMarker(a *App) liveThreadMarker {
 	if a == nil {
 		return liveThreadMarker{}
 	}
-	owner := a.runtimeView().ensureRuntimeOwner()
+	owner := runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner()
 	var announcement announcement.Query
 	if a.bindings != nil {
 		announcement = a.bindings.AnnouncementQuery
@@ -33,12 +33,12 @@ func sessionHasLiveThread(a *App, sessionKey, threadID string) bool {
 	if a == nil {
 		return false
 	}
-	return a.runtimeView().ensureRuntimeOwner().LiveThreads.Has(sessionKey, threadID)
+	return runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner().LiveThreads.Has(sessionKey, threadID)
 }
 
 func clearSessionLiveThread(a *App, sessionKey string) {
 	if a != nil {
-		a.runtimeView().ensureRuntimeOwner().LiveThreads.Clear(sessionKey)
+		runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner().LiveThreads.Clear(sessionKey)
 	}
 }
 

@@ -18,7 +18,7 @@ import (
 func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.runtimeView().setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
 
@@ -59,8 +59,8 @@ func TestListClaudeSessionsFiltersWorkspaceAndSortsRecent(t *testing.T) {
 func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.runtimeView().setCodex(nil)
-	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(&fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -86,8 +86,8 @@ func TestHandleCommandSessionListClaudeShowsSessionCard(t *testing.T) {
 func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.runtimeView().setCodex(nil)
-	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(&fakeClaudeCore{})
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -143,9 +143,9 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.runtimeView().setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true, ensureSessionID: "session-resume-1"}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	configDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
@@ -191,9 +191,9 @@ func TestHandleCommandSessionResumeClaudeResumesSession(t *testing.T) {
 func TestHandleCommandSessionNewClaudeBindsDeferredSessionID(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.runtimeView().setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 	claude := &fakeClaudeCore{ensureSessionSet: true, ensureSessionID: ""}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	msg := &feishu.InboundMessage{MessageID: "m-1", ChatID: "chat-1", ChatType: "group", RootMessageID: "root-1", UserID: "user-1"}
 	sessionKey := a.configView().makeSessionKey(msg)
@@ -233,8 +233,8 @@ func TestHandleCommandSessionNewClaudeBindsDeferredSessionID(t *testing.T) {
 func TestCompleteThreadResumeClaudeRejectsSessionFromDifferentWorkspace(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.runtimeView().setCodex(nil)
-	a.runtimeView().setClaudeCore(&fakeClaudeCore{})
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(&fakeClaudeCore{})
 	altCwd := t.TempDir()
 	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Name: "Alt", Cwd: altCwd, ApprovalPolicy: "never", SandboxMode: "read-only"})
 

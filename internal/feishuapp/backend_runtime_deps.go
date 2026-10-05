@@ -58,7 +58,7 @@ func (a *App) BackendRuntimeDeps() BackendRuntimeDeps {
 		cfg:        a.cfg,
 		cfgPath:    a.cfgPath,
 		frontendID: a.frontendID,
-		runtime:    a.runtimeView(),
+		runtime:    runtimeViewOf(a.runtimeOwner),
 		contextFn:  a.Context,
 	}
 	if a.runtimeOwner != nil {

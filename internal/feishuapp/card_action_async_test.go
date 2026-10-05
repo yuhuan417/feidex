@@ -413,9 +413,9 @@ func TestCompleteReviewFormSubmitBaseReturnsPreparingCardAndPatchesAsync(t *test
 func TestCompleteMenuInterruptClaudeReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
-	a.runtimeView().setCodex(nil)
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
 	claude := &fakeClaudeCore{}
-	a.runtimeView().setClaudeCore(claude)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
 
 	sessionKey := a.configView().makeSessionKey(&feishu.InboundMessage{ChatType: "p2p", ChatID: "chat-1", UserID: "user-1"})
 	if err := a.store.UpsertSession(&conversation.Session{

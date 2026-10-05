@@ -97,7 +97,7 @@ func TestModelConfigClaudeFailureRetainsQueueAndLineage(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: fmt.Errorf("%w: rejected", claudecli.ErrModelConfigApply)}
-	a.runtimeView().setClaudeCore(fake)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(fake)
 	first := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "first")
 	second := modelBoundaryQueuedSubmission(t, a, "sess-config", "original-thread", "second")
 	if err := startNextSubmission(a.bindings.Submissions, first.SessionKey); !errors.Is(err, claudecli.ErrModelConfigApply) {
@@ -341,7 +341,7 @@ func TestModelConfigClaudeSteerDoesNotEnsureOrApply(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{ensureSessionErr: errors.New("must not initialize while steering")}
-	a.runtimeView().setClaudeCore(fake)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(fake)
 	sub := seedActiveSubmission(t, a, "sess-steer", "original-thread", "turn-original")
 	if _, err := a.store.UpdateSession(sub.SessionKey, func(sess *conversation.Session) { sess.ActiveThreadWorkspaceID = a.cfg.Workspaces[0].ID }); err != nil {
 		t.Fatal(err)
@@ -362,7 +362,7 @@ func TestModelConfigFailedSaveDoesNotPublish(t *testing.T) {
 			a, _, _ := newTestApp(t)
 			a.SetBackend(backend)
 			a.cfg.Feishu.Backend = backend
-			a.runtimeView().setClaudeCore(&fakeClaudeCore{})
+			runtimeViewOf(a.runtimeOwner).setClaudeCore(&fakeClaudeCore{})
 			before := *config.Clone(a.cfg)
 			a.cfgPath = t.TempDir()
 			recomposeTestApp(a) // A directory cannot be replaced by config.toml.
@@ -375,7 +375,7 @@ func TestModelConfigFailedSaveDoesNotPublish(t *testing.T) {
 			if err == nil || a.cfg.Codex.Model != before.Codex.Model || a.cfg.Claude.Model != before.Claude.Model {
 				t.Fatalf("failed save published settings: %v", err)
 			}
-			if len(a.runtimeView().currentClaudeCore().(*fakeClaudeCore).updatedConfigs) != 0 {
+			if len(runtimeViewOf(a.runtimeOwner).currentClaudeCore().(*fakeClaudeCore).updatedConfigs) != 0 {
 				t.Fatal("failed save updated runtime")
 			}
 		})
@@ -415,7 +415,7 @@ func TestModelConfigGroupWritesDuringWorkPreservePending(t *testing.T) {
 	a.SetBackend(domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	fake := &fakeClaudeCore{}
-	a.runtimeView().setClaudeCore(fake)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(fake)
 	msg := &feishu.InboundMessage{ChatID: "group-model", ChatType: "group", UserID: "user", MessageID: "config"}
 	key := a.configView().makeSessionKey(msg)
 	seedActiveSubmission(t, a, key, "group-thread", "group-turn")
@@ -476,7 +476,7 @@ func TestModelConfigClaudeAcknowledgesAndRestartsOnlyTargetSession(t *testing.T)
 	cli, logPath := writeModelConfigCLI(t)
 	a.cfg.Claude.Command, a.cfg.Claude.Model, a.cfg.Claude.Effort, a.cfg.Claude.SubagentModel = cli, "sonnet", "low", "fixed-subagent"
 	r := appclauderuntime.NewService(testClaudeRuntimePorts(a, a.cfg.Claude))
-	a.runtimeView().setClaudeCore(r)
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(r)
 	t.Cleanup(func() { _ = r.Close() })
 	for _, key := range []string{"one", "two"} {
 		if err := a.store.UpsertSession(&conversation.Session{Key: key, ActiveThreadID: "thread-" + key, WorkspaceID: a.cfg.Workspaces[0].ID, Status: "idle"}); err != nil {

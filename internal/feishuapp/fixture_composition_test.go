@@ -113,7 +113,7 @@ func prepareTestApp(a *App) *App {
 		return a.runtimeOwner.Lifecycle.Run(fn, a.asyncRunner)
 	}), Effects: newEffectRunner(a.runtimeOwner)}}
 	a.bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(a.FrontendID()), Repository: scoped.WorkspaceSelections{Store: a.State()}, DefaultWorkspaceID: DefaultWorkspaceID(a.Config(), a.ConfigMu())}
-	a.bindings.GoalManagement = &goal.Management{Tracker: a.bindings.Goals, Context: a.Context, Gateway: func() (goal.Gateway, error) { return RequireCodexGoalGateway(a.runtimeView().getCodex()) }}
+	a.bindings.GoalManagement = &goal.Management{Tracker: a.bindings.Goals, Context: a.Context, Gateway: func() (goal.Gateway, error) { return RequireCodexGoalGateway(runtimeViewOf(a.runtimeOwner).getCodex()) }}
 	a.bindings.SubmissionLookup = submission.SubmissionLookupService{State: a.State(), Runtime: a.runtimeOwner.TurnBindings}
 	a.bindings.SubmissionStatus = submission.StatusService{Lookup: a.bindings.SubmissionLookup, Repository: a.State()}
 	a.bindings.InteractionLifecycle = interaction.LifecycleService{Repository: a.State(), Frontend: a.FrontendID(), Presentation: InteractionExpiryPresentation(a.Feishu(), a.State(), identity.FrontendID(a.FrontendID()), *a.runtimeOwner.EffectRunner)}
@@ -260,7 +260,7 @@ func prepareTestApp(a *App) *App {
 	})
 	a.bindings.History = BuildHistory(
 		identity.FrontendID(a.FrontendID()), a.State(), ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.FrontendConfigIndex()),
-		func() codexadapter.RPCClient { return a.runtimeView().currentCodexClient() },
+		func() codexadapter.RPCClient { return runtimeViewOf(a.runtimeOwner).currentCodexClient() },
 		a.runtimeOwner.Lifecycle.Context, *a.runtimeOwner.EffectRunner,
 		SessionKeyBuilder(a.FrontendID()), func(string) bool { return false },
 	)

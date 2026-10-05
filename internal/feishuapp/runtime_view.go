@@ -15,11 +15,8 @@ type runtimeView struct {
 	owner *frontendruntime.FrontendOwner
 }
 
-func (a *App) runtimeView() runtimeView {
-	if a == nil {
-		return runtimeView{}
-	}
-	return runtimeView{owner: a.runtimeOwner}
+func runtimeViewOf(owner *frontendruntime.FrontendOwner) runtimeView {
+	return runtimeView{owner: owner}
 }
 
 // ensureRuntimeOwner returns the owner itself for the call sites that use it

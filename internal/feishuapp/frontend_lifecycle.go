@@ -8,12 +8,12 @@ import (
 
 func (a *App) Prepare(ctx context.Context) error {
 	a.beginLifecycle(ctx)
-	if err := startMCPService(a, a.Context()); err != nil {
-		a.runtimeView().ensureRuntimeOwner().Lifecycle.Cancel()
+	if err := startMCPService(a.runtimeOwner, a.BackendRuntimeDeps(), a.Context()); err != nil {
+		runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner().Lifecycle.Cancel()
 		return err
 	}
-	if err := startPreparedBackendRuntime(a.BackendRuntimeDeps(), a.Context(), currentBackendRuntimeHandle(a.configView().configuredBackend(), a.runtimeView())); err != nil {
-		a.runtimeView().ensureRuntimeOwner().Lifecycle.Cancel()
+	if err := startPreparedBackendRuntime(a.BackendRuntimeDeps(), a.Context(), currentBackendRuntimeHandle(a.configView().configuredBackend(), runtimeViewOf(a.runtimeOwner))); err != nil {
+		runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner().Lifecycle.Cancel()
 		return err
 	}
 	return nil

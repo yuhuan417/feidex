@@ -77,7 +77,7 @@ func BuildClaudeSupport(a *App) *claudesupport.Service {
 		},
 		BackendClaude: domainbackend.BackendClaude,
 		ResolvePlanFeedback: func(pendingID, feedback string) error {
-			return a.runtimeView().currentClaudeCore().ResolvePlanFeedback(pendingID, feedback)
+			return runtimeViewOf(a.runtimeOwner).currentClaudeCore().ResolvePlanFeedback(pendingID, feedback)
 		},
 		FinalizePendingReply: func(pending *state.PendingRequest) *state.PendingRequest {
 			return pendingReplies.Finalize(pending)

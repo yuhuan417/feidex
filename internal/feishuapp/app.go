@@ -100,7 +100,7 @@ func (a *App) Start(ctx context.Context) error {
 }
 
 func (a *App) beginLifecycle(ctx context.Context) {
-	a.runtimeView().ensureRuntimeOwner().Lifecycle.Begin(ctx)
+	runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner().Lifecycle.Begin(ctx)
 }
 
 func (a *App) Stop(ctx context.Context) error {
@@ -120,7 +120,7 @@ func (a *App) Context() context.Context {
 	if a == nil {
 		return context.Background()
 	}
-	return a.runtimeView().ensureRuntimeOwner().Lifecycle.Context()
+	return runtimeViewOf(a.runtimeOwner).ensureRuntimeOwner().Lifecycle.Context()
 }
 
 func runAsync(lifecycle *frontendruntime.FrontendRuntime, runner func(func()), fn func()) bool {

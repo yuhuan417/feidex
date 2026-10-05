@@ -31,7 +31,7 @@ func TestFrontendLifecycleCancellationIsIsolated(t *testing.T) {
 	b, _, _ := newTestApp(t)
 	a.beginLifecycle(context.Background())
 	b.beginLifecycle(context.Background())
-	defer b.runtimeView().ensureRuntimeOwner().Lifecycle.Cancel()
+	defer runtimeViewOf(b.runtimeOwner).ensureRuntimeOwner().Lifecycle.Cancel()
 	if err := a.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}

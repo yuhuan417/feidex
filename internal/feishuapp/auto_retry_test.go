@@ -581,9 +581,9 @@ func TestClaudeAutoRetryStartFailureKeepsWaitingState(t *testing.T) {
 		t.Fatal("hasPendingAutoRetry(sessionKey) = false, want true")
 	}
 
-	claude, ok := a.runtimeView().currentClaudeCore().(*fakeClaudeCore)
+	claude, ok := runtimeViewOf(a.runtimeOwner).currentClaudeCore().(*fakeClaudeCore)
 	if !ok {
-		t.Fatalf("claude core type = %T", a.runtimeView().currentClaudeCore())
+		t.Fatalf("claude core type = %T", runtimeViewOf(a.runtimeOwner).currentClaudeCore())
 	}
 	claude.mu.Lock()
 	startTurnCalls := append([]fakeClaudeStartTurnCall(nil), claude.startTurnCalls...)

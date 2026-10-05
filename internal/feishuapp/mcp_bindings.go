@@ -19,14 +19,14 @@ type feidexMCPService struct {
 	token   string
 }
 
-func startMCPService(a *App, ctx context.Context) error {
-	if a == nil {
+func startMCPService(owner *frontendruntime.FrontendOwner, deps BackendRuntimeDeps, ctx context.Context) error {
+	if owner == nil || owner.MCP == nil {
 		return nil
 	}
-	if err := a.runtimeOwner.MCP.Start(ctx); err != nil {
+	if err := owner.MCP.Start(ctx); err != nil {
 		return err
 	}
-	publishMCPToCodexClient(a.BackendRuntimeDeps(), a.runtimeView().currentCodexClient())
+	publishMCPToCodexClient(deps, deps.runtime.currentCodexClient())
 	return nil
 }
 

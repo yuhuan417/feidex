@@ -68,16 +68,16 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 			backend := pendingBackend(a.configView(), pending)
 			switch normalizeRuntimeBackend(backend) {
 			case domainbackend.BackendCodex:
-				client := a.runtimeView().currentCodexClient()
+				client := runtimeViewOf(a.runtimeOwner).currentCodexClient()
 				if client == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
 				return interactionreply.NewCodexAdapter(codexEffectReplyClient{runtimeOwner: a.runtimeOwner, frontendID: identity.FrontendID(a.FrontendID())}, backend)
 			case domainbackend.BackendClaude:
-				if a.runtimeView().currentClaudeCore() == nil {
+				if runtimeViewOf(a.runtimeOwner).currentClaudeCore() == nil {
 					return interactionreply.NewUnsupportedAdapter(backend)
 				}
-				return interactionreply.NewClaudeAdapter(claudeReplyClientShim{claude: a.runtimeView().currentClaudeCore()}, backend)
+				return interactionreply.NewClaudeAdapter(claudeReplyClientShim{claude: runtimeViewOf(a.runtimeOwner).currentClaudeCore()}, backend)
 			default:
 				return interactionreply.NewUnsupportedAdapter(backend)
 			}
@@ -114,7 +114,7 @@ func BuildServerRequests(a *App) *serverrequest.Service {
 			return apputil.PrependAttentionMentionMarkdown(text, userID)
 		},
 		ReplyCodexError: func(requestID json.RawMessage, code int, message string) {
-			replyCodexError(a.runtimeView(), requestID, code, message)
+			replyCodexError(runtimeViewOf(a.runtimeOwner), requestID, code, message)
 		},
 		RawCard: rawCard,
 
