@@ -159,14 +159,6 @@ func (a *App) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawComm
 	return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)
 }
 
-func (a *App) ActionStringValue(action *feishu.CardAction, key string) string {
-	return actionStringValue(action, key)
-}
-
-func (a *App) MenuCardBodyForBackend(backend, action, body string) string {
-	return menuCardBodyForBackend(backend, action, body)
-}
-
 func (a *App) CancelAutoRetry(sessionKey string, keepUntilTerminal bool, notice string) bool {
 	return a.bindings.AutoRetry.CancelAutoRetry(sessionKey, keepUntilTerminal, notice)
 }

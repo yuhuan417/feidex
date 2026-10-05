@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 208 |
-| 收 `*App` 的顶层函数 | 78 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 206 |
+| 收 `*App` 的顶层函数 | 76 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -847,6 +847,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 176 删除无生产调用方的 `App.Claude()`、`App.Codex()` 与 `App.BackendRuntime()` facade；composition 的 goal gateway 直接从已持有的 frontend runtime owner 获取当前 Codex client，测试 fixture 和断言直接读取已有 `runtimeView`。owner 的 client 来源与 `App.Codex()` 相同。生产 `*App` 引用由 216 降至 213，收 `*App` 的顶层函数由 86 降至 83，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 步骤 177 删除无生产调用方的 `App.AutoRetries()`、`App.RunAsync()`、`App.MenuCardBody()`、`App.SessionHasActiveWork()` 与 `App.LockAutoRetryDispatch()` facade。ThreadMenu 在构造期直接取 auto-retry tracker 的 `LockDispatch` 方法值；auto-retry executor 显式通过 frontend lifecycle admission 后再交给 async runner，关闭期间拒绝新任务的行为保持不变。生产 `*App` 引用由 213 降至 208，收 `*App` 的顶层函数由 83 降至 78，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
+
+步骤 178 删除无生产调用方的 `App.ActionStringValue()` 和 `App.MenuCardBodyForBackend()` 转发 facade。goal、planmode、threadmenu 以及菜单 renderer 已直接使用相应纯函数，生产 `*App` 引用由 208 降至 206，收 `*App` 的顶层函数由 78 降至 76，App-bearing 结构体、App-bearing `*Ports` 工厂和 lazy binding-read 预算保持 1/1/0。
 
 ## 方法
 
