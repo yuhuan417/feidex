@@ -12,15 +12,6 @@ import (
 
 // Feishu returns the Feishu client. Sub-packages should define narrow
 // interfaces for the methods they need rather than depending on this type.
-// AsyncRunner exposes the frontend's async executor so composition can hand
-// it to components that need to schedule work off the callback path.
-func (a *App) AsyncRunner() func(func()) {
-	if a == nil {
-		return nil
-	}
-	return a.asyncRunner
-}
-
 func (a *App) Feishu() FeishuClient {
 	if a == nil {
 		return nil
@@ -49,14 +40,6 @@ func (a *App) State() *appstate.Store {
 	return a.stateView
 }
 
-// ConfigPath returns the filesystem path to the configuration file.
-func (a *App) ConfigPath() string {
-	if a == nil {
-		return ""
-	}
-	return a.cfgPath
-}
-
 // FrontendID returns the configured frontend identifier.
 func (a *App) FrontendID() string {
 	if a == nil {
@@ -78,12 +61,4 @@ func (a *App) ConfigMu() *sync.RWMutex {
 		return nil
 	}
 	return a.configMutex()
-}
-
-// FrontendConfigIndex returns the active frontend configuration index.
-func (a *App) FrontendConfigIndex() int {
-	if a == nil {
-		return -1
-	}
-	return a.frontendConfigIndex
 }

@@ -85,6 +85,13 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		return nil, err
 	}
 	store := scope.Store
+	configPath := scope.ConfigPath
+	frontendConfigIndex := scope.Frontend.ConfigIndex
+	configSource := configadapter.FrontendSource{
+		WorkspaceSource: configadapter.WorkspaceSource{Value: scope.Config, Mu: scope.ConfigMutex, Path: configPath},
+		ConfigIndex:     frontendConfigIndex,
+	}
+	var asyncRunner func(func())
 	configuredBackend := feishuapp.ConfiguredBackendBuilder(
 		scope.Config, scope.ConfigMutex, scope.RuntimeOwner.Backend, scope.Frontend.ID, scope.Frontend.ConfigIndex,
 	)
@@ -103,7 +110,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	}}
 	frontend.AttachBindings(bindings)
 	feishuapp.AttachEffectRunner(frontend, feishuapp.NewEffectRunner(frontend))
-	bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(frontend)}
+	bindings.RuntimeSettings = runtimeconfig.Service{Repository: configadapter.NewRuntimeRepository(configSource)}
 	bindings.PathPicker = pathpicker.Service{Filesystem: filesystempicker.Filesystem{}}
 	bindings.AsyncInputs = asyncinput.Service{Deps: asyncinput.Dependencies{Repository: frontend.State(), Backend: configuredBackend, Context: frontend.Context, Run: feishuapp.SessionTaskRunner(frontend), Effects: feishuapp.NewEffectRunner(frontend)}}
 	bindings.WorkspaceSelection = workspaceapp.SelectionService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: scoped.WorkspaceSelections{Store: frontend.State()}, DefaultWorkspaceID: feishuapp.DefaultWorkspaceID(frontend.Config(), frontend.ConfigMu())}
@@ -127,14 +134,14 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		enabled, _ := bindings.Primary.IsPrimary(frontend.FrontendID(), "group", chatID)
 		return enabled
 	}}
-	bindings.AnnouncementQuery = announcement.Query{Repository: frontend.State(), Workspaces: configadapter.NewWorkspaceRepositoryForConfig(frontend.Config(), frontend.ConfigMu(), frontend.ConfigPath()), HasPrimary: func(chatID string) bool {
+	bindings.AnnouncementQuery = announcement.Query{Repository: frontend.State(), Workspaces: configadapter.NewWorkspaceRepositoryForConfig(frontend.Config(), frontend.ConfigMu(), configPath), HasPrimary: func(chatID string) bool {
 		record, _ := bindings.Primary.Lookup(frontend.FrontendID(), "group", chatID)
 		return record != nil
 	}}
 	bindings.ConversationQuery = conversation.Query{Repository: frontend.State()}
 	scope.RuntimeOwner.Announcements = runtime.NewCoalescedRefresh(&scope.RuntimeOwner.Lifecycle, 2*time.Second, 15*time.Second, feishuapp.GroupAnnouncementRefresh(feishuapp.GroupAnnouncementRefreshDependencies{
 		FrontendID: frontend.FrontendID(), Feishu: frontend.Feishu(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
-		FrontendConfigIndex: frontend.FrontendConfigIndex(), RuntimeOwner: scope.RuntimeOwner,
+		FrontendConfigIndex: frontendConfigIndex, RuntimeOwner: scope.RuntimeOwner,
 		Announcements: bindings.Announcements, AnnouncementQuery: bindings.AnnouncementQuery, ConversationQuery: bindings.ConversationQuery,
 	}))
 	liveThreads := feishuapp.SubmissionLiveThreads(scope.RuntimeOwner.LiveThreads, frontend.State().Session, bindings.AnnouncementQuery, scope.RuntimeOwner.Announcements.Schedule)
@@ -142,11 +149,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.TurnMetadata = turnmeta.Service{Tracker: scope.RuntimeOwner.TurnBindings}
 	bindings.ItemContext = approval.ItemContext{Items: bindings.TurnItems, Started: func(threadID, turnID string) { bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
 	bindings.PendingReplies = feishuapp.PendingReplyAdapter{Service: bindings.Interactions, Repository: frontend.State()}
-	filesystem, git := feishuapp.WorkspaceCreationPorts(frontend.ConfigPath())
-	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(frontend.FrontendID()), Selection: bindings.WorkspaceSelection, Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(frontend)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: frontend, Scope: frontend.State()}}
+	filesystem, git := feishuapp.WorkspaceCreationPorts(configPath)
+	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(frontend.FrontendID()), Selection: bindings.WorkspaceSelection, Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(configSource)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: configSource, Scope: frontend.State()}}
 	bindings.WorkspaceCreation = &workspaceapp.CreationService{Filesystem: filesystem, Git: git, Lifecycle: workspaceLifecycle}
-	bindings.WorkspaceSettings = workspaceapp.SettingsService{Frontend: frontend.FrontendID(), Repository: configadapter.WorkspaceSettingsRepository{Source: frontend, Scope: frontend.State()}}
-	bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(frontend), PendingRequests: frontend.State().PendingRequests, ConfigPath: frontend.ConfigPath, BotName: frontend.Feishu().BotName, FrontendID: frontend.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
+	bindings.WorkspaceSettings = workspaceapp.SettingsService{Frontend: frontend.FrontendID(), Repository: configadapter.WorkspaceSettingsRepository{Source: configSource, Scope: frontend.State()}}
+	bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(configSource), PendingRequests: frontend.State().PendingRequests, ConfigPath: func() string { return configPath }, BotName: frontend.Feishu().BotName, FrontendID: frontend.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
 	bindings.Forms = &interaction.FormService{Repository: frontend.State()}
 	bindings.WorkspaceWorkflow = &workspaceapp.Workflow{Forms: bindings.Forms, Planning: bindings.WorkspacePlanning, Creation: bindings.WorkspaceCreation}
 	workspacePresentation := NewWorkspacePresentation(WorkspacePresentationDependencies{
@@ -156,11 +163,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.WorkspacePresentation = workspacePresentation
 	bindings.ModelSnapshots = modelconfig.SnapshotService{Repository: feishuapp.ModelSnapshotRepository(frontend.Config(), frontend.ConfigMu(), frontend.State())}
 	bindings.ModelDefaults = modelconfig.DefaultsService{
-		Repository: configadapter.ModelDefaultsRepository{Source: frontend, Scope: frontend.State()},
+		Repository: configadapter.ModelDefaultsRepository{Source: configSource, Scope: frontend.State()},
 		Admission:  feishuapp.ModelWriteAdmission(bindings.FrontendQuery), Frontend: frontend.FrontendID(),
 		Publisher: feishuapp.ModelDefaultsPublisher(scope.RuntimeOwner, frontend.Config(), frontend.ConfigMu()),
 	}
-	bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: frontend}}
+	bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: configSource}}
 	bindings.ModelCommands = feishuapp.BuildModelCommands(frontend)
 	frontendIDForBindingScope := frontend.FrontendID()
 	bindingScope := feishuapp.NewBindingScope(frontend.State(), func(key string) string {
@@ -184,7 +191,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Context: frontend.Context, Tracker: scope.RuntimeOwner.AutoRetries, Repository: frontend.State(), Live: liveThreads,
 		Enabled: func() bool { return bindings.AutoRetry.Settings().Enabled }, SaveEnabled: bindings.RuntimeSettings.SetAutoRetry,
 		RuntimeDeps: autoRetryRuntimeDeps, RuntimeOwner: scope.RuntimeOwner,
-		RunAsync:   func(fn func()) { scope.RuntimeOwner.Lifecycle.Run(fn, frontend.AsyncRunner()) },
+		RunAsync:   func(fn func()) { scope.RuntimeOwner.Lifecycle.Run(fn, asyncRunner) },
 		FrontendID: frontend.FrontendID(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
 		Starter: bindings.Submissions, Presenter: bindings.AutoRetry,
 	}))
@@ -198,7 +205,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		}
 	}
 	bindings.CodexRecovery = codexruntime.NewRecoveryService(feishuapp.CodexRecoveryPorts(feishuapp.CodexRecoveryPortInputs{
-		Runtime: frontend.BackendRuntimeDeps(), Submissions: bindings.Submissions, AsyncRunner: frontend.AsyncRunner(),
+		Runtime: frontend.BackendRuntimeDeps(), Submissions: bindings.Submissions, AsyncRunner: asyncRunner,
 		BackendFailure: func() *backendfailure.BackendFailureService { return backendFailureOwner },
 		StartVerifiedCodexClient: func(ctx context.Context) (codexruntime.CodexClient, error) {
 			return codexUpgrade.StartVerifiedCodexClient(ctx)
@@ -206,13 +213,13 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		RecoverFrontendRuntime: recoverFrontend,
 	}))
 	codexUpgrade = codexruntime.NewUpgradeService(feishuapp.CodexUpgradePorts(
-		frontend.Config(), frontend.ConfigMu(), frontend.FrontendID(), frontend.FrontendConfigIndex(),
+		frontend.Config(), frontend.ConfigMu(), frontend.FrontendID(), frontendConfigIndex,
 		scope.RuntimeOwner, frontend.BackendRuntimeDeps(), bindings.CodexRecovery,
 		recoverFrontend,
 		func(ctx context.Context) error { return codexUpgrade.CodexSmokeTest(ctx) },
 	))
 	bindings.CodexUpgrade = codexUpgrade
-	smoke, active, current, create := feishuapp.ClaudeMaintenancePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, scope.RuntimeOwner, frontend.FrontendConfigIndex(), bindings.ClaudeFactory)
+	smoke, active, current, create := feishuapp.ClaudeMaintenancePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, scope.RuntimeOwner, frontendConfigIndex, bindings.ClaudeFactory)
 	bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	bindings.BackendMaintenance = make(map[string]*backendmaintenance.Service)
 	bindings.MaintenanceRunners = make(map[string]maintenance.OperationRunner)
@@ -244,43 +251,43 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		})
 		service := &backendmaintenance.Service{Name: name, Kind: kind, Forms: bindings.Forms, Installer: installer, State: scope.RuntimeOwner.MaintenanceTrackers.Get(runtime.BackendKey(kind)), BusyReason: busy, Runtime: backendRuntime, Publisher: publisher}
 		bindings.BackendMaintenance[kind] = service
-		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(frontend.AsyncRunner())}
+		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(asyncRunner)}
 	}
 	bindings.UpgradePresentation = feishuapp.BuildUpgradePresentation(maintenanceRenderer, bindings.BackendMaintenance)
 	bindings.BackendUpgrades = feishuapp.BuildBackendUpgrades(feishuapp.BackendUpgradeInputs{
 		SessionKey: feishuapp.SessionKeyBuilder(frontend.FrontendID()), ReplyInThread: func() bool { return false },
 		FrontendID: identity.FrontendID(frontend.FrontendID()), Runner: *scope.RuntimeOwner.EffectRunner,
-		Lifecycle: &scope.RuntimeOwner.Lifecycle, AsyncRunner: frontend.AsyncRunner(),
+		Lifecycle: &scope.RuntimeOwner.Lifecycle, AsyncRunner: asyncRunner,
 		BackendMaintenance: bindings.BackendMaintenance, MaintenanceRunners: bindings.MaintenanceRunners,
 		Maintenance: bindings.Maintenance, Presentation: bindings.UpgradePresentation,
 		Forms: bindings.Forms, CodexUpgrade: bindings.CodexUpgrade,
 	})
 	frontendID := identity.FrontendID(frontend.FrontendID())
 	bindings.History = feishuapp.BuildHistory(
-		frontendID, frontend.State(), feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex()),
+		frontendID, frontend.State(), feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontendConfigIndex),
 		func() codexadapter.RPCClient { return scope.RuntimeOwner.CodexClient() },
 		scope.RuntimeOwner.Lifecycle.Context, *scope.RuntimeOwner.EffectRunner,
 		feishuapp.SessionKeyBuilder(frontend.FrontendID()), func(string) bool { return false },
 	)
 	debugViewDependencies := feishuapp.DebugViewDependencies(frontend)
-	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend.Feishu(), debugViewDependencies, &scope.RuntimeOwner.Lifecycle, scope.RuntimeOwner.SessionActors, frontend.AsyncRunner())
+	sharedArtifacts, downloadPresentation, downloadRunner := feishuapp.FileSharePorts(frontend.Feishu(), debugViewDependencies, &scope.RuntimeOwner.Lifecycle, scope.RuntimeOwner.SessionActors, asyncRunner)
 	bindings.FileSharing = &fileshare.Service{Forms: bindings.Forms, Repository: frontend.State(), Artifacts: sharedArtifacts, Presentation: downloadPresentation, Context: frontend.Context, Run: downloadRunner}
 	debugViewDependencies.FileSharing = bindings.FileSharing
 	bindings.Debug = feishuapp.BuildDebug(debugViewDependencies)
 	bindings.Usage = feishuapp.BuildUsage(debugViewDependencies)
 	bindings.FinalCardPatch = feishuapp.BuildFinalCardPatch(feishuapp.FinalCardPatchInputs{
 		Context: frontend.Context, Tracker: bindings.FinalCardPatches, Finder: frontend.State(),
-		Patcher: frontend.Feishu(), RunAsync: frontend.AsyncRunner(), Config: frontend.Config(), State: frontend.State(),
+		Patcher: frontend.Feishu(), RunAsync: asyncRunner, Config: frontend.Config(), State: frontend.State(),
 	})
 	bindings.ClaudeSupport = feishuapp.BuildClaudeSupport(frontend)
 	bindings.ThreadSettings = threadsettings.Service{Repository: frontend.State()}
-	permissionBackend := feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex())
+	permissionBackend := feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontendConfigIndex)
 	permissionMenuRenderer := feishuapp.ClaudePermissionMenuRenderer(frontend.Config(), permissionBackend, frontend.State().Session)
 	bindings.PermissionSettings = threadsettings.PermissionService{
 		Settings: bindings.ThreadSettings,
-		Source:   configadapter.ThreadPermissionRepository{Source: frontend, Scope: frontend.State()},
+		Source:   configadapter.ThreadPermissionRepository{Source: configSource, Scope: frontend.State()},
 		Runtime:  feishuapp.PermissionRuntime(permissionBackend, scope.RuntimeOwner.ClaudeCore),
-		Tasks:    feishuapp.PermissionTasks(&scope.RuntimeOwner.Lifecycle, scope.RuntimeOwner.SessionActors, frontend.AsyncRunner()),
+		Tasks:    feishuapp.PermissionTasks(&scope.RuntimeOwner.Lifecycle, scope.RuntimeOwner.SessionActors, asyncRunner),
 		Failure:  feishuapp.PermissionFailure(permissionMenuRenderer, frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner),
 		Context:  frontend.Context,
 	}
@@ -294,7 +301,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BindingPending = routing.PendingService{Configuration: bindings.RoutingConfiguration.ConfigurationService, Repository: frontend.State()}
 	bindings.BackendConfiguration = feishuapp.BuildBackendConfiguration(feishuapp.BackendConfigurationInputs{
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), Backend: scope.RuntimeOwner.Backend,
-		FrontendConfigIndex: frontend.FrontendConfigIndex(), Store: store,
+		FrontendConfigIndex: frontendConfigIndex, Store: store,
 		WorkspaceSelection: bindings.WorkspaceSelection, Driver: frontend.BackendDriver(), ModelCommands: bindings.ModelCommands,
 	})
 	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
@@ -302,7 +309,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Skills = compositionkit.NewSkillService(feishuapp.SkillUseCasePorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner.PendingSkills, frontend.FrontendID(), scope.RuntimeOwner))
 	bindings.SkillCommands = feishuapp.BuildSkillCommands(frontend)
 	*bindings.PendingQueue = submission.NewPendingQueueService(feishuapp.PendingQueuePorts(frontend.Context, frontend.State(), bindings.SubmissionCleanup, frontend.Config(), frontend.ConfigMu(), frontend.Feishu()))
-	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner, bindings.Submissions, frontend.FrontendID(), frontend.FrontendConfigIndex(), frontend.Feishu())
+	bindings.Continuation.Deps = feishuapp.ContinuationPorts(frontend.Config(), frontend.ConfigMu(), frontend.Context, frontend.State(), scope.RuntimeOwner, bindings.Submissions, frontend.FrontendID(), frontendConfigIndex, frontend.Feishu())
 	bindings.Compaction.Deps = feishuapp.CompactionPorts(frontend.Context, frontend.State(), scope.RuntimeOwner, frontend.FrontendID(), frontend.Feishu() != nil)
 	bindings.GoalContinuation.Deps = goal.Dependencies{
 		Context: scope.RuntimeOwner.Lifecycle.Context, Repository: frontend.State(), Tracker: bindings.Goals,
@@ -335,7 +342,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Interactions.Deps = feishuapp.InteractionPorts(frontend.State(), bindings.SubmissionLookup)
 	bindings.InteractionDelivery = &interaction.DeliveryService{Repository: frontend.State()}
 	reviewCards := feishuapp.NewOutboundCardService(feishuapp.OutboundCardInputs{
-		RuntimeDeps: frontend.BackendRuntimeDeps(), Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+		RuntimeDeps: frontend.BackendRuntimeDeps(), Feishu: frontend.Feishu(), AsyncRunner: asyncRunner,
 		InteractionDelivery: bindings.InteractionDelivery, TurnPresentation: bindings.TurnPresentation,
 		Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
 		TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,
@@ -349,15 +356,15 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Review = &review
 	queuedNotice, expirePlan := feishuapp.SubmissionNoticePorts(feishuapp.SubmissionNoticeInputs{
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),
-		FrontendConfigIndex: frontend.FrontendConfigIndex(), State: frontend.State(), RuntimeOwner: scope.RuntimeOwner,
+		FrontendConfigIndex: frontendConfigIndex, State: frontend.State(), RuntimeOwner: scope.RuntimeOwner,
 		Continuation: bindings.Continuation, Feishu: frontend.Feishu(), Runner: *scope.RuntimeOwner.EffectRunner,
 	})
 	*bindings.Submissions = submission.NewSubmissionQueueService(feishuapp.SubmissionPorts(feishuapp.SubmissionPortInputs{
 		Plan: bindings.Plan, TurnPresentation: bindings.TurnPresentation, LiveThreads: liveThreads,
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),
-		FrontendConfigIndex: frontend.FrontendConfigIndex(), State: frontend.State(), Context: frontend.Context,
+		FrontendConfigIndex: frontendConfigIndex, State: frontend.State(), Context: frontend.Context,
 		Feishu: frontend.Feishu(), RuntimeOwner: scope.RuntimeOwner, RuntimeDeps: frontend.BackendRuntimeDeps(),
-		AsyncRunner: frontend.AsyncRunner(), PendingQueue: bindings.Continuation, SkillResolver: bindings.Skills,
+		AsyncRunner: asyncRunner, PendingQueue: bindings.Continuation, SkillResolver: bindings.Skills,
 		Continuation: bindings.Continuation, TurnItems: bindings.TurnItems, RuntimeMaintenance: bindings.SubmissionCleanup,
 		AutoRetry: bindings.AutoRetry, WorkspaceSelection: bindings.WorkspaceSelection,
 		ModelSettings: bindings.ModelSnapshots, ConversationConfiguration: bindings.ConversationConfiguration,
@@ -378,7 +385,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		PendingQueue: bindings.PendingQueue, Submissions: bindings.Submissions, AutoRetry: bindings.AutoRetry,
 		SubmissionCleanup: bindings.SubmissionCleanup, Compaction: bindings.Compaction,
 		GoalContinuation: bindings.GoalContinuation, PlanMode: turnPlanMode,
-		AnnouncementQuery: bindings.AnnouncementQuery, AsyncRunner: frontend.AsyncRunner(),
+		AnnouncementQuery: bindings.AnnouncementQuery, AsyncRunner: asyncRunner,
 	}))
 	*bindings.TurnPresentation = turnstream.NewService(feishuapp.TurnPresentationPorts(feishuapp.TurnPresentationPortInputs{
 		Runtime: runtimeDeps, Turns: bindings.Turns, TurnPresentation: bindings.TurnPresentation,
@@ -386,8 +393,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Compaction: bindings.Compaction, SubmissionStatus: bindings.SubmissionStatus, Cards: bindings.OutboundCards,
 	}))
 	bindings.TurnReconciliation = turn.Reconciliation{Gateway: feishuapp.TurnReconciliationGateway(frontend.BackendRuntimeDeps()), Session: frontend.State().Session, SawFinal: bindings.TurnPresentation.StreamSawFinal, Finish: bindings.Turns.FinishTurn, Context: frontend.Context}
-	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex()), scope.RuntimeOwner.ClaudeCore), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}
-	workspaceRepository := configadapter.NewWorkspaceRepository(frontend)
+	bindings.ClaudeReconciliation = turn.StoppedReconciliation{Stopped: feishuapp.ClaudeSessionStopped(feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontendConfigIndex), scope.RuntimeOwner.ClaudeCore), Session: frontend.State().Session, Finish: bindings.Turns.FinishTurn}
+	workspaceRepository := configadapter.NewWorkspaceRepository(configSource)
 	bindings.BackendEvents.Deps = backendevents.Dependencies{
 		Lifecycle: bindings.Turns, Items: bindings.TurnItems, Presentation: bindings.TurnPresentation,
 		Compaction: bindings.Compaction, Submissions: bindings.SubmissionStatus,
@@ -411,7 +418,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		}),
 	}
 	failureCards := feishuapp.NewOutboundCardService(feishuapp.OutboundCardInputs{
-		RuntimeDeps: runtimeDeps, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+		RuntimeDeps: runtimeDeps, Feishu: frontend.Feishu(), AsyncRunner: asyncRunner,
 		InteractionDelivery: bindings.InteractionDelivery, TurnPresentation: bindings.TurnPresentation,
 		Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
 		TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,
@@ -420,7 +427,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Runtime: runtimeDeps, TurnPresentation: bindings.TurnPresentation, Compaction: bindings.Compaction,
 		InteractionLifecycle: bindings.InteractionLifecycle, AutoRetry: bindings.AutoRetry,
 		SubmissionCleanup: bindings.SubmissionCleanup, PendingQueue: bindings.PendingQueue,
-		Submissions: bindings.Submissions, Cards: failureCards, AsyncRunner: frontend.AsyncRunner(),
+		Submissions: bindings.Submissions, Cards: failureCards, AsyncRunner: asyncRunner,
 	}))
 	bindings.BackendFailure = &failure
 	backendFailureOwner = bindings.BackendFailure
@@ -428,11 +435,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	// built from the other's finished value. They are wired here instead: the
 	// two entry points are passed in after both exist.
 	inboundService := &inbound.Service{}
-	forwardService := inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend.Feishu()), Tasks: feishuapp.ForwardTasks(&scope.RuntimeOwner.Lifecycle, frontend.AsyncRunner()), Context: frontend.Context, Process: feishuapp.ForwardProcessor(scope.RuntimeOwner.SessionActors, feishuapp.SessionKeyBuilder(frontend.FrontendID()), func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(scope.RuntimeOwner.Lifecycle.Context, frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner)}
+	forwardService := inbound.ForwardService{Gateway: feishuapp.ForwardGateway(frontend.Feishu()), Tasks: feishuapp.ForwardTasks(&scope.RuntimeOwner.Lifecycle, asyncRunner), Context: frontend.Context, Process: feishuapp.ForwardProcessor(scope.RuntimeOwner.SessionActors, feishuapp.SessionKeyBuilder(frontend.FrontendID()), func(msg *application.InboundMessage) error { return inboundService.ProcessMessage(msg) }), Queued: bindings.PendingQueue.MarkMessagesQueuedReactions, Clear: bindings.PendingQueue.ClearMessageProcessingReactions, Failed: feishuapp.ForwardFailure(scope.RuntimeOwner.Lifecycle.Context, frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner)}
 	bindings.ForwardInputs = forwardService
 	bindings.Conversations = &conversation.Service{Deps: feishuapp.ConversationPorts(feishuapp.ConversationPortInputs{
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), FrontendID: frontend.FrontendID(),
-		FrontendConfigIndex: frontend.FrontendConfigIndex(), Context: frontend.Context,
+		FrontendConfigIndex: frontendConfigIndex, Context: frontend.Context,
 		Repository: frontend.State(), RuntimeOwner: scope.RuntimeOwner, LiveThreads: liveThreads,
 		ModelSettings: bindings.ModelSnapshots,
 		ThreadBinding: conversation.ThreadBindingDependencies{
@@ -449,16 +456,16 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Upgrades = feishuapp.BuildUpgrades(frontend, bindings.WorkspaceConfiguration)
 	actors, replayRunner := feishuapp.BindingReplayPorts(scope.RuntimeOwner.SessionActors, scope.RuntimeOwner)
 	bindings.BindingReplay = runtime.BindingReplay{Service: bindings.BindingPending, Runner: replayRunner, Actors: actors}
-	bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: bindings.WorkspaceCreation.Lifecycle, Runtime: feishuapp.WorkspaceEffectRuntime(&scope.RuntimeOwner.Lifecycle, frontend.AsyncRunner(), scope.RuntimeOwner.SessionActors, scope.RuntimeOwner.LiveThreads, bindings.BindingReplay), Conversations: bindings.Conversations, Context: frontend.Context}
+	bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: bindings.WorkspaceCreation.Lifecycle, Runtime: feishuapp.WorkspaceEffectRuntime(&scope.RuntimeOwner.Lifecycle, asyncRunner, scope.RuntimeOwner.SessionActors, scope.RuntimeOwner.LiveThreads, bindings.BindingReplay), Conversations: bindings.Conversations, Context: frontend.Context}
 	bindings.WorkspaceWorkflow.Effects = bindings.WorkspaceEffects
 	bindings.GroupWorkspaces = workspaceapp.GroupService{Frontend: identity.FrontendID(frontend.FrontendID()), Repository: frontend.State(), Creation: bindings.WorkspaceCreation, Planning: bindings.WorkspacePlanning, Effects: bindings.WorkspaceEffects}
 	feishuClient := frontend.Feishu()
 	bindings.BindingCommands = feishuapp.BuildBindingCommands(feishuapp.BindingCommandInputs{
 		Scope: bindingScope, Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), State: frontend.State(),
-		FrontendID: frontend.FrontendID(), ConfiguredBackend: feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontend.FrontendConfigIndex()),
+		FrontendID: frontend.FrontendID(), ConfiguredBackend: feishuapp.ConfiguredBackendBuilder(frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend, frontend.FrontendID(), frontendConfigIndex),
 		MakeSessionKey: feishuapp.SessionKeyBuilder(frontend.FrontendID()), Context: frontend.Context,
 		Effects:               *scope.RuntimeOwner.EffectRunner,
-		RunAsync:              func(fn func()) { scope.RuntimeOwner.Lifecycle.Run(fn, frontend.AsyncRunner()) },
+		RunAsync:              func(fn func()) { scope.RuntimeOwner.Lifecycle.Run(fn, asyncRunner) },
 		RefreshGroupStatus:    scope.RuntimeOwner.Announcements.Schedule,
 		CurrentBotDisplayName: feishuapp.BotDisplayName(feishuClient), CurrentLiveBotOpenID: feishuapp.LiveBotOpenID(feishuClient),
 		InitializeGroupPrimary: func(ctx context.Context, chatType, chatID string) error {
@@ -478,7 +485,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	})
 	bindings.Notifications = frontendapp.Notifications{Repository: frontend.State(), Sender: feishuapp.NotificationSender(frontend.Feishu(), frontend.FrontendID(), *scope.RuntimeOwner.EffectRunner), Context: frontend.Context}
 	bindings.ConversationRecovery = conversation.NewRecovery(feishuapp.ConversationRecoveryPorts(
-		frontend.Config(), frontend.ConfigMu(), frontend.FrontendConfigIndex(), frontend.State(),
+		frontend.Config(), frontend.ConfigMu(), frontendConfigIndex, frontend.State(),
 		bindings.Conversations, scope.RuntimeOwner, bindings.CodexRecovery, bindings.ConversationConfiguration,
 	))
 	bindings.StartupRecovery = maintenance.NewStartupRecovery(feishuapp.StartupRecoveryPorts(feishuapp.StartupRecoveryPortInputs{
@@ -499,7 +506,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	inboundRunner := *scope.RuntimeOwner.EffectRunner
 	inboundBackend := feishuapp.ConfiguredBackendBuilder(
 		frontend.Config(), frontend.ConfigMu(), scope.RuntimeOwner.Backend,
-		inboundFrontendID, frontend.FrontendConfigIndex(),
+		inboundFrontendID, frontendConfigIndex,
 	)
 	inboundSessionKey := feishuapp.SessionKeyBuilder(inboundFrontendID)
 	inboundService.Deps = feishuapp.InboundPorts(feishuapp.InboundPortInputs{
@@ -533,7 +540,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.Inbound = inboundService
 	controls := conversation.NewControls(feishuapp.ConversationControlPorts(feishuapp.ConversationControlInputs{
 		Repository: frontend.State(), Config: frontend.Config(), ConfigMu: frontend.ConfigMu(),
-		FrontendID: frontend.FrontendID(), FrontendConfigIndex: frontend.FrontendConfigIndex(),
+		FrontendID: frontend.FrontendID(), FrontendConfigIndex: frontendConfigIndex,
 		Conversations: bindings.Conversations, Pending: bindings.PendingQueue,
 		RetryTracker: scope.RuntimeOwner.AutoRetries, AutoRetry: bindings.AutoRetry,
 		Runtime: frontend.BackendRuntimeDeps(), Context: frontend.Context,
@@ -546,7 +553,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Runtime: frontend.BackendRuntimeDeps(), UseCase: bindings.Plan, Continuation: bindings.Continuation,
 		State: frontend.State(), ModelSnapshots: bindings.ModelSnapshots,
 		WorkspaceSelection: bindings.WorkspaceSelection, Submissions: bindings.Submissions,
-		Conversations: bindings.Conversations, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+		Conversations: bindings.Conversations, Feishu: frontend.Feishu(), AsyncRunner: asyncRunner,
 	})
 	bindings.ReviewCommands = feishuapp.BuildReviewCommands(frontend)
 	bindings.MCP, err = feishuapp.BuildMCP(feishuapp.MCPPorts(feishuapp.MCPPortInputs{
@@ -601,7 +608,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	*claudeRuntimeInputs = feishuapp.ClaudeRuntimePortInputs{
 		Runtime: deps,
 		Cards: feishuapp.NewOutboundCardService(feishuapp.OutboundCardInputs{
-			RuntimeDeps: deps, Feishu: frontend.Feishu(), AsyncRunner: frontend.AsyncRunner(),
+			RuntimeDeps: deps, Feishu: frontend.Feishu(), AsyncRunner: asyncRunner,
 			InteractionDelivery: bindings.InteractionDelivery, TurnPresentation: bindings.TurnPresentation,
 			Continuation: bindings.Continuation, FinalCardPatch: bindings.FinalCardPatch,
 			TurnFinalFooter: bindings.TurnMetadata.TurnFinalFooterLines,

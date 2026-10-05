@@ -18,6 +18,15 @@ type BackendSource interface {
 	FrontendConfigIndex() int
 }
 
+// FrontendSource carries the immutable composition inputs shared by config
+// repositories for one frontend.
+type FrontendSource struct {
+	WorkspaceSource
+	ConfigIndex int
+}
+
+func (s FrontendSource) FrontendConfigIndex() int { return s.ConfigIndex }
+
 type BackendRepository struct{ source BackendSource }
 
 func NewBackendRepository(source BackendSource) *BackendRepository {

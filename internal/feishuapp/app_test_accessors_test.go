@@ -20,3 +20,24 @@ func (a *App) SetBackend(backend string) {
 		a.stateView.SetBackend(a.runtimeOwner.Backend())
 	}
 }
+
+func (a *App) AsyncRunner() func(func()) {
+	if a == nil {
+		return nil
+	}
+	return a.asyncRunner
+}
+
+func (a *App) ConfigPath() string {
+	if a == nil {
+		return ""
+	}
+	return a.cfgPath
+}
+
+func (a *App) FrontendConfigIndex() int {
+	if a == nil {
+		return -1
+	}
+	return a.frontendConfigIndex
+}
