@@ -14,15 +14,7 @@ import (
 	"time"
 
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 )
-
-func queueFrontendCardNotification(a *App, note state.FrontendCardNotification) {
-	if a == nil || a.store == nil {
-		return
-	}
-	a.bindings.Notifications.Queue(note)
-}
 
 type notificationCardClient interface {
 	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any

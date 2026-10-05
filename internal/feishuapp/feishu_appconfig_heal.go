@@ -435,7 +435,7 @@ func notifyFeishuAppConfigHeal(a *App, color, title, body string) {
 		sent = true
 	}
 	if !sent {
-		queueFrontendCardNotification(a, note)
+		a.bindings.Notifications.Queue(note)
 	}
 }
 
