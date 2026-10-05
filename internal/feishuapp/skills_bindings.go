@@ -44,14 +44,16 @@ func SkillUseCasePorts(
 }
 
 func BuildSkillCommands(a *App) *skillsadapter.Service {
+	owner := a.runtimeOwner
+	actors := owner.SessionActors
 	return &skillsadapter.Service{
-		Service: a.bindings.Skills, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)),
+		Service: a.bindings.Skills, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(owner)),
 		MakeSessionKey:       func(msg *feishu.InboundMessage) string { return a.configView().makeSessionKey(msg) },
 		ReplyInThreadEnabled: func(chatType string) bool { return a.configView().replyInThreadEnabled() },
 		FormatMenuBody:       menuCardBody, CommandLabel: commandLabel,
 		RunAsync: func(key string, work func()) bool {
-			return a.runtimeView().ensureRuntimeOwner().Lifecycle.Run(func() {
-				a.sessionActorRuntime().Run("session:"+key, work)
+			return owner.Lifecycle.Run(func() {
+				runSessionOnActor(actors, key, work)
 			}, a.asyncRunner)
 		},
 	}

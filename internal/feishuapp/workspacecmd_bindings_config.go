@@ -20,6 +20,7 @@ func workspaceCommandApp(a *App, presentation *workspacecards.Presentation) work
 		return workspacecmd.Dependencies{}
 	}
 	configProvider := newFrontendConfigProvider(a.BackendRuntimeDeps(), a.store, a.bindings.WorkspaceSelection)
+	backendDriver := appbackend.SelectedDriver{Selected: func() string { return a.configView().configuredBackend() }}
 	return workspacecmd.Dependencies{
 		ConfigProvider: configProvider,
 		Settings:       a.bindings.WorkspaceSettings,
@@ -35,7 +36,7 @@ func workspaceCommandApp(a *App, presentation *workspacecards.Presentation) work
 			return a.feishu.BotName()
 		},
 		ContextProvider:  a,
-		BackendDriver:    a.BackendDriver(),
+		BackendDriver:    backendDriver,
 		SettingsRenderer: presentation,
 	}
 }
@@ -76,8 +77,9 @@ func buildWorkspaceConfigService(a *App, presentation *workspacecards.Presentati
 	replyRunner := newEffectRunner(a.runtimeOwner)
 	frontendID := a.FrontendID()
 	replyInThread := a.configView().replyInThreadEnabled()
+	dependencies := workspaceCommandApp(a, presentation)
 	return workspacecmd.NewConfigService(workspacecmd.ConfigDeps{
-		Dependencies: workspaceCommandApp(a, presentation),
+		Dependencies: dependencies,
 		State:        workspaceStateDeps(st),
 		SessionContext: workspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
@@ -88,7 +90,7 @@ func buildWorkspaceConfigService(a *App, presentation *workspacecards.Presentati
 				return conversations.EnsureWorkspaceThreadBinding(sessionKey, sess, ws)
 			},
 		},
-		Backend: workspaceBackendConfigDeps(a.BackendDriver()),
+		Backend: workspaceBackendConfigDeps(dependencies.BackendDriver),
 		Actions: workspacecmd.ActionDeps{
 			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)

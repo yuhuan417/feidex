@@ -36,7 +36,7 @@ func runSession(a *App, sessionKey string, fn func()) {
 		fn()
 		return
 	}
-	a.sessionActorRuntime().Run("session:"+strings.TrimSpace(sessionKey), fn)
+	runSessionOnActor(a.runtimeOwner.SessionActors, sessionKey, fn)
 }
 
 func runSessionOnActor(actors *frontendruntime.SessionActors, sessionKey string, fn func()) {

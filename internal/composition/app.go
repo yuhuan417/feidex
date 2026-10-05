@@ -312,7 +312,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.BackendConfiguration = feishuapp.BuildBackendConfiguration(feishuapp.BackendConfigurationInputs{
 		Config: frontend.Config(), ConfigMu: frontend.ConfigMu(), Backend: scope.RuntimeOwner.Backend,
 		FrontendConfigIndex: frontendConfigIndex, Store: store,
-		WorkspaceSelection: bindings.WorkspaceSelection, Driver: frontend.BackendDriver(), ModelCommands: bindings.ModelCommands,
+		WorkspaceSelection: bindings.WorkspaceSelection, Driver: appbackend.SelectedDriver{Selected: configuredBackend}, ModelCommands: bindings.ModelCommands,
 	})
 	bindings.BackendActions = feishuapp.BuildBackendActions(frontend)
 	bindings.ServerRequests = feishuapp.BuildServerRequests(frontend)

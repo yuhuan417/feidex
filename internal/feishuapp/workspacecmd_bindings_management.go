@@ -26,13 +26,14 @@ func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presen
 	replyRunner := newEffectRunner(a.runtimeOwner)
 	frontendID := a.FrontendID()
 	replyInThread := a.configView().replyInThreadEnabled()
+	dependencies := workspaceCommandApp(a, presentation)
 	bindingScope := scope.scope
 	threadMarker := liveThreadMarker{
 		tracker: a.runtimeOwner.LiveThreads, state: st,
 		announcement: a.bindings.AnnouncementQuery, refreshes: a.runtimeOwner.Announcements,
 	}
 	return appworkspacecmd.NewManagementService(appworkspacecmd.ManagementDeps{
-		Dependencies: workspaceCommandApp(a, presentation),
+		Dependencies: dependencies,
 		State:        workspaceStateDeps(st),
 		SessionContext: appworkspacecmd.SessionContextDeps{
 			SessionHasInFlight:     conversation.HasInFlightSubmission,
@@ -54,7 +55,7 @@ func buildWorkspaceManagementService(a *App, presentation *workspacecards.Presen
 			ClearCloneOp: workspaceCloneClearOp(a.runtimeOwner),
 			GitClone:     workspaceGitClone,
 		},
-		Backend: workspaceBackendConfigDeps(a.BackendDriver()),
+		Backend: workspaceBackendConfigDeps(dependencies.BackendDriver),
 		Actions: appworkspacecmd.ActionDeps{
 			CompleteMenuCommand: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 				return completeMenuCommand(a, action, sessionKey, rawCommand, parentAction)

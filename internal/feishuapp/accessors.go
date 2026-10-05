@@ -3,9 +3,7 @@ package feishuapp
 import (
 	"sync"
 
-	appbackend "feidex/internal/adapter/feishu/backend"
 	appstate "feidex/internal/adapter/storage/json/scoped"
-	frontendruntime "feidex/internal/runtime"
 
 	"feidex/internal/config"
 )
@@ -27,11 +25,6 @@ func (a *App) Config() *config.Config {
 	return a.cfg
 }
 
-// BackendDriver follows the frontend backend selected at execution time.
-func (a *App) BackendDriver() appbackend.Driver {
-	return appbackend.SelectedDriver{Selected: func() string { return a.configView().configuredBackend() }}
-}
-
 // State returns the frontend-scoped app state store.
 func (a *App) State() *appstate.Store {
 	if a == nil {
@@ -46,13 +39,6 @@ func (a *App) FrontendID() string {
 		return ""
 	}
 	return a.frontendID
-}
-
-func (a *App) sessionActorRuntime() *frontendruntime.SessionActors {
-	if a == nil {
-		return nil
-	}
-	return a.runtimeOwner.SessionActors
 }
 
 // ConfigMu returns the config read-write mutex.

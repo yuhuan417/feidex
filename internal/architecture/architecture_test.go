@@ -583,7 +583,7 @@ func TestSessionOwnedAsyncPathsUseActorAwarePorts(t *testing.T) {
 	}{
 		{"internal/application/submission/queue.go", []string{"RunSessionAsync", "runSessionAsync("}, nil},
 		{"internal/application/turn/service.go", []string{"RunSessionAsync"}, nil},
-		{"internal/feishuapp/session_async.go", []string{"sessionActorRuntime().Run"}, nil},
+		{"internal/feishuapp/session_async.go", []string{"runSessionOnActor("}, nil},
 		{"internal/adapter/feishu/backend/selection.go", nil, []string{"go func()"}},
 		{"internal/runtime/codex/recovery.go", []string{"RunSessionAsync"}, nil},
 		{"internal/application/backendfailure/service.go", []string{"RunSessionAsync"}, nil},
@@ -1089,7 +1089,7 @@ func importsUnder(root, relative string, banned []string) ([]string, error) {
 // narrow values it uses should lower the number here in the same commit; if a
 // change needs a higher number, it is adding coupling rather than removing it.
 func TestFeishuAppAggregateDoesNotGrow(t *testing.T) {
-	const budget = 165
+	const budget = 163
 
 	root := repositoryRoot(t)
 	entries, err := filepath.Glob(filepath.Join(root, "internal/feishuapp/*.go"))

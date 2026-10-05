@@ -303,7 +303,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.BackendConfiguration = BuildBackendConfiguration(BackendConfigurationInputs{
 		Config: a.Config(), ConfigMu: a.ConfigMu(), Backend: a.runtimeOwner.Backend,
 		FrontendConfigIndex: a.FrontendConfigIndex(), Store: a.store,
-		WorkspaceSelection: a.bindings.WorkspaceSelection, Driver: a.BackendDriver(), ModelCommands: a.bindings.ModelCommands,
+		WorkspaceSelection: a.bindings.WorkspaceSelection, Driver: appbackend.SelectedDriver{Selected: configuredBackend}, ModelCommands: a.bindings.ModelCommands,
 	})
 	a.bindings.BackendActions = BuildBackendActions(a)
 	a.bindings.ServerRequests = BuildServerRequests(a)
@@ -448,7 +448,7 @@ func prepareTestApp(a *App) *App {
 	bindingScope := NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID())
 	a.bindings.WorkspaceManagement = BuildWorkspaceManagement(a, a.bindings.WorkspacePresentation, a.bindings.Conversations, bindingScope)
 	a.bindings.Upgrades = BuildUpgrades(a, a.bindings.WorkspaceConfiguration)
-	actors, replayRunner := BindingReplayPorts(a.sessionActorRuntime(), a.runtimeOwner)
+	actors, replayRunner := BindingReplayPorts(a.runtimeOwner.SessionActors, a.runtimeOwner)
 	a.bindings.BindingReplay = runtime.BindingReplay{Service: a.bindings.BindingPending, Runner: replayRunner, Actors: actors}
 	a.bindings.WorkspaceEffects = workspaceapp.EffectService{Lifecycle: a.bindings.WorkspaceCreation.Lifecycle, Runtime: WorkspaceEffectRuntime(&a.runtimeOwner.Lifecycle, a.asyncRunner, actors, a.runtimeOwner.LiveThreads, a.bindings.BindingReplay), Conversations: a.bindings.Conversations, Context: a.Context}
 	a.bindings.WorkspaceWorkflow.Effects = a.bindings.WorkspaceEffects
