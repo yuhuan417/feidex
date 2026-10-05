@@ -36,14 +36,6 @@ func (a *App) Config() *config.Config {
 	return a.cfg
 }
 
-// Backend returns the name of the currently active backend.
-func (a *App) Backend() string {
-	if a == nil {
-		return ""
-	}
-	return a.runtimeOwner.Backend()
-}
-
 // BackendDriver follows the frontend backend selected at execution time.
 func (a *App) BackendDriver() appbackend.Driver {
 	return appbackend.SelectedDriver{Selected: func() string { return a.configView().configuredBackend() }}
@@ -94,15 +86,4 @@ func (a *App) FrontendConfigIndex() int {
 		return -1
 	}
 	return a.frontendConfigIndex
-}
-
-// SetBackend sets the runtime backend override.
-func (a *App) SetBackend(backend string) {
-	if a == nil {
-		return
-	}
-	a.runtimeOwner.SetBackend(normalizeRuntimeBackend(backend))
-	if a.stateView != nil {
-		a.stateView.SetBackend(a.runtimeOwner.Backend())
-	}
 }

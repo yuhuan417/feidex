@@ -37,10 +37,14 @@ func (a *App) configView() frontendConfigView {
 	// Backend is resolved here rather than stored: it follows the runtime
 	// owner's current selection, and every caller snapshots the view
 	// immediately before using it.
+	backend := ""
+	if a.runtimeOwner != nil {
+		backend = a.runtimeOwner.Backend()
+	}
 	return frontendConfigView{
 		cfg:                 a.cfg,
 		mu:                  a.ConfigMu(),
-		backend:             a.Backend(),
+		backend:             backend,
 		frontendID:          a.frontendID,
 		frontendConfigIndex: a.frontendConfigIndex,
 	}
