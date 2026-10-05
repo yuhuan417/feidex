@@ -577,7 +577,10 @@ func prepareTestApp(a *App) *App {
 		a.bindings.WorkspaceConfiguration.WorkspaceDeleteActions(),
 		a.bindings.History,
 		a.bindings.ServerRequests, a.bindings.ClaudeSupport, a.bindings.ReviewCommands,
-		a.bindings.Upgrades, a.bindings.BackendUpgrades, PathPickerActionInputs{
+		MaintenanceCardActionInputs{
+			Upgrades: a.bindings.Upgrades, BackendUpgrades: a.bindings.BackendUpgrades,
+			BackendActions: a.bindings.BackendActions,
+		}, PathPickerActionInputs{
 			State: a.State(), Forms: a.bindings.Forms, Picker: a.bindings.PathPicker,
 			Planning: a.bindings.WorkspacePlanning, WorkspaceCards: a.bindings.WorkspacePresentation,
 			Upgrades: a.bindings.Upgrades, Debug: a.bindings.Debug,

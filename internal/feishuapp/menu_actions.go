@@ -178,18 +178,3 @@ func (s cardActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 	}
 	return completeMenuCommand(s.app, action, sessionKey, "/upgrade", "menu.group.system")
 }
-
-func (s cardActionService) completeUpgradeDev(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	sessionKey := actionSessionKey(action)
-	return completeAsyncCommandAction(s.app,
-		action,
-		sessionKey,
-		"/upgrade dev",
-		"menu.group.system",
-		"正在检查开发版升级信息",
-		s.app.bindings.Upgrades.RenderUpgradePreparingCard(sessionKey),
-		nil,
-		s.app.bindings.Upgrades.RenderUpgradeFailedCard,
-		"upgrade dev patch failed",
-	)
-}

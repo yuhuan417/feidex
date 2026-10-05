@@ -11,7 +11,6 @@ import (
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
 	"feidex/internal/adapter/feishu/serverrequest"
 	"feidex/internal/adapter/feishu/threadmenu"
-	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/adapter/feishu/workspacecmd"
 	"feidex/internal/application"
 	appcardaction "feidex/internal/application/cardaction"
@@ -28,14 +27,13 @@ type cardActionDispatcher struct {
 	inner appcardaction.Service
 }
 
-func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceActions WorkspaceCardActionInputs, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service, planMode planmode.Dependencies, asyncInputs AsyncUserInputActionInputs, pendingCancel PendingFormCancelActionInputs) appcardaction.Dependencies {
+func CardActionPorts(app *App, normalizeSessionKey func(string) string, blockedReason func(string) string, workspaceActions WorkspaceCardActionInputs, workspaceDeleteActions workspacecmd.WorkspaceDeleteActions, historyService history.Service, serverRequests *serverrequest.Service, claudeSupport *claudesupport.Service, reviewCommands appreviewcmd.ReviewFormService, maintenanceActions MaintenanceCardActionInputs, pathPicker PathPickerActionInputs, threadMenu *threadmenu.Service, planMode planmode.Dependencies, asyncInputs AsyncUserInputActionInputs, pendingCancel PendingFormCancelActionInputs) appcardaction.Dependencies {
 	appHandlers := mergeCardActionHandlerSets(
 		menuCardActionHandlers(),
-		maintenanceCardActionHandlers(),
 	)
 	portHandlers := mergeCardActionPortHandlerSets(
 		workspaceCardActionHandlers(workspaceActions),
-		maintenancePortCardActionHandlers(upgrades, backendUpgrades, backendUpgradeCommandCompleter(cardActionService{app: app})),
+		maintenanceCardActionHandlers(maintenanceActions),
 		pendingPortCardActionHandlers(serverRequests, claudeSupport, reviewCommands),
 		pendingPlanModeExitPortCardActionHandlers(planMode),
 		workspaceDeletePortCardActionHandlers(workspaceDeleteActions),

@@ -924,6 +924,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 
 步骤 215 将 26 个 workspace card-action handler 从 `cardActionService` 上下文迁移到显式 `WorkspaceCardActionInputs`。binding commands、workspace management/configuration、thread menu 和 menu command callback 由 composition 与测试 fixture 在构造期注入，owner-only callback 闭包不再捕获 `App`。action name、群绑定分流、workspace 选择/创建/克隆/配置和 thread menu 行为不变。本步是移除最后 `cardActionService` 前的 family 级拆分，文本棘轮保持 `115/7/1/1/0`；不涉及 Codex turn lifecycle、approval 或 pending request 状态转换。
 
+步骤 216 将 maintenance card-action family 迁移到显式 `MaintenanceCardActionInputs`，由 upgrade service、backend upgrade owner 和已组合的 backend action command port 执行。`upgrade.dev` 与 Codex/Claude upgrade/restart callbacks 不再接收 `cardActionService`；异步命令仍使用原 frontend lifecycle、session actor、command capture 和 card patch 路径。action name、toast、preparing/failure card 与后台维护边界不变。文本棘轮保持 `115/7/1/1/0`；不涉及 Codex turn lifecycle 或 pending request 状态转换。
+
 ## 方法
 
 - 一次一个工厂，一个提交，随改随验：`go build ./...`、`go vet ./...`、

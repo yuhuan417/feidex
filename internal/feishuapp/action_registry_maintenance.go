@@ -1,28 +1,44 @@
 package feishuapp
 
 import (
+	appbackend "feidex/internal/adapter/feishu/backend"
 	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func maintenanceCardActionHandlers() map[string]cardActionHandler {
-	return map[string]cardActionHandler{
-		"upgrade.dev": func(s cardActionService, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-			return s.completeUpgradeDev(action)
-		},
-	}
+type MaintenanceCardActionInputs struct {
+	Upgrades        appupgradecmd.UpgradeService
+	BackendUpgrades backendUpgradeService
+	BackendActions  appbackend.ActionService
 }
 
-func backendUpgradeCommandCompleter(service cardActionService) upgradeActionCommandCompleter {
+func backendUpgradeCommandCompleter(service appbackend.ActionService) upgradeActionCommandCompleter {
 	return func(action *feishu.CardAction, sessionKey, rawCommand, toastText string, preparingCard map[string]any, failureCard func(string, string) map[string]any, patchLog string) (*callback.CardActionTriggerResponse, error) {
-		return completeAsyncCommandAction(service.app, action, sessionKey, rawCommand, "menu.group.system", toastText, preparingCard, nil, failureCard, patchLog)
+		return service.CompleteAsyncCommandAction(action, sessionKey, rawCommand, "menu.group.system", toastText, preparingCard, nil, failureCard, patchLog)
 	}
 }
 
-func maintenancePortCardActionHandlers(upgrades appupgradecmd.UpgradeService, backendUpgrades backendUpgradeService, complete upgradeActionCommandCompleter) map[string]cardActionPortHandler {
+func maintenanceCardActionHandlers(inputs MaintenanceCardActionInputs) map[string]cardActionPortHandler {
+	upgrades := inputs.Upgrades
+	backendUpgrades := inputs.BackendUpgrades
+	complete := backendUpgradeCommandCompleter(inputs.BackendActions)
 	return map[string]cardActionPortHandler{
+		"upgrade.dev": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+			sessionKey := actionSessionKey(action)
+			return inputs.BackendActions.CompleteAsyncCommandAction(
+				action,
+				sessionKey,
+				"/upgrade dev",
+				"menu.group.system",
+				"正在检查开发版升级信息",
+				upgrades.RenderUpgradePreparingCard(sessionKey),
+				nil,
+				upgrades.RenderUpgradeFailedCard,
+				"upgrade dev patch failed",
+			)
+		},
 		"upgrade.confirm": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return upgrades.CompleteUpgradeAction(action, "upgrade.confirm")
 		},

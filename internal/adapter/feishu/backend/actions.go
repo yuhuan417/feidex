@@ -139,6 +139,30 @@ func (s ActionService) CompleteMenuInterrupt(action *feishu.CardAction, sessionK
 	}
 }
 
+func (s ActionService) CompleteAsyncCommandAction(
+	action *feishu.CardAction,
+	sessionKey, rawCommand, fallbackAction, toastText string,
+	preparingCard map[string]any,
+	successCardFromText func(sessionKey, text string) map[string]any,
+	failureCard func(sessionKey, errText string) map[string]any,
+	patchWarnMsg string,
+) (*callback.CardActionTriggerResponse, error) {
+	if s.deps.Commands.CompleteAsyncCommandAction == nil {
+		return nil, fmt.Errorf("async command action not configured")
+	}
+	return s.deps.Commands.CompleteAsyncCommandAction(
+		action,
+		sessionKey,
+		rawCommand,
+		fallbackAction,
+		toastText,
+		preparingCard,
+		successCardFromText,
+		failureCard,
+		patchWarnMsg,
+	)
+}
+
 func actionStringValue(action *feishu.CardAction, key string) string {
 	if action == nil {
 		return ""

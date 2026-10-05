@@ -6,7 +6,6 @@ import (
 	history "feidex/internal/adapter/feishu/history"
 	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
-	appupgradecmd "feidex/internal/adapter/feishu/upgradecmd"
 	"feidex/internal/adapter/feishu/workspacecmd"
 )
 
@@ -16,14 +15,13 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		handlers map[string]cardActionHandler
 	}{
 		{name: "menu", handlers: menuCardActionHandlers()},
-		{name: "maintenance", handlers: maintenanceCardActionHandlers()},
 	}
 	portSets := []struct {
 		name     string
 		handlers map[string]cardActionPortHandler
 	}{
 		{name: "workspace", handlers: workspaceCardActionHandlers(WorkspaceCardActionInputs{})},
-		{name: "maintenance-ports", handlers: maintenancePortCardActionHandlers(appupgradecmd.UpgradeService{}, backendUpgradeService{}, nil)},
+		{name: "maintenance", handlers: maintenanceCardActionHandlers(MaintenanceCardActionInputs{})},
 		{name: "pending-ports", handlers: pendingPortCardActionHandlers(nil, nil, appreviewcmd.ReviewFormService{})},
 		{name: "pending-plan-exit-ports", handlers: pendingPlanModeExitPortCardActionHandlers(planmode.Dependencies{})},
 		{name: "workspace-delete-ports", handlers: workspaceDeletePortCardActionHandlers(workspacecmd.WorkspaceDeleteActions{})},

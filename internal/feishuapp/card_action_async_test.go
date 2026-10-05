@@ -200,7 +200,10 @@ func TestCompleteUpgradeDevReturnsPreparingCardAndPatchesAsync(t *testing.T) {
 	currentVersion = func() string { return "0.1.0" }
 	currentGOARCH = func() string { return "amd64" }
 
-	resp, err := newMenuActionService(a).completeUpgradeDev(&feishu.CardAction{
+	resp, err := maintenanceCardActionHandlers(MaintenanceCardActionInputs{
+		Upgrades: a.bindings.Upgrades, BackendUpgrades: a.bindings.BackendUpgrades,
+		BackendActions: a.bindings.BackendActions,
+	})["upgrade.dev"](&feishu.CardAction{
 		UserID:      "user-1",
 		MessageID:   "msg-upgrade-dev",
 		ActionValue: map[string]any{"session_key": "sess-1"},
