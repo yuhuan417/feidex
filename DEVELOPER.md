@@ -347,7 +347,9 @@ Important current assumptions:
 Current pacing constants are tied to `im/v1/messages` behavior:
 
 - create: `5 QPS`
-- patch: `5 QPS`
+- patch: `4 QPS` — Feishu's per-message limit is `5 QPS` and excess updates are
+  rejected with `230020`; pacing stays below it so request jitter inside the
+  platform's window does not trip the limit
 
 If you add new outbound paths, prefer reusing adapter helpers instead of calling the raw SDK directly, otherwise pacing and logging will be bypassed.
 

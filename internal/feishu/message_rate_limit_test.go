@@ -7,6 +7,20 @@ import (
 	"time"
 )
 
+// Feishu rejects im.message.patch beyond 5 updates per second for a single
+// message with code 230020. Pacing must keep a margin below that, since a pacer
+// sitting exactly on the limit still trips when request timing jitters inside
+// the platform's window.
+func TestMessagePatchPacerKeepsMarginBelowFeishuLimit(t *testing.T) {
+	const feishuPatchLimitPerSecond = 5
+
+	limitInterval := time.Second / time.Duration(feishuPatchLimitPerSecond)
+	if interval := time.Second / time.Duration(feishuMessagePatchQPS); interval <= limitInterval {
+		t.Fatalf("patch interval = %v, must be above the %v implied by Feishu's %d QPS limit",
+			interval, limitInterval, feishuPatchLimitPerSecond)
+	}
+}
+
 func TestRequestPacerWaitsBetweenCalls(t *testing.T) {
 	pacer := newRequestPacerWithInterval(25 * time.Millisecond)
 

@@ -12,8 +12,13 @@ import (
 )
 
 const (
-	feishuMessageCreateQPS  = 5
-	feishuMessagePatchQPS   = 5
+	feishuMessageCreateQPS = 5
+	// Feishu limits im.message.patch to 5 updates per second per message and
+	// rejects the excess with code 230020 ("Update the single messages too
+	// frequently"). Stay below the limit instead of at it: pacing at exactly
+	// 200ms leaves no room for jitter inside the platform's window, which
+	// produced occasional 230020 rejections on fast turn streams.
+	feishuMessagePatchQPS   = 4
 	feishuAnnouncementQPS   = 2
 	keyedPacerIdleTTL       = 30 * time.Minute
 	keyedPacerSweepInterval = 5 * time.Minute
