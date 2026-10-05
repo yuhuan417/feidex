@@ -29,7 +29,7 @@ func TestResolveSubmissionWorkspaceUsesLocalBindingOnly(t *testing.T) {
 		Key:       "feishu:frontend:frontend-a:chat:chat-1",
 		BindingID: "binding-client",
 	}
-	if got := resolveSubmissionWorkspaceID(a.State(), a.WorkspaceSelection(), a.configView().defaultWorkspaceID, nil, sess, false); got != "client-workspace" {
+	if got := resolveSubmissionWorkspaceID(a.State(), a.bindings.WorkspaceSelection, a.configView().defaultWorkspaceID, nil, sess, false); got != "client-workspace" {
 		t.Fatalf("binding workspace = %q, want client-workspace", got)
 	}
 	if err := a.State().SaveAgentBinding(&state.AgentBinding{
@@ -45,7 +45,7 @@ func TestResolveSubmissionWorkspaceUsesLocalBindingOnly(t *testing.T) {
 		BindingID:   "binding-empty",
 		WorkspaceID: "",
 	}
-	if got := resolveSubmissionWorkspaceID(a.State(), a.WorkspaceSelection(), a.configView().defaultWorkspaceID, nil, emptySession, false); got != "" {
+	if got := resolveSubmissionWorkspaceID(a.State(), a.bindings.WorkspaceSelection, a.configView().defaultWorkspaceID, nil, emptySession, false); got != "" {
 		t.Fatalf("empty binding workspace = %q, want empty", got)
 	}
 }

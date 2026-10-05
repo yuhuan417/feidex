@@ -140,7 +140,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 	bindings.ItemContext = approval.ItemContext{Items: bindings.TurnItems, Started: func(threadID, turnID string) { bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
 	bindings.PendingReplies = feishuapp.PendingReplyAdapter{Service: bindings.Interactions, Repository: frontend.State()}
 	filesystem, git := feishuapp.WorkspaceCreationPorts(frontend.ConfigPath())
-	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(frontend.FrontendID()), Selection: frontend.WorkspaceSelection(), Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(frontend)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: frontend, Scope: frontend.State()}}
+	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(frontend.FrontendID()), Selection: bindings.WorkspaceSelection, Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(frontend)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: frontend, Scope: frontend.State()}}
 	bindings.WorkspaceCreation = &workspaceapp.CreationService{Filesystem: filesystem, Git: git, Lifecycle: workspaceLifecycle}
 	bindings.WorkspaceSettings = workspaceapp.SettingsService{Frontend: frontend.FrontendID(), Repository: configadapter.WorkspaceSettingsRepository{Source: frontend, Scope: frontend.State()}}
 	bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(frontend), PendingRequests: frontend.State().PendingRequests, ConfigPath: frontend.ConfigPath, BotName: frontend.Feishu().BotName, FrontendID: frontend.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
@@ -166,7 +166,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		scope.RuntimeOwner.MaintenanceTrackers,
 		feishuapp.MaintenanceRepository(frontend.State(), frontend.FrontendID()),
 	)
-	bindings.StartupState = conversation.StartupState{Repository: frontend.State(), DefaultWorkspaceID: func() string { return frontend.WorkspaceSelection().ResolveSession(nil) }}
+	bindings.StartupState = conversation.StartupState{Repository: frontend.State(), DefaultWorkspaceID: func() string { return bindings.WorkspaceSelection.ResolveSession(nil) }}
 	bindings.UpgradePoller = upgrade.Poller{Repository: frontend.State(), Units: upgradeunits.Units{}}
 	bindings.MaintenanceCommands = feishuapp.BuildMaintenanceCommands(frontend)
 	bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: frontend.State(), Runtime: scope.RuntimeOwner.TurnBindings, Items: bindings.TurnItems}

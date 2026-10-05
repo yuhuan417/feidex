@@ -129,7 +129,7 @@ func prepareTestApp(a *App) *App {
 	a.bindings.ItemContext = approval.ItemContext{Items: a.bindings.TurnItems, Started: func(threadID, turnID string) { a.bindings.Turns.BindPendingSubmissionTurn(threadID, turnID, true) }}
 	a.bindings.PendingReplies = PendingReplyAdapter{Service: a.bindings.Interactions, Repository: a.State()}
 	filesystem, git := WorkspaceCreationPorts(a.ConfigPath())
-	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(a.FrontendID()), Selection: a.WorkspaceSelection(), Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(a)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: a, Scope: a.State()}}
+	workspaceLifecycle := &workspaceapp.Lifecycle{Frontend: identity.FrontendID(a.FrontendID()), Selection: a.bindings.WorkspaceSelection, Configuration: workspaceapp.ConfigurationService{Repository: configadapter.NewWorkspaceRepository(a)}, Repository: configadapter.WorkspaceLifecycleRepository{Source: a, Scope: a.State()}}
 	a.bindings.WorkspaceCreation = &workspaceapp.CreationService{Filesystem: filesystem, Git: git, Lifecycle: workspaceLifecycle}
 	a.bindings.WorkspaceSettings = workspaceapp.SettingsService{Frontend: a.FrontendID(), Repository: configadapter.WorkspaceSettingsRepository{Source: a, Scope: a.State()}}
 	a.bindings.WorkspacePlanning = &workspaceapp.PlanningService{Repository: configadapter.NewWorkspaceRepository(a), PendingRequests: a.State().PendingRequests, ConfigPath: a.ConfigPath, BotName: func() string { return currentBotDisplayName(feishuClient) }, FrontendID: a.FrontendID, Paths: runtimeworkspace.PlanningFilesystem{}, Git: runtimeworkspace.PlanningGit{}}
@@ -143,7 +143,7 @@ func prepareTestApp(a *App) *App {
 		a.runtimeOwner.MaintenanceTrackers,
 		MaintenanceRepository(a.State(), a.FrontendID()),
 	)
-	a.bindings.StartupState = conversation.StartupState{Repository: a.State(), DefaultWorkspaceID: func() string { return a.WorkspaceSelection().ResolveSession(nil) }}
+	a.bindings.StartupState = conversation.StartupState{Repository: a.State(), DefaultWorkspaceID: func() string { return a.bindings.WorkspaceSelection.ResolveSession(nil) }}
 	a.bindings.UpgradePoller = upgrade.Poller{Repository: a.State(), Units: upgradeunits.Units{}}
 	a.bindings.MaintenanceCommands = BuildMaintenanceCommands(a)
 	a.bindings.SubmissionCleanup = maintenance.SubmissionCleanup{Repository: a.State(), Runtime: a.runtimeOwner.TurnBindings, Items: a.bindings.TurnItems}

@@ -5,18 +5,14 @@ import (
 	backendruntime "feidex/internal/runtime"
 
 	"context"
-	"sync"
-
 	appbackend "feidex/internal/adapter/feishu/backend"
 
 	appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
 	"feidex/internal/adapter/feishu/workspacecmd"
 	conversationapp "feidex/internal/application/conversation"
-	"feidex/internal/application/workspace"
 	"feidex/internal/config"
 	"feidex/internal/domain/identity"
 	"feidex/internal/feishu"
-	"feidex/internal/state"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -60,7 +56,7 @@ func newThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
 		frontend: identity.FrontendID(runtimeDeps.frontendID), replyInThread: forkConfigView.replyInThreadEnabled(),
 	}
 	return appthreadmenu.Dependencies{
-		ConfigProvider: threadMenuConfigProvider{runtime: runtimeDeps, store: a.store, workspaces: workspaceSelection}, Outbound: newEffectOutbound(runtimeDeps.frontendID, newEffectRunner(owner)), Controls: conversationControls, Settings: threadSettings,
+		ConfigProvider: newFrontendConfigProvider(runtimeDeps, a.store, workspaceSelection), Outbound: newEffectOutbound(runtimeDeps.frontendID, newEffectRunner(owner)), Controls: conversationControls, Settings: threadSettings,
 		PermissionSettings: permissionSettings,
 		AppStateFn:         func() appthreadmenu.StateProvider { return state }, EffectiveSessionKeyFn: effectiveSessionKey,
 		ConversationBackendFn: func() appthreadmenu.ConversationBackendProvider {
@@ -146,29 +142,6 @@ type threadMenuBackendActionAdapter struct {
 
 func (a threadMenuBackendActionAdapter) CompleteMenuInterrupt(action *feishu.CardAction, sessionKey, targetTurnID string) (*callback.CardActionTriggerResponse, error) {
 	return a.service.CompleteMenuInterrupt(action, sessionKey, targetTurnID)
-}
-
-type threadMenuConfigProvider struct {
-	runtime    BackendRuntimeDeps
-	store      *state.Store
-	workspaces workspace.SelectionService
-}
-
-func (p threadMenuConfigProvider) Config() *config.Config  { return p.runtime.cfg }
-func (p threadMenuConfigProvider) ConfigMu() *sync.RWMutex { return p.runtime.view.mu }
-func (p threadMenuConfigProvider) Backend() string {
-	if p.runtime.runtime.owner == nil {
-		return p.runtime.view.configuredBackend()
-	}
-	return p.runtime.runtime.owner.Backend()
-}
-func (p threadMenuConfigProvider) FrontendID() string { return p.runtime.frontendID }
-func (p threadMenuConfigProvider) FrontendConfigIndex() int {
-	return p.runtime.view.frontendConfigIndex
-}
-func (p threadMenuConfigProvider) Store() *state.Store { return p.store }
-func (p threadMenuConfigProvider) WorkspaceSelection() workspace.SelectionService {
-	return p.workspaces
 }
 
 func (a *App) CompleteMenuCommand(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {

@@ -47,9 +47,10 @@ func newReviewAppAdapter(a *App) appreviewcmd.Dependencies {
 	bindingScope := a.bindings.BindingCommands.scope
 	pendingQueue := a.bindings.PendingQueue
 	queuedNotice := a.bindings.OutboundCards
+	configProvider := newFrontendConfigProvider(a.BackendRuntimeDeps(), a.store, a.bindings.WorkspaceSelection)
 	return appreviewcmd.Dependencies{
 		UseCase:        a.bindings.Review,
-		ConfigProvider: a, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
+		ConfigProvider: configProvider, Outbound: newEffectOutbound(a.FrontendID(), newEffectRunner(a.runtimeOwner)), CardRenderer: simpleStatusCardRenderer{client: a.feishu}, StateProvider: a.State(),
 		ContextProvider:        a,
 		WorkspaceProviderValue: reviewWorkspaceProviderAdapter{config: a.Config(), configView: a.configView(), session: a.State().Session}, GitProvider: reviewGitProviderAdapter{context: a.runtimeOwner.Lifecycle.Context},
 		CodexClientFn:    func() (appreviewcmd.CodexClient, error) { return a.runtimeView().requireCodexGateway() },

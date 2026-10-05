@@ -19,8 +19,9 @@ func workspaceCommandApp(a *App) workspacecmd.Dependencies {
 	if a == nil {
 		return workspacecmd.Dependencies{}
 	}
+	configProvider := newFrontendConfigProvider(a.BackendRuntimeDeps(), a.store, a.bindings.WorkspaceSelection)
 	return workspacecmd.Dependencies{
-		ConfigProvider: a,
+		ConfigProvider: configProvider,
 		Settings:       a.bindings.WorkspaceSettings,
 		Planning:       a.bindings.WorkspacePlanning,
 		Workflow:       a.bindings.WorkspaceWorkflow,

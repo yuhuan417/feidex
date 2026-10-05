@@ -92,14 +92,6 @@ func agentBindingForChat(store *appstate.Store, chatType, chatID string) *state.
 	return nil
 }
 
-// WorkspaceSelection binds the use case directly to scoped repositories.
-func (a *App) WorkspaceSelection() workspace.SelectionService {
-	if a == nil {
-		return workspace.SelectionService{}
-	}
-	return a.bindings.WorkspaceSelection
-}
-
 func DefaultWorkspaceID(cfg *config.Config, mu *sync.RWMutex) func() string {
 	view := frontendConfigView{cfg: cfg, mu: mu}
 	return view.defaultWorkspaceID

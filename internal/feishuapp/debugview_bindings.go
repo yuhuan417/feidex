@@ -46,8 +46,9 @@ func DebugViewDependencies(app *App) appdebugviewcmd.Dependencies {
 	if app == nil {
 		return appdebugviewcmd.Dependencies{}
 	}
+	configProvider := newFrontendConfigProvider(app.BackendRuntimeDeps(), app.store, app.bindings.WorkspaceSelection)
 	return appdebugviewcmd.Dependencies{
-		ConfigProvider: app, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)), FileSharing: app.bindings.FileSharing, CardRenderer: simpleStatusCardRenderer{client: app.feishu}, StateProvider: app.State(),
+		ConfigProvider: configProvider, ContextProvider: app, RuntimeConfigRepository: configadapter.NewRuntimeRepository(app), Outbound: newEffectOutbound(app.FrontendID(), newEffectRunner(app.runtimeOwner)), FileSharing: app.bindings.FileSharing, CardRenderer: simpleStatusCardRenderer{client: app.feishu}, StateProvider: app.State(),
 		RuntimeStateProvider: debugRuntimeStateAdapter{tracker: app.runtimeOwner.TurnBindings},
 		ConversationBackendProvider: debugConversationBackendAdapter{
 			backend:      ConfiguredBackendBuilder(app.Config(), app.ConfigMu(), app.runtimeOwner.Backend, app.FrontendID(), app.FrontendConfigIndex()),
