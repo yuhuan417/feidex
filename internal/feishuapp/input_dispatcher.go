@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"feidex/internal/adapter/backend/codex"
+	retryview "feidex/internal/adapter/feishu/autoretry"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application"
+	"feidex/internal/application/backendevents"
 	"feidex/internal/application/backendops"
+	"feidex/internal/application/cardaction"
+	"feidex/internal/application/inbound"
 	appsubmission "feidex/internal/application/submission"
 	"feidex/internal/codexrpc"
 	domainbackend "feidex/internal/domain/backend"
@@ -25,27 +29,35 @@ import (
 
 // Composition explicitly binds input families to owners. Backend event
 // decoding has already completed when Dispatch is called.
-func newInputDispatcher(a *App) application.Dispatcher {
-	owner := a.runtimeOwner
-	autoRetry := a.bindings.AutoRetry
-	frontendID := identity.FrontendID(a.FrontendID())
-	runner := newEffectRunner(owner)
-	inThread := a.configView().replyInThreadEnabled()
-	router := newFeishuEventRouter(a.started, a.bindings.Inbound, owner.InboundDeduper, owner, func(msg *feishu.InboundMessage, err error) {
+type DispatcherInputs struct {
+	FrontendID    string
+	Started       time.Time
+	Inbound       *inbound.Service
+	CardActions   cardaction.Service
+	BackendEvents *backendevents.Service
+	AutoRetry     retryview.Service
+	RuntimeOwner  *appruntime.FrontendOwner
+	EffectRunner  appruntime.EffectRunner
+	ReplyInThread bool
+}
+
+func newInputDispatcher(inputs DispatcherInputs) application.Dispatcher {
+	owner := inputs.RuntimeOwner
+	frontendID := identity.FrontendID(inputs.FrontendID)
+	router := newFeishuEventRouter(inputs.Started, inputs.Inbound, owner.InboundDeduper, owner, func(msg *feishu.InboundMessage, err error) {
 		if msg == nil || err == nil {
 			return
 		}
-		_ = runner.Run(owner.Lifecycle.Context(), []application.Effect{application.SendMessage{
+		_ = inputs.EffectRunner.Run(owner.Lifecycle.Context(), []application.Effect{application.SendMessage{
 			Frontend:       frontendID,
 			Chat:           identity.ChatRef{ID: msg.ChatID, Type: identity.ChatType(msg.ChatType)},
 			ReplyMessageID: msg.MessageID,
 			Text:           "执行失败: " + err.Error(),
-			InThread:       inThread,
+			InThread:       inputs.ReplyInThread,
 		}})
 	})
-	cardActions := cardActionDispatcher{inner: a.bindings.CardActions}
-	backendEvents := a.bindings.BackendEvents
-	return application.NewDispatcher(identity.FrontendID(a.FrontendID()), application.Handlers{
+	cardActions := cardActionDispatcher{inner: inputs.CardActions}
+	return application.NewDispatcher(frontendID, application.Handlers{
 		Message: func(_ context.Context, event application.MessageReceived) (application.Result, error) {
 			router.handleMessage(&event.Message)
 			return application.Result{}, nil
@@ -64,11 +76,11 @@ func newInputDispatcher(a *App) application.Dispatcher {
 			return application.Result{}, nil
 		},
 		Retry: func(_ context.Context, event application.RetryTimerFired) (application.Result, error) {
-			autoRetry.RunAutoRetryTimer(string(event.SessionKey), event.Sequence)
+			inputs.AutoRetry.RunAutoRetryTimer(string(event.SessionKey), event.Sequence)
 			return application.Result{}, nil
 		},
 		Backend: func(ctx context.Context, event application.BackendEventReceived) (application.Result, error) {
-			return backendEvents.Handle(ctx, event.Event)
+			return inputs.BackendEvents.Handle(ctx, event.Event)
 		},
 	})
 }

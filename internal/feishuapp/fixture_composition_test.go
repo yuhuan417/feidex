@@ -573,7 +573,7 @@ func prepareTestApp(a *App) *App {
 			WorkspaceConfigured: a.Config() != nil,
 		},
 	))
-	dispatcher := newInputDispatcher(a)
+	dispatcher := NewDispatcher(testDispatcherInputs(a))
 	a.runtimeOwner.Dispatcher = &dispatcher
 	if a.runtimeOwner.MCP == nil {
 		mcp, err := buildMCPForTest(a)

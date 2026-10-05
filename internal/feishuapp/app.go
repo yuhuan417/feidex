@@ -71,6 +71,10 @@ func NewFeishuShell(scope frontendruntime.FrontendScope) (*App, error) {
 	}
 	owner := scope.RuntimeOwner
 	owner.SetBackend(backend)
+	started := scope.StartedAt
+	if started.IsZero() {
+		started = time.Now()
+	}
 	app := &App{
 		cfg:                 cfg,
 		sharedConfigMu:      scope.ConfigMutex,
@@ -80,7 +84,7 @@ func NewFeishuShell(scope frontendruntime.FrontendScope) (*App, error) {
 		frontendConfigIndex: frontend.ConfigIndex,
 		transport:           feishuTransport,
 		feishu:              feishuTransport,
-		started:             time.Now(),
+		started:             started,
 		runtimeOwner:        owner,
 	}
 	app.stateView = appstate.NewScoped(store, app.frontendID, app.configView().configuredBackend())

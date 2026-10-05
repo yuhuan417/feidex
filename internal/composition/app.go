@@ -80,6 +80,9 @@ type Service[T runtime.ManagedFrontend] struct {
 }
 
 func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
+	if scope.StartedAt.IsZero() {
+		scope.StartedAt = time.Now()
+	}
 	frontend, err := feishuapp.NewFeishuShell(scope)
 	if err != nil {
 		return nil, err
@@ -616,7 +619,11 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 			WorkspaceConfigured: frontend.Config() != nil,
 		},
 	))
-	dispatcher := feishuapp.NewDispatcher(frontend)
+	dispatcher := feishuapp.NewDispatcher(feishuapp.DispatcherInputs{
+		FrontendID: frontend.FrontendID(), Started: scope.StartedAt, Inbound: bindings.Inbound,
+		CardActions: bindings.CardActions, BackendEvents: bindings.BackendEvents, AutoRetry: bindings.AutoRetry,
+		RuntimeOwner: scope.RuntimeOwner, EffectRunner: *scope.RuntimeOwner.EffectRunner, ReplyInThread: false,
+	})
 	scope.RuntimeOwner.Dispatcher = &dispatcher
 	*autoRetryRuntimeDeps = frontend.BackendRuntimeDeps()
 	if err := feishuapp.CanonicalizeStoredSessionKeys(store); err != nil {

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"sync"
+	"time"
 
 	"feidex/internal/config"
 	"feidex/internal/state"
@@ -17,4 +18,5 @@ type FrontendScope struct {
 	Frontend        config.ResolvedFrontend
 	FeishuTransport any
 	RuntimeOwner    *FrontendOwner
+	StartedAt       time.Time
 }

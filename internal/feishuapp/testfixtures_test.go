@@ -921,6 +921,14 @@ func testEffectRunnerInputs(a *App) EffectRunnerInputs {
 	}
 }
 
+func testDispatcherInputs(a *App) DispatcherInputs {
+	return DispatcherInputs{
+		FrontendID: a.FrontendID(), Started: a.started, Inbound: a.bindings.Inbound,
+		CardActions: a.bindings.CardActions, BackendEvents: a.bindings.BackendEvents, AutoRetry: a.bindings.AutoRetry,
+		RuntimeOwner: a.runtimeOwner, EffectRunner: newEffectRunner(a.runtimeOwner), ReplyInThread: a.configView().replyInThreadEnabled(),
+	}
+}
+
 func testOwnerWithCodex(client CodexClient) *frontendruntime.FrontendOwner {
 	o := frontendruntime.NewFrontendOwner()
 	o.SetCodexClient(client)

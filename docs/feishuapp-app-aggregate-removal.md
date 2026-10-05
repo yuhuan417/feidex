@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 140 |
-| 收 `*App` 的顶层函数 | 32 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 138 |
+| 收 `*App` 的顶层函数 | 30 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -897,6 +897,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 201 将 effect runner 构造改为显式输入，并在 composition 中复用同一个已装配 runner。transport、scoped state、submission queue、deduper 和 announcement refresh 仍由原 owner 提供，Codex client/gateway 仍在 effect 执行时动态解析。生产 `*App` 引用由 144 降至 142，收 `*App` 的函数数由 36 降至 34，其他棘轮保持 1/1/0。
 
 步骤 202 将 session async admission 改为显式 lifecycle、runner 和 session actors 输入。card action 与 backend selection 仍在 callback ack 后进入同一 session actor，lifecycle shutdown admission 和执行顺序不变。生产 `*App` 引用由 142 降至 140，收 `*App` 的函数数由 34 降至 32，其他棘轮保持 1/1/0。
+
+步骤 203 将 application dispatcher 构造改为显式输入。message/card/backend/retry handlers 继续绑定相同 services，inbound dedupe、traffic owner、失败回复 runner 和 lifecycle context 均保持原 owner；只移除构造时的 aggregate 读取。生产 `*App` 引用由 140 降至 138，收 `*App` 的函数数由 32 降至 30，其他棘轮保持 1/1/0。
 
 ## 方法
 

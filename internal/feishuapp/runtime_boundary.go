@@ -17,7 +17,7 @@ func NewEffectRunner(inputs EffectRunnerInputs) runtime.EffectRunner {
 }
 
 // NewDispatcher creates the application input dispatcher for this frontend.
-func NewDispatcher(a *App) application.Dispatcher { return newInputDispatcher(a) }
+func NewDispatcher(inputs DispatcherInputs) application.Dispatcher { return newInputDispatcher(inputs) }
 
 // CanonicalizeStoredSessionKeys performs the one-time state migration required
 // when a frontend enters the runtime.
