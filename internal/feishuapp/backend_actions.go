@@ -49,7 +49,7 @@ func BuildBackendActions(app *App) appbackend.ActionService {
 		},
 		Execution: appbackend.ActionExecutionDeps{
 			EnqueueSubmission: func(msg *feishu.InboundMessage) error {
-				return enqueueSubmission(app, msg)
+				return enqueueSubmissionWithSessionKey(submissions, msg, app.configView().makeSessionKey(msg), false)
 			},
 			EnqueuePassthroughCommand: func(msg *feishu.InboundMessage, rawCommand string) error {
 				return enqueuePassthroughCommand(submissions, app.configView().makeSessionKey(msg), msg, rawCommand)

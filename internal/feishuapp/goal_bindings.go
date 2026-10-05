@@ -95,7 +95,7 @@ func completeMenuGoalAsync(a *App, action *feishu.CardAction, sessionKey string)
 		return commands.CompleteMenuGoal(action, sessionKey)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
-	runAsync(a, func() {
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() {
 		resp, err := commands.CompleteMenuGoal(action, sessionKey)
 		completeGoalAsyncResult(a, action, sessionKey, messageID, resp, err, "goal menu patch failed")
 	})
@@ -115,7 +115,7 @@ func completeGoalRenderedActionAsync(
 		return run(commands)
 	}
 	messageID := strings.TrimSpace(action.MessageID)
-	runAsync(a, func() {
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() {
 		resp, err := run(commands)
 		completeGoalAsyncResult(a, action, sessionKey, messageID, resp, err, "goal action patch failed")
 	})

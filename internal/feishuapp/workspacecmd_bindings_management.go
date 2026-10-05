@@ -72,7 +72,7 @@ func BuildWorkspaceManagement(a *App, presentation *workspacecards.Presentation,
 			FormatMenuBody: menuCardBody,
 		},
 		Async: appworkspacecmd.AsyncDeps{
-			RunAsync: func(fn func()) { runAsync(a, fn) },
+			RunAsync: func(fn func()) { runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, fn) },
 		},
 		Render: appworkspacecmd.ManagementRenderDeps{
 			RenderNewCard: func(sessionKey, requestID string, payload appworkspacecmd.NewPayload) map[string]any {

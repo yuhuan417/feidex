@@ -11,7 +11,7 @@ func TestStopCancelsAndWaitsForBackgroundWork(t *testing.T) {
 	a.beginLifecycle(context.Background())
 	ctx := a.bindings.Submissions.Deps.Context()
 	started, finished := make(chan struct{}), make(chan struct{})
-	runAsync(a, func() { close(started); <-ctx.Done(); close(finished) })
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() { close(started); <-ctx.Done(); close(finished) })
 	<-started
 	shutdown, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -23,7 +23,7 @@ func TestStopCancelsAndWaitsForBackgroundWork(t *testing.T) {
 	default:
 		t.Fatal("Stop returned before background work exited")
 	}
-	runAsync(a, func() { t.Error("work admitted after shutdown") })
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() { t.Error("work admitted after shutdown") })
 }
 
 func TestFrontendLifecycleCancellationIsIsolated(t *testing.T) {

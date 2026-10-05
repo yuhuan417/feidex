@@ -123,11 +123,14 @@ func (a *App) Context() context.Context {
 	return a.runtimeView().ensureRuntimeOwner().Lifecycle.Context()
 }
 
-func runAsync(a *App, fn func()) bool {
+func runAsync(lifecycle *frontendruntime.FrontendRuntime, runner func(func()), fn func()) bool {
 	if fn == nil {
 		return false
 	}
-	return a.runtimeView().ensureRuntimeOwner().Lifecycle.Run(fn, a.asyncRunner)
+	if lifecycle == nil {
+		return false
+	}
+	return lifecycle.Run(fn, runner)
 }
 
 func (a *App) HandleFeishuMessage(msg *feishu.InboundMessage) {
@@ -165,11 +168,7 @@ func nonZero(values ...int64) int64 {
 }
 
 func (a *App) HandleCardAction(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
-	return dispatchCardAction(a, action)
-}
-
-func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
-	return enqueueSubmissionWithSessionKey(a.bindings.Submissions, msg, a.configView().makeSessionKey(msg), false)
+	return dispatchCardAction(a.BackendRuntimeDeps(), a.FrontendID(), action)
 }
 
 func enqueueSubmissionWithSessionKey(submissions *submission.SubmissionQueueService, msg *feishu.InboundMessage, sessionKey string, bindOnlyCurrentRoot bool) error {

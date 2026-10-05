@@ -217,11 +217,11 @@ func buildEffectRunner(inputs EffectRunnerInputs) appruntime.EffectRunner {
 	}
 	return runner
 }
-func dispatchCardAction(a *App, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+func dispatchCardAction(deps BackendRuntimeDeps, frontendID string, action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 	if action == nil {
 		return &callback.CardActionTriggerResponse{}, nil
 	}
-	result, err := dispatchInput(a.BackendRuntimeDeps(), application.CardActionReceived{Frontend: identity.FrontendID(a.FrontendID()), Action: toApplicationCardAction(action)})
+	result, err := dispatchInput(deps, application.CardActionReceived{Frontend: identity.FrontendID(frontendID), Action: toApplicationCardAction(action)})
 	if err != nil {
 		return nil, err
 	}

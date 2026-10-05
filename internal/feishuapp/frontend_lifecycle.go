@@ -19,7 +19,7 @@ func (a *App) Prepare(ctx context.Context) error {
 	return nil
 }
 func (a *App) StartInboundGC() {
-	runAsync(a, func() { a.runtimeOwner.InboundDeduper.RunGC(a.Context()) })
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() { a.runtimeOwner.InboundDeduper.RunGC(a.Context()) })
 }
 func (a *App) ResetStartupState() error { return a.bindings.StartupRecovery.ResetStartupState() }
 func (a *App) RecoverFrontend() error {
@@ -27,10 +27,10 @@ func (a *App) RecoverFrontend() error {
 }
 func (a *App) Serve() error { return startFrontend(a.feishu, a.Context()) }
 func (a *App) StartBackground() {
-	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 24*time.Hour, a.bindings.MaintenanceCommands.RunDriveArtifactGC)
-	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(a, fn) }, 30*time.Second, a.bindings.MaintenanceCommands.CheckPendingUpgrades)
+	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, fn) }, 24*time.Hour, a.bindings.MaintenanceCommands.RunDriveArtifactGC)
+	maintenance.StartPeriodic(a.Context(), func(fn func()) { runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, fn) }, 30*time.Second, a.bindings.MaintenanceCommands.CheckPendingUpgrades)
 	scheduleStartupGroupAnnouncementRefreshes(a.runtimeOwner.Announcements, a.bindings.AnnouncementQuery)
 	startupRecovery := a.bindings.StartupRecovery
-	runAsync(a, func() { startupRecovery.SendStartupReadyNotifications() })
-	runAsync(a, func() { runFeishuAppConfigHeal(a) })
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() { startupRecovery.SendStartupReadyNotifications() })
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() { runFeishuAppConfigHeal(a) })
 }

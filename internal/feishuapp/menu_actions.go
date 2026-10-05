@@ -65,7 +65,7 @@ func (s cardActionService) completeMenuCompact(action *feishu.CardAction, sessio
 	if messageID == "" {
 		return completeMenuCommand(s.app, action, sessionKey, "/compact", "menu.tools")
 	}
-	runAsync(s.app, func() {
+	runAsync(&s.app.runtimeOwner.Lifecycle, s.app.asyncRunner, func() {
 		card := renderCompactAcceptedCard(s.app.State(), sessionKey)
 		if err := s.app.bindings.BackendActions.RunMenuCompactAction(action, sessionKey, s.app.bindings.Compaction); err != nil {
 			card = renderCompactFailedCard(s.app.State(), sessionKey, err.Error())
@@ -149,7 +149,7 @@ func (s cardActionService) completeMenuUpgrade(action *feishu.CardAction) (*call
 	sessionKey, _ := action.ActionValue["session_key"].(string)
 	if action != nil && strings.TrimSpace(action.MessageID) != "" {
 		messageID := strings.TrimSpace(action.MessageID)
-		runAsync(s.app, func() {
+		runAsync(&s.app.runtimeOwner.Lifecycle, s.app.asyncRunner, func() {
 			_, card, err := runCommandFromCardAction(s.app, action, sessionKey, "/upgrade")
 			if err != nil {
 				slog.Warn("upgrade panel render failed",

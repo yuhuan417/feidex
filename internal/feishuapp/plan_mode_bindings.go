@@ -173,7 +173,7 @@ func completeMenuPlanAsync(a *App, action *feishu.CardAction, sessionKey string)
 		return completeMenuCommand(a, action, sessionKey, "/plan", "menu.tools")
 	}
 	messageID := strings.TrimSpace(action.MessageID)
-	runAsync(a, func() {
+	runAsync(&a.runtimeOwner.Lifecycle, a.asyncRunner, func() {
 		resp, err := completeMenuCommand(a, action, sessionKey, "/plan", "menu.tools")
 		if card := callbackResponseCard(resp); card != nil {
 			patchMaintenanceCard(a.Context(), a.FrontendID(), newEffectRunner(a.runtimeOwner), messageID, card, "plan menu patch failed",

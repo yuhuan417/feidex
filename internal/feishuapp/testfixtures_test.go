@@ -929,6 +929,10 @@ func testDispatcherInputs(a *App) DispatcherInputs {
 	}
 }
 
+func enqueueSubmission(a *App, msg *feishu.InboundMessage) error {
+	return enqueueSubmissionWithSessionKey(a.bindings.Submissions, msg, a.configView().makeSessionKey(msg), false)
+}
+
 func testOwnerWithCodex(client CodexClient) *frontendruntime.FrontendOwner {
 	o := frontendruntime.NewFrontendOwner()
 	o.SetCodexClient(client)

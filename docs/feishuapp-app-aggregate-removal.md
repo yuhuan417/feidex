@@ -28,8 +28,8 @@ Bindings，Bindings 需要 App**，104 字段的服务定位器就是这个环�
 
 | 指标 | 值 |
 |---|---|
-| `internal/feishuapp` 生产代码里的 `*App` 引用 | 134 |
-| 收 `*App` 的顶层函数 | 26 |
+| `internal/feishuapp` 生产代码里的 `*App` 引用 | 131 |
+| 收 `*App` 的顶层函数 | 23 |
 | 收 `*App` 的 `*Ports` 工厂 | 1 |
 | **持有 `*App` 字段的结构体** | **1** |
 
@@ -901,6 +901,8 @@ StartupRecovery 执行时的 reset/begin/restore 顺序不变。lazy binding-rea
 步骤 203 将 application dispatcher 构造改为显式输入。message/card/backend/retry handlers 继续绑定相同 services，inbound dedupe、traffic owner、失败回复 runner 和 lifecycle context 均保持原 owner；只移除构造时的 aggregate 读取。生产 `*App` 引用由 140 降至 138，收 `*App` 的函数数由 32 降至 30，其他棘轮保持 1/1/0。
 
 步骤 204 删除 backend actions、backend selection、workspace config 和 workspace management 的纯转发构造 facade，由原实现直接作为导出构造函数。调用点与行为不变。生产 `*App` 引用由 138 降至 134，收 `*App` 的函数数由 30 降至 26，其他棘轮保持 1/1/0。
+
+步骤 205 将通用 lifecycle admission、card dispatch 与 submission enqueue helper 改为显式 owner/service 输入。Feishu entrypoint 仍使用同一 BackendRuntimeDeps、frontend identity、submission queue 和 session-key builder，异步 admission 仍由同一 lifecycle 与 runner 执行。生产 `*App` 引用由 134 降至 131，收 `*App` 的函数数由 26 降至 23，其他棘轮保持 1/1/0。
 
 ## 方法
 
