@@ -1,5 +1,7 @@
 package feishuapp
 
+import appthreadmenu "feidex/internal/adapter/feishu/threadmenu"
+
 import domainbackend "feidex/internal/domain/backend"
 
 // These test-only conveniences keep fixture setup readable without retaining
@@ -40,4 +42,19 @@ func (a *App) FrontendConfigIndex() int {
 		return -1
 	}
 	return a.frontendConfigIndex
+}
+
+func ThreadMenuDependencies(a *App) appthreadmenu.Dependencies {
+	if a == nil {
+		return appthreadmenu.Dependencies{}
+	}
+	return BuildThreadMenuDependencies(ThreadMenuInputs{
+		Runtime: a.BackendRuntimeDeps(), Store: a.store, State: a.State(),
+		Conversations: a.bindings.Conversations, BindingScope: BindingScope{scope: a.bindings.BindingCommands.scope},
+		ConversationQuery: a.bindings.ConversationQuery, PendingQueue: a.bindings.PendingQueue,
+		WorkspaceConfiguration: a.bindings.WorkspaceConfiguration, WorkspaceSelection: a.bindings.WorkspaceSelection,
+		ConversationControls: a.bindings.ConversationControls, ThreadSettings: a.bindings.ThreadSettings,
+		PermissionSettings: a.bindings.PermissionSettings, BackendActions: a.bindings.BackendActions,
+		AutoRetry: a.bindings.AutoRetry, CompleteMenuCommand: a.CompleteMenuCommand,
+	})
 }

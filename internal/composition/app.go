@@ -604,7 +604,15 @@ func NewFrontend(scope FrontendScope) (*feishuapp.App, error) {
 		Runtime: frontend.BackendRuntimeDeps(), Context: frontend.Context,
 	}))
 	bindings.ConversationControls = &controls
-	bindings.ThreadMenu = threadmenu.NewService(feishuapp.ThreadMenuDependencies(frontend))
+	bindings.ThreadMenu = threadmenu.NewService(feishuapp.BuildThreadMenuDependencies(feishuapp.ThreadMenuInputs{
+		Runtime: frontend.BackendRuntimeDeps(), Store: store, State: frontend.State(),
+		Conversations: bindings.Conversations, BindingScope: bindingScope, ConversationQuery: bindings.ConversationQuery,
+		PendingQueue: bindings.PendingQueue, WorkspaceConfiguration: bindings.WorkspaceConfiguration,
+		WorkspaceSelection: bindings.WorkspaceSelection, ConversationControls: bindings.ConversationControls,
+		ThreadSettings: bindings.ThreadSettings, PermissionSettings: bindings.PermissionSettings,
+		BackendActions: bindings.BackendActions, AutoRetry: bindings.AutoRetry,
+		CompleteMenuCommand: frontend.CompleteMenuCommand,
+	}))
 	planSource, planCatalog, planWorkspaces := feishuapp.PlanPorts(frontend.Config(), frontend.ConfigMu(), bindings.ModelSnapshots, scope.RuntimeOwner)
 	*bindings.Plan = planapp.Service{Forms: bindings.Forms, Delivery: bindings.InteractionDelivery, Repository: frontend.State(), Settings: planapp.SettingsService{Source: planSource, Catalog: planCatalog, Context: frontend.Context}, Conversations: bindings.Conversations, Workspaces: planWorkspaces, Queue: bindings.Submissions}
 	*turnPlanMode = feishuapp.PlanModePorts(feishuapp.PlanModePortInputs{
