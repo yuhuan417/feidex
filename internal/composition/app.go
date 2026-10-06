@@ -831,13 +831,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 	if err := feishuapp.CanonicalizeStoredSessionKeys(store); err != nil {
 		return nil, err
 	}
-	if backend := configuredBackend(); backend != "" {
-		handle, err := feishuapp.BuildBackendRuntimeHandle(frontend.BackendRuntimeDeps(), backend)
-		if err != nil {
-			return nil, err
-		}
-		feishuapp.InstallBackendRuntime(frontend.BackendRuntimeDeps(), handle)
-	}
 	deps := frontend.BackendRuntimeDeps()
 	*claudeRuntimeInputs = feishuapp.ClaudeRuntimePortInputs{
 		Runtime: deps,
@@ -854,6 +847,15 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 		BackendFailure: bindings.BackendFailure, Usage: bindings.Usage,
 		TurnMetadata: bindings.TurnMetadata, ConversationQuery: bindings.ConversationQuery,
 		Conversations: bindings.Conversations,
+	}
+	// Building a configured Claude backend calls ClaudeFactory immediately, so
+	// its port inputs must be fully composed before any backend is constructed.
+	if backend := configuredBackend(); backend != "" {
+		handle, err := feishuapp.BuildBackendRuntimeHandle(frontend.BackendRuntimeDeps(), backend)
+		if err != nil {
+			return nil, err
+		}
+		feishuapp.InstallBackendRuntime(frontend.BackendRuntimeDeps(), handle)
 	}
 	feishuapp.InstallFeishuPolicies(feishuapp.FeishuPolicyInputs{
 		Client: feishuClient, GroupMessages: bindings.GroupMessages, Context: frontend.Context,
