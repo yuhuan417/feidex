@@ -354,7 +354,7 @@ func (s bindingService) completeBindingModelSet(action *feishu.CardAction, sessi
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已保存当前群内模型；本轮不变，下一轮启动前应用"},
-		Card:  rawCard(s.renderBindingModelConfigOrMenuCard(sessionKey, updated)),
+		Card:  rawCard(s.renderBindingModelConfigOrErrorCard(sessionKey, updated)),
 	}, nil
 }
 
@@ -375,7 +375,7 @@ func (s bindingService) completeBindingEffortSet(action *feishu.CardAction, sess
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: "已保存当前群内推理强度；本轮不变，下一轮启动前应用"},
-		Card:  rawCard(s.renderBindingModelConfigOrMenuCard(sessionKey, updated)),
+		Card:  rawCard(s.renderBindingModelConfigOrErrorCard(sessionKey, updated)),
 	}, nil
 }
 

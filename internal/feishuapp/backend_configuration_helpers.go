@@ -57,9 +57,6 @@ func buildBackendConfigurationService(inputs BackendConfigurationInputs) appback
 			workspaceSelection: inputs.WorkspaceSelection,
 		},
 		Driver: inputs.Driver,
-		Formatting: appbackend.ConfigurationFormattingDeps{
-			FormatMenuBody: menuCardBody,
-		},
 		Commands: appbackend.ConfigurationCommandDeps{
 			HandleCodexModelCommand: func(msg *feishu.InboundMessage, args []string) error {
 				return modelCommands.CommandCodexModel(msg, args)

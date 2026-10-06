@@ -171,7 +171,9 @@ func BuildCommandFeatureInputs(inputs CommandFeatureDependencies) CommandFeature
 			return renderToolsMenuCardData(inputs.ConfiguredBackend(), title(sessionKey, spec.Label), inputs.Renderer, sessionKey), true
 		},
 		MenuGroupModel: func(sessionKey string) (map[string]any, bool) {
-			return inputs.BackendConfiguration.RenderModelMenuCard(sessionKey), true
+			// The root button opens /model directly. If that command fails, return
+			// to /menu instead of reviving the removed model overview card.
+			return renderCommandMenuCardData(inputs.ConfiguredBackend(), title(sessionKey, "主菜单"), inputs.Renderer, sessionKey), true
 		},
 		MenuGroupSystem: func(sessionKey string) (map[string]any, bool) {
 			spec, _ := menuGroupSpec("menu.group.system")

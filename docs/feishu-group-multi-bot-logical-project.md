@@ -310,13 +310,13 @@ Session / Thread 临时覆盖
 
 ```text
 /menu
-  -> 当前 Bot
-      -> 当前工作区 /workspace
-          -> 新建工作区 /workspace new
-          -> 从仓库创建 /workspace clone
-          -> 创建 Worktree /workspace new worktree
-      -> 模型配置 /model
-      -> 响应速度 /fast config
+  -> 工作区管理 /workspace
+      -> 新建工作区 /workspace new
+      -> 从仓库创建 /workspace clone
+      -> 创建 Worktree /workspace new worktree
+  -> 模型配置 /model（直接打开配置页）
+      -> 配置辅助模型
+      -> 响应速度 /fast config（Codex）
 ```
 
 群内 help 也按群作用域改写：它推荐 `/workspace`、`/model`、`/effort`、`/fast` 和 `/primary`，不再展示旧的绑定命令。

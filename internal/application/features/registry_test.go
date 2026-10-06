@@ -28,3 +28,24 @@ func TestFeatureActionNamesAreUnique(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryDeclaredMenuNodeLeadsBackToMenu(t *testing.T) {
+	nodes := MenuNodes()
+	if _, ok := nodes["menu.root"]; !ok {
+		t.Fatal("menu.root is missing")
+	}
+	for action := range nodes {
+		seen := map[string]bool{}
+		for current := action; current != "menu.root"; {
+			if seen[current] {
+				t.Fatalf("menu node %q has a parent cycle at %q", action, current)
+			}
+			seen[current] = true
+			node, ok := nodes[current]
+			if !ok || node.Parent == "" {
+				t.Fatalf("menu node %q is disconnected at %q", action, current)
+			}
+			current = node.Parent
+		}
+	}
+}

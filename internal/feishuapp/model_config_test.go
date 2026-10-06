@@ -384,17 +384,20 @@ func modelConfigFormCountForTest(t *testing.T, card map[string]any) int {
 	return count
 }
 
-func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {
+func TestClaudeModelConfigReachedFromMenuOmitsFast(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	selectBackendForTest(a, domainbackend.BackendClaude)
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	a.cfg.Claude.Model = "mimo-v2-pro"
 	a.cfg.Claude.Effort = "high"
 
-	card := a.bindings.BackendConfiguration.RenderModelMenuCard("sess-1")
+	if !containsMenuAction(renderCommandMenuCard(a, "sess-1"), "menu.group.model") {
+		t.Fatal("Claude /menu must link to model configuration")
+	}
+	card := a.bindings.ModelCommands.RenderClaudeModelConfigCard("sess-1", "menu.model")
 	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, "当前 effort: `high`") {
-		t.Fatalf("Claude model menu body = %q", body)
+	if !strings.Contains(body, "当前推理强度: `high`") {
+		t.Fatalf("Claude model configuration body = %q", body)
 	}
 
 	actions := cardButtonsForTest(card)
@@ -410,26 +413,22 @@ func TestRenderModelMenuCardForClaudeOmitsFast(t *testing.T) {
 		name, _ := value["action"].(string)
 		seen[name] = true
 	}
-	if !seen["menu.model"] {
-		t.Fatalf("Claude model menu actions = %+v, want menu.model", actions)
+	if !seen["menu.model_auxiliary"] {
+		t.Fatalf("Claude model configuration actions = %+v, want menu.model_auxiliary", actions)
 	}
 	if seen["menu.fast"] {
-		t.Fatalf("Claude model menu should omit menu.fast: %+v", actions)
+		t.Fatalf("Claude model configuration should omit menu.fast: %+v", actions)
 	}
 }
 
-func TestRenderModelMenuCardWithoutBackendDoesNotFallbackToCodex(t *testing.T) {
+func TestMenuWithoutBackendDoesNotExposeModelConfiguration(t *testing.T) {
 	a, _, _ := newTestApp(t)
 	selectBackendForTest(a, "")
 	a.cfg.Feishu.Backend = ""
 
-	card := a.bindings.BackendConfiguration.RenderModelMenuCard("sess-1")
-	body := cardMarkdownContent(t, card)
-	if !strings.Contains(body, "还没有设置 backend") {
-		t.Fatalf("unset backend model menu body = %q, want backend selection prompt", body)
-	}
-	if strings.Contains(body, "当前 fast:") || strings.Contains(body, "当前 reasoning:") {
-		t.Fatalf("unset backend model menu body = %q, should not render Codex model fields", body)
+	card := renderCommandMenuCard(a, "sess-1")
+	if containsMenuAction(card, "menu.group.model") {
+		t.Fatal("unset backend /menu must require backend selection before model configuration")
 	}
 }
 

@@ -55,11 +55,6 @@
 
 主菜单按后端分不同入口（Codex 侧重 thread，Claude 侧重 session）：
 
-- 当前 Bot
-  - `当前工作区 /workspace`
-  - `模型配置 /model`
-  - `响应速度 /fast config`
-  - 查看当前 bot 在本群内的 workspace、primary 和本地运行参数
 - 常用工具
   - `中断任务 /stop`
   - `静默模式 /quiet`
@@ -68,10 +63,10 @@
   - `历史记录 /history`
   - `Token 消耗 /usage`
   - `代码审查 /review`（Codex only）
-- model
-  - `模型配置 /model`
-  - `推理强度 /effort`（Claude only）
-  - `响应速度 /fast`
+- 模型配置 `/model`：从 `/menu` 直接打开配置页，没有中间总览卡
+  - 选择主模型与推理强度；`/effort` 也可直接打开配置页
+  - `配置辅助模型` 打开辅助模型配置页
+  - `响应速度 /fast config` 打开响应速度配置页（Codex only）
 - thread（Codex）/ session（Claude）
   - list 下拉切换
   - 新建 / fork / resume

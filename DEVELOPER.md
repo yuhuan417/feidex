@@ -85,6 +85,7 @@ Dependency direction should stay simple:
 ## Interaction Constraints
 
 - Any capability that is reachable from a Feishu menu must also be invocable directly from a slash command or equivalent command-line style entrypoint. Do not introduce menu-only product capabilities.
+- Every menu-workflow page must also be reachable by visible card actions starting at `/menu` for each backend and chat scope that supports it. A direct slash command does not replace that navigation path; do not leave standalone configuration pages or revive removed intermediate overview cards as error fallbacks.
 - Feishu-side user experience should stay as consistent as practical across different backends. If a backend-specific user-visible behavior must differ, confirm that difference with the user first and document the reason and constraint in the repository.
 - The menu system has one general card UI contract across single-chat and group-chat scopes. Every card in a shared menu workflow (menu entry, submenu, configuration/detail page, selector, and form-result card) for the same backend and capability must use the same rendered UI structure: controls, order, labels, command hints, layout, breadcrumbs, and navigation. Command handling and persistence may branch by scope after selection. Effective values and concise scope descriptions may differ, but the available shared controls and their visual arrangement must not.
 - In every menu-workflow card that has a `返回上一级` action, that action must be the final interactive card element, after all other menu actions and controls. This applies to cards assembled in multiple steps as well as cards with controls and action rows.
@@ -446,6 +447,7 @@ General menu-card UI contract:
 
 - This is a system-wide rule for cards in shared menu workflows, not a rule for one command or card. It covers menu entries, submenus, configuration/detail pages, selectors, and form-result cards.
 - Use the shared menu/card rendering helpers for p2p and group Conversation scope. Before merging, compare both rendered cards for the same backend and capability; shared controls, order, labels, command hints, layout, breadcrumbs, and navigation must match. Keep scope-specific values in body copy. Group workspace-onboarding may have a distinct entry card, but its completed workspace menus use the shared renderer.
+- Test the route from `/menu` using the action values emitted by each rendered card, including forward and back actions, so a registered callback alone cannot hide an unreachable page.
 - In any such card that has `返回上一级`, keep it after every other interactive element, including action rows appended before later controls. Add or update a named rendering guard when the card is changed.
 - Back controls are labelled `feishu.MenuBackButtonText` and nothing else. Describe the card in the body or breadcrumb rather than naming the destination on the control, and keep command hints on forward controls only. `feishu.BackButtonsLast` and `cards.isBackActionRow` both match this exact string, so a destination-named label silently escapes the ordering rule above.
 

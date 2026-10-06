@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"feidex/internal/adapter/feishu/cards"
+	"feidex/internal/adapter/feishu/menuutil"
 	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
 	"feidex/internal/domain/routing"
@@ -319,6 +320,15 @@ func ModelCardActionRow(buttons []feishu.Button) map[string]any {
 	return cards.BuildMarkdownBodyCardActionElement(buttons)
 }
 
+// FastConfigButton opens the Codex service-tier menu from a model card.
+func FastConfigButton(sessionKey string) feishu.Button {
+	return feishu.Button{
+		Text:  menuutil.SubmenuCommandLabel("响应速度", "/fast config"),
+		Type:  "default",
+		Value: map[string]any{"action": "menu.fast", "session_key": sessionKey},
+	}
+}
+
 // ChunkButtons splits a button slice into rows of the given size.
 func ChunkButtons(buttons []feishu.Button, size int) [][]feishu.Button {
 	if len(buttons) == 0 {
@@ -596,11 +606,14 @@ func (s ModelConfigService) RenderModelConfigCard(result catalog.ModelListResult
 		effortInitialOption,
 	))
 
-	elements = append(elements, ModelCardActionRow([]feishu.Button{{
-		Text:  "配置辅助模型",
-		Type:  "default",
-		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey, "menu_action": menuAction},
-	}}))
+	elements = append(elements, ModelCardActionRow([]feishu.Button{
+		{
+			Text:  "配置辅助模型",
+			Type:  "default",
+			Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey, "menu_action": menuAction},
+		},
+		FastConfigButton(sessionKey),
+	}))
 	if strings.TrimSpace(sessionKey) != "" {
 		elements = append(elements, ModelCardActionRow([]feishu.Button{{
 			Text:  feishu.MenuBackButtonText,
@@ -633,6 +646,7 @@ func (s ModelConfigService) RenderCodexAuxiliaryModelConfigCard(result catalog.M
 		reviewValue, subagentValue, subagentEffort = cfg.Codex.ReviewModel, cfg.Codex.SubagentModel, cfg.Codex.SubagentReasoningEffort
 	}
 	card := cards.NewMarkdownBodyCard("辅助模型配置", "blue")
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody(menuAction, "")})
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**Plan 模型**\n用于 `/plan` 模式；未设置时跟随主模型。"})
 	cards.AppendMarkdownBodyCardElement(card, cards.BuildSelectStaticElement("model_aux_plan_model", "Plan 模型", map[string]any{"action": "model.plan_config.select_model", "session_key": sessionKey, "menu_action": "menu.model_auxiliary"}, modelOptions, firstNonEmpty(planModelValue, DefaultOptionValue)))
 	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": "**Plan 推理强度**\n未设置时跟随 Codex 的 Plan preset。"})

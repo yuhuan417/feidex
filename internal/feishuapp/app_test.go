@@ -1216,7 +1216,10 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		t.Fatalf("tools menu last button = %q, want 返回上一级", lastToolsText)
 	}
 
-	modelCard := a.bindings.BackendConfiguration.RenderModelMenuCard(sessionKey)
+	if !containsMenuAction(rootCard, "menu.group.model") {
+		t.Fatal("/menu must link to model configuration")
+	}
+	modelCard := a.bindings.ModelCommands.RenderModelConfigCard(catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5"}}}, nil, sessionKey, "menu.model")
 	modelActions := cardButtonsForTest(modelCard)
 	modelLabelByAction := map[string]string{}
 	for _, action := range modelActions {
@@ -1232,8 +1235,8 @@ func TestMenuCardsShowBreadcrumbsAndSubmenuIndicators(t *testing.T) {
 		actionName, _ := value["action"].(string)
 		modelLabelByAction[actionName] = label
 	}
-	if !strings.Contains(modelLabelByAction["menu.model"], "/model") || !strings.Contains(modelLabelByAction["menu.fast"], "/fast config") {
-		t.Fatalf("expected real command labels in model menu, got %#v", modelLabelByAction)
+	if !strings.Contains(modelLabelByAction["menu.fast"], "/fast config") {
+		t.Fatalf("model configuration must link to /fast config, got %#v", modelLabelByAction)
 	}
 
 	helpCard := renderHelpCard(a, sessionKey)
@@ -1297,13 +1300,17 @@ func TestClaudeMenuCardsHideUnsupportedLocalFeatures(t *testing.T) {
 		}
 	}
 
-	modelCard := a.bindings.BackendConfiguration.RenderModelMenuCard(sessionKey)
+	rootCard := renderCommandMenuCard(a, sessionKey)
+	if !containsMenuAction(rootCard, "menu.group.model") {
+		t.Fatal("Claude /menu must link to model configuration")
+	}
+	modelCard := a.bindings.ModelCommands.RenderClaudeModelConfigCard(sessionKey, "menu.model")
 	modelLabels := cardButtonLabelsByAction(modelCard)
 	if _, ok := modelLabels["menu.fast"]; ok {
 		t.Fatalf("unexpected Claude model action menu.fast in %+v", modelLabels)
 	}
-	if _, ok := modelLabels["menu.model"]; !ok {
-		t.Fatalf("missing Claude model action menu.model in %+v", modelLabels)
+	if _, ok := modelLabels["menu.model_auxiliary"]; !ok {
+		t.Fatalf("missing Claude auxiliary model action in %+v", modelLabels)
 	}
 }
 

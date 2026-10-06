@@ -354,6 +354,7 @@ var registry = []Spec{
 		},
 		Nodes: []MenuNode{
 			{Action: "menu.model", Label: "模型配置", Parent: "menu.root"},
+			{Action: "menu.model_auxiliary", Label: "辅助模型配置", Parent: "menu.model"},
 		},
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.group.model", Action: "menu.model", Label: "模型配置", Slash: "/model", Kind: MenuItemSubmenu},

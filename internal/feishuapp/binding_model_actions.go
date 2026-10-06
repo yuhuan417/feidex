@@ -22,33 +22,6 @@ import (
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
 
-func (s bindingService) renderBindingModelMenuCard(sessionKey string, binding *state.AgentBinding) map[string]any {
-	if binding == nil {
-		binding = s.scope.Binding(sessionKey)
-	}
-	backend := s.deps.ConfiguredBackend()
-	lines := []string{
-		"配置当前 Bot 在本群的模型相关设置。",
-		"",
-		"backend: `" + textutil.FirstNonEmpty(backend, "unset") + "`",
-		"当前群内模型: " + renderOptionalBacktick(bindingModelOverride(binding)),
-	}
-	if backend == domainbackend.BackendCodex || backend == domainbackend.BackendClaude {
-		lines = append(lines, "当前群内推理强度: "+renderOptionalBacktick(bindingReasoningEffortOverride(binding)))
-	}
-	if backend == domainbackend.BackendCodex {
-		lines = append(lines, "当前群内响应速度: "+renderOptionalBacktick(bindingServiceTierOverride(binding)))
-	}
-	buttons := []feishu.Button{
-		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.model", "session_key": sessionKey}},
-	}
-	if backend == domainbackend.BackendCodex {
-		buttons = append(buttons, feishu.Button{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: map[string]any{"action": "menu.fast", "session_key": sessionKey}})
-	}
-	buttons = append(buttons, feishu.Button{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}})
-	return s.renderer("模型配置", "blue", menuCardBody("menu.group.model", strings.Join(lines, "\n")), buttons)
-}
-
 func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding *state.AgentBinding) (map[string]any, error) {
 	if binding == nil {
 		binding = s.scope.Binding(sessionKey)
@@ -209,11 +182,14 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		effortOptions,
 		effortInitialOption,
 	))
-	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{
-		Text:  "配置辅助模型",
-		Type:  "default",
-		Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey},
-	}}))
+	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{
+		{
+			Text:  "配置辅助模型",
+			Type:  "default",
+			Value: map[string]any{"action": "menu.model_auxiliary", "session_key": sessionKey},
+		},
+		appmodelconfig.FastConfigButton(sessionKey),
+	}))
 	cards.AppendMarkdownBodyCardElement(card, appmodelconfig.ModelCardActionRow([]feishu.Button{{
 		Text:  feishu.MenuBackButtonText,
 		Type:  "default",
@@ -450,7 +426,7 @@ func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, ses
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
-	card := s.renderBindingModelConfigOrMenuCard(sessionKey, binding)
+	card := s.renderBindingModelConfigOrErrorCard(sessionKey, binding)
 	verb := "移除"
 	if add {
 		verb = "添加"
@@ -477,7 +453,7 @@ func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, arg
 	if err != nil {
 		return err
 	}
-	card := s.renderBindingModelConfigOrMenuCard(s.deps.MakeSessionKey(msg), binding)
+	card := s.renderBindingModelConfigOrErrorCard(s.deps.MakeSessionKey(msg), binding)
 	_, err = s.deps.replyCardWithID(context.Background(), msg.MessageID, card, false)
 	return err
 }
@@ -519,12 +495,15 @@ func bindingServiceTierOverride(binding *state.AgentBinding) string {
 	return strings.TrimSpace(binding.ServiceTierOverride)
 }
 
-func (s bindingService) renderBindingModelConfigOrMenuCard(sessionKey string, binding *state.AgentBinding) map[string]any {
+func (s bindingService) renderBindingModelConfigOrErrorCard(sessionKey string, binding *state.AgentBinding) map[string]any {
 	card, err := s.renderBindingModelConfigCard(sessionKey, binding)
 	if err == nil {
 		return card
 	}
-	return s.renderBindingModelMenuCard(sessionKey, binding)
+	return s.renderer("模型配置", "orange", menuCardBody("menu.model", "已保存配置，但暂时无法刷新模型配置："+err.Error()), []feishu.Button{
+		{Text: submenuCommandLabel("重试模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}},
+		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
+	})
 }
 
 // renderAuxModelSummary renders one auxiliary-model summary entry: the value

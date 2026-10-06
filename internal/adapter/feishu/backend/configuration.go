@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"feidex/internal/adapter/feishu/cardactions"
 	appdebugview "feidex/internal/adapter/feishu/debugview"
 	appquietmode "feidex/internal/adapter/feishu/quietmode"
 	appthreadview "feidex/internal/adapter/feishu/threadview"
@@ -40,10 +39,6 @@ type ConfigurationService struct {
 	deps        ConfigurationDeps
 }
 
-type ConfigurationFormattingDeps struct {
-	FormatMenuBody func(action, body string) string
-}
-
 type ConfigurationCommandDeps struct {
 	HandleCodexModelCommand  func(msg *feishu.InboundMessage, args []string) error
 	HandleClaudeModelCommand func(msg *feishu.InboundMessage, args []string) error
@@ -67,7 +62,6 @@ type ConfigurationCodexDeps struct {
 type ConfigurationDeps struct {
 	Permissions PermissionDependencies
 	Driver      Driver
-	Formatting  ConfigurationFormattingDeps
 	Commands    ConfigurationCommandDeps
 	Claude      ConfigurationClaudeDeps
 	Codex       ConfigurationCodexDeps
@@ -79,13 +73,6 @@ func NewConfigurationService(deps ConfigurationDeps) ConfigurationService {
 		deps.Driver = DriverForKind(configuredBackend(deps.Permissions))
 	}
 	return ConfigurationService{Permissions: deps.Permissions, deps: deps}
-}
-
-func (s ConfigurationService) FormatMenuBody(action, body string) string {
-	if s.deps.Formatting.FormatMenuBody == nil {
-		return body
-	}
-	return s.deps.Formatting.FormatMenuBody(action, body)
 }
 
 func (s ConfigurationService) HandleModelCommand(msg *feishu.InboundMessage, args []string) error {
@@ -166,30 +153,6 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func submenuLabel(label string) string {
-	label = strings.TrimSpace(label)
-	if label == "" {
-		return "›"
-	}
-	return label + " ›"
-}
-
-func commandLabel(label, slash string) string {
-	label = strings.TrimSpace(label)
-	slash = strings.TrimSpace(slash)
-	if label == "" {
-		return slash
-	}
-	if slash == "" {
-		return label
-	}
-	return label + " " + slash
-}
-
-func submenuCommandLabel(label, slash string) string {
-	return submenuLabel(commandLabel(label, slash))
-}
-
 func normalizeClaudePermissionModeValue(value string) string {
 	switch strings.TrimSpace(value) {
 	case "", "default":
@@ -226,15 +189,6 @@ func claudePermissionModeLabel(value string) string {
 func autoRetryEnabled(app configSource) bool {
 	cfg := feishuConfig(app)
 	return cfg != nil && cfg.AutoRetry
-}
-
-func (s ConfigurationService) renderBackendRequiredCard(sessionKey string) map[string]any {
-	body := s.FormatMenuBody("menu.group.model", unsupportedBackendUserMessage(configuredBackend(s.Permissions)))
-	buttons := []feishu.Button{
-		{Text: "后端选择 /backend", Type: "default", Value: cardactions.MenuActionValue{Action: "menu.group.backend", SessionKey: sessionKey}.Map()},
-		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
-	}
-	return feishu.SimpleStatusCard("模型配置", "orange", body, buttons)
 }
 
 func (s ConfigurationService) backendRequiredStatusBody() string {
@@ -275,62 +229,6 @@ func (s ConfigurationService) BackendWorkspaceSwitchBindingFailureNotice() strin
 // workspace switch binding result.
 func (s ConfigurationService) BackendWorkspaceSwitchBindingNotice(binding *conversation.ThreadBinding) string {
 	return s.deps.Driver.Conversation().WorkspaceSwitchBindingNotice(binding)
-}
-
-// RenderModelMenuCard renders the model menu card for the active backend.
-func (s ConfigurationService) RenderModelMenuCard(sessionKey string) map[string]any {
-	switch configuredBackend(s.Permissions) {
-	case domainbackend.BackendCodex:
-		return s.RenderCodexModelMenuCard(sessionKey)
-	case domainbackend.BackendClaude:
-		return s.RenderClaudeModelMenuCard(sessionKey)
-	default:
-		return s.renderBackendRequiredCard(sessionKey)
-	}
-}
-
-// RenderClaudeModelMenuCard renders the Claude model menu card.
-func (s ConfigurationService) RenderClaudeModelMenuCard(sessionKey string) map[string]any {
-	cfg := configurationSnapshot(s.Permissions)
-	modelValue := firstNonEmpty(configuredClaudeModel(cfg), claudeDefaultModelAlias)
-	effortValue := firstNonEmpty(configuredClaudeEffort(cfg), "(default)")
-	body := strings.Join([]string{
-		"当前 model: `" + modelValue + "`",
-		"当前 effort: `" + effortValue + "`",
-		"模型配置可随时保存，本轮不变。",
-		"下一轮启动前应用最新配置，包括尚未启动的排队消息。",
-	}, "\n")
-	buttons := []feishu.Button{
-		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.model", SessionKey: sessionKey}.Map()},
-		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
-	}
-	body = s.FormatMenuBody("menu.group.model", body)
-	return feishu.SimpleStatusCard("模型配置", "blue", body, buttons)
-}
-
-// RenderCodexModelMenuCard renders the Codex model menu card.
-func (s ConfigurationService) RenderCodexModelMenuCard(sessionKey string) map[string]any {
-	cfg := configurationSnapshot(s.Permissions)
-	modelValue := firstNonEmpty(configuredGlobalModel(cfg), "(default)")
-	effortValue := firstNonEmpty(configuredGlobalReasoningEffort(cfg), "(default)")
-	fastValue := "-"
-	if store := s.Permissions.Store(); store != nil {
-		if sess := store.GetSession(strings.TrimSpace(sessionKey)); sess != nil {
-			fastValue = appruntime.RenderServiceTierValue(sess.ActiveThreadServiceTier)
-		}
-	}
-	body := strings.Join([]string{
-		"当前 model: `" + modelValue + "`",
-		"当前 reasoning: `" + effortValue + "`",
-		"当前 fast: " + fastValue,
-	}, "\n")
-	buttons := []feishu.Button{
-		{Text: submenuCommandLabel("模型配置", "/model"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.model", SessionKey: sessionKey}.Map()},
-		{Text: submenuCommandLabel("响应速度", "/fast config"), Type: "default", Value: cardactions.MenuActionValue{Action: "menu.fast", SessionKey: sessionKey}.Map()},
-		{Text: feishu.MenuBackButtonText, Type: "default", Value: cardactions.MenuActionValue{Action: "menu.root", SessionKey: sessionKey}.Map()},
-	}
-	body = s.FormatMenuBody("menu.group.model", body)
-	return feishu.SimpleStatusCard("模型配置", "blue", body, buttons)
 }
 
 // CompleteGlobalModelSet completes a global model set action, dispatching

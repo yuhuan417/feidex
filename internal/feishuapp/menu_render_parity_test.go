@@ -62,6 +62,14 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 	}
 	p2pModelConfig := a.bindings.ModelCommands.RenderModelConfigCard(catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}}, nil, p2pKey, "menu.model")
 	groupModelConfig := a.bindings.BindingCommands.renderBindingCodexModelConfigCard(groupKey, binding, catalog.ModelListResult{Data: []catalog.ModelListEntry{{ID: "gpt-5", DisplayName: "GPT-5", DefaultReasoningEffort: "medium"}}})
+	for _, card := range []map[string]any{p2pModelConfig, groupModelConfig} {
+		if !containsMenuAction(card, "menu.fast") {
+			t.Fatal("Codex model configuration must link to /fast config")
+		}
+		if labels := strings.Join(menuCardSignature(t, card).ButtonTexts, " "); !strings.Contains(labels, "/fast config") {
+			t.Fatalf("Codex model configuration lacks visible /fast config label: %q", labels)
+		}
+	}
 
 	families := []struct {
 		name  string
@@ -73,7 +81,6 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 		{name: "system", p2p: renderSystemMenuCard(a, p2pKey), group: renderSystemMenuCard(a, groupKey)},
 		{name: "backend", p2p: renderBackendMenuCard(a, p2pKey), group: renderBackendMenuCard(a, groupKey)},
 		{name: "workspace", p2p: p2pWorkspace, group: groupWorkspace},
-		{name: "model overview", p2p: a.bindings.BackendConfiguration.RenderModelMenuCard(p2pKey), group: a.bindings.BindingCommands.renderBindingModelMenuCard(groupKey, binding)},
 		{name: "service tier", p2p: renderServiceTierMenuCard(a.State(), p2pKey), group: a.bindings.BindingCommands.renderBindingFastCard(groupKey, binding)},
 		{name: "thread/session", p2p: p2pThread, group: groupThread},
 		{name: "model config", p2p: p2pModelConfig, group: groupModelConfig},
@@ -105,6 +112,11 @@ func TestCommonMenuFamiliesRenderEquallyForP2PAndGroup(t *testing.T) {
 	a.cfg.Feishu.Backend = domainbackend.BackendClaude
 	p2pClaudeModelConfig := a.bindings.ModelCommands.RenderClaudeModelConfigCard(p2pKey, "menu.model")
 	groupClaudeModelConfig := a.bindings.BindingCommands.renderBindingClaudeModelConfigCard(groupKey, binding)
+	for _, card := range []map[string]any{p2pClaudeModelConfig, groupClaudeModelConfig} {
+		if containsMenuAction(card, "menu.fast") {
+			t.Fatal("Claude model configuration must omit /fast config")
+		}
+	}
 	if p2p := menuCardSignature(t, p2pClaudeModelConfig); !reflect.DeepEqual(p2p, menuCardSignature(t, groupClaudeModelConfig)) {
 		t.Fatalf("p2p/group Claude model configuration differs:\np2p:   %#v\ngroup: %#v", p2p, menuCardSignature(t, groupClaudeModelConfig))
 	}
