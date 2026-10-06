@@ -39,6 +39,12 @@ func (s SnapshotService) Desired(backend string, sess *conversation.Session) dom
 	return domain.Resolve(backend, sources(s.Repository.ModelSourceRevision(sess), false))
 }
 
+// DesiredTraced resolves desired settings and additionally reports the tier
+// each value came from, for cards that annotate effective values.
+func (s SnapshotService) DesiredTraced(backend string, sess *conversation.Session) (domain.Snapshot, domain.Origins) {
+	return domain.ResolveTraced(backend, sources(s.Repository.ModelSourceRevision(sess), false))
+}
+
 func (s SnapshotService) Auxiliary(sess *conversation.Session) domain.GlobalValues {
 	return domain.ResolveAuxiliary(sources(s.Repository.ModelSourceRevision(sess), false))
 }

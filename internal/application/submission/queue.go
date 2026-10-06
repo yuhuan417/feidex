@@ -12,6 +12,7 @@ import (
 	domaininteraction "feidex/internal/domain/interaction"
 	domainsubmission "feidex/internal/domain/submission"
 	"feidex/internal/domain/workspace"
+	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -444,67 +445,12 @@ func submissionBinding(a Dependencies, sess *conversation.Session, sub *domainsu
 	return nil
 }
 
-func effectiveBindingApprovalPolicy(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadApprovalPolicy) != "" {
-		return strings.TrimSpace(sess.ActiveThreadApprovalPolicy)
-	}
-	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.ApprovalPolicyOverride) != "" {
-		return strings.TrimSpace(binding.ApprovalPolicyOverride)
-	}
-	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.ApprovalPolicy) != "" {
-		return strings.TrimSpace(profile.ApprovalPolicy)
-	}
-	workspaceValue := ""
-	if ws != nil {
-		workspaceValue = ws.ApprovalPolicy
-	}
-	return conversation.EffectiveApprovalPolicy(sess, workspaceValue)
-}
-
-func effectiveBindingSandboxMode(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadSandboxMode) != "" {
-		return strings.TrimSpace(sess.ActiveThreadSandboxMode)
-	}
-	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.SandboxModeOverride) != "" {
-		return strings.TrimSpace(binding.SandboxModeOverride)
-	}
-	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.SandboxMode) != "" {
-		return strings.TrimSpace(profile.SandboxMode)
-	}
-	workspaceValue := ""
-	if ws != nil {
-		workspaceValue = ws.SandboxMode
-	}
-	return conversation.EffectiveSandboxMode(sess, workspaceValue)
-}
-
-func effectiveBindingServiceTier(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission) string {
-	if value := conversation.EffectiveServiceTier(sess); strings.TrimSpace(value) != "" {
-		return strings.TrimSpace(value)
-	}
-	if binding := submissionBinding(a, sess, sub); binding != nil {
-		if value := strings.TrimSpace(binding.ServiceTierOverride); value != "" {
-			return value
-		}
-	}
-	return strings.TrimSpace(botProfileServiceTier(a))
-}
-
-func effectiveBindingMultiAgentMode(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveThreadMultiAgentMode) != "" {
-		return strings.TrimSpace(sess.ActiveThreadMultiAgentMode)
-	}
-	if binding := submissionBinding(a, sess, sub); binding != nil && strings.TrimSpace(binding.MultiAgentModeOverride) != "" {
-		return strings.TrimSpace(binding.MultiAgentModeOverride)
-	}
-	if profile := submissionBotProfile(a); profile != nil && strings.TrimSpace(profile.MultiAgentMode) != "" {
-		return strings.TrimSpace(profile.MultiAgentMode)
-	}
-	workspaceValue := ""
-	if ws != nil {
-		workspaceValue = ws.MultiAgentMode
-	}
-	return conversation.EffectiveMultiAgentMode(sess, workspaceValue)
+// submissionSettings resolves the settings a submission applies to its thread
+// with the shared conversation resolver, so the turn path and the thread
+// start/fork path cannot drift apart. Claude permission mode is not consumed
+// on this path, so its config fallback stays empty here.
+func submissionSettings(a Dependencies, sess *conversation.Session, sub *domainsubmission.Submission, ws *workspace.Workspace) conversation.Settings {
+	return conversation.ResolveSettings(sess, submissionBinding(a, sess, sub), submissionBotProfile(a), ws, "")
 }
 
 func submissionBotProfile(a Dependencies) *routing.BotProfile {
@@ -512,13 +458,6 @@ func submissionBotProfile(a Dependencies) *routing.BotProfile {
 		return nil
 	}
 	return a.BotProfile()
-}
-
-func botProfileServiceTier(a Dependencies) string {
-	if profile := submissionBotProfile(a); profile != nil {
-		return strings.TrimSpace(profile.ServiceTier)
-	}
-	return ""
 }
 
 // PendingConfirmationText returns the pending confirmation text for a skill.
@@ -979,10 +918,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 		return err
 	}
 	effectiveModel, effectiveReasoningEffort := sub.ModelConfig.Model, sub.ModelConfig.Effort
-	effectiveApprovalPolicy := effectiveBindingApprovalPolicy(a, sess, sub, ws)
-	effectiveSandboxMode := effectiveBindingSandboxMode(a, sess, sub, ws)
-	effectiveServiceTier := effectiveBindingServiceTier(a, sess, sub)
-	effectiveMultiAgentMode := effectiveBindingMultiAgentMode(a, sess, sub, ws)
+	settings := submissionSettings(a, sess, sub, ws)
 	createdThread := threadID == ""
 	if threadID == "" {
 		slog.Debug("thread start request",
@@ -1048,7 +984,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 	if a.IsReviewSubmission(sub) {
 		turnID, turnErr = a.StartSubmissionReview(turnCtx, threadID, sub)
 	} else {
-		turnID, turnErr = a.StartSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, effectiveApprovalPolicy, effectiveSandboxMode, effectiveServiceTier, effectiveModel, effectiveReasoningEffort, effectiveMultiAgentMode)
+		turnID, turnErr = a.StartSubmissionTurn(turnCtx, sessionKey, threadID, sub, ws.Cwd, settings.ApprovalPolicy, settings.SandboxMode, settings.ServiceTier, effectiveModel, effectiveReasoningEffort, settings.MultiAgentMode)
 	}
 	turnCancel()
 	if turnErr == nil && sub.ModelConfig.Valid {
@@ -1125,12 +1061,7 @@ func (s SubmissionQueueService) StartNextCodexSubmissionWithFailureNotice(sessio
 
 // firstNonEmpty returns the first non-empty trimmed string.
 func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 
 func recordLegacySessionRootTurnBinding(reply QueueReplyContinuationProvider, sess *conversation.Session, sub *domainsubmission.Submission, sessionKey, threadID, turnID string) {

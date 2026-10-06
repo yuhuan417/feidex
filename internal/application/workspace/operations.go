@@ -8,6 +8,7 @@ import (
 
 	"feidex/internal/domain/conversation"
 	domain "feidex/internal/domain/workspace"
+	"feidex/internal/textutil"
 )
 
 func CloneDefaultID(repoName string) string { return SuggestedID(repoName) }
@@ -141,10 +142,5 @@ func SessionReferencesWorkspace(sess *conversation.Session, workspaceID string) 
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }

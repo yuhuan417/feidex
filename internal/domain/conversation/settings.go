@@ -3,6 +3,7 @@ package conversation
 import (
 	"feidex/internal/domain/routing"
 	"feidex/internal/domain/workspace"
+	"feidex/internal/textutil"
 	"strings"
 )
 
@@ -33,6 +34,32 @@ func ResolveSettings(sess *Session, binding *routing.AgentBinding, profile *rout
 	}
 }
 
+// SessionField returns a pointer to the session override field that stores
+// the desired value of a setting, or nil when the session tier does not
+// persist the setting.
+func SessionField(sess *Session, setting routing.Setting) *string {
+	if sess == nil {
+		return nil
+	}
+	switch setting {
+	case routing.Model:
+		return &sess.ModelOverride
+	case routing.PlanModel:
+		return &sess.PlanModelOverride
+	case routing.PlanEffort:
+		return &sess.PlanReasoningEffortOverride
+	case routing.ReviewModel:
+		return &sess.ReviewModelOverride
+	case routing.SubagentModel:
+		return &sess.SubagentModelOverride
+	case routing.SubagentEffort:
+		return &sess.SubagentReasoningEffortOverride
+	case routing.SmallModel:
+		return &sess.SmallModelOverride
+	}
+	return nil
+}
+
 func NormalizeClaudePermissionMode(value string) string {
 	if value = strings.TrimSpace(value); value == "" {
 		return "default"
@@ -41,10 +68,5 @@ func NormalizeClaudePermissionMode(value string) string {
 }
 
 func firstSetting(values ...string) string {
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			return value
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }

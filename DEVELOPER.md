@@ -469,6 +469,12 @@ Sync all of:
 - status/menu surfaces if users can inspect or change the value
 - tests
 
+Tiered settings (session → group binding → Bot profile → backend global) resolve and persist through shared tables; do not add parallel per-field switches or per-card fallback chains:
+
+- The `Setting` vocabulary and the `BindingField` / `ProfileField` / `GlobalField` / `OverrideSettings` tables live in `internal/domain/routing`; the session-tier table (`SessionField`) lives in `internal/domain/conversation`.
+- Write paths (`domain.SetBinding`, `domain.SetProfile`, `application/modelconfig.SettingsService.SaveAuxiliary`, `application/modelconfig.DefaultsService`) must go through these tables. A nil field pointer means "unsupported on this tier/backend" and must surface as an error, never a silent drop. `DefaultsService` is the only place that dual-writes global values and the Bot profile.
+- Effective values and their source annotations render from `domain/modelconfig.ResolveTraced` (or `SnapshotService.DesiredTraced`), not from hand-rolled per-card chains.
+
 ### When Adding New User-Facing Output
 
 Check:

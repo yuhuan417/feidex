@@ -4,6 +4,7 @@ import (
 	"context"
 	goalapp "feidex/internal/application/goal"
 	"feidex/internal/domain/conversation"
+	"feidex/internal/textutil"
 	"fmt"
 	"strconv"
 	"strings"
@@ -803,12 +804,7 @@ func formatGoalTokenProgress(goal conversation.ThreadGoal) string {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 func truncate(value string, limit int) string {
 	value = strings.TrimSpace(value)

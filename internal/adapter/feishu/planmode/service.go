@@ -8,6 +8,7 @@ import (
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 	"sync"
@@ -408,12 +409,7 @@ func (d Dependencies) WorkspaceSelection() workspace.SelectionService {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 func configuredBackend(a Dependencies) string {
 	if a.ConfigProvider == nil {

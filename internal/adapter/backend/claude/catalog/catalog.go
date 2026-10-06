@@ -13,6 +13,7 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	appruntime "feidex/internal/runtime"
+	"feidex/internal/textutil"
 )
 
 const (
@@ -401,12 +402,7 @@ func StringValue(value any) string {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 
 func sameWorkspaceCWD(a, b string) bool {

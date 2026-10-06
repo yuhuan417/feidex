@@ -8,6 +8,7 @@ import (
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	frontendclients "feidex/internal/runtime"
+	"feidex/internal/textutil"
 	"sort"
 	"strings"
 	"sync"
@@ -867,12 +868,7 @@ func (a Dependencies) WorkspaceSelection() appworkspace.SelectionService {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			return value
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 func makeSessionKey(a Dependencies, msg *feishu.InboundMessage) string {
 	if msg == nil {

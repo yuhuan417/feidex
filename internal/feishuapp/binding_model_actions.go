@@ -47,17 +47,15 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 }
 
 func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, binding *state.AgentBinding, result catalog.ModelListResult) map[string]any {
-	cfg := configReadCopy(s.deps.Config, s.deps.ConfigMu)
 	if binding == nil {
 		binding = &state.AgentBinding{}
 	}
 	modelOverride := strings.TrimSpace(binding.ModelOverride)
 	effortOverride := strings.TrimSpace(binding.ReasoningEffortOverride)
-	selectedModel := appmodelconfig.FindModelEntry(result, textutil.FirstNonEmpty(modelOverride, appmodelconfig.ConfiguredGlobalModel(cfg)))
-	selectedEffort := effortOverride
-	if selectedEffort == "" {
-		selectedEffort = appmodelconfig.ConfiguredGlobalReasoningEffort(cfg)
-	}
+	sess := s.deps.State.Session(sessionKey)
+	settings, origins := s.deps.ModelSnapshots.DesiredTraced(domainbackend.BackendCodex, sess)
+	selectedModel := appmodelconfig.FindModelEntry(result, settings.Model)
+	selectedEffort := settings.Effort
 	if selectedEffort == "" && selectedModel != nil {
 		selectedEffort = strings.TrimSpace(selectedModel.DefaultReasoningEffort)
 	}
@@ -71,38 +69,11 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		modelDescription = strings.TrimSpace(selectedModel.Description)
 	}
 
-	// 改进来源显示：显示实际生效的值
-	modelSource := "跟随 Bot 默认"
-	if modelOverride == "" {
-		// 显示实际生效的 Bot 默认值
-		botDefault := appmodelconfig.ConfiguredGlobalModel(s.deps.Config)
-		if botDefault != "" {
-			modelSource = "跟随 Bot 默认 (`" + botDefault + "`)"
-		} else {
-			modelSource = "跟随 Bot 默认 (app-server 默认)"
-		}
-	} else {
-		modelSource = "当前群内显式配置"
-	}
-
-	effortSource := "跟随模型或 Bot 默认"
-	if effortOverride == "" {
-		// 显示实际生效的值
-		botEffort := appmodelconfig.ConfiguredGlobalReasoningEffort(s.deps.Config)
-		if botEffort != "" {
-			effortSource = "跟随 Bot 默认 (`" + botEffort + "`)"
-		} else if selectedModel != nil && selectedModel.DefaultReasoningEffort != "" {
-			effortSource = "跟随模型默认 (`" + selectedModel.DefaultReasoningEffort + "`)"
-		} else {
-			effortSource = "跟随模型或 Bot 默认"
-		}
-	} else {
-		effortSource = "当前群内显式配置"
-	}
+	// 来源显示基于统一解析器的层标注；未显式配置时显示实际生效的 Bot 默认值。
+	modelSource := groupSettingSourceText(origins.Model, settings.Model, "跟随 Bot 默认 (app-server 默认)")
+	effortSource := groupEffortSourceText(origins.Effort, settings.Effort, selectedModel)
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
-	sess := s.deps.State.Session(sessionKey)
-	settings := s.deps.ModelSnapshots.Desired(domainbackend.BackendCodex, sess)
 	planModelDisplay := renderAuxModelSummary(binding.PlanModelOverride, settings.PlanModel, modelName)
 	reviewModelDisplay := renderAuxModelSummary(binding.ReviewModelOverride, settings.ReviewModel, modelName)
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, modelName)
@@ -206,31 +177,14 @@ func (s bindingService) renderBindingClaudeModelConfigCard(sessionKey string, bi
 	}
 	modelOverride := strings.TrimSpace(binding.ModelOverride)
 	effortOverride := strings.TrimSpace(binding.ReasoningEffortOverride)
-	currentModel := textutil.FirstNonEmpty(modelOverride, appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
-	currentEffort := textutil.FirstNonEmpty(effortOverride, appmodelconfig.ConfiguredClaudeEffort(cfg), "(default)")
-	modelSource := "跟随 Bot 默认"
-	if modelOverride == "" {
-		botModel := textutil.FirstNonEmpty(appmodelconfig.ConfiguredClaudeModel(cfg), appmodelconfig.ClaudeDefaultModelAlias)
-		modelSource = "跟随 Bot 默认 (`" + botModel + "`)"
-	} else {
-		modelSource = "当前群内显式配置"
-	}
-
-	effortSource := "跟随 Bot 默认"
-	if effortOverride == "" {
-		botEffort := appmodelconfig.ConfiguredClaudeEffort(cfg)
-		if botEffort != "" {
-			effortSource = "跟随 Bot 默认 (`" + botEffort + "`)"
-		} else {
-			effortSource = "跟随 Bot 默认 (default)"
-		}
-	} else {
-		effortSource = "当前群内显式配置"
-	}
+	sess := s.deps.State.Session(sessionKey)
+	settings, origins := s.deps.ModelSnapshots.DesiredTraced(domainbackend.BackendClaude, sess)
+	currentModel := textutil.FirstNonEmpty(settings.Model, appmodelconfig.ClaudeDefaultModelAlias)
+	currentEffort := textutil.FirstNonEmpty(settings.Effort, "(default)")
+	modelSource := groupSettingSourceText(origins.Model, settings.Model, "跟随 Bot 默认 (`"+appmodelconfig.ClaudeDefaultModelAlias+"`)")
+	effortSource := groupSettingSourceText(origins.Effort, settings.Effort, "跟随 Bot 默认 (default)")
 
 	// 辅助模型摘要显示实际生效值；未显式配置时跟随 Bot 默认。
-	sess := s.deps.State.Session(sessionKey)
-	settings := s.deps.ModelSnapshots.Desired(domainbackend.BackendClaude, sess)
 	smallModelDisplay := renderAuxModelSummary(binding.SmallModelOverride, settings.SmallModel, "Claude 内置 haiku")
 	subagentModelDisplay := renderAuxModelSummary(binding.SubagentModelOverride, settings.SubagentModel, currentModel)
 
@@ -504,6 +458,35 @@ func (s bindingService) renderBindingModelConfigOrErrorCard(sessionKey string, b
 		{Text: submenuCommandLabel("重试模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}},
 		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
 	})
+}
+
+// groupSettingSourceText renders the source annotation for a resolved setting
+// on a group configuration card: which tier the effective value came from.
+// unsetText is used when no tier supplied a value.
+func groupSettingSourceText(origin catalog.Origin, value, unsetText string) string {
+	switch origin {
+	case catalog.OriginBinding:
+		return "当前群内显式配置"
+	case catalog.OriginSession:
+		return "当前会话配置"
+	case catalog.OriginProfile, catalog.OriginGlobal, catalog.OriginDerived:
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return "跟随 Bot 默认 (`" + trimmed + "`)"
+		}
+	}
+	return unsetText
+}
+
+// groupEffortSourceText renders the effort source annotation, including the
+// model-default fallback that applies when no tier configured an effort.
+func groupEffortSourceText(origin catalog.Origin, effort string, selectedModel *catalog.ModelListEntry) string {
+	if text := groupSettingSourceText(origin, effort, ""); text != "" {
+		return text
+	}
+	if selectedModel != nil && strings.TrimSpace(selectedModel.DefaultReasoningEffort) != "" {
+		return "跟随模型默认 (`" + strings.TrimSpace(selectedModel.DefaultReasoningEffort) + "`)"
+	}
+	return "跟随模型或 Bot 默认"
 }
 
 // renderAuxModelSummary renders one auxiliary-model summary entry: the value

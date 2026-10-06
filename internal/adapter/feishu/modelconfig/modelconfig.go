@@ -3,6 +3,7 @@ package modelconfig
 import (
 	"context"
 	catalog "feidex/internal/domain/modelconfig"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 	"sync"
@@ -62,12 +63,7 @@ type CodexClient interface {
 // ---------------------------------------------------------------------------
 
 func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 
 func derefStringPtr(value *string) string {

@@ -5,6 +5,7 @@ import (
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 	"sync"
@@ -145,12 +146,7 @@ func (s ConfigurationService) RenderModelConfigCard(result catalog.ModelListResu
 // ---------------------------------------------------------------------------
 
 func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 
 func normalizeClaudePermissionModeValue(value string) string {

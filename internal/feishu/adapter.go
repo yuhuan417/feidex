@@ -1592,6 +1592,8 @@ func extractMediaAttachment(raw *string) (Attachment, bool) {
 	return Attachment{Kind: "media", ResourceKey: strings.TrimSpace(body.FileKey)}, true
 }
 
+// firstNonEmptyString returns the first value that is not blank after
+// trimming, preserving the original (untrimmed) string.
 func firstNonEmptyString(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {

@@ -9,15 +9,11 @@ import (
 	appselection "feidex/internal/application/workspace"
 	domain "feidex/internal/domain/workspace"
 	"feidex/internal/feishu"
+	"feidex/internal/textutil"
 )
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			return value
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 
 // RenderWorkspaceNewCard renders the "new workspace" card.

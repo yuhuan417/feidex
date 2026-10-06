@@ -57,19 +57,8 @@ func (s SettingsService) SaveAuxiliary(key, backend string, setting domain.Setti
 	value = domain.ClearableValue(value)
 	if sess := s.Repository.Session(key); sess != nil {
 		_, err := s.Repository.UpdateSession(sess.Key, func(current *conversation.Session) {
-			switch setting {
-			case domain.PlanModel:
-				current.PlanModelOverride = value
-			case domain.PlanEffort:
-				current.PlanReasoningEffortOverride = value
-			case domain.ReviewModel:
-				current.ReviewModelOverride = value
-			case domain.SubagentModel:
-				current.SubagentModelOverride = value
-			case domain.SubagentEffort:
-				current.SubagentReasoningEffortOverride = value
-			case domain.SmallModel:
-				current.SmallModelOverride = value
+			if field := conversation.SessionField(current, setting); field != nil {
+				*field = value
 			}
 		})
 		if err != nil {

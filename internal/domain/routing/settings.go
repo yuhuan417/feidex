@@ -1,8 +1,16 @@
+// Package routing owns the conversation-scoped configuration types: the
+// Setting vocabulary and the per-tier field mapping shared by every read and
+// write path. Adding a new tiered setting means adding it to the Setting
+// list and to the BindingField/ProfileField/GlobalField tables (plus the
+// session table in domain/conversation when the session tier persists it);
+// the write services and card annotations consume the tables.
 package routing
 
 import (
 	"fmt"
 	"strings"
+
+	"feidex/internal/domain/modelconfig"
 )
 
 type Setting string
@@ -42,93 +50,200 @@ func (s Setting) Auxiliary() bool {
 	return false
 }
 
-// SetBinding changes desired settings only; runtime thread state is separate.
-func SetBinding(binding *AgentBinding, setting Setting, value string) error {
+// OverrideSettings lists every setting persisted as a string override on the
+// binding/profile/session tiers. Normalization and bulk reads iterate this
+// list instead of hand-maintaining per-field lines.
+func OverrideSettings() []Setting {
+	return []Setting{Model, Effort, PlanModel, PlanEffort, ReviewModel, SubagentModel, SubagentEffort, SmallModel, ServiceTier, Workspace, Sandbox, ApprovalPolicy, MultiAgent, Permissions}
+}
+
+// BindingField returns a pointer to the AgentBinding override field that
+// stores the desired value of a setting, or nil when bindings do not persist
+// the setting.
+func BindingField(binding *AgentBinding, setting Setting) *string {
+	if binding == nil {
+		return nil
+	}
 	switch setting {
 	case Model:
-		binding.ModelOverride = value
+		return &binding.ModelOverride
 	case Effort:
-		binding.ReasoningEffortOverride = value
+		return &binding.ReasoningEffortOverride
 	case PlanModel:
-		binding.PlanModelOverride = value
+		return &binding.PlanModelOverride
 	case PlanEffort:
-		binding.PlanReasoningEffortOverride = value
+		return &binding.PlanReasoningEffortOverride
 	case ReviewModel:
-		binding.ReviewModelOverride = value
+		return &binding.ReviewModelOverride
 	case SubagentModel:
-		binding.SubagentModelOverride = value
+		return &binding.SubagentModelOverride
 	case SubagentEffort:
-		binding.SubagentReasoningEffortOverride = value
+		return &binding.SubagentReasoningEffortOverride
 	case SmallModel:
-		binding.SmallModelOverride = value
+		return &binding.SmallModelOverride
 	case ServiceTier:
-		binding.ServiceTierOverride = value
+		return &binding.ServiceTierOverride
 	case Workspace:
-		binding.WorkspaceID = value
+		return &binding.WorkspaceID
 	case Sandbox:
-		binding.SandboxModeOverride = value
+		return &binding.SandboxModeOverride
 	case ApprovalPolicy:
-		binding.ApprovalPolicyOverride = value
+		return &binding.ApprovalPolicyOverride
 	case MultiAgent:
-		binding.MultiAgentModeOverride = value
+		return &binding.MultiAgentModeOverride
 	case Permissions:
-		binding.ClaudePermissionMode = value
-	default:
-		return fmt.Errorf("unknown binding setting %q", setting)
+		return &binding.ClaudePermissionMode
 	}
 	return nil
 }
 
-func SetProfile(profile *BotProfile, backend string, setting Setting, value string) error {
+// BindingValue reads the stored override of a setting from a binding.
+func BindingValue(binding *AgentBinding, setting Setting) string {
+	if field := BindingField(binding, setting); field != nil {
+		return *field
+	}
+	return ""
+}
+
+// ProfileField returns a pointer to the BotProfile field that stores the
+// desired value of a setting, selecting backend-specific fields where the two
+// backends differ. A nil result means the backend does not support the
+// setting on the profile tier; writers must surface that as an error instead
+// of silently dropping the value.
+func ProfileField(profile *BotProfile, setting Setting, backend string) *string {
+	if profile == nil {
+		return nil
+	}
 	switch setting {
 	case Model:
-		if backend == "claude" {
-			profile.ClaudeModel = value
-		} else {
-			profile.Model = value
+		if backend == modelconfig.BackendClaude {
+			return &profile.ClaudeModel
 		}
+		return &profile.Model
 	case Effort:
-		profile.ReasoningEffort = value
+		return &profile.ReasoningEffort
 	case PlanModel:
-		if backend != "claude" {
-			profile.PlanModel = value
+		if backend == modelconfig.BackendClaude {
+			return nil
 		}
+		return &profile.PlanModel
 	case PlanEffort:
-		if backend != "claude" {
-			profile.PlanReasoningEffort = value
+		if backend == modelconfig.BackendClaude {
+			return nil
 		}
+		return &profile.PlanReasoningEffort
 	case ReviewModel:
-		if backend != "claude" {
-			profile.ReviewModel = value
+		if backend == modelconfig.BackendClaude {
+			return nil
 		}
+		return &profile.ReviewModel
 	case SubagentModel:
-		if backend == "claude" {
-			profile.ClaudeSubagentModel = value
-		} else {
-			profile.SubagentModel = value
+		if backend == modelconfig.BackendClaude {
+			return &profile.ClaudeSubagentModel
 		}
+		return &profile.SubagentModel
 	case SubagentEffort:
-		if backend != "claude" {
-			profile.SubagentReasoningEffort = value
+		if backend == modelconfig.BackendClaude {
+			return nil
 		}
+		return &profile.SubagentReasoningEffort
 	case SmallModel:
-		if backend == "claude" {
-			profile.ClaudeSmallModel = value
+		if backend == modelconfig.BackendClaude {
+			return &profile.ClaudeSmallModel
 		}
+		return nil
 	case ServiceTier:
-		profile.ServiceTier = value
+		return &profile.ServiceTier
 	case Workspace:
-		profile.WorkspaceID = value
+		return &profile.WorkspaceID
 	case Sandbox:
-		profile.SandboxMode = value
+		return &profile.SandboxMode
 	case ApprovalPolicy:
-		profile.ApprovalPolicy = value
+		return &profile.ApprovalPolicy
 	case MultiAgent:
-		profile.MultiAgentMode = value
+		return &profile.MultiAgentMode
 	case Permissions:
-		profile.ClaudePermissionMode = value
-	default:
-		return fmt.Errorf("unknown profile setting %q", setting)
+		return &profile.ClaudePermissionMode
 	}
+	return nil
+}
+
+// ProfileValue reads the stored value of a setting from a profile.
+func ProfileValue(profile *BotProfile, backend string, setting Setting) string {
+	if field := ProfileField(profile, setting, backend); field != nil {
+		return *field
+	}
+	return ""
+}
+
+// GlobalField returns a pointer to the backend-global value of a setting, or
+// nil when the backend does not support the setting globally.
+func GlobalField(values *modelconfig.GlobalValues, setting Setting, backend string) *string {
+	if values == nil {
+		return nil
+	}
+	switch setting {
+	case Model:
+		if backend == modelconfig.BackendClaude {
+			return &values.ClaudeModel
+		}
+		return &values.Model
+	case Effort:
+		if backend == modelconfig.BackendClaude {
+			return &values.ClaudeEffort
+		}
+		return &values.Effort
+	case PlanModel:
+		if backend == modelconfig.BackendClaude {
+			return nil
+		}
+		return &values.PlanModel
+	case PlanEffort:
+		if backend == modelconfig.BackendClaude {
+			return nil
+		}
+		return &values.PlanEffort
+	case ReviewModel:
+		if backend == modelconfig.BackendClaude {
+			return nil
+		}
+		return &values.ReviewModel
+	case SubagentModel:
+		if backend == modelconfig.BackendClaude {
+			return &values.ClaudeSubagent
+		}
+		return &values.SubagentModel
+	case SubagentEffort:
+		if backend == modelconfig.BackendClaude {
+			return nil
+		}
+		return &values.SubagentEffort
+	case SmallModel:
+		if backend == modelconfig.BackendClaude {
+			return &values.ClaudeSmallModel
+		}
+		return nil
+	}
+	return nil
+}
+
+// SetBinding changes desired settings only; runtime thread state is separate.
+func SetBinding(binding *AgentBinding, setting Setting, value string) error {
+	field := BindingField(binding, setting)
+	if field == nil {
+		return fmt.Errorf("unknown binding setting %q", setting)
+	}
+	*field = value
+	return nil
+}
+
+// SetProfile writes a desired profile setting. Unsupported backend/setting
+// combinations are rejected so a write is never dropped silently.
+func SetProfile(profile *BotProfile, backend string, setting Setting, value string) error {
+	field := ProfileField(profile, setting, backend)
+	if field == nil {
+		return fmt.Errorf("unsupported %s profile setting %q", backend, setting)
+	}
+	*field = value
 	return nil
 }

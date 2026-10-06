@@ -11,6 +11,7 @@ import (
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/identity"
 	"feidex/internal/state"
+	"feidex/internal/textutil"
 )
 
 // Store provides frontend-scoped access to state.Store.
@@ -217,12 +218,7 @@ func (s *Store) promoteSessionAlias(sess *conversation.Session, canonical string
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 
 func (s *Store) revisionMutex() sync.Locker {

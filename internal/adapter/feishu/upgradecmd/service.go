@@ -15,6 +15,7 @@ import (
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 	"feidex/internal/state"
+	"feidex/internal/textutil"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
 )
@@ -448,12 +449,7 @@ func rawCard(card map[string]any) *callback.Card {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 
 func (a *DefaultApp) Context() context.Context {

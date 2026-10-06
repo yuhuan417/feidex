@@ -3,6 +3,7 @@ package modelconfig
 import (
 	domain "feidex/internal/domain/modelconfig"
 	"feidex/internal/domain/routing"
+	"feidex/internal/textutil"
 	"fmt"
 	"strings"
 )
@@ -45,41 +46,17 @@ func (s DefaultsService) Set(command DefaultsCommand) error {
 			revision.Profile = &routing.BotProfile{ID: "bot-profile-" + routing.ProfileID(s.Frontend), FrontendID: s.Frontend}
 		}
 		p := revision.Profile
+		// Dual write rule: a Bot default persists to the backend-global values
+		// and to the frontend profile in one revision, so both tiers stay in
+		// sync through this single path.
 		for setting, raw := range command.Values {
 			value := strings.TrimSpace(raw)
-			if command.Backend == domain.BackendClaude {
-				switch setting {
-				case routing.Model:
-					v.ClaudeModel, p.ClaudeModel = value, value
-				case routing.Effort:
-					v.ClaudeEffort, p.ReasoningEffort = value, value
-				case routing.SmallModel:
-					v.ClaudeSmallModel, p.ClaudeSmallModel = value, value
-				case routing.SubagentModel:
-					v.ClaudeSubagent, p.ClaudeSubagentModel = value, value
-				default:
-					return fmt.Errorf("unsupported Claude default setting %q", setting)
-				}
-			} else {
-				switch setting {
-				case routing.Model:
-					v.Model, p.Model = value, value
-				case routing.Effort:
-					v.Effort, p.ReasoningEffort = value, value
-				case routing.PlanModel:
-					v.PlanModel, p.PlanModel = value, value
-				case routing.PlanEffort:
-					v.PlanEffort, p.PlanReasoningEffort = value, value
-				case routing.ReviewModel:
-					v.ReviewModel, p.ReviewModel = value, value
-				case routing.SubagentModel:
-					v.SubagentModel, p.SubagentModel = value, value
-				case routing.SubagentEffort:
-					v.SubagentEffort, p.SubagentReasoningEffort = value, value
-				default:
-					return fmt.Errorf("unsupported Codex default setting %q", setting)
-				}
+			global := routing.GlobalField(v, setting, command.Backend)
+			profile := routing.ProfileField(p, setting, command.Backend)
+			if global == nil || profile == nil {
+				return fmt.Errorf("unsupported %s default setting %q", command.Backend, setting)
 			}
+			*global, *profile = value, value
 		}
 		if catalog := command.Catalog; catalog != nil && command.Backend == domain.BackendCodex {
 			model := firstDefault(p.Model, v.Model)
@@ -100,10 +77,5 @@ func (s DefaultsService) Set(command DefaultsCommand) error {
 }
 
 func firstDefault(values ...string) string {
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			return value
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }

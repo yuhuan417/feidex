@@ -7,6 +7,7 @@ import (
 	"feidex/internal/domain/interaction"
 	"feidex/internal/domain/routing"
 	domainsubmission "feidex/internal/domain/submission"
+	"feidex/internal/textutil"
 	"fmt"
 	"log/slog"
 	"os"
@@ -1084,20 +1085,12 @@ func normalizeAgentBindingValues(binding *AgentBinding) bool {
 	binding.FrontendID = strings.TrimSpace(binding.FrontendID)
 	binding.ChatID = strings.TrimSpace(binding.ChatID)
 	binding.ChatType = strings.ToLower(strings.TrimSpace(binding.ChatType))
-	binding.WorkspaceID = strings.TrimSpace(binding.WorkspaceID)
-	binding.ModelOverride = strings.TrimSpace(binding.ModelOverride)
-	binding.ReasoningEffortOverride = strings.TrimSpace(binding.ReasoningEffortOverride)
-	binding.PlanModelOverride = strings.TrimSpace(binding.PlanModelOverride)
-	binding.PlanReasoningEffortOverride = strings.TrimSpace(binding.PlanReasoningEffortOverride)
-	binding.ReviewModelOverride = strings.TrimSpace(binding.ReviewModelOverride)
-	binding.SubagentModelOverride = strings.TrimSpace(binding.SubagentModelOverride)
-	binding.SubagentReasoningEffortOverride = strings.TrimSpace(binding.SubagentReasoningEffortOverride)
-	binding.SmallModelOverride = strings.TrimSpace(binding.SmallModelOverride)
+	for _, setting := range routing.OverrideSettings() {
+		if field := routing.BindingField(binding, setting); field != nil {
+			*field = strings.TrimSpace(*field)
+		}
+	}
 	binding.ServiceTierOverride = normalizeStoredServiceTier(binding.ServiceTierOverride)
-	binding.SandboxModeOverride = strings.TrimSpace(binding.SandboxModeOverride)
-	binding.ApprovalPolicyOverride = strings.TrimSpace(binding.ApprovalPolicyOverride)
-	binding.MultiAgentModeOverride = strings.TrimSpace(binding.MultiAgentModeOverride)
-	binding.ClaudePermissionMode = strings.TrimSpace(binding.ClaudePermissionMode)
 	binding.PendingMessage = normalizeAgentBindingPendingMessage(binding.PendingMessage)
 	queue := make([]*AgentBindingPendingMessage, 0, len(binding.PendingMessages))
 	for _, pending := range binding.PendingMessages {
@@ -1815,12 +1808,7 @@ func (s *Store) DeleteMessageLinks(match func(*MessageLink) bool) {
 }
 
 func firstNonEmptyString(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
+	return textutil.FirstNonEmpty(values...)
 }
 
 func mergeSessions(a, b *conversation.Session) *conversation.Session {

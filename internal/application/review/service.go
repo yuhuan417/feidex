@@ -92,10 +92,7 @@ func (s Service) Start(ctx context.Context, input Input, ws Workspace, target re
 	return resolved, nil
 }
 func first(a, b string) string {
-	if strings.TrimSpace(a) != "" {
-		return a
-	}
-	return b
+	return textutil.FirstNonEmpty(a, b)
 }
 func SubmissionInputText(target review.TargetSpec) string {
 	switch strings.TrimSpace(target.Type) {
