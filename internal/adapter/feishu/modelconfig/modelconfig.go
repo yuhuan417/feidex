@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"feidex/internal/adapter/feishu/cards"
-	"feidex/internal/adapter/feishu/menuutil"
 	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	applicationmodelconfig "feidex/internal/application/modelconfig"
 	"feidex/internal/config"
@@ -309,7 +308,7 @@ func ModelCardActionRow(buttons []feishu.Button) map[string]any {
 // FastConfigButton opens the Codex service-tier menu from a model card.
 func FastConfigButton(sessionKey string) feishu.Button {
 	return feishu.Button{
-		Text:  menuutil.SubmenuCommandLabel("响应速度", "/fast config"),
+		Text:  appmenuutil.SubmenuCommandLabel("响应速度", "/fast config"),
 		Type:  "default",
 		Value: map[string]any{"action": "menu.fast", "session_key": sessionKey},
 	}
