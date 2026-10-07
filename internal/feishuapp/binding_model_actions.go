@@ -43,7 +43,9 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 			"backend: `" + textutil.FirstNonEmpty(s.deps.ConfiguredBackend(), "unset") + "`",
 			unsupportedGroupModelBackendMessage(s.deps.ConfiguredBackend()),
 		}, "\n")
-		return s.renderer("模型配置", "orange", menuCardBody("menu.model", body), []feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": menuBackAction("menu.model"), "session_key": sessionKey}}}), nil
+		return appmenuutil.PageCard{
+			Node: "menu.model", SessionKey: sessionKey, Title: "模型配置", Color: "orange", Body: body,
+		}.Render(), nil
 	}
 }
 
@@ -453,10 +455,13 @@ func (s bindingService) renderBindingModelConfigOrErrorCard(sessionKey string, b
 	if err == nil {
 		return card
 	}
-	return s.renderer("模型配置", "orange", menuCardBody("menu.model", "已保存配置，但暂时无法刷新模型配置："+err.Error()), []feishu.Button{
-		{Text: submenuCommandLabel("重试模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}},
-		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.root", "session_key": sessionKey}},
-	})
+	return appmenuutil.PageCard{
+		Node: "menu.model", SessionKey: sessionKey, Title: "模型配置", Color: "orange",
+		Body: "已保存配置，但暂时无法刷新模型配置：" + err.Error(),
+		Buttons: []feishu.Button{
+			{Text: submenuCommandLabel("重试模型配置", "/model"), Type: "default", Value: map[string]any{"action": "menu.group.model", "session_key": sessionKey}},
+		},
+	}.Render()
 }
 
 // groupSettingSourceText renders the source annotation for a resolved setting

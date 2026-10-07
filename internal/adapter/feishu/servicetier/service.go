@@ -134,13 +134,8 @@ func RenderMenuCard(sessionKey string, sess *conversation.Session) map[string]an
 			},
 		)
 	}
-	buttons = append(buttons, feishu.Button{
-		Text: feishu.MenuBackButtonText,
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.group.model",
-			"session_key": sessionKey,
-		},
-	})
-	return feishu.SimpleStatusCard("响应速度", "blue", menuutil.MenuCardBody("menu.fast", body), buttons)
+	return menuutil.PageCard{
+		Node: "menu.fast", SessionKey: sessionKey, Title: "响应速度", Color: "blue",
+		Body: body, Buttons: buttons,
+	}.Render()
 }

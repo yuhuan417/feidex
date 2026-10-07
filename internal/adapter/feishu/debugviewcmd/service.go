@@ -124,8 +124,6 @@ type Dependencies struct {
 	MakeSessionKeyFn                  func(*feishu.InboundMessage) string
 	ReplyInThreadEnabledFn            func(string) bool
 	CompleteMenuCommandFn             func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
-	MenuCardBodyFn                    func(string, string) string
-	MenuBreadcrumbLabelsFn            func(string) []string
 	CommandLabelFn                    func(string, string) string
 	CurrentThreadLabelFn              func(*conversation.Session) string
 	PrimaryConversationMissingLabelFn func(string) string
@@ -206,18 +204,6 @@ func (d Dependencies) DebugCompleteMenuCommand(a *feishu.CardAction, s, r, p str
 		return nil, fmt.Errorf("menu command unavailable")
 	}
 	return d.CompleteMenuCommandFn(a, s, r, p)
-}
-func (d Dependencies) DebugMenuCardBody(a, b string) string {
-	if d.MenuCardBodyFn == nil {
-		return b
-	}
-	return d.MenuCardBodyFn(a, b)
-}
-func (d Dependencies) DebugMenuBreadcrumbLabels(a string) []string {
-	if d.MenuBreadcrumbLabelsFn == nil {
-		return nil
-	}
-	return d.MenuBreadcrumbLabelsFn(a)
 }
 func (d Dependencies) DebugCommandLabel(a, b string) string {
 	if d.CommandLabelFn == nil {

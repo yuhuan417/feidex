@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	appdebugview "feidex/internal/adapter/feishu/debugview"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/adapter/feishu/planmode"
 	appfeatures "feidex/internal/application/features"
 	"feidex/internal/application/submission"
@@ -65,13 +66,13 @@ func isLocalCommand(raw string) bool {
 	return isLocalCommandForBackend(domainbackend.BackendCodex, raw)
 }
 
-func handleHelpCommand(scope bindingSessionScope, backend func() string, makeSessionKey func(*feishu.InboundMessage) string, state planmode.StateProvider, renderer bindingCardRenderer, runner frontendruntime.EffectRunner, frontendID string, replyInThread bool, msg *feishu.InboundMessage, args []string) error {
+func handleHelpCommand(scope bindingSessionScope, backend func() string, makeSessionKey func(*feishu.InboundMessage) string, state planmode.StateProvider, runner frontendruntime.EffectRunner, frontendID string, replyInThread bool, msg *feishu.InboundMessage, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf("usage: /help")
 	}
 	sessionKey := makeSessionKey(msg)
 	backendKind := backend()
-	card := renderHelpCardData(backendKind, planModeTitleForSession(state, state != nil, sessionKey, "帮助说明"), renderer, scope, sessionKey)
+	card := renderHelpCardData(backendKind, planModeTitleForSession(state, state != nil, sessionKey, "帮助说明"), scope, sessionKey)
 	return replyCardEffect(runner, frontendID, replyInThread, msg, card)
 }
 
@@ -100,9 +101,9 @@ func renderBackendMenuCardData(backend, title string, renderer bindingCardRender
 	return renderer.SimpleStatusCard(title, "blue", menuCardBodyForBackend(configuredBackend, spec.Action, body), renderGroupMenuButtons(configuredBackend, spec.Action, sessionKey))
 }
 
-func renderHelpCardData(backend, title string, renderer bindingCardRenderer, scope bindingSessionScope, sessionKey string) map[string]any {
-	buttons := []feishu.Button{
-		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
-	}
-	return renderer.SimpleStatusCard(title, "blue", menuCardBody("menu.help", renderHelpBodyForSession(scope, backend, sessionKey)), buttons)
+func renderHelpCardData(backend, title string, scope bindingSessionScope, sessionKey string) map[string]any {
+	return appmenuutil.PageCard{
+		Node: "menu.help", SessionKey: sessionKey, Title: title, Color: "blue",
+		Body: renderHelpBodyForSession(scope, backend, sessionKey),
+	}.Render()
 }

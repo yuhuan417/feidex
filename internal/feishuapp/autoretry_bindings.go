@@ -35,7 +35,7 @@ func AutoRetryView(inputs AutoRetryViewInputs) retryview.Service {
 		frontendID: inputs.FrontendID, frontendConfigIndex: inputs.FrontendConfigIndex,
 	}
 	service := retryview.Service{
-		Context: inputs.Context, Outbound: newEffectOutbound(inputs.FrontendID, inputs.EffectRunner), Renderer: simpleStatusCardRenderer{client: inputs.Feishu}, MenuBody: menuCardBody,
+		Context: inputs.Context, Outbound: newEffectOutbound(inputs.FrontendID, inputs.EffectRunner), Renderer: simpleStatusCardRenderer{client: inputs.Feishu},
 		Settings: func() retryview.Settings {
 			cfg := configView.feishuConfig()
 			backend, title := "", ""

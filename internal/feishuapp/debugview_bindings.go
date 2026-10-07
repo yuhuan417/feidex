@@ -81,8 +81,8 @@ func BuildDebugViewDependencies(inputs DebugViewInputs) appdebugviewcmd.Dependen
 		WorkspaceRenderProvider: debugWorkspaceRenderAdapter{render: inputs.WorkspacePresentation.RenderPathPickerCard},
 		MakeSessionKeyFn:        runtimeDeps.view.makeSessionKey, ReplyInThreadEnabledFn: func(string) bool { return runtimeDeps.view.replyInThreadEnabled() },
 		CompleteMenuCommandFn: inputs.CompleteMenuCommand,
-		MenuCardBodyFn:        menuCardBody, MenuBreadcrumbLabelsFn: menuBreadcrumbLabels, CommandLabelFn: commandLabel,
-		CurrentThreadLabelFn: appthreadmenu.SessionCurrentThreadLabel, PrimaryConversationMissingLabelFn: primaryConversationMissingLabel,
+		CommandLabelFn:        commandLabel,
+		CurrentThreadLabelFn:  appthreadmenu.SessionCurrentThreadLabel, PrimaryConversationMissingLabelFn: primaryConversationMissingLabel,
 		DefaultWorkspaceIDFn: runtimeDeps.view.defaultWorkspaceID, ConfigPathFn: func() string { return runtimeDeps.cfgPath },
 	}
 }

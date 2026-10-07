@@ -116,10 +116,6 @@ func threadMenuEffectiveSessionKey(normalizeSessionKey func(string) string, scop
 	return conversations.EffectiveGroupSessionKey(sessionKey, chatID, bindingID)
 }
 
-func groupBindingBackButton(sessionKey string) feishu.Button {
-	return feishu.Button{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}}
-}
-
 func (s bindingService) commandWorkspace(msg *feishu.InboundMessage, args []string) error {
 	if !isGroupMessage(msg) {
 		return s.deps.WorkspaceConfiguration.CommandWorkspace(msg, args, s.deps.WorkspaceManagement)

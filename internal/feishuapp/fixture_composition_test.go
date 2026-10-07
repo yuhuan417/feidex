@@ -228,7 +228,6 @@ func prepareTestApp(a *Frontend) *Frontend {
 	a.bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	a.bindings.BackendMaintenance = make(map[string]*backendmaintenance.Service)
 	a.bindings.MaintenanceRunners = make(map[string]maintenance.OperationRunner)
-	maintenanceRenderer := a.feishu
 	maintenanceFrontend := identity.FrontendID(a.FrontendID())
 	maintenanceEffects := newEffectRunner(a.runtimeOwner)
 	for kind, name := range map[string]string{"codex": "Codex", "claude": "Claude"} {
@@ -237,10 +236,10 @@ func prepareTestApp(a *Frontend) *Frontend {
 			spec = upgraderender.ClaudeSpec
 		}
 		renderUpgrade := func(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
-			return upgraderender.RenderUpgradeOperationCard(spec, maintenanceRenderer, sessionKey, snapshot)
+			return upgraderender.RenderUpgradeOperationCard(spec, sessionKey, snapshot)
 		}
 		renderRestart := func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
-			return upgraderender.RenderRestartOperationCard(spec, maintenanceRenderer, sessionKey, snapshot)
+			return upgraderender.RenderRestartOperationCard(spec, sessionKey, snapshot)
 		}
 		patchCard := func(ctx context.Context, messageID string, card map[string]any) error {
 			return maintenanceEffects.Run(ctx, []application.Effect{application.PatchCard{
@@ -258,7 +257,7 @@ func prepareTestApp(a *Frontend) *Frontend {
 		a.bindings.BackendMaintenance[kind] = service
 		a.bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &a.runtimeOwner.Lifecycle, Service: service, Executor: a.asyncRunner}
 	}
-	a.bindings.UpgradePresentation = BuildUpgradePresentation(maintenanceRenderer, a.bindings.BackendMaintenance)
+	a.bindings.UpgradePresentation = BuildUpgradePresentation(a.bindings.BackendMaintenance)
 	a.bindings.BackendUpgrades = BuildBackendUpgrades(BackendUpgradeInputs{
 		SessionKey: SessionKeyBuilder(a.FrontendID()), ReplyInThread: func() bool { return false },
 		FrontendID: identity.FrontendID(a.FrontendID()), Runner: *a.runtimeOwner.EffectRunner,
@@ -382,11 +381,8 @@ func prepareTestApp(a *Frontend) *Frontend {
 			return GoalCommandSessionKey(a.FrontendID(), msg)
 		},
 		ReplyInThreadEnabledFn: func(string) bool { return false },
-		MenuCardBodyForSessionFn: func(_, action, body string) string {
-			return menuCardBody(action, body)
-		},
-		ActionStringValueFn: GoalCommandActionStringValue,
-		ActionSessionKeyFn:  GoalCommandActionSessionKey,
+		ActionStringValueFn:    GoalCommandActionStringValue,
+		ActionSessionKeyFn:     GoalCommandActionSessionKey,
 		CompleteMenuCommandFn: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 			return menuCommands.Complete(action, sessionKey, rawCommand, parentAction)
 		},

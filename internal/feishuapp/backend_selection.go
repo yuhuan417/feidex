@@ -72,15 +72,9 @@ func BuildBackendSelection(inputs BackendSelectionInputs) backend.SelectionServi
 			},
 		},
 		Render: backend.SelectionRenderDeps{
-			BuildStatusCard: func(title, color, body string, buttons []feishu.Button) map[string]any {
-				return inputs.Feishu.SimpleStatusCard(title, color, body, buttons)
-			},
 			BuildMenuCard: func(sessionKey string) map[string]any {
 				spec, _ := menuGroupSpec("menu.group.backend")
 				return renderBackendMenuCardData(runtimeDeps.currentBackend().view.configuredBackend(), planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, spec.Label), inputs.Feishu, sessionKey)
-			},
-			BuildCardBody: func(action, body string) string {
-				return menuCardBody(action, body)
 			},
 		},
 		Effects: backend.SelectionEffectDeps{

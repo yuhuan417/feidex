@@ -29,7 +29,7 @@ func maintenanceCardActionHandlers(inputs MaintenanceCardActionInputs) map[strin
 			sessionKey := actionSessionKey(action)
 			return inputs.BackendActions.CompleteAsyncCommandAction(
 				action, sessionKey, "/upgrade", "menu.group.system", "正在检查可升级版本",
-				upgrades.RenderUpgradePreparingCard(sessionKey), nil, upgrades.RenderUpgradeFailedCard, "upgrade panel patch failed",
+				upgrades.RenderUpgradePreparingCard(), nil, upgrades.RenderUpgradeFailedCard, "upgrade panel patch failed",
 			)
 		},
 		"upgrade.dev": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
@@ -40,7 +40,7 @@ func maintenanceCardActionHandlers(inputs MaintenanceCardActionInputs) map[strin
 				"/upgrade dev",
 				"menu.group.system",
 				"正在检查开发版升级信息",
-				upgrades.RenderUpgradePreparingCard(sessionKey),
+				upgrades.RenderUpgradePreparingCard(),
 				nil,
 				upgrades.RenderUpgradeFailedCard,
 				"upgrade dev patch failed",

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	appdelivery "feidex/internal/adapter/feishu/delivery"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/application/upgrade"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
@@ -34,15 +35,10 @@ type Outbound interface {
 	ReplyCard(context.Context, string, map[string]any, bool) (string, error)
 }
 
-type CardRenderer interface {
-	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
-}
-
 // DefaultApp provides an App implementation backed by function callbacks.
 type DefaultApp struct {
 	ContextFunc              func() context.Context
 	OutboundFunc             func() Outbound
-	CardRendererFunc         func() CardRenderer
 	StateFunc                func() UpgradeState
 	CurrentWorkspaceFunc     func(msg *feishu.InboundMessage) (string, *config.Workspace)
 	WorkspaceForSessionFunc  func(sessionKey string) *config.Workspace
@@ -51,12 +47,10 @@ type DefaultApp struct {
 	DaemonNameFunc           func() string
 	MakeSessionKeyFunc       func(msg *feishu.InboundMessage) string
 	ReplyInThreadFunc        func(chatType string) bool
-	MenuCardBodyFunc         func(action, body string) string
 }
 
-func (a *DefaultApp) UpgradeOutbound() Outbound     { return a.OutboundFunc() }
-func (a *DefaultApp) UpgradeRenderer() CardRenderer { return a.CardRendererFunc() }
-func (a *DefaultApp) UpgradeState() UpgradeState    { return a.StateFunc() }
+func (a *DefaultApp) UpgradeOutbound() Outbound  { return a.OutboundFunc() }
+func (a *DefaultApp) UpgradeState() UpgradeState { return a.StateFunc() }
 func (a *DefaultApp) UpgradeCurrentWorkspace(msg *feishu.InboundMessage) (string, *config.Workspace) {
 	return a.CurrentWorkspaceFunc(msg)
 }
@@ -72,9 +66,6 @@ func (a *DefaultApp) MakeSessionKey(msg *feishu.InboundMessage) string {
 	return a.MakeSessionKeyFunc(msg)
 }
 func (a *DefaultApp) ReplyInThreadEnabled(chatType string) bool { return a.ReplyInThreadFunc(chatType) }
-func (a *DefaultApp) MenuCardBody(action, body string) string {
-	return a.MenuCardBodyFunc(action, body)
-}
 
 // ---------------------------------------------------------------------------
 // Exported types
@@ -129,10 +120,12 @@ func NewUpgradeService(app *DefaultApp, deps UpgradeServiceDeps, useCase *upgrad
 // Card rendering methods
 // ---------------------------------------------------------------------------
 
-// RenderUpgradePreparingCard renders the "checking for upgrades" card.
-func (s UpgradeService) RenderUpgradePreparingCard(sessionKey string) map[string]any {
+// RenderUpgradePreparingCard renders the "checking for upgrades" card. It is a
+// status display rather than a menu page: the check is in flight and the card
+// is patched in place, so it claims no breadcrumb and offers no back control.
+func (s UpgradeService) RenderUpgradePreparingCard() map[string]any {
 	body := "正在检查可升级版本，请稍候。\n\n这张卡片会自动刷新。"
-	return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "blue", s.app.MenuCardBody("menu.upgrade", body), nil)
+	return feishu.SimpleStatusCard("升级服务", "blue", body, nil)
 }
 
 // RenderUpgradeFailedCard renders the "upgrade check failed" card.
@@ -141,7 +134,10 @@ func (s UpgradeService) RenderUpgradeFailedCard(sessionKey, errText string) map[
 	if text := strings.TrimSpace(errText); text != "" {
 		body += "\n\n错误: " + text
 	}
-	return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", body), UpgradePanelButtons(sessionKey, nil, true))
+	return appmenuutil.PageCard{
+		Node: "menu.upgrade", SessionKey: sessionKey, Title: "升级服务", Color: "orange",
+		Body: body, Buttons: UpgradePanelButtons(sessionKey, nil),
+	}.Render()
 }
 
 // RenderUpgradeCardForVersion renders the upgrade card for a specific version.
@@ -168,11 +164,14 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		if env.GOOS == "linux" {
 			lines = append(lines, "你仍然可以选择本地 Binary 升级。")
 		}
-		buttons := upgradeBackButtons(sessionKey)
+		var buttons []feishu.Button
 		if env.GOOS == "linux" {
-			buttons = UpgradePanelButtons(sessionKey, nil, true)
+			buttons = UpgradePanelButtons(sessionKey, nil)
 		}
-		return s.app.UpgradeRenderer().SimpleStatusCard("升级服务", "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(lines, "\n")), buttons), nil
+		return appmenuutil.PageCard{
+			Node: "menu.upgrade", SessionKey: sessionKey, Title: "升级服务", Color: "orange",
+			Body: strings.Join(lines, "\n"), Buttons: buttons,
+		}.Render(), nil
 	}
 	label := "最新版本"
 	if result.Forced {
@@ -203,14 +202,17 @@ func (s UpgradeService) RenderUpgradeCardForTarget(sessionKey, ownerUserID, requ
 		title, color = "已是最新版本", "green"
 		lines = append(lines, "", "当前版本已不落后于远端最新版本。")
 	}
-	buttons := upgradeBackButtons(sessionKey)
+	var buttons []feishu.Button
 	if env.GOOS == "linux" {
-		buttons = UpgradePanelButtons(sessionKey, nil, true)
+		buttons = UpgradePanelButtons(sessionKey, nil)
 		lines = append(lines, "你仍然可以选择本地 Binary 升级。")
 	} else {
 		lines = append(lines, "", "当前平台仅支持 release 检查，不支持自动升级。")
 	}
-	return s.app.UpgradeRenderer().SimpleStatusCard(title, color, s.app.MenuCardBody("menu.upgrade", strings.Join(lines, "\n")), buttons), nil
+	return appmenuutil.PageCard{
+		Node: "menu.upgrade", SessionKey: sessionKey, Title: title, Color: color,
+		Body: strings.Join(lines, "\n"), Buttons: buttons,
+	}.Render(), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -293,12 +295,12 @@ func (s UpgradeService) CompleteUpgradeAction(action *feishu.CardAction, actionN
 		}
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已取消升级"}, Card: rawCard(s.deps.RenderSystemMenuCard(req.SessionKey))}, nil
 	}
-	payload, key, err := s.useCase.Confirm(s.context(), id, action.UserID, action.MessageID)
+	payload, _, err := s.useCase.Confirm(s.context(), id, action.UserID, action.MessageID)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: err.Error()}}, nil
 	}
 	body := strings.Join([]string{UpgradeStartedSummaryLine(payload), "后台任务: `" + payload.UnitName + "`", "服务即将重启；如果启动失败会自动回退。"}, "\n")
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已开始升级"}, Card: rawCard(s.app.UpgradeRenderer().SimpleStatusCard("升级中", "orange", s.app.MenuCardBody("menu.upgrade", body), upgradeBackButtons(key)))}, nil
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已开始升级"}, Card: rawCard(feishu.SimpleStatusCard("升级中", "orange", body, nil))}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -325,10 +327,14 @@ func (s UpgradeService) RenderUpgradeConfirmCard(title, sessionKey, requestID st
 			"确认后会使用本地制品重启 daemon；如果启动失败会自动回退到旧版本。",
 		)
 	}
-	return s.app.UpgradeRenderer().SimpleStatusCard(title, "orange", s.app.MenuCardBody("menu.upgrade", strings.Join(lines, "\n")), UpgradePanelButtons(sessionKey, map[string]any{
-		"request_id": requestID,
-		"label":      buttonLabel,
-	}, true))
+	return appmenuutil.PageCard{
+		Node: "menu.upgrade", SessionKey: sessionKey, Title: title, Color: "orange",
+		Body: strings.Join(lines, "\n"),
+		Buttons: UpgradePanelButtons(sessionKey, map[string]any{
+			"request_id": requestID,
+			"label":      buttonLabel,
+		}),
+	}.Render()
 }
 
 // ---------------------------------------------------------------------------
@@ -346,8 +352,9 @@ func RemoteUpgradeSummary(forceVersion, useDevRelease bool) string {
 	return "确认后会下载新版本、重启 daemon；如果启动失败会自动回退到旧版本。"
 }
 
-// UpgradePanelButtons builds the button list for the upgrade panel.
-func UpgradePanelButtons(sessionKey string, confirm map[string]any, includeBack bool) []feishu.Button {
+// UpgradePanelButtons builds the forward controls of the upgrade panel. The
+// back control is injected by menuutil.PageCard from the declared node.
+func UpgradePanelButtons(sessionKey string, confirm map[string]any) []feishu.Button {
 	buttons := []feishu.Button{}
 	if confirm != nil {
 		label, _ := confirm["label"].(string)
@@ -380,30 +387,7 @@ func UpgradePanelButtons(sessionKey string, confirm map[string]any, includeBack 
 			"session_key": sessionKey,
 		},
 	})
-	if includeBack {
-		buttons = append(buttons, feishu.Button{
-			Text: feishu.MenuBackButtonText,
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.group.system",
-				"session_key": sessionKey,
-			},
-		})
-	}
 	return buttons
-}
-
-func upgradeBackButtons(sessionKey string) []feishu.Button {
-	return []feishu.Button{
-		{
-			Text: feishu.MenuBackButtonText,
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.group.system",
-				"session_key": sessionKey,
-			},
-		},
-	}
 }
 
 // UpgradeStartedSummaryLine returns a summary line for the "upgrade started"

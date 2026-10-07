@@ -123,7 +123,7 @@ func (s backendUpgradeService) completeUpgradeAsyncAction(h backendUpgradeHooks,
 	render := s.presentation
 	sessionKey := actionSessionKey(action)
 	return complete(action, sessionKey, rawCommand, toastText,
-		render.renderUpgradePreparingCard(h.spec, sessionKey, preparingText),
+		render.renderUpgradePreparingCard(h.spec, preparingText),
 		func(key, errText string) map[string]any {
 			return render.renderUpgradeFailedCard(h.spec, key, errText)
 		},
@@ -152,7 +152,7 @@ func (s backendUpgradeService) completeUpgradeAction(kind backendUpgradeKind, ac
 			}
 			patchMaintenanceCard(s.lifecycle.Context(), string(s.frontendID), s.runner, action.MessageID, render.renderUpgradeStatusCard(h.spec, sessionKey, view, false), h.patchLog)
 		}, s.asyncRunner)
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已取消升级"}, Card: rawCard(render.renderUpgradePreparingCard(h.spec, sessionKey, "已取消升级"))}, nil
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已取消升级"}, Card: rawCard(render.renderUpgradePreparingCard(h.spec, "已取消升级"))}, nil
 	}
 	operation, err := service.Confirm(requestID, action.UserID, action.MessageID)
 	if err != nil {

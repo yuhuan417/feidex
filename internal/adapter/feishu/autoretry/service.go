@@ -3,6 +3,7 @@ package autoretry
 
 import (
 	"context"
+	"feidex/internal/adapter/feishu/menuutil"
 	retry "feidex/internal/application/autoretry"
 	"feidex/internal/feishu"
 	"feidex/internal/textutil"
@@ -32,7 +33,6 @@ type Service struct {
 	Renderer    CardRenderer
 	Settings    func() Settings
 	SessionKey  func(*feishu.InboundMessage) string
-	MenuBody    func(string, string) string
 	ReplyAction func(*feishu.InboundMessage, *callback.CardActionTriggerResponse) error
 }
 type RetryState = retry.RetryState
@@ -187,13 +187,11 @@ func (s Service) RenderAutoRetryConfigCard(sessionKey string) map[string]any {
 				"session_key": sessionKey,
 			},
 		},
-		{
-			Text:  feishu.MenuBackButtonText,
-			Type:  "default",
-			Value: map[string]any{"action": "menu.group.backend", "session_key": sessionKey},
-		},
 	}
-	return s.Renderer.SimpleStatusCard(s.AutoRetryTitle(), "blue", s.MenuBody("menu.auto_retry", strings.Join(lines, "\n")), buttons)
+	return menuutil.PageCard{
+		Node: "menu.auto_retry", SessionKey: sessionKey, Title: s.AutoRetryTitle(), Color: "blue",
+		Body: strings.Join(lines, "\n"), Buttons: buttons,
+	}.Render()
 }
 
 // CompleteAutoRetrySet handles the card action to toggle auto-retry on or off.

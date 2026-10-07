@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/config"
 	"feidex/internal/feishu"
 
@@ -29,9 +30,7 @@ type SelectionRuntimeDeps struct {
 }
 
 type SelectionRenderDeps struct {
-	BuildMenuCard   func(sessionKey string) map[string]any
-	BuildCardBody   func(action, body string) string
-	BuildStatusCard func(title, color, body string, buttons []feishu.Button) map[string]any
+	BuildMenuCard func(sessionKey string) map[string]any
 }
 
 type SelectionEffectDeps struct {
@@ -153,13 +152,6 @@ func (s SelectionService) RenderBackendSelectionCard(sessionKey, notice string) 
 			Value: map[string]any{"action": "backend.select", "session_key": sessionKey, "backend": choice.Kind},
 		})
 	}
-	if strings.TrimSpace(sessionKey) != "" {
-		buttons = append(buttons, feishu.Button{
-			Text:  feishu.MenuBackButtonText,
-			Type:  "default",
-			Value: map[string]any{"action": "menu.group.backend", "session_key": sessionKey},
-		})
-	}
 	color := "blue"
 	switch {
 	case current == "":
@@ -169,14 +161,10 @@ func (s SelectionService) RenderBackendSelectionCard(sessionKey, notice string) 
 	case strings.Contains(notice, "已切换"):
 		color = "green"
 	}
-	body := strings.Join(lines, "\n")
-	if s.deps.Render.BuildCardBody != nil {
-		body = s.deps.Render.BuildCardBody("menu.backend.switch", body)
-	}
-	if s.deps.Render.BuildStatusCard == nil {
-		return nil
-	}
-	return s.deps.Render.BuildStatusCard("后端选择", color, body, buttons)
+	return appmenuutil.PageCard{
+		Node: "menu.backend.switch", SessionKey: sessionKey, Title: "后端选择", Color: color,
+		Body: strings.Join(lines, "\n"), Buttons: buttons,
+	}.Render()
 }
 
 // RenderBackendSwitchingCard builds the in-progress switching card.
@@ -186,16 +174,14 @@ func (s SelectionService) RenderBackendSwitchingCard(sessionKey, target string) 
 		"",
 		"会先切换 runtime，再恢复这个 backend 之前的 thread lineage。",
 	}, "\n")
-	cardBody := body
-	if s.deps.Render.BuildCardBody != nil {
-		cardBody = s.deps.Render.BuildCardBody("menu.backend.switch", body)
-	}
-	if s.deps.Render.BuildStatusCard == nil {
-		return nil
-	}
-	return s.deps.Render.BuildStatusCard("切换后端", "orange", cardBody, []feishu.Button{
-		{Text: "处理中", Type: "default", Value: map[string]any{"action": "menu.backend.switch", "session_key": sessionKey}},
-	})
+	// No SessionKey: a switch in flight offers no way back, so the page keeps
+	// its declared breadcrumb and only the in-progress control.
+	return appmenuutil.PageCard{
+		Node: "menu.backend.switch", Title: "切换后端", Color: "orange",
+		Body: body, Buttons: []feishu.Button{
+			{Text: "处理中", Type: "default", Value: map[string]any{"action": "menu.backend.switch", "session_key": sessionKey}},
+		},
+	}.Render()
 }
 
 // ReplyBackendSelectionCard sends the backend selection card as a reply.

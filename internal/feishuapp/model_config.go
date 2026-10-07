@@ -73,7 +73,6 @@ func BuildModelCommands(inputs ModelCommandInputs) modelconfig.ModelConfigServic
 			return false
 		},
 		SessionConfig:  sessionConfig.ForSession,
-		MenuBackAction: menuBackAction,
 		FormatMenuBody: menuCardBody,
 		ModelConfigStatus: func(sessionKey string) string {
 			view := frontendConfigView{

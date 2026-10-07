@@ -158,7 +158,7 @@ func BuildCommandFeatureInputs(inputs CommandFeatureDependencies) CommandFeature
 			return handleStatusCommand(inputs.State, inputs.ConfiguredBackend, inputs.BackendConfiguration, inputs.MakeSessionKey, inputs.Renderer, inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg)
 		},
 		Help: func(msg *feishu.InboundMessage, args []string) error {
-			return handleHelpCommand(inputs.BindingScope.scope, inputs.ConfiguredBackend, inputs.MakeSessionKey, inputs.State, inputs.Renderer, inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, args)
+			return handleHelpCommand(inputs.BindingScope.scope, inputs.ConfiguredBackend, inputs.MakeSessionKey, inputs.State, inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, args)
 		},
 		Codex:   inputs.BackendUpgrades.commandCodex,
 		Claude:  inputs.BackendUpgrades.commandClaude,

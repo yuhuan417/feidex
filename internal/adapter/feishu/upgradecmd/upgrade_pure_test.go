@@ -3,12 +3,71 @@ package upgradecmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	filesystem "feidex/internal/adapter/filesystem/upgrade"
 	"feidex/internal/config"
+	"feidex/internal/feishu"
 )
+
+func upgradeCardButtons(card map[string]any) []map[string]any {
+	body, _ := card["body"].(map[string]any)
+	elements, _ := body["elements"].([]map[string]any)
+	buttons := make([]map[string]any, 0, 4)
+	for _, element := range elements {
+		columns, _ := element["columns"].([]map[string]any)
+		for _, column := range columns {
+			children, _ := column["elements"].([]map[string]any)
+			for _, child := range children {
+				if tag, _ := child["tag"].(string); tag == "button" {
+					buttons = append(buttons, child)
+				}
+			}
+		}
+	}
+	return buttons
+}
+
+func upgradeCardMarkdownBody(card map[string]any) string {
+	body, _ := card["body"].(map[string]any)
+	elements, _ := body["elements"].([]map[string]any)
+	for _, element := range elements {
+		if content, ok := element["content"].(string); ok {
+			return content
+		}
+	}
+	return ""
+}
+
+func upgradeCardButtonLabels(card map[string]any) []string {
+	labels := make([]string, 0, 4)
+	for _, button := range upgradeCardButtons(card) {
+		text, _ := button["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		labels = append(labels, label)
+	}
+	return labels
+}
+
+func upgradeCardBackAction(card map[string]any) string {
+	for _, button := range upgradeCardButtons(card) {
+		text, _ := button["text"].(map[string]any)
+		label, _ := text["content"].(string)
+		if !feishu.IsMenuBackButtonText(label) {
+			continue
+		}
+		behaviors, _ := button["behaviors"].([]map[string]any)
+		if len(behaviors) == 0 {
+			return ""
+		}
+		value, _ := behaviors[0]["value"].(map[string]any)
+		action, _ := value["action"].(string)
+		return action
+	}
+	return ""
+}
 
 func TestRemoteUpgradeSummary(t *testing.T) {
 	tests := []struct {
@@ -32,8 +91,8 @@ func TestRemoteUpgradeSummary(t *testing.T) {
 }
 
 func TestUpgradePanelButtons(t *testing.T) {
-	t.Run("without confirm or back", func(t *testing.T) {
-		buttons := UpgradePanelButtons("sess-1", nil, false)
+	t.Run("without confirm", func(t *testing.T) {
+		buttons := UpgradePanelButtons("sess-1", nil)
 		if len(buttons) != 2 {
 			t.Fatalf("expected 2 buttons, got %d", len(buttons))
 		}
@@ -45,7 +104,7 @@ func TestUpgradePanelButtons(t *testing.T) {
 		}
 	})
 	t.Run("with confirm", func(t *testing.T) {
-		buttons := UpgradePanelButtons("sess-1", map[string]any{"label": "升级到 v1.0", "request_id": "r-1"}, false)
+		buttons := UpgradePanelButtons("sess-1", map[string]any{"label": "升级到 v1.0", "request_id": "r-1"})
 		if len(buttons) != 3 {
 			t.Fatalf("expected 3 buttons, got %d", len(buttons))
 		}
@@ -56,21 +115,63 @@ func TestUpgradePanelButtons(t *testing.T) {
 			t.Fatalf("confirm button type = %q, want primary", buttons[0].Type)
 		}
 	})
-	t.Run("with back", func(t *testing.T) {
-		buttons := UpgradePanelButtons("sess-1", nil, true)
-		if len(buttons) != 3 {
-			t.Fatalf("expected 3 buttons, got %d", len(buttons))
-		}
-		if buttons[2].Text != "返回上一级" {
-			t.Fatalf("back button text = %q", buttons[2].Text)
-		}
-	})
 	t.Run("confirm with empty label uses default", func(t *testing.T) {
-		buttons := UpgradePanelButtons("sess-1", map[string]any{"request_id": "r-1"}, false)
+		buttons := UpgradePanelButtons("sess-1", map[string]any{"request_id": "r-1"})
 		if buttons[0].Text != "确认升级" {
 			t.Fatalf("default confirm label = %q, want 确认升级", buttons[0].Text)
 		}
 	})
+	t.Run("panel carries only forward controls", func(t *testing.T) {
+		for _, button := range UpgradePanelButtons("sess-1", map[string]any{"request_id": "r-1"}) {
+			if feishu.IsMenuBackButtonText(button.Text) {
+				t.Fatalf("UpgradePanelButtons() emitted a back control %q; the page card injects it", button.Text)
+			}
+		}
+	})
+}
+
+// TestUpgradePageCardDerivesBackControl pins the migration contract: the upgrade
+// pages get their breadcrumb and their single final back control from the
+// declared node, so the back target cannot drift from the menu tree.
+func TestUpgradePageCardDerivesBackControl(t *testing.T) {
+	service := UpgradeService{}
+	failed := service.RenderUpgradeFailedCard("sess-1", "boom")
+	if body := upgradeCardMarkdownBody(failed); !strings.Contains(body, "当前位置：") {
+		t.Fatalf("failed card body = %q, want a declared breadcrumb", body)
+	}
+	labels := upgradeCardButtonLabels(failed)
+	backCount := 0
+	for i, label := range labels {
+		if !feishu.IsMenuBackButtonText(label) {
+			continue
+		}
+		backCount++
+		if i != len(labels)-1 {
+			t.Fatalf("failed card: back control at index %d of %d, want final", i, len(labels)-1)
+		}
+	}
+	if backCount != 1 {
+		t.Fatalf("failed card: back control count = %d, want 1 (labels %q)", backCount, labels)
+	}
+	if action := upgradeCardBackAction(failed); action != "menu.group.system" {
+		t.Fatalf("failed card back action = %q, want the declared parent menu.group.system", action)
+	}
+}
+
+// TestUpgradePreparingCardIsAStatusDisplay pins the other half of the contract:
+// the in-flight and canceled states are status displays, not menu pages, so
+// they claim no breadcrumb and carry no controls.
+func TestUpgradePreparingCardIsAStatusDisplay(t *testing.T) {
+	card := (UpgradeService{}).RenderUpgradePreparingCard()
+	if body := upgradeCardMarkdownBody(card); strings.Contains(body, "当前位置：") {
+		t.Fatalf("preparing card body = %q, want no breadcrumb", body)
+	}
+	if labels := upgradeCardButtonLabels(card); len(labels) != 0 {
+		t.Fatalf("preparing card buttons = %q, want none", labels)
+	}
+	if body := upgradeCardMarkdownBody(card); !strings.Contains(body, "正在检查可升级版本") {
+		t.Fatalf("preparing card body = %q, want the in-flight status line", body)
+	}
 }
 
 func TestShortUpgradeCommit(t *testing.T) {

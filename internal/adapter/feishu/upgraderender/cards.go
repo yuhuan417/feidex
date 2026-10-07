@@ -8,19 +8,13 @@ import (
 	"feidex/internal/feishu"
 )
 
-// StatusCardRenderer abstracts the feishu card rendering dependency so that
-// card-building functions do not need to import the app package.
-type StatusCardRenderer interface {
-	SimpleStatusCard(title, color, body string, buttons []feishu.Button) map[string]any
-}
-
 func updateCommandText(spec Spec, command, updateCommand string) string {
 	command = textutil.FirstNonEmpty(strings.TrimSpace(command), spec.DefaultCommand)
 	updateCommand = textutil.FirstNonEmpty(strings.TrimSpace(updateCommand), "update")
 	return command + " " + updateCommand
 }
 
-func RenderUpgradeStatusCard(spec Spec, r StatusCardRenderer, sessionKey string, view UpgradeView, latestChecked bool) map[string]any {
+func RenderUpgradeStatusCard(spec Spec, sessionKey string, view UpgradeView, latestChecked bool) map[string]any {
 	snapshot := view.Snapshot
 	restart := view.Restart
 	lines := []string{
@@ -104,11 +98,14 @@ func RenderUpgradeStatusCard(spec Spec, r StatusCardRenderer, sessionKey string,
 	case strings.TrimSpace(restart.Result) != "":
 		color = "orange"
 	}
-	body := appmenuutil.MenuCardBody(spec.MenuAction, strings.Join(lines, "\n"))
-	return r.SimpleStatusCard(title, color, body, UpgradeStatusButtons(spec, sessionKey, snapshot.Running || restart.Running))
+	return appmenuutil.PageCard{
+		Node: spec.MenuAction, SessionKey: sessionKey, Title: title, Color: color,
+		Body:    strings.Join(lines, "\n"),
+		Buttons: UpgradeStatusButtons(spec, sessionKey, snapshot.Running || restart.Running),
+	}.Render()
 }
 
-func RenderUpgradeConfirmCard(spec Spec, r StatusCardRenderer, sessionKey, requestID string, currentVersion, targetVersion, updateCommand string) map[string]any {
+func RenderUpgradeConfirmCard(spec Spec, sessionKey, requestID string, currentVersion, targetVersion, updateCommand string) map[string]any {
 	lines := []string{
 		"当前版本: `" + textutil.FirstNonEmpty(currentVersion, "-") + "`",
 		"目标版本: `" + textutil.FirstNonEmpty(targetVersion, "-") + "`",
@@ -136,35 +133,41 @@ func RenderUpgradeConfirmCard(spec Spec, r StatusCardRenderer, sessionKey, reque
 				"session_key": sessionKey,
 			},
 		},
-		{
-			Text: feishu.MenuBackButtonText,
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.group.backend",
-				"session_key": sessionKey,
-			},
-		},
 	}
-	body := appmenuutil.MenuCardBody(spec.MenuAction, strings.Join(lines, "\n"))
-	return r.SimpleStatusCard(spec.Name+" 升级确认", "orange", body, buttons)
+	return appmenuutil.PageCard{
+		Node: spec.MenuAction, SessionKey: sessionKey, Title: spec.Name + " 升级确认", Color: "orange",
+		Body: strings.Join(lines, "\n"), Buttons: buttons,
+	}.Render()
 }
 
-func RenderUpgradePreparingCard(spec Spec, r StatusCardRenderer, body string) map[string]any {
+// RenderUpgradePreparingCard renders the in-flight and canceled states of an
+// upgrade request. These are status displays rather than menu pages: the card
+// is patched in place (the cancel state is replaced by the status card as soon
+// as the cancel round-trip lands), so it claims no breadcrumb and offers no
+// back control.
+func RenderUpgradePreparingCard(spec Spec, body string) map[string]any {
 	if strings.TrimSpace(body) == "" {
 		body = "正在准备 " + spec.Name + " 升级信息，请稍候。\n\n这张卡片会自动刷新。"
 	}
-	return r.SimpleStatusCard(spec.Name+" 管理", "blue", appmenuutil.MenuCardBody(spec.MenuAction, body), nil)
+	return feishu.SimpleStatusCard(spec.Name+" 管理", "blue", body, nil)
 }
 
-func RenderUpgradeFailedCard(spec Spec, r StatusCardRenderer, sessionKey, errText string) map[string]any {
+func RenderUpgradeFailedCard(spec Spec, sessionKey, errText string) map[string]any {
 	body := "加载 " + spec.Name + " 升级面板失败。"
 	if strings.TrimSpace(errText) != "" {
 		body += "\n\n错误: " + strings.TrimSpace(errText)
 	}
-	return r.SimpleStatusCard(spec.Name+" 管理", "orange", appmenuutil.MenuCardBody(spec.MenuAction, body), UpgradeStatusButtons(spec, sessionKey, false))
+	return appmenuutil.PageCard{
+		Node: spec.MenuAction, SessionKey: sessionKey, Title: spec.Name + " 管理", Color: "orange",
+		Body: body, Buttons: UpgradeStatusButtons(spec, sessionKey, false),
+	}.Render()
 }
 
-func RenderUpgradeOperationCard(spec Spec, r StatusCardRenderer, sessionKey string, snapshot BackendUpgradeSnapshot) map[string]any {
+// RenderUpgradeOperationCard renders the in-flight and finished upgrade states.
+// Like the preparing card these are status displays, not menu pages: the card
+// is patched in place by the maintenance runner, so it claims no breadcrumb and
+// offers no back control. Its own panel controls stay.
+func RenderUpgradeOperationCard(spec Spec, sessionKey string, snapshot BackendUpgradeSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + textutil.FirstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"目标版本: `" + textutil.FirstNonEmpty(snapshot.TargetVersion, "-") + "`",
@@ -197,11 +200,12 @@ func RenderUpgradeOperationCard(spec Spec, r StatusCardRenderer, sessionKey stri
 		}
 		lines = append(lines, "结果: `"+UpgradeResultText(snapshot.Result)+"`")
 	}
-	body := appmenuutil.MenuCardBody(spec.MenuAction, strings.Join(lines, "\n"))
-	return r.SimpleStatusCard(title, color, body, buttons)
+	return feishu.SimpleStatusCard(title, color, strings.Join(lines, "\n"), buttons)
 }
 
-func RenderRestartOperationCard(spec Spec, r StatusCardRenderer, sessionKey string, snapshot BackendRestartSnapshot) map[string]any {
+// RenderRestartOperationCard renders the in-flight and finished restart states
+// as status displays, matching RenderUpgradeOperationCard.
+func RenderRestartOperationCard(spec Spec, sessionKey string, snapshot BackendRestartSnapshot) map[string]any {
 	lines := []string{
 		"当前版本: `" + textutil.FirstNonEmpty(snapshot.CurrentVersion, "-") + "`",
 		"阶段: `" + RestartPhaseText(snapshot.Phase) + "`",
@@ -226,6 +230,5 @@ func RenderRestartOperationCard(spec Spec, r StatusCardRenderer, sessionKey stri
 		}
 		lines = append(lines, "结果: `"+RestartResultText(snapshot.Result)+"`")
 	}
-	body := appmenuutil.MenuCardBody(spec.MenuAction, strings.Join(lines, "\n"))
-	return r.SimpleStatusCard(title, color, body, UpgradeStatusButtons(spec, sessionKey, snapshot.Running))
+	return feishu.SimpleStatusCard(title, color, strings.Join(lines, "\n"), UpgradeStatusButtons(spec, sessionKey, snapshot.Running))
 }

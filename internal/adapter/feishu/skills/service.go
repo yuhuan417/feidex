@@ -24,7 +24,6 @@ type Service struct {
 	Outbound             Outbound
 	MakeSessionKey       func(*feishu.InboundMessage) string
 	ReplyInThreadEnabled func(string) bool
-	FormatMenuBody       func(string, string) string
 	CommandLabel         func(string, string) string
 	RunAsync             func(string, func()) bool
 }
@@ -69,7 +68,6 @@ func (s *Service) RenderSkillsCard(sessionKey string, forceReload bool) (map[str
 		HasPending:  view.HasPending,
 		Pending:     view.Pending,
 		SessionKey:  sessionKey,
-		FormatBody:  func(body string) string { return s.FormatMenuBody("menu.skills", body) },
 		ReloadLabel: s.CommandLabel("刷新", "/skills reload"),
 	})
 	return card, nil

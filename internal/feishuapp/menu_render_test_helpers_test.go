@@ -30,6 +30,6 @@ func renderBackendMenuCard(a *Frontend, sessionKey string) map[string]any {
 func renderHelpCard(a *Frontend, sessionKey string) map[string]any {
 	return renderHelpCardData(
 		a.configView().configuredBackend(), planModeTitleForSession(a.State(), a != nil, sessionKey, "帮助说明"),
-		a.feishu, a.bindings.BindingCommands.scope, sessionKey,
+		a.bindings.BindingCommands.scope, sessionKey,
 	)
 }

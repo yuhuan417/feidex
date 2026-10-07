@@ -59,7 +59,6 @@ func BuildUpgrades(inputs UpgradeInputs) appupgradecmd.UpgradeService {
 		OutboundFunc: func() appupgradecmd.Outbound {
 			return newEffectOutbound(inputs.FrontendID, inputs.EffectRunner)
 		},
-		CardRendererFunc: func() appupgradecmd.CardRenderer { return simpleStatusCardRenderer{client: inputs.Feishu} },
 		StateFunc: func() appupgradecmd.UpgradeState {
 			return inputs.State
 		},
@@ -87,9 +86,6 @@ func BuildUpgrades(inputs UpgradeInputs) appupgradecmd.UpgradeService {
 		},
 		MakeSessionKeyFunc: configView.makeSessionKey,
 		ReplyInThreadFunc:  func(string) bool { return false },
-		MenuCardBodyFunc: func(action, body string) string {
-			return menuCardBody(action, body)
-		},
 	}
 	return appupgradecmd.NewUpgradeService(adapter, deps, inputs.Workflow)
 }

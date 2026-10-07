@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	appcards "feidex/internal/adapter/feishu/cards"
+	menuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/feishu"
 )
 
@@ -62,13 +63,12 @@ type BuildCardParams struct {
 	HasPending  bool
 	Pending     domainsubmission.SubmissionSkill
 	SessionKey  string
-	FormatBody  func(string) string
 	ReloadLabel string
 }
 
-// BuildCard builds the skills list card from the given data.
-// The formatBody function is applied to the markdown body (typically menuCardBody).
-// reloadLabel and backLabel are the formatted button labels.
+// BuildCard builds the skills list card from the given data. The breadcrumb and
+// the back control come from the declared menu.skills node; reloadLabel is the
+// formatted label of the page's own reload control.
 func BuildCard(p BuildCardParams) map[string]any {
 	sorted := SortForDisplay(p.Entry.Skills)
 	enabledCount := 0
@@ -104,17 +104,7 @@ func BuildCard(p BuildCardParams) map[string]any {
 		}
 	}
 
-	body := strings.Join(lines, "\n")
-	if p.FormatBody != nil {
-		body = p.FormatBody(body)
-	}
-
-	card := appcards.NewMarkdownBodyCard("技能列表", "blue")
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
-		"tag":     "markdown",
-		"content": body,
-	})
-
+	var elements []map[string]any
 	initialOption := ""
 	if p.HasPending {
 		initialOption = textutil.FirstNonEmpty(strings.TrimSpace(p.Pending.Path), strings.TrimSpace(p.Pending.Name))
@@ -127,7 +117,7 @@ func BuildCard(p BuildCardParams) map[string]any {
 				Value: textutil.FirstNonEmpty(strings.TrimSpace(skill.Path), strings.TrimSpace(skill.Name)),
 			})
 		}
-		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
+		elements = append(elements, appcards.BuildSelectStaticElement(
 			"skills_select",
 			"选择 skill",
 			map[string]any{"action": "skills.select", "session_key": p.SessionKey},
@@ -141,25 +131,17 @@ func BuildCard(p BuildCardParams) map[string]any {
 		reloadLabel = "刷新 /skills reload"
 	}
 
-	for _, row := range appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
-		{
+	return menuutil.MarkdownPageCard{
+		Node: "menu.skills", SessionKey: p.SessionKey, Title: "技能列表", Color: "blue",
+		Body:     strings.Join(lines, "\n"),
+		Elements: elements,
+		Buttons: []feishu.Button{{
 			Text: reloadLabel,
 			Type: "default",
 			Value: map[string]any{
 				"action":      "skills.reload",
 				"session_key": p.SessionKey,
 			},
-		},
-		{
-			Text: feishu.MenuBackButtonText,
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.tools",
-				"session_key": p.SessionKey,
-			},
-		},
-	}) {
-		appcards.AppendMarkdownBodyCardElement(card, row)
-	}
-	return card
+		}},
+	}.Render()
 }

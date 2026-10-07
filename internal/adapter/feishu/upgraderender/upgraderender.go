@@ -128,6 +128,8 @@ func RestartResultText(result string) string {
 	}
 }
 
+// UpgradeStatusButtons builds the forward controls of the upgrade panel. The
+// back control is injected by menuutil.PageCard from the declared node.
 func UpgradeStatusButtons(spec Spec, sessionKey string, running bool) []feishu.Button {
 	buttons := []feishu.Button{
 		{
@@ -167,13 +169,5 @@ func UpgradeStatusButtons(spec Spec, sessionKey string, running bool) []feishu.B
 			},
 		)
 	}
-	buttons = append(buttons, feishu.Button{
-		Text: feishu.MenuBackButtonText,
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.group.backend",
-			"session_key": sessionKey,
-		},
-	})
 	return buttons
 }

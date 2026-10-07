@@ -56,7 +56,7 @@ func BuildSkillCommands(inputs SkillCommandInputs) *skillsadapter.Service {
 		Service: inputs.Service, Outbound: newEffectOutbound(inputs.FrontendID, inputs.EffectRunner),
 		MakeSessionKey:       SessionKeyBuilder(inputs.FrontendID),
 		ReplyInThreadEnabled: func(string) bool { return false },
-		FormatMenuBody:       menuCardBody, CommandLabel: commandLabel,
+		CommandLabel:         commandLabel,
 		RunAsync: func(key string, work func()) bool {
 			return inputs.RunAsync(func() {
 				runSessionOnActor(inputs.Actors, key, work)

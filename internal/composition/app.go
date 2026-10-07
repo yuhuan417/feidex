@@ -17,7 +17,6 @@ import (
 	appfeishuwrap "feidex/internal/adapter/feishu/feishuwrap"
 	"feidex/internal/adapter/feishu/finalcardpatch"
 	"feidex/internal/adapter/feishu/goalcmd"
-	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	feishuoutbound "feidex/internal/adapter/feishu/outbound"
 	"feidex/internal/adapter/feishu/planmode"
 	appreviewcmd "feidex/internal/adapter/feishu/reviewcmd"
@@ -277,7 +276,6 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 	bindings.ClaudeMaintenance = &clauderuntime.Maintenance{Smoke: smoke, Active: active, Current: current, Create: create}
 	bindings.BackendMaintenance = make(map[string]*backendmaintenance.Service)
 	bindings.MaintenanceRunners = make(map[string]maintenance.OperationRunner)
-	maintenanceRenderer := feishuClient
 	maintenanceFrontend := identity.FrontendID(frontend.FrontendID())
 	maintenanceEffects := *scope.RuntimeOwner.EffectRunner
 	for kind, name := range map[string]string{"codex": "Codex", "claude": "Claude"} {
@@ -286,10 +284,10 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 			spec = upgraderender.ClaudeSpec
 		}
 		renderUpgrade := func(sessionKey string, snapshot appbackend.BackendUpgradeSnapshot) map[string]any {
-			return upgraderender.RenderUpgradeOperationCard(spec, maintenanceRenderer, sessionKey, snapshot)
+			return upgraderender.RenderUpgradeOperationCard(spec, sessionKey, snapshot)
 		}
 		renderRestart := func(sessionKey string, snapshot appbackend.BackendRestartSnapshot) map[string]any {
-			return upgraderender.RenderRestartOperationCard(spec, maintenanceRenderer, sessionKey, snapshot)
+			return upgraderender.RenderRestartOperationCard(spec, sessionKey, snapshot)
 		}
 		patchCard := func(ctx context.Context, messageID string, card map[string]any) error {
 			return maintenanceEffects.Run(ctx, []application.Effect{application.PatchCard{
@@ -307,7 +305,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 		bindings.BackendMaintenance[kind] = service
 		bindings.MaintenanceRunners[kind] = maintenance.OperationRunner{Lifecycle: &scope.RuntimeOwner.Lifecycle, Service: service, Executor: feishuapp.AsyncExecutor(asyncRunner)}
 	}
-	bindings.UpgradePresentation = feishuapp.BuildUpgradePresentation(maintenanceRenderer, bindings.BackendMaintenance)
+	bindings.UpgradePresentation = feishuapp.BuildUpgradePresentation(bindings.BackendMaintenance)
 	bindings.BackendUpgrades = feishuapp.BuildBackendUpgrades(feishuapp.BackendUpgradeInputs{
 		SessionKey: feishuapp.SessionKeyBuilder(frontend.FrontendID()), ReplyInThread: func() bool { return false },
 		FrontendID: identity.FrontendID(frontend.FrontendID()), Runner: *scope.RuntimeOwner.EffectRunner,
@@ -391,11 +389,8 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 			return feishuapp.GoalCommandSessionKey(frontend.FrontendID(), msg)
 		},
 		ReplyInThreadEnabledFn: func(string) bool { return false },
-		MenuCardBodyForSessionFn: func(_, action, body string) string {
-			return appmenuutil.MenuCardBody(action, body)
-		},
-		ActionStringValueFn: feishuapp.GoalCommandActionStringValue,
-		ActionSessionKeyFn:  feishuapp.GoalCommandActionSessionKey,
+		ActionStringValueFn:    feishuapp.GoalCommandActionStringValue,
+		ActionSessionKeyFn:     feishuapp.GoalCommandActionSessionKey,
 		CompleteMenuCommandFn: func(action *feishu.CardAction, sessionKey, rawCommand, parentAction string) (*callback.CardActionTriggerResponse, error) {
 			return menuCommands.Complete(action, sessionKey, rawCommand, parentAction)
 		},

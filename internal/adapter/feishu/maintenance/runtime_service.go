@@ -64,9 +64,7 @@ type Dependencies struct {
 	Repository        maintenance.StateProvider
 	ArtifactClient    ArtifactClient
 	Outbound          Outbound
-	Renderer          CardRenderer
 	PermissionNotify  PermissionIssueDiagnosticSender
-	MenuBody          func(string, string) string
 	QueueNotification func(state.FrontendCardNotification)
 	ReadyChatIDs      func([]*conversation.Session) []string
 	RunAsync          func(func())
@@ -76,9 +74,6 @@ type ArtifactClient interface {
 }
 type Outbound interface {
 	PatchCard(context.Context, string, map[string]any) error
-}
-type CardRenderer interface {
-	SimpleStatusCard(string, string, string, []feishu.Button) map[string]any
 }
 type RuntimeMaintenanceService struct{ deps Dependencies }
 
@@ -262,18 +257,14 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 			slog.Warn("upgrade unit cleanup failed", "error", err)
 		}
 	}
-	sessionKey, feishuMsgID, unitName := outcome.SessionKey, outcome.MessageID, outcome.UnitName
+	feishuMsgID, unitName := outcome.MessageID, outcome.UnitName
 	if feishuMsgID == "" {
 		return
 	}
-	cardRenderer := s.deps.Renderer
 	var card map[string]any
 	if outcome.Success {
 		slog.Info("upgrade unit succeeded", "unit", unitName, "source", source)
-		body := "升级已完成，服务已重启。"
-		card = cardRenderer.SimpleStatusCard("升级成功", "green", s.deps.MenuBody("menu.upgrade", body), []feishu.Button{
-			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
-		})
+		card = feishu.SimpleStatusCard("升级成功", "green", "升级已完成，服务已重启。", nil)
 	} else {
 		errMsg := outcome.Error
 		slog.Warn("upgrade unit failed", "unit", unitName, "error", errMsg, "source", source)
@@ -281,9 +272,7 @@ func (s RuntimeMaintenanceService) CheckOneUpgrade(source string, pending *state
 		if errMsg != "" {
 			body += "\n\n错误: " + errMsg
 		}
-		card = cardRenderer.SimpleStatusCard("升级失败", "red", s.deps.MenuBody("menu.upgrade", body), []feishu.Button{
-			{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
-		})
+		card = feishu.SimpleStatusCard("升级失败", "red", body, nil)
 	}
 
 	if err := s.deps.Outbound.PatchCard(ctx, feishuMsgID, card); err != nil {

@@ -190,7 +190,6 @@ type ModelConfigService struct {
 
 	// Menu helper callbacks.
 	FormatMenuBody    func(action, body string) string
-	MenuBackAction    func(action string) string
 	ModelConfigStatus func(sessionKey string) string
 
 	// Card action response callback.
@@ -206,16 +205,6 @@ func (s ModelConfigService) configForSession(sessionKey string) *config.Config {
 		}
 	}
 	return s.configSnapshot()
-}
-
-// backAction resolves the action a card's back control returns to.
-func (s ModelConfigService) backAction(action string) string {
-	if s.MenuBackAction != nil {
-		if resolved := strings.TrimSpace(s.MenuBackAction(action)); resolved != "" {
-			return resolved
-		}
-	}
-	return "menu.root"
 }
 
 // auxModelRef renders one auxiliary-model summary entry: the value in effect,

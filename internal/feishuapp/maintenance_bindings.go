@@ -66,9 +66,7 @@ func BuildMaintenanceCommands(inputs MaintenanceCommandInputs) appmaintenance.Ru
 		Context: inputs.Context, Repository: inputs.Repository, Poller: inputs.Poller,
 		ArtifactClient:   inputs.Feishu,
 		Outbound:         newEffectOutbound(inputs.FrontendID, inputs.EffectRunner),
-		Renderer:         simpleStatusCardRenderer{client: inputs.Feishu},
 		PermissionNotify: maintenancePermissionNotifier{client: inputs.Feishu},
-		MenuBody:         menuCardBody,
 		Workspaces: func() []config.Workspace {
 			if inputs.Config == nil {
 				return nil

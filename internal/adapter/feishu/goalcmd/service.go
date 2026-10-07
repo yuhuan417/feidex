@@ -45,15 +45,14 @@ type Dependencies struct {
 	Outbound      Outbound
 	CardRenderer  CardRenderer
 
-	GoalTracker              *goalapp.Tracker
-	GoalManagement           *goalapp.Management
-	MakeSessionKeyFn         func(*feishu.InboundMessage) string
-	ReplyInThreadEnabledFn   func(string) bool
-	MenuCardBodyForSessionFn func(string, string, string) string
-	ActionStringValueFn      func(*feishu.CardAction, string) string
-	ActionSessionKeyFn       func(*feishu.CardAction) string
-	CompleteMenuCommandFn    func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
-	ContextFn                func() context.Context
+	GoalTracker            *goalapp.Tracker
+	GoalManagement         *goalapp.Management
+	MakeSessionKeyFn       func(*feishu.InboundMessage) string
+	ReplyInThreadEnabledFn func(string) bool
+	ActionStringValueFn    func(*feishu.CardAction, string) string
+	ActionSessionKeyFn     func(*feishu.CardAction) string
+	CompleteMenuCommandFn  func(*feishu.CardAction, string, string, string) (*callback.CardActionTriggerResponse, error)
+	ContextFn              func() context.Context
 }
 
 func (d Dependencies) State() StateProvider   { return d.StateProvider }
@@ -69,12 +68,6 @@ func (d Dependencies) MakeSessionKey(m *feishu.InboundMessage) string {
 }
 func (d Dependencies) ReplyInThreadEnabled(v string) bool {
 	return d.ReplyInThreadEnabledFn != nil && d.ReplyInThreadEnabledFn(v)
-}
-func (d Dependencies) MenuCardBodyForSession(s, a, b string) string {
-	if d.MenuCardBodyForSessionFn == nil {
-		return b
-	}
-	return d.MenuCardBodyForSessionFn(s, a, b)
 }
 func (d Dependencies) ActionStringValue(a *feishu.CardAction, k string) string {
 	if d.ActionStringValueFn == nil {
@@ -379,15 +372,6 @@ func formatGoalTokens(tokens int64) string {
 	default:
 		return fmt.Sprintf("%s%d", sign, tokens)
 	}
-}
-
-func goalBackButtons(sessionKey string) []feishu.Button {
-	return []feishu.Button{{
-		Text:  feishu.MenuBackButtonText,
-		Type:  "default",
-		Name:  "goal_back",
-		Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
-	}}
 }
 
 func goalButtons(sessionKey, threadID string, status conversation.ThreadGoalStatus) []feishu.Button {
