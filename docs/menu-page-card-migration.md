@@ -1,6 +1,6 @@
 # 菜单页面卡迁移：方案与进度
 
-状态：进行中（阶段 A / B 已完成，D 框架完成、页面迁移大部分完成，余量见下文清单）
+状态：已完成（所有声明节点页面均走 PageCard / MarkdownPageCard；有意保留的手工卡片见下文）
 关联契约：`DEVELOPER.md`（Interaction Constraints、High-Signal Test Guards、When Adding Or Changing A Menu Action）
 守卫测试：`internal/feishuapp/menu_graph_guard_test.go`、`internal/application/features/registry_test.go`、`internal/feishuapp/menu_back_button_contract_test.go`
 
@@ -23,7 +23,7 @@
 
 ## 已迁移页面卡（走 PageCard / MarkdownPageCard）
 
-- feishuapp：quiet 卡、群工作区管理卡（binding status）、fast 卡、群 Codex/Claude 模型卡、群辅助模型卡、status 面板
+- feishuapp：quiet 卡、群工作区管理卡（binding status）、fast 卡、群 Codex/Claude 模型卡、群辅助模型卡、模型配置错误卡（不支持的 backend 分支、刷新失败卡）、status 面板
 - adapter/feishu/modelconfig：p2p/全局 Codex 模型卡、Claude 模型卡、Codex 辅助卡、Claude 辅助卡（applyStatusTail 保留在返回键之后）
 - adapter/feishu/history：Codex/Claude 历史列表卡、Codex/Claude Turn 详情卡（返回带 `page` 参数，经 `BackParams`）
 - adapter/feishu/goalcmd：goal 状态卡、create/edit 表单卡、cleared 卡、replace 确认卡（goalButtons 不再自带返回键）
@@ -32,6 +32,13 @@
 - adapter/feishu/workspace：新建表单卡、clone 表单卡、worktree 表单卡、工作区管理卡（p2p）、删除列表卡、删除确认卡
 - adapter/feishu/threadview：Codex/Claude 会话卡（并删除了包内重复的 menuBreadcrumbLabelsForBackend/menuNodeLabelForBackend/menuCardBodyForBackend 本地副本）
 - adapter/feishu/backend（permission driver）：thread.sandbox.menu、thread.policy.menu、thread.multiagent.menu、thread.permission_mode.menu 四张线程设置页
+- adapter/feishu/upgraderender：Codex/Claude 管理页的状态卡、升级确认卡、失败卡（`Node` 由 `Spec.MenuAction` 提供）
+- adapter/feishu/upgradecmd：升级服务的检查失败卡、检查结果卡、升级确认卡
+- adapter/feishu/servicetier：响应速度卡（menu.fast）
+- adapter/feishu/autoretry：自动重试配置卡（menu.auto_retry）
+- adapter/feishu/backend/selection：后端选择卡（menu.backend.switch）
+- adapter/feishu/skills：技能列表卡（menu.skills）
+- feishuapp：`/help` 命令帮助卡（menu.help）
 
 ## 迁移中发现并修复的真实缺陷
 
@@ -42,17 +49,22 @@
 - `menu.goal` 缺 Node 声明；`workspace.binding.unbind`（操作）误声明为 Node（已撤销）
 - back-button AST 扫描根仍指向已搬空的 `internal/app` → 改为渲染器实际所在目录
 - 群工作区页返回键自环（menu.workspace→menu.workspace）→ 改为声明父级 menu.root（对应测试断言已更新）
+- 升级面板返回键硬编码 `menu.group.system` / `menu.group.backend`、`UpgradePanelButtons` 靠 `includeBack` 参数决定是否附返回键 → 改由 PageCard 从声明父级注入，参数与 `upgradeBackButtons` 一并删除
+- `skills` 列表卡、`/help` 卡、响应速度卡、自动重试卡、后端选择卡仍在手写面包屑+返回键 → 全部改走 PageCard/MarkdownPageCard
+- 模型配置的两个错误分支（不支持的 backend、刷新失败）认领 menu.model 面包屑却手工拼装，而同函数的 Codex/Claude 分支已走 PageCard → 改为 PageCard，返回键由 `MenuBackAction("menu.model")` 派生（与原硬编码的 menu.root 一致）；随之删除无人调用的 `ModelConfigService.backAction`、注入的 `MenuBackAction` 与 `feishuapp.menuBackAction`
 
 ## 有意保留手工构造的卡片（非节点页面）
 
 - 根菜单卡（`menu.root`）：无返回键属预期（已是树根）
 - 分组菜单卡：返回键来自声明中的 `MenuItemBack` 项，比构造注入更数据驱动
-- compaction 三张状态卡、review 目标选择/失败卡、upgrade 运行卡、`renderBindingModelConfigOrErrorCard`/权限不足等错误卡：锚定操作卡或错误对话框，返回目标带请求上下文或锚定在父分组，不是独立节点页面；结构仍由图守卫校验
+- compaction 三张状态卡、review 目标选择/失败卡、debug 权限不足等错误卡：锚定操作卡或错误对话框，返回目标带请求上下文或锚定在父分组，不是独立节点页面；结构仍由图守卫校验（这些卡仍然手写面包屑，见"遗留"）
 - `thread_feature_actions.go` 的中断占位/确认卡：瞬态卡
+- workspace 的 clone/worktree 成功、切换、手动提示、取消结果卡：操作结果卡，本就不认领面包屑，只带一个指回 `menu.workspace` 的返回键
+- 升级/重启的 preparing、取消、运行中、结果卡（upgraderender、upgradecmd、maintenance）：状态展示而非菜单页——它们由请求驱动、被就地 patch，因此不认领面包屑，也不注入返回键；运行卡的刷新/检查/升级等自身控件保留。契约由 `upgraderender/cards_test.go` 与 `upgradecmd/upgrade_pure_test.go` 钉住
 
 ## 遗留与后续
 
-- `upgradecmd`/`upgraderender` 的升级页共约 12 处面包屑仍手写：返回按钮携带请求上下文（prepare/confirm/cancel request id），需要 PageCard 支持多按钮尾部或单独迁移，收益有限（守卫已覆盖其结构正确性）
+- 上述 compaction / review 异步卡 / 错误卡仍然手写面包屑与返回键：它们不认领节点页面，或返回目标按操作上下文而定（compaction 回 menu.tools 分组、review 异步卡回 menu.review、review 表单卡的出口是带 request_id 的「取消」），迁到 PageCard 会用 `MenuBackAction(节点)` 覆盖掉这些目标，反而出错
 - 图守卫的命令回复收割依赖 fake client 同步回放；若未来命令回复改为纯异步 effect，需要给 walk 增加排空等待
 - 新增菜单页面的工作流：在 `features/data.go` 声明 Node（+MenuItemSpec/Commands）→ 渲染器用 `menuutil.PageCard`/`MarkdownPageCard` 组装 → handler 注册到 action registry → `go test ./internal/feishuapp/ -run TestMenuGraphGuard` 验证
 
