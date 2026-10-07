@@ -332,7 +332,6 @@ If Feidex adds another backend, keep these rules:
 - Do not collapse the product to the lowest common denominator. Shared abstractions should cover the common lifecycle, while backend-specific capabilities remain first-class product features.
 - Do not make one backend the semantic parent of the other. Backend-neutral types are for shared orchestration only; backend-native capabilities should live behind explicit extension points.
 - Capability differences must be explicit. If a backend does not support review, compaction, thread history, skills catalog, or model catalog parity, gate the product surface instead of allowing protocol errors to leak through.
-- Use [docs/claude-cli-backend-design.md](/home/yuhuan/feidex/docs/claude-cli-backend-design.md) as the current design reference for the Claude dual-backend direction.
 
 ### Feishu
 

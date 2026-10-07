@@ -133,8 +133,7 @@ func TestFetchWSEndpointErrors(t *testing.T) {
 
 // The preflight must surface the server-provided client config, because the SDK
 // applies it without guarding against zero: a missing value would overwrite the
-// SDK's defaults with 0 and cause reconnect churn. See
-// docs/oapi-sdk-v3.12.0-upgrade-plan.md 3.5.5.
+// SDK's defaults with 0 and cause reconnect churn.
 func TestFetchWSEndpointParsesClientConfig(t *testing.T) {
 	a := New(config.FeishuConfig{AppID: "app", AppSecret: "secret"})
 	a.httpClient = stubHTTPClient(roundTripperFunc(func(req *http.Request) (*http.Response, error) {

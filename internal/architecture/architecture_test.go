@@ -1079,11 +1079,9 @@ func importsUnder(root, relative string, banned []string) ([]string, error) {
 }
 
 // TestFeishuAppAggregateDoesNotGrow pins the remaining *App coupling in
-// internal/feishuapp. The package is the transitional home of the Feishu
-// frontend implementation; the migration that removes the aggregate proceeds
-// one capability at a time (see
-// docs/feishuapp-app-aggregate-removal.md and
-// docs/feishuapp-construction-cycle-breaking.md).
+// internal/feishuapp. The package is the Feishu frontend implementation home;
+// the aggregate removal migration is complete and the budget must stay at
+// zero.
 //
 // The budget only ratchets down. Converting a function or struct to take the
 // narrow values it uses should lower the number here in the same commit; if a

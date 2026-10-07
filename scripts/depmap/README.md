@@ -1,7 +1,8 @@
 # depmap
 
-Analysis tool for the `*App` aggregate removal in `internal/feishuapp`
-(see [docs/feishuapp-app-aggregate-removal.md](../../docs/feishuapp-app-aggregate-removal.md)).
+AST analysis tool for `*App` coupling in `internal/feishuapp`. Built for the
+aggregate-removal migration (now complete; the coupling budget is pinned at
+zero by `TestFeishuAppAggregateDoesNotGrow`), kept for future coupling audits.
 
 It parses the package with `go/ast` and reports, for every function that takes
 `*App`:

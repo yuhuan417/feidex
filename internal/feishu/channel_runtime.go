@@ -116,7 +116,7 @@ func (a *Adapter) fetchWSEndpoint(ctx context.Context) (*larkws.EndpointResp, er
 // receives events over it, wires the handlers this project owns, and starts
 // the connection in the background.
 //
-// Ownership split (see docs/oapi-sdk-v3.12.0-upgrade-plan.md 3.4):
+// Ownership split between the SDK channel and this project:
 //   - channel owns messages, reactions and bot-added events;
 //   - this project owns card callbacks (channel's OnCardAction cannot return a
 //     callback response, and 98% of card paths return a toast through it) and

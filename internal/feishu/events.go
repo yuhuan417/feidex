@@ -62,7 +62,7 @@ func eventRegistrations() []eventRegistration {
 			callback:  true,
 			// Card callbacks stay ours: channel's OnCardAction discards the
 			// callback response, and 98% of this project's card paths return a
-			// toast through it. See docs/oapi-sdk-v3.12.0-upgrade-plan.md 3.2.
+			// toast through it.
 			register: func(a *Adapter, d *dispatcher.EventDispatcher) {
 				d.OnP2CardActionTrigger(func(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
 					return a.handleCardActionEvent(ctx, event)
