@@ -189,10 +189,10 @@ func TestCompleteMenuReviewReturnsReviewEntryCard(t *testing.T) {
 		t.Fatalf("menu review button count = %d, want 5", len(buttons))
 	}
 	wantActions := []string{
-		"menu.review.uncommitted",
-		"menu.review.base",
-		"menu.review.commit",
-		"menu.review.custom",
+		"review.start.uncommitted",
+		"review.start.base",
+		"review.start.commit",
+		"review.start.custom",
 		"menu.tools",
 	}
 	for i, want := range wantActions {

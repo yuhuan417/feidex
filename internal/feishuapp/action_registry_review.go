@@ -23,16 +23,16 @@ func reviewCardActionHandlers(inputs ReviewCardActionInputs) map[string]cardActi
 			}
 			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "info", Content: "已打开代码审查"}, Card: rawCard(inputs.ReviewCommands.RenderReviewMenuCard(sessionKey))}, nil
 		},
-		"menu.review.uncommitted": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"review.start.uncommitted": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return appreviewcmd.CompleteMenuReviewUncommitted(inputs.Dependencies, action, actionSessionKey(action))
 		},
-		"menu.review.base": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"review.start.base": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return appreviewcmd.CompleteMenuReviewBase(inputs.Dependencies, action, actionSessionKey(action))
 		},
-		"menu.review.commit": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"review.start.commit": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return appreviewcmd.CompleteMenuReviewCommit(inputs.Dependencies, action, actionSessionKey(action))
 		},
-		"menu.review.custom": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"review.start.custom": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return inputs.CompleteMenuCommand(action, actionSessionKey(action), "/review custom", "menu.review")
 		},
 	}

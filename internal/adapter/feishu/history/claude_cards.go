@@ -70,18 +70,9 @@ func renderClaudePage(sessionKey string, view historyapp.Page) map[string]any {
 			},
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text: feishu.MenuBackButtonText,
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.tools",
-			"session_key": sessionKey,
-		},
-	})
-	card := appcards.NewMarkdownBodyCard("历史记录", "blue")
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuutil.MenuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
+	elements := []map[string]any{}
 	if len(selectOptions) > 0 {
-		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
+		elements = append(elements, appcards.BuildSelectStaticElement(
 			"history_detail_select",
 			"选择要查看的 turn",
 			map[string]any{"action": "history.detail.select", "session_key": sessionKey},
@@ -89,8 +80,12 @@ func renderClaudePage(sessionKey string, view historyapp.Page) map[string]any {
 			initialOption,
 		))
 	}
-	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildMarkdownBodyCardActionElement(buttons))
-	return card
+	return menuutil.MarkdownPageCard{
+		Node: "menu.history", SessionKey: sessionKey, Title: "历史记录", Color: "blue",
+		Body:     strings.Join(bodyLines, "\n"),
+		Elements: elements,
+		Buttons:  buttons,
+	}.Render()
 }
 
 func renderClaudeDetail(sessionKey string, view historyapp.Detail) map[string]any {
@@ -156,14 +151,10 @@ func renderClaudeDetail(sessionKey string, view historyapp.Detail) map[string]an
 			},
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text: feishu.MenuBackButtonText,
-		Type: "default",
-		Value: map[string]any{
-			"action":      "history.page",
-			"session_key": sessionKey,
-			"page":        index / HistoryPageSize,
-		},
-	})
-	return feishu.SimpleStatusCard("Turn 详情", "blue", menuutil.MenuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons)
+	return menuutil.PageCard{
+		Node: "history.detail", SessionKey: sessionKey, Title: "Turn 详情", Color: "blue",
+		Body:       strings.Join(bodyLines, "\n"),
+		Buttons:    buttons,
+		BackParams: map[string]any{"page": index / HistoryPageSize},
+	}.Render()
 }

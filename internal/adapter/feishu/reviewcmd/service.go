@@ -6,6 +6,7 @@ package reviewcmd
 import (
 	"context"
 	"encoding/json"
+	menuutil "feidex/internal/adapter/feishu/menuutil"
 	interactionapp "feidex/internal/application/interaction"
 	reviewapp "feidex/internal/application/review"
 	"feidex/internal/application/workspace"
@@ -402,30 +403,29 @@ func (s ReviewFormService) RenderReviewMenuCard(sessionKey string) map[string]an
 		{
 			Text:  commandLabel("审查未提交改动", "/review"),
 			Type:  "default",
-			Value: map[string]any{"action": "menu.review.uncommitted", "session_key": sessionKey},
+			Value: map[string]any{"action": "review.start.uncommitted", "session_key": sessionKey},
 		},
 		{
 			Text:  submenuCommandLabel("对比分支审查", "/review base"),
 			Type:  "default",
-			Value: map[string]any{"action": "menu.review.base", "session_key": sessionKey},
+			Value: map[string]any{"action": "review.start.base", "session_key": sessionKey},
 		},
 		{
 			Text:  submenuCommandLabel("审查单个 commit", "/review commit"),
 			Type:  "default",
-			Value: map[string]any{"action": "menu.review.commit", "session_key": sessionKey},
+			Value: map[string]any{"action": "review.start.commit", "session_key": sessionKey},
 		},
 		{
 			Text:  submenuCommandLabel("自定义审查", "/review custom"),
 			Type:  "default",
-			Value: map[string]any{"action": "menu.review.custom", "session_key": sessionKey},
-		},
-		{
-			Text:  feishu.MenuBackButtonText,
-			Type:  "default",
-			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
+			Value: map[string]any{"action": "review.start.custom", "session_key": sessionKey},
 		},
 	}
-	return s.app.ReviewRenderer().SimpleStatusCard("代码审查", "blue", s.app.ReviewMenuCardBody("menu.review", strings.Join(bodyLines, "\n")), buttons)
+	return menuutil.PageCard{
+		Node: "menu.review", SessionKey: sessionKey, Title: "代码审查", Color: "blue",
+		Body:    strings.Join(bodyLines, "\n"),
+		Buttons: buttons,
+	}.Render()
 }
 
 // BeginReviewForm starts a review form interaction for the given mode.

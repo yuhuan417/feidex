@@ -34,7 +34,7 @@ func toolsCardActionHandlers(inputs ToolsCardActionInputs) map[string]cardAction
 			}
 			return &callback.CardActionTriggerResponse{
 				Toast: &callback.Toast{Type: "success", Content: "已更新 quiet 模式为 " + quietmode.StatusText(mode)},
-				Card:  rawCard(renderQuietModeMenuCard(inputs.QuietMode(), sessionKey, planModeTitleForSession(inputs.State, true, sessionKey, "Quiet Mode"), inputs.Renderer)),
+				Card:  rawCard(renderQuietModeMenuCard(inputs.QuietMode(), sessionKey, planModeTitleForSession(inputs.State, true, sessionKey, "Quiet Mode"))),
 			}, nil
 		},
 		"menu.history": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {

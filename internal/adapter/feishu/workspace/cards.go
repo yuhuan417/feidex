@@ -6,6 +6,7 @@ import (
 
 	"feidex/internal/adapter/feishu/cardactions"
 	appcards "feidex/internal/adapter/feishu/cards"
+	menuutil "feidex/internal/adapter/feishu/menuutil"
 	appselection "feidex/internal/application/workspace"
 	domain "feidex/internal/domain/workspace"
 	"feidex/internal/feishu"
@@ -22,15 +23,12 @@ func (s *RenderService) RenderWorkspaceNewCard(sessionKey, requestID string, pay
 	if selectedCWD == "" {
 		selectedCWD = payload.RootPath
 	}
-	card := appcards.NewMarkdownBodyCard("新建工作区", "orange")
-	body := "当前位置：主菜单 / workspace / new\n\n" +
-		"已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
+	body := "已选目录: `" + firstNonEmpty(selectedCWD, "-") + "`\n" +
 		"浏览根目录: `" + firstNonEmpty(strings.TrimSpace(payload.RootPath), "-") + "`\n\n" +
 		"可以先选目录，再填写 `workspace_id` 和可选的 `name`。选完目录后会按目录名自动建议 `workspace_id`。点「确认」时才会校验 `workspace_id`。"
 	if notice := strings.TrimSpace(payload.Notice); notice != "" {
 		body = notice + "\n\n" + body
 	}
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 	buttonRows := appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
 		{
 			Text:  "选目录",
@@ -87,8 +85,11 @@ func (s *RenderService) RenderWorkspaceNewCard(sessionKey, requestID string, pay
 		"vertical_spacing":   "8px",
 		"elements":           append(append([]map[string]any{}, buttonRows...), workspaceIDInput, workspaceNameInput),
 	}
-	appcards.AppendMarkdownBodyCardElement(card, form)
-	return card
+	return menuutil.MarkdownPageCard{
+		Node: "workspace.new", SessionKey: sessionKey, Title: "新建工作区", Color: "orange",
+		Body:     body,
+		Elements: []map[string]any{form},
+	}.Render()
 }
 
 // RenderWorkspaceCloneCard renders the "clone workspace" card.
@@ -105,17 +106,14 @@ func (s *RenderService) RenderWorkspaceCloneCard(view appselection.View, session
 		workspaceLabel = "`" + workspaceID + "`"
 	}
 
-	card := appcards.NewMarkdownBodyCard("从仓库创建工作区", "orange")
 	body := "当前工作区: " + workspaceLabel + "\n" +
 		"已选父目录: `" + firstNonEmpty(parentDir, "-") + "`\n" +
 		"创建方式: `" + cloneMode + "`\n" +
 		"浏览根目录: `" + firstNonEmpty(rootPath, "-") + "`\n\n" +
 		"先填写 Git 地址，再按需调整父目录和 `workspace_id`；`workspace_id` 留空会按仓库名自动推导。选择 `clone 后创建 worktree` 后，点「更新表单」会显示 worktree 分支、workspace_id 和目录名；这些字段留空会按 bot 显示名 + base project 自动推导，目录名默认等于 worktree workspace_id。"
-	body = s.FormatMenuBody("workspace.clone", body)
 	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
 		body += "\n\n最近一次创建失败：\n" + errText + "\n\n请修正后重试。"
 	}
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
 
 	repoURLInput := map[string]any{
 		"tag":         "input",
@@ -214,8 +212,11 @@ func (s *RenderService) RenderWorkspaceCloneCard(view appselection.View, session
 		"vertical_spacing":   "8px",
 		"elements":           formElements,
 	}
-	appcards.AppendMarkdownBodyCardElement(card, form)
-	return card
+	return menuutil.MarkdownPageCard{
+		Node: "workspace.clone", SessionKey: sessionKey, Title: "从仓库创建工作区", Color: "orange",
+		Body:     body,
+		Elements: []map[string]any{form},
+	}.Render()
 }
 
 // RenderWorkspaceClonePreparingCard renders the clone in-progress card.
@@ -405,7 +406,6 @@ func (s *RenderService) RenderWorkspaceWorktreeCard(view appselection.View, sess
 		baseOptions = append(baseOptions, appcards.SelectStaticOption{Text: baseWorkspaceID, Value: baseWorkspaceID})
 	}
 
-	card := appcards.NewMarkdownBodyCard("从 Worktree 创建工作区", "orange")
 	body := strings.Join([]string{
 		"基准工作区: `" + firstNonEmpty(baseWorkspaceID, "-") + "`",
 		"新分支: `" + firstNonEmpty(branchName, "-") + "`",
@@ -420,12 +420,10 @@ func (s *RenderService) RenderWorkspaceWorktreeCard(view appselection.View, sess
 		"- 工作区 ID / workspace_id: Feidex 里显示和切换用的新工作区 ID。",
 		"- 目录名 / directory_name: 实际创建的 worktree 目录名，默认等于 workspace_id，位置在基准仓库同级目录。",
 	}, "\n")
-	body = s.FormatMenuBody("workspace.worktree", body)
+
 	if errText := strings.TrimSpace(payload.ErrorMessage); errText != "" {
 		body += "\n\n最近一次创建失败：\n" + errText + "\n\n请修正后重试。"
 	}
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
-
 	baseSelect := appcards.BuildFormSelectStaticElement("base_workspace_id", "基准工作区", baseOptions, baseWorkspaceID)
 	branchInput := map[string]any{
 		"tag":         "input",
@@ -486,8 +484,11 @@ func (s *RenderService) RenderWorkspaceWorktreeCard(view appselection.View, sess
 		"vertical_spacing":   "8px",
 		"elements":           append(append([]map[string]any{baseSelect, branchInput}, buttonRows...), workspaceIDInput, directoryNameInput),
 	}
-	appcards.AppendMarkdownBodyCardElement(card, form)
-	return card
+	return menuutil.MarkdownPageCard{
+		Node: "workspace.worktree", SessionKey: sessionKey, Title: "从 Worktree 创建工作区", Color: "orange",
+		Body:     body,
+		Elements: []map[string]any{form},
+	}.Render()
 }
 
 // RenderWorkspaceWorktreePreparingCard renders a worktree creation progress card.
@@ -664,31 +665,22 @@ func (s *RenderService) RenderWorkspaceMenuCard(view appselection.View, sessionK
 			},
 		})
 	}
-	buttons = append(buttons,
-		feishu.Button{
-			Text: feishu.MenuBackButtonText,
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.root",
-				"session_key": sessionKey,
-			},
-		},
-	)
-	card := appcards.NewMarkdownBodyCard("工作区管理", "blue")
 	body := strings.Join(bodyLines, "\n")
-	body = s.FormatMenuBody("menu.workspace", body)
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": body})
-	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
-		"workspace_select",
-		"list",
-		map[string]any{"action": "workspace.use.select", "session_key": sessionKey},
-		selectOptions,
-		currentID,
-	))
-	for _, row := range appcards.BuildMarkdownBodyCardActionElements(buttons) {
-		appcards.AppendMarkdownBodyCardElement(card, row)
+	elements := []map[string]any{
+		appcards.BuildSelectStaticElement(
+			"workspace_select",
+			"list",
+			map[string]any{"action": "workspace.use.select", "session_key": sessionKey},
+			selectOptions,
+			currentID,
+		),
 	}
-	return card
+	elements = append(elements, appcards.BuildMarkdownBodyCardActionElements(buttons)...)
+	return menuutil.MarkdownPageCard{
+		Node: "menu.workspace", SessionKey: sessionKey, Title: "工作区管理", Color: "blue",
+		Body:     body,
+		Elements: elements,
+	}.Render()
 }
 
 // RenderWorkspaceChooseCard renders the workspace choose card with buttons sorted by recently used.
@@ -748,15 +740,10 @@ func (s *RenderService) RenderWorkspaceDeleteMenuCard(view appselection.View, se
 	if len(deleteOptions) == 0 {
 		lines = append(lines, "", "当前没有可删除的其他工作区。")
 	}
-	card := appcards.NewMarkdownBodyCard("删除工作区", "orange")
 	body := strings.Join(lines, "\n")
-	body = s.FormatMenuBody("workspace.delete.menu", body)
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
-		"tag":     "markdown",
-		"content": body,
-	})
+	elements := []map[string]any{}
 	if len(deleteOptions) > 0 {
-		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
+		elements = append(elements, appcards.BuildSelectStaticElement(
 			"workspace_delete_select",
 			"选择要删除的 workspace",
 			map[string]any{"action": "workspace.delete.prompt", "session_key": sessionKey},
@@ -764,19 +751,11 @@ func (s *RenderService) RenderWorkspaceDeleteMenuCard(view appselection.View, se
 			"",
 		))
 	}
-	for _, row := range appcards.BuildMarkdownBodyCardActionElements([]feishu.Button{
-		{
-			Text: feishu.MenuBackButtonText,
-			Type: "default",
-			Value: map[string]any{
-				"action":      "menu.workspace",
-				"session_key": sessionKey,
-			},
-		},
-	}) {
-		appcards.AppendMarkdownBodyCardElement(card, row)
-	}
-	return card, nil
+	return menuutil.MarkdownPageCard{
+		Node: "workspace.delete.menu", SessionKey: sessionKey, Title: "删除工作区", Color: "orange",
+		Body:     body,
+		Elements: elements,
+	}.Render(), nil
 }
 
 // RenderWorkspaceDeleteConfirmCard renders the workspace delete confirmation card.
@@ -801,16 +780,10 @@ func (s *RenderService) RenderWorkspaceDeleteConfirmCard(sessionKey string, ws d
 				"workspace_id": workspaceID,
 			},
 		},
-		{
-			Text: feishu.MenuBackButtonText,
-			Type: "default",
-			Value: map[string]any{
-				"action":      "workspace.delete.menu",
-				"session_key": sessionKey,
-			},
-		},
 	}
-	bodyText := strings.Join(body, "\n")
-	bodyText = s.FormatMenuBody("workspace.delete.confirm", bodyText)
-	return feishu.SimpleStatusCard("确认删除工作区", "red", bodyText, buttons), nil
+	return menuutil.PageCard{
+		Node: "workspace.delete.confirm", SessionKey: sessionKey, Title: "确认删除工作区", Color: "red",
+		Body:    strings.Join(body, "\n"),
+		Buttons: buttons,
+	}.Render(), nil
 }

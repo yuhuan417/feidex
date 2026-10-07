@@ -58,7 +58,7 @@ func CompleteMenuReviewUncommitted(a Dependencies, action *feishu.CardAction, se
 		renderReviewPreparingCard(a, sessionKey, "正在准备 review，请稍候。\n\n这张卡片会自动刷新。"),
 		func(sessionKey, text string) map[string]any { return renderReviewResultCard(a, sessionKey, text) },
 		func(sessionKey, errText string) map[string]any {
-			return renderReviewFailureCard(a, sessionKey, errText, "menu.review.uncommitted")
+			return renderReviewFailureCard(a, sessionKey, errText, "review.start.uncommitted")
 		},
 		"review uncommitted patch failed",
 	)
@@ -74,7 +74,7 @@ func CompleteMenuReviewBase(a Dependencies, action *feishu.CardAction, sessionKe
 		renderReviewPreparingCard(a, sessionKey, "正在加载 base branch 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 		func(sessionKey, errText string) map[string]any {
-			return renderReviewFailureCard(a, sessionKey, errText, "menu.review.base")
+			return renderReviewFailureCard(a, sessionKey, errText, "review.start.base")
 		},
 		"review base patch failed",
 	)
@@ -90,7 +90,7 @@ func CompleteMenuReviewCommit(a Dependencies, action *feishu.CardAction, session
 		renderReviewPreparingCard(a, sessionKey, "正在加载 commit 选择，请稍候。\n\n这张卡片会自动刷新。"),
 		nil,
 		func(sessionKey, errText string) map[string]any {
-			return renderReviewFailureCard(a, sessionKey, errText, "menu.review.commit")
+			return renderReviewFailureCard(a, sessionKey, errText, "review.start.commit")
 		},
 		"review commit patch failed",
 	)

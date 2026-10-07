@@ -115,7 +115,7 @@ func TestRenderClaudeThreadsCardShowsForkAndShortIDsForActiveSession(t *testing.
 		t.Fatalf("Claude thread card body = %q, want warmup hint", body)
 	}
 	labels := cardButtonLabelsByAction(card)
-	if _, ok := labels["menu.fork"]; !ok {
+	if _, ok := labels["thread.fork.start"]; !ok {
 		t.Fatalf("Claude thread card missing fork button: %+v", labels)
 	}
 	if _, ok := labels["thread.sandbox.menu"]; ok {

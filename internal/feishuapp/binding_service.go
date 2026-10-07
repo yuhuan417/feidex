@@ -1,6 +1,7 @@
 package feishuapp
 
 import (
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	applicationrouting "feidex/internal/application/routing"
 	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
@@ -313,7 +314,9 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 	primaryLabel := onOffLabel(groupPrimaryEnabled(s.deps.Primary, s.deps.FrontendID, chatType, chatID))
 	if binding == nil {
 		body := "当前 Bot 在本群还没有配置工作区。\nprimary: `" + primaryLabel + "`\n\n使用 `@Bot /workspace use WORKSPACE_ID` 选择已有工作区，也可以用 `@Bot /workspace new worktree` 基于当前 Git 仓库创建隔离 worktree，或用 `@Bot /workspace clone GIT_URL [WORKSPACE_ID] [--parent DIR]` 从仓库创建。"
-		return s.renderer("工作区管理", "orange", menuCardBody("menu.workspace", body), []feishu.Button{groupBindingBackButton(sessionKey)})
+		return appmenuutil.PageCard{
+			Node: "menu.workspace", SessionKey: sessionKey, Title: "工作区管理", Color: "orange", Body: body,
+		}.Render()
 	}
 	statusLine := "状态: `工作区未配置`"
 	workspaceLine := "workspace: `(未配置)`"
@@ -357,12 +360,14 @@ func (s bindingService) renderBindingStatusCard(sessionKey string, binding *stat
 		buttons = append(buttons, feishu.Button{Text: "使用 default", Type: "default", Value: map[string]any{"action": "workspace.use.existing", "session_key": sessionKey, "workspace_id": "default"}})
 	}
 	buttons = append(buttons, feishu.Button{Text: "选择已有", Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": sessionKey}})
-	buttons = append(buttons, groupBindingBackButton(sessionKey))
 	color := "blue"
 	if binding.Status != state.AgentBindingStatusActive.String() || strings.TrimSpace(binding.WorkspaceID) == "" {
 		color = "orange"
 	}
-	return s.renderer("工作区管理", color, menuCardBody("menu.workspace", strings.Join(lines, "\n")), buttons)
+	return appmenuutil.PageCard{
+		Node: "menu.workspace", SessionKey: sessionKey, Title: "工作区管理", Color: color,
+		Body: strings.Join(lines, "\n"), Buttons: buttons,
+	}.Render()
 }
 
 func currentBotMenuContext(scope bindingSessionScope, sessionKey string) (chatType, chatID, rootMessageID, userID string) {

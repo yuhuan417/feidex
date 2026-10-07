@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/adapter/feishu/planmode"
 	"feidex/internal/adapter/feishu/quietmode"
 	"feidex/internal/adapter/feishu/turnitem"
@@ -21,7 +22,7 @@ func shouldDeliverTurnItemPayloadInQuiet(mode config.QuietMode, payload turnitem
 	return quietmode.ShouldDeliverTurnItemPayload(mode, payload.ItemType, payload.ProtocolItemType, payload.ToolName, payload.IsFinalAnswer)
 }
 
-func renderQuietModeMenuCard(mode config.QuietMode, sessionKey, title string, renderer bindingCardRenderer) map[string]any {
+func renderQuietModeMenuCard(mode config.QuietMode, sessionKey, title string) map[string]any {
 	lines := []string{
 		"当前模式: `" + quietmode.StatusText(mode) + "`",
 		"",
@@ -29,7 +30,7 @@ func renderQuietModeMenuCard(mode config.QuietMode, sessionKey, title string, re
 	for _, option := range quietmode.Options {
 		lines = append(lines, "- `"+option.Title+"`: "+option.Description)
 	}
-	buttons := make([]feishu.Button, 0, len(quietmode.Options)+1)
+	buttons := make([]feishu.Button, 0, len(quietmode.Options))
 	for _, option := range quietmode.Options {
 		buttons = append(buttons, feishu.Button{
 			Text: func() string {
@@ -51,14 +52,14 @@ func renderQuietModeMenuCard(mode config.QuietMode, sessionKey, title string, re
 			},
 		})
 	}
-	if strings.TrimSpace(sessionKey) != "" {
-		buttons = append(buttons, feishu.Button{
-			Text:  feishu.MenuBackButtonText,
-			Type:  "default",
-			Value: map[string]any{"action": "menu.tools", "session_key": sessionKey},
-		})
-	}
-	return renderer.SimpleStatusCard(title, "blue", menuCardBody("menu.quiet", strings.Join(lines, "\n")), buttons)
+	return appmenuutil.PageCard{
+		Node:       "menu.quiet",
+		SessionKey: sessionKey,
+		Title:      title,
+		Color:      "blue",
+		Body:       strings.Join(lines, "\n"),
+		Buttons:    buttons,
+	}.Render()
 }
 
 func updateQuietMode(settings runtimeconfig.Service, mode config.QuietMode) error {
@@ -92,7 +93,7 @@ func handleQuietCommand(inputs QuietCommandInputs, msg *feishu.InboundMessage, a
 			return nil
 		}
 		sessionKey := inputs.MakeSessionKey(msg)
-		card := renderQuietModeMenuCard(inputs.Mode(), sessionKey, planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, "Quiet Mode"), inputs.Renderer)
+		card := renderQuietModeMenuCard(inputs.Mode(), sessionKey, planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, "Quiet Mode"))
 		return replyCardEffect(inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, card)
 	}
 	arg := strings.TrimSpace(args[0])
@@ -103,7 +104,7 @@ func handleQuietCommand(inputs QuietCommandInputs, msg *feishu.InboundMessage, a
 				return nil
 			}
 			sessionKey := inputs.MakeSessionKey(msg)
-			card := renderQuietModeMenuCard(inputs.Mode(), sessionKey, planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, "Quiet Mode"), inputs.Renderer)
+			card := renderQuietModeMenuCard(inputs.Mode(), sessionKey, planModeTitleForSession(inputs.State, inputs.State != nil, sessionKey, "Quiet Mode"))
 			return replyCardEffect(inputs.Effects, inputs.FrontendID, inputs.ReplyInThread, msg, card)
 		default:
 			mode, err := config.ParseQuietMode(config.QuietMode(arg))

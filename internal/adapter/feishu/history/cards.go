@@ -69,15 +69,9 @@ func RenderPage(sessionKey string, view historyapp.Page) map[string]any {
 			Value: cardactions.HistoryPageActionValue{SessionKey: sessionKey, Page: page + 1}.Map(),
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text:  feishu.MenuBackButtonText,
-		Type:  "default",
-		Value: cardactions.MenuActionValue{Action: "menu.tools", SessionKey: sessionKey}.Map(),
-	})
-	card := appcards.NewMarkdownBodyCard("历史记录", "blue")
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": menuutil.MenuCardBody("menu.history", strings.Join(bodyLines, "\n"))})
+	elements := []map[string]any{}
 	if len(selectOptions) > 0 {
-		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
+		elements = append(elements, appcards.BuildSelectStaticElement(
 			"history_detail_select",
 			"选择要查看的 turn",
 			cardactions.HistoryDetailSelectActionValue{SessionKey: sessionKey}.Map(),
@@ -85,8 +79,12 @@ func RenderPage(sessionKey string, view historyapp.Page) map[string]any {
 			initialOption,
 		))
 	}
-	appcards.AppendMarkdownBodyCardElement(card, appcards.BuildMarkdownBodyCardActionElement(buttons))
-	return card
+	return menuutil.MarkdownPageCard{
+		Node: "menu.history", SessionKey: sessionKey, Title: "历史记录", Color: "blue",
+		Body:     strings.Join(bodyLines, "\n"),
+		Elements: elements,
+		Buttons:  buttons,
+	}.Render()
 }
 
 func RenderDetail(sessionKey string, view historyapp.Detail) map[string]any {
@@ -137,10 +135,10 @@ func RenderDetail(sessionKey string, view historyapp.Detail) map[string]any {
 			Value: cardactions.HistoryDetailActionValue{SessionKey: sessionKey, Index: index + 1}.Map(),
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text:  feishu.MenuBackButtonText,
-		Type:  "default",
-		Value: cardactions.HistoryPageActionValue{SessionKey: sessionKey, Page: index / HistoryPageSize}.Map(),
-	})
-	return feishu.SimpleStatusCard("Turn 详情", "blue", menuutil.MenuCardBody("history.detail", strings.Join(bodyLines, "\n")), buttons)
+	return menuutil.PageCard{
+		Node: "history.detail", SessionKey: sessionKey, Title: "Turn 详情", Color: "blue",
+		Body:       strings.Join(bodyLines, "\n"),
+		Buttons:    buttons,
+		BackParams: map[string]any{"page": index / HistoryPageSize},
+	}.Render()
 }

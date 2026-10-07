@@ -885,7 +885,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 				ActionValue: map[string]any{"session_key": downloadSessionKey, "parent_action": "menu.tools"},
 			}, downloadSessionKey)
 		},
-		"menu.fork": func() (*callback.CardActionTriggerResponse, error) {
+		"thread.fork.start": func() (*callback.CardActionTriggerResponse, error) {
 			const forkSessionKey = "feishu:chat:chat-1"
 			if err := a.store.UpsertSession(&conversation.Session{
 				Key:                     forkSessionKey,
@@ -990,7 +990,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 		if name == "thread.sandbox.menu" || name == "thread.policy.menu" || name == "menu.history" {
 			wantToastType = "warning"
 		}
-		if name == "menu.compact" || name == "menu.fork" || name == "menu.debug" {
+		if name == "menu.compact" || name == "thread.fork.start" || name == "menu.debug" {
 			wantToastType = "success"
 		}
 		if name == "menu.debug.logs" {
@@ -1000,7 +1000,7 @@ func TestActionWrappersAndDispatchFallbacks(t *testing.T) {
 			t.Fatalf("%s toast type = %q, want %s", name, resp.Toast.Type, wantToastType)
 		}
 		switch name {
-		case "menu.root", "menu.tools", "menu.thread", "menu.download", "menu.fork", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.clone", "workspace.worktree", "workspace.delete.menu", "workspace.sandbox.menu", "workspace.policy.menu":
+		case "menu.root", "menu.tools", "menu.thread", "menu.download", "thread.fork.start", "menu.compact", "menu.group.model", "menu.group.system", "menu.quiet", "menu.fast", "menu.model", "menu.status", "menu.debug", "menu.debug.logs", "menu.help", "menu.skills", "menu.workspace", "workspace.new", "workspace.clone", "workspace.worktree", "workspace.delete.menu", "workspace.sandbox.menu", "workspace.policy.menu":
 			if resp.Card == nil {
 				t.Fatalf("%s should update current card", name)
 			}
@@ -3620,7 +3620,7 @@ func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *t
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}
 	labels := cardButtonLabelsByAction(card)
-	for _, actionName := range []string{"menu.fork", "thread.sandbox.menu", "thread.policy.menu"} {
+	for _, actionName := range []string{"thread.fork.start", "thread.sandbox.menu", "thread.policy.menu"} {
 		if _, ok := labels[actionName]; !ok {
 			t.Fatalf("expected thread action %q in %+v", actionName, labels)
 		}
@@ -3666,7 +3666,7 @@ func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t
 		t.Fatalf("renderThreadsCard() error = %v", err)
 	}
 	labels := cardButtonLabelsByAction(card)
-	for _, actionName := range []string{"menu.fork", "thread.sandbox.menu", "thread.policy.menu"} {
+	for _, actionName := range []string{"thread.fork.start", "thread.sandbox.menu", "thread.policy.menu"} {
 		if _, ok := labels[actionName]; ok {
 			t.Fatalf("unexpected thread action %q in %+v", actionName, labels)
 		}

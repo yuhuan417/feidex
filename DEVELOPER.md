@@ -417,9 +417,11 @@ When a change touches one of these contracts, prefer updating the existing guard
 - Workspace new, clone, and path picker flows: `internal/app/path_picker_test.go`, `internal/app/actions_dispatch_more_test.go`, `internal/app/app_more_test.go`
 - Upgrade and backend maintenance: `internal/app/upgrade_isolation_test.go`, `internal/app/upgrade_more_test.go`, `internal/app/codex_upgrade_test.go`, `internal/app/claude_upgrade_test.go`
 - Backend selection and frontend isolation: `internal/app/backend_selection_test.go`, `internal/app/frontend_idle_test.go`, `internal/app/session_lineage_test.go`
-- Menu rendering and navigation: `internal/adapter/feishu/menuutil/menuutil_test.go`, `internal/app/app_more_test.go`, and the relevant menu or card rendering tests. Verify single-chat and group-chat output together, including the final position of `返回上一级`.
-- Cross-scope menu parity: `internal/app/menu_render_parity_test.go` compares the rendered structure and controls for each common menu family in p2p and group scope.
-- Menu back-control label and position: `internal/app/menu_back_button_contract_test.go` rejects any `返回`-prefixed string literal under `internal/app` (the shared label is referenced as `feishu.MenuBackButtonText`), and renders representative card families to check the back control is the final action.
+- Menu rendering and navigation: `internal/adapter/feishu/menuutil/menuutil_test.go`, `internal/feishuapp/app_more_test.go`, and the relevant menu or card rendering tests. Verify single-chat and group-chat output together, including the final position of `返回上一级`.
+- Cross-scope menu parity: `internal/feishuapp/menu_render_parity_test.go` compares the rendered structure and controls for each common menu family in p2p and group scope.
+- Menu back-control label and position: `internal/feishuapp/menu_back_button_contract_test.go` rejects any `返回`-prefixed string literal under `internal/feishuapp` and `internal/adapter/feishu` (the shared label is referenced as `feishu.MenuBackButtonText`), and renders representative card families to check the back control is the final action.
+- Menu graph integrity: `internal/feishuapp/menu_graph_guard_test.go` walks every declared menu node from `/menu` through real rendered cards (group/p2p × codex/claude) and enforces: no dead buttons (every emitted action has a registered handler), no undeclared `menu.*` actions, every declared node reachable and rendered in at least one scope/backend, and every page claiming its own breadcrumb path with exactly one final `返回上一级`. Command-bridge pages are opened through their declared slash entrypoints; select-driven pages are reached by simulating dropdown options.
+- Menu item command entrypoints: `internal/application/features/registry_test.go` requires every visible menu item to carry a slash command that routes through `HandlesCommand`; pure navigation group pages and back items are the only exemptions.
 
 If a new core contract does not fit one of these buckets, add a named guard test for it instead of relying only on incidental coverage.
 
@@ -438,10 +440,11 @@ Update all relevant surfaces:
 
 Keep these in sync:
 
-- `internal/app/menu_specs.go` / `menu_registry.go` / `menu_nav.go`
-- `internal/app/action_registry.go`
-- `internal/app/menu_actions.go`
+- `internal/feishuapp/menu_specs.go` / feature declarations in `internal/application/features/data.go` (menu nodes, items, commands, action names)
+- `internal/feishuapp/action_registry.go` and the `action_registry_*.go` handler sets
 - tests for dispatch and card rendering
+
+Menu page cards should be assembled through `menuutil.PageCard` (node, session key, title, body, forward controls): it renders the page's declared breadcrumb and appends the final `返回上一级` control whose target is the node's declared parent, so breadcrumb and back placement cannot drift. Every new page must also be declared as a `MenuNode` in `internal/application/features`; `internal/feishuapp/menu_graph_guard_test.go` fails on pages that render undeclared breadcrumb paths, emit unregistered actions, or leave a declared node unreachable from `/menu`.
 
 General menu-card UI contract:
 

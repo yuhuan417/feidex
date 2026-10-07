@@ -3,6 +3,7 @@ package workspace
 import (
 	"strings"
 
+	menuutil "feidex/internal/adapter/feishu/menuutil"
 	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/feishu"
 )
@@ -45,6 +46,12 @@ func (s *RenderService) RenderWorkspaceSettingsCard(key string, view workspaceap
 		}
 		buttons = append(buttons, feishu.Button{Text: label, Type: style, Value: value(option.Value)})
 	}
-	buttons = append(buttons, feishu.Button{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.workspace", "session_key": key}})
-	return feishu.SimpleStatusCard(title, "blue", s.FormatMenuBody(strings.TrimSuffix(action, ".set")+".menu", body), buttons)
+	return menuutil.PageCard{
+		Node:       strings.TrimSuffix(action, ".set") + ".menu",
+		SessionKey: key,
+		Title:      title,
+		Color:      "blue",
+		Body:       body,
+		Buttons:    buttons,
+	}.Render()
 }

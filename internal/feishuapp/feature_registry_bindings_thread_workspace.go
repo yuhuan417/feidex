@@ -15,7 +15,7 @@ func appendFeatureBindingsThreadWorkspace(bindings map[string]featureBinding, in
 		},
 		RenderActions: []string{"menu.thread"},
 		Render:        inputs.render("menu.thread"),
-		PortActions:   []string{"menu.thread", "menu.new", "menu.fork"},
+		PortActions:   []string{"menu.thread", "thread.new.start", "thread.fork.start"},
 	}
 	bindings["menu.workspace"] = featureBinding{
 		Commands:      map[string]featureCommandBinding{"workspace": inputs.command("workspace")},

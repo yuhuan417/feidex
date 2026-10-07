@@ -10,11 +10,16 @@ import (
 	appfeatures "feidex/internal/application/features"
 )
 
-func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
-	portSets := []struct {
-		name     string
-		handlers map[string]cardActionPortHandler
-	}{
+type cardActionPortSetForTest struct {
+	name     string
+	handlers map[string]cardActionPortHandler
+}
+
+// allCardActionPortSetsForTest builds every card action handler set with
+// zero-value inputs. Handler maps are built statically from their inputs, so
+// the key set matches production registration exactly.
+func allCardActionPortSetsForTest() []cardActionPortSetForTest {
+	return []cardActionPortSetForTest{
 		{name: "workspace", handlers: workspaceCardActionHandlers(WorkspaceCardActionInputs{})},
 		{name: "maintenance", handlers: maintenanceCardActionHandlers(MaintenanceCardActionInputs{})},
 		{name: "system", handlers: systemCardActionHandlers(SystemCardActionInputs{})},
@@ -37,6 +42,10 @@ func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
 		{name: "async-user-input-ports", handlers: asyncUserInputPortCardActionHandlers(AsyncUserInputActionInputs{})},
 		{name: "pending-form-cancel-ports", handlers: pendingFormCancelPortCardActionHandlers(PendingFormCancelActionInputs{})},
 	}
+}
+
+func TestCardActionHandlerSetsHaveUniqueKeys(t *testing.T) {
+	portSets := allCardActionPortSetsForTest()
 	portMaps := make([]map[string]cardActionPortHandler, 0, len(portSets))
 	for _, set := range portSets {
 		portMaps = append(portMaps, set.handlers)

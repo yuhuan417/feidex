@@ -122,7 +122,7 @@ func completeMenuFork(a *Frontend, action *feishu.CardAction, sessionKey string)
 		BindingCommands: a.bindings.BindingCommands, ConversationQuery: a.bindings.ConversationQuery,
 		NormalizeSessionKey: a.configView().normalizeSessionKey,
 		Backend:             a.configView().configuredBackend, CompleteMenuCommand: a.bindings.MenuCommands.Complete,
-	})["menu.fork"](action)
+	})["thread.fork.start"](action)
 }
 
 func (s cardActionService) completeMenuReview(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {

@@ -2,8 +2,8 @@ package threadview
 
 import (
 	appcards "feidex/internal/adapter/feishu/cards"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	backendcaps "feidex/internal/application/backendcaps"
-	menutypes "feidex/internal/application/features"
 	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
 	"feidex/internal/feishu"
@@ -91,42 +91,6 @@ func claudePermissionModeLabel(value string) string {
 	return "`" + value + "`"
 }
 
-func menuBreadcrumbLabelsForBackend(action, backend string) []string {
-	action = strings.TrimSpace(action)
-	if action == "" {
-		action = "menu.root"
-	}
-	labels := []string{}
-	for i := 0; action != "" && i < 16; i++ {
-		node, ok := menutypes.MenuNodes()[action]
-		if !ok {
-			break
-		}
-		labels = append(labels, menuNodeLabelForBackend(action, node.Label, backend))
-		action = node.Parent
-	}
-	for i, j := 0, len(labels)-1; i < j; i, j = i+1, j-1 {
-		labels[i], labels[j] = labels[j], labels[i]
-	}
-	return labels
-}
-
-func menuNodeLabelForBackend(action, label, backend string) string {
-	return backendcaps.ForKind(backend).MenuNodeLabel(action, label)
-}
-
-func menuCardBodyForBackend(backend, action, body string) string {
-	breadcrumbs := strings.Join(menuBreadcrumbLabelsForBackend(action, backend), " / ")
-	body = strings.TrimSpace(body)
-	if breadcrumbs == "" {
-		return body
-	}
-	if body == "" {
-		return "当前位置：" + breadcrumbs
-	}
-	return "当前位置：" + breadcrumbs + "\n\n" + body
-}
-
 // ConversationThreadsCardView holds the data needed to build a conversation
 // threads card.
 type ConversationThreadsCardView struct {
@@ -155,13 +119,9 @@ func BuildConversationThreadsCard(sessionKey string, view ConversationThreadsCar
 			Value: item.ID,
 		})
 	}
-	card := appcards.NewMarkdownBodyCard(strings.TrimSpace(view.Title), "blue")
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
-		"tag":     "markdown",
-		"content": menuCardBodyForBackend(view.Backend, "menu.thread", strings.Join(view.BodyLines, "\n")),
-	})
+	elements := []map[string]any{}
 	if len(selectOptions) > 0 {
-		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildSelectStaticElement(
+		elements = append(elements, appcards.BuildSelectStaticElement(
 			"thread_resume_select",
 			"list",
 			map[string]any{"action": "thread.resume.select", "session_key": sessionKey, "include_all": view.IncludeAll},
@@ -169,10 +129,14 @@ func BuildConversationThreadsCard(sessionKey string, view ConversationThreadsCar
 			initialOption,
 		))
 	}
-	for _, row := range appcards.BuildMarkdownBodyCardActionElements(view.Buttons) {
-		appcards.AppendMarkdownBodyCardElement(card, row)
-	}
-	return card
+	return appmenuutil.MarkdownPageCard{
+		Node: "menu.thread", Backend: view.Backend, SessionKey: sessionKey,
+		Title:    strings.TrimSpace(view.Title),
+		Color:    "blue",
+		Body:     strings.Join(view.BodyLines, "\n"),
+		Elements: elements,
+		Buttons:  view.Buttons,
+	}.Render()
 }
 
 // RenderCodexThreadsCard renders the codex threads card for a session.
@@ -220,7 +184,7 @@ func RenderCodexThreadsCard(sessionKey string, sess *conversation.Session, works
 			Text: commandLabel("new thread", "/thread new"),
 			Type: "default",
 			Value: map[string]any{
-				"action":        "menu.new",
+				"action":        "thread.new.start",
 				"session_key":   sessionKey,
 				"parent_action": "menu.thread",
 			},
@@ -232,7 +196,7 @@ func RenderCodexThreadsCard(sessionKey string, sess *conversation.Session, works
 				Text: commandLabel("fork thread", "/thread fork"),
 				Type: "default",
 				Value: map[string]any{
-					"action":        "menu.fork",
+					"action":        "thread.fork.start",
 					"session_key":   sessionKey,
 					"parent_action": "menu.thread",
 				},
@@ -263,14 +227,7 @@ func RenderCodexThreadsCard(sessionKey string, sess *conversation.Session, works
 			},
 		)
 	}
-	buttons = append(buttons, feishu.Button{
-		Text: "back",
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.root",
-			"session_key": sessionKey,
-		},
-	})
+
 	return BuildConversationThreadsCard(sessionKey, ConversationThreadsCardView{
 		Title:          primaryConversationMenuLabel(backend),
 		Backend:        backend,
@@ -337,7 +294,7 @@ func RenderClaudeThreadsCard(sessionKey string, sess *conversation.Session, ws *
 			Text: commandLabel("new session", "/session new"),
 			Type: "default",
 			Value: map[string]any{
-				"action":        "menu.new",
+				"action":        "thread.new.start",
 				"session_key":   sessionKey,
 				"parent_action": "menu.thread",
 			},
@@ -349,7 +306,7 @@ func RenderClaudeThreadsCard(sessionKey string, sess *conversation.Session, ws *
 				Text: commandLabel("fork session", "/session fork"),
 				Type: "default",
 				Value: map[string]any{
-					"action":        "menu.fork",
+					"action":        "thread.fork.start",
 					"session_key":   sessionKey,
 					"parent_action": "menu.thread",
 				},
@@ -364,14 +321,7 @@ func RenderClaudeThreadsCard(sessionKey string, sess *conversation.Session, ws *
 			},
 		)
 	}
-	buttons = append(buttons, feishu.Button{
-		Text: "back",
-		Type: "default",
-		Value: map[string]any{
-			"action":      "menu.root",
-			"session_key": sessionKey,
-		},
-	})
+
 	return BuildConversationThreadsCard(sessionKey, ConversationThreadsCardView{
 		Title:          "session management",
 		Backend:        backend,

@@ -5,6 +5,7 @@ package menuutil
 import (
 	"strings"
 
+	"feidex/internal/adapter/feishu/cards"
 	"feidex/internal/application/backendcaps"
 	menutypes "feidex/internal/application/features"
 	"feidex/internal/feishu"
@@ -164,4 +165,123 @@ func AppendHelpCommands(lines []string, specs []menutypes.HelpCommandSpec) []str
 		lines = append(lines, command, spec.Summary)
 	}
 	return lines
+}
+
+// PageCard assembles one menu page: the breadcrumb header, the page body, the
+// renderer's forward controls, and the final 返回上一级 control, all derived
+// from a single declared menu node. Renderers only supply the body and forward
+// controls, so a page cannot forget its breadcrumb or misplace its back
+// control. The node must be declared in the features registry; the menu graph
+// guard test fails on undeclared breadcrumb paths, and an undeclared node
+// falls back to the root menu path at runtime.
+type PageCard struct {
+	// Node is the declared menu node action this page claims.
+	Node string
+	// Backend selects backend-specific node labels; empty uses shared labels.
+	Backend string
+	// SessionKey is embedded in the back control. When empty, the back
+	// control is omitted because it has no conversation to return through.
+	SessionKey string
+	// BackAction overrides the back target; empty uses the node's declared
+	// parent via the features registry.
+	BackAction string
+	// BackParams are extra fields merged into the back control value, for
+	// back targets that need context such as a page number.
+	BackParams map[string]any
+	Title      string
+	Color      string
+	Body       string
+	// Buttons are the page's forward controls. The back control is appended
+	// after them, keeping it the final interactive element.
+	Buttons []feishu.Button
+}
+
+// Render assembles the page card.
+func (p PageCard) Render() map[string]any {
+	node := strings.TrimSpace(p.Node)
+	if node == "" {
+		node = "menu.root"
+	}
+	backAction := strings.TrimSpace(p.BackAction)
+	if backAction == "" {
+		backAction = menutypes.MenuBackAction(node)
+	}
+	backValue := map[string]any{
+		"action":      backAction,
+		"session_key": p.SessionKey,
+	}
+	for key, value := range p.BackParams {
+		backValue[key] = value
+	}
+	body := MenuCardBodyForBackend(p.Backend, node, p.Body)
+	buttons := append([]feishu.Button(nil), p.Buttons...)
+	if strings.TrimSpace(p.SessionKey) != "" {
+		buttons = append(buttons, feishu.Button{
+			Text:  feishu.MenuBackButtonText,
+			Type:  "default",
+			Value: backValue,
+		})
+	}
+	return feishu.SimpleStatusCard(p.Title, p.Color, body, buttons)
+}
+
+// MarkdownPageCard assembles one menu page built from markdown body elements
+// (selects, forms, action rows): the declared breadcrumb header first, the
+// page's own elements, the final 返回上一级 action row, and optional tail
+// elements (apply-status notes) after it. Like PageCard, the back control is
+// derived from the declared node so it cannot drift.
+type MarkdownPageCard struct {
+	Node       string
+	Backend    string
+	SessionKey string
+	// BackAction overrides the back target; empty uses the node's declared
+	// parent via the features registry.
+	BackAction string
+	Title      string
+	Color      string
+	// Body is optional leading markdown rendered together with the
+	// breadcrumb; empty renders the breadcrumb line alone.
+	Body string
+	// Buttons are forward controls rendered as one action row between the
+	// page elements and the back control.
+	Buttons []feishu.Button
+	// Elements are the page's own elements between breadcrumb and back.
+	Elements []map[string]any
+	// Tail elements are appended after the back control (non-interactive
+	// apply-status notes).
+	Tail []map[string]any
+}
+
+// Render assembles the page card.
+func (p MarkdownPageCard) Render() map[string]any {
+	node := strings.TrimSpace(p.Node)
+	if node == "" {
+		node = "menu.root"
+	}
+	backAction := strings.TrimSpace(p.BackAction)
+	if backAction == "" {
+		backAction = menutypes.MenuBackAction(node)
+	}
+	card := cards.NewMarkdownBodyCard(p.Title, p.Color)
+	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": MenuCardBodyForBackend(p.Backend, node, p.Body)})
+	for _, element := range p.Elements {
+		cards.AppendMarkdownBodyCardElement(card, element)
+	}
+	if len(p.Buttons) > 0 {
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildMarkdownBodyCardActionElement(p.Buttons))
+	}
+	if strings.TrimSpace(p.SessionKey) != "" {
+		cards.AppendMarkdownBodyCardElement(card, cards.BuildMarkdownBodyCardActionElement([]feishu.Button{{
+			Text: feishu.MenuBackButtonText,
+			Type: "default",
+			Value: map[string]any{
+				"action":      backAction,
+				"session_key": p.SessionKey,
+			},
+		}}))
+	}
+	for _, element := range p.Tail {
+		cards.AppendMarkdownBodyCardElement(card, element)
+	}
+	return card
 }

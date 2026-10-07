@@ -22,7 +22,7 @@ type ThreadForkCardActionInputs struct {
 
 func threadForkCardActionHandlers(inputs ThreadForkCardActionInputs) map[string]cardActionPortHandler {
 	return map[string]cardActionPortHandler{
-		"menu.fork": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"thread.fork.start": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			sessionKey := threadMenuEffectiveSessionKey(inputs.NormalizeSessionKey, inputs.BindingCommands.scope, inputs.ConversationQuery, actionSessionKey(action))
 			return inputs.CompleteMenuCommand(action, sessionKey, primaryConversationSlash(inputs.Backend())+" fork", "menu.thread")
 		},
@@ -71,7 +71,7 @@ func threadMenuPortCardActionHandlers(service *threadmenu.Service) map[string]ca
 		"menu.thread": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return service.CompleteMenuThread(action, actionSessionKey(action))
 		},
-		"menu.new": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+		"thread.new.start": func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
 			return service.CompleteMenuNew(action, actionSessionKey(action))
 		},
 	}

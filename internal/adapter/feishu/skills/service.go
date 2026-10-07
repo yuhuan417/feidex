@@ -4,7 +4,7 @@ package skills
 import (
 	"context"
 	"errors"
-	"feidex/internal/adapter/feishu/cards"
+	menuutil "feidex/internal/adapter/feishu/menuutil"
 	skillapp "feidex/internal/application/skill"
 	"feidex/internal/feishu"
 	"fmt"
@@ -172,10 +172,8 @@ func (s *Service) completeAction(action *feishu.CardAction, key, text string, wo
 }
 
 func (s *Service) noticeCard(key, text string) map[string]any {
-	card := cards.NewMarkdownBodyCard("技能列表", "blue")
-	cards.AppendMarkdownBodyCardElement(card, map[string]any{"tag": "markdown", "content": s.FormatMenuBody("menu.skills", text)})
-	for _, row := range cards.BuildMarkdownBodyCardActionElements([]feishu.Button{{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": key}}}) {
-		cards.AppendMarkdownBodyCardElement(card, row)
-	}
-	return card
+	return menuutil.MarkdownPageCard{
+		Node: "menu.skills", SessionKey: key, Title: "技能列表", Color: "blue",
+		Body: text,
+	}.Render()
 }

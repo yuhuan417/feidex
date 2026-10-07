@@ -854,8 +854,10 @@ func TestMenuIncludesCurrentBotBindingWithoutBotSelector(t *testing.T) {
 	if got := workspaceLabels["workspace.use.existing"]; !strings.Contains(got, "default") {
 		t.Fatalf("workspace card labels = %+v, want workspace.use.existing", workspaceLabels)
 	}
-	if got := workspaceLabels["menu.workspace"]; !strings.Contains(got, feishu.MenuBackButtonText) {
-		t.Fatalf("workspace card labels = %+v, want menu.workspace", workspaceLabels)
+	// The back control targets the declared parent (menu.root) instead of the
+	// page's own action.
+	if got := workspaceLabels["menu.root"]; !strings.Contains(got, feishu.MenuBackButtonText) {
+		t.Fatalf("workspace card labels = %+v, want menu.root", workspaceLabels)
 	}
 }
 
@@ -983,12 +985,12 @@ func TestGroupThreadMenuUsesChatScopedActiveSessionInCurrentGroupBinding(t *test
 		t.Fatalf("group thread menu body = %q", body)
 	}
 	labels := cardButtonLabelsByAction(card)
-	for _, actionName := range []string{"menu.fork", "thread.sandbox.menu", "thread.policy.menu", "thread.multiagent.menu"} {
+	for _, actionName := range []string{"thread.fork.start", "thread.sandbox.menu", "thread.policy.menu", "thread.multiagent.menu"} {
 		if labels[actionName] == "" {
 			t.Fatalf("group thread menu labels = %+v, want action %q", labels, actionName)
 		}
 	}
-	for _, actionName := range []string{"menu.new", "menu.fork", "thread.sandbox.menu", "thread.policy.menu", "thread.multiagent.menu", "menu.root"} {
+	for _, actionName := range []string{"thread.new.start", "thread.fork.start", "thread.sandbox.menu", "thread.policy.menu", "thread.multiagent.menu", "menu.root"} {
 		value := firstCardActionValueForTest(card, actionName)
 		if value == nil {
 			t.Fatalf("missing card action value for %q in %+v", actionName, cardButtonsForTest(card))
@@ -1048,7 +1050,7 @@ func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(
 		t.Fatalf("group Claude session menu body = %q", body)
 	}
 	labels := cardButtonLabelsByAction(card)
-	for _, actionName := range []string{"menu.fork", "thread.permission_mode.menu"} {
+	for _, actionName := range []string{"thread.fork.start", "thread.permission_mode.menu"} {
 		if labels[actionName] == "" {
 			t.Fatalf("group Claude session menu labels = %+v, want action %q", labels, actionName)
 		}
@@ -1058,7 +1060,7 @@ func TestGroupClaudeSessionMenuUsesChatScopedActiveSessionInCurrentGroupBinding(
 			t.Fatalf("group Claude session menu labels = %+v, should not include %q", labels, actionName)
 		}
 	}
-	for _, actionName := range []string{"menu.new", "menu.fork", "thread.permission_mode.menu", "menu.root"} {
+	for _, actionName := range []string{"thread.new.start", "thread.fork.start", "thread.permission_mode.menu", "menu.root"} {
 		value := firstCardActionValueForTest(card, actionName)
 		if value == nil {
 			t.Fatalf("missing card action value for %q in %+v", actionName, cardButtonsForTest(card))

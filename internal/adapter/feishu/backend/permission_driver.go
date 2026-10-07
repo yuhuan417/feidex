@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"feidex/internal/adapter/feishu/cardactions"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	appthreadview "feidex/internal/adapter/feishu/threadview"
 	"feidex/internal/config"
 	domainworkspace "feidex/internal/domain/workspace"
@@ -455,15 +456,11 @@ func (d codexPermissionDriver) RenderConversationSandboxMenu(sessionKey string, 
 			}.Map(),
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text:  feishu.MenuBackButtonText,
-		Type:  "default",
-		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
-	})
-	if deps.FormatMenuBody != nil {
-		body = deps.FormatMenuBody("thread.sandbox.menu", body)
-	}
-	return feishu.SimpleStatusCard("配置 Thread Sandbox", "blue", body, buttons), nil
+
+	return appmenuutil.PageCard{
+		Node: "thread.sandbox.menu", SessionKey: sessionKey, Title: "配置 Thread Sandbox", Color: "blue",
+		Body: body, Buttons: buttons,
+	}.Render(), nil
 }
 
 func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
@@ -515,15 +512,11 @@ func (d codexPermissionDriver) RenderConversationPolicyMenu(sessionKey string, d
 			}.Map(),
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text:  feishu.MenuBackButtonText,
-		Type:  "default",
-		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
-	})
-	if deps.FormatMenuBody != nil {
-		body = deps.FormatMenuBody("thread.policy.menu", body)
-	}
-	return feishu.SimpleStatusCard("配置 Thread Policy", "blue", body, buttons), nil
+
+	return appmenuutil.PageCard{
+		Node: "thread.policy.menu", SessionKey: sessionKey, Title: "配置 Thread Policy", Color: "blue",
+		Body: body, Buttons: buttons,
+	}.Render(), nil
 }
 
 func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
@@ -565,15 +558,11 @@ func (d codexPermissionDriver) RenderConversationMultiAgentMenu(sessionKey strin
 			}.Map(),
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text:  feishu.MenuBackButtonText,
-		Type:  "default",
-		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
-	})
-	if deps.FormatMenuBody != nil {
-		body = deps.FormatMenuBody("thread.multiagent.menu", body)
-	}
-	return feishu.SimpleStatusCard("配置 Thread Multi-Agent Mode", "blue", body, buttons), nil
+
+	return appmenuutil.PageCard{
+		Node: "thread.multiagent.menu", SessionKey: sessionKey, Title: "配置 Thread Multi-Agent Mode", Color: "blue",
+		Body: body, Buttons: buttons,
+	}.Render(), nil
 }
 
 func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey string, deps ConversationPermissionRenderDeps) (map[string]any, error) {
@@ -637,16 +626,13 @@ func (d claudePermissionDriver) RenderConversationPermissionModeMenu(sessionKey 
 			}.Map(),
 		})
 	}
-	buttons = append(buttons, feishu.Button{
-		Text:  feishu.MenuBackButtonText,
-		Type:  "default",
-		Value: cardactions.MenuActionValue{Action: "menu.thread", SessionKey: sessionKey}.Map(),
-	})
+
 	body := strings.Join(bodyLines, "\n")
-	if deps.FormatMenuBody != nil {
-		body = deps.FormatMenuBody("thread.permission_mode.menu", body)
-	}
-	return feishu.SimpleStatusCard("配置会话权限", "blue", body, buttons), nil
+
+	return appmenuutil.PageCard{
+		Node: "thread.permission_mode.menu", SessionKey: sessionKey, Title: "配置会话权限", Color: "blue",
+		Body: body, Buttons: buttons,
+	}.Render(), nil
 }
 
 func (d claudePermissionDriver) RenderConversationSandboxMenu(string, ConversationPermissionRenderDeps) (map[string]any, error) {

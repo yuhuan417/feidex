@@ -969,8 +969,10 @@ func TestCommandDebugLogsShowsRecentLogContent(t *testing.T) {
 		t.Fatal("expected debug logs card")
 	}
 	elements := cardElementsForTest(ff.replyCards[len(ff.replyCards)-1])
-	if len(elements) < 2 || elements[0]["tag"] != "div" || elements[1]["tag"] != "div" {
-		t.Fatalf("debug logs card elements = %#v, want summary/log div blocks first", elements)
+	// The page leads with the breadcrumb markdown, then the summary and log
+	// div blocks, before the action rows.
+	if len(elements) < 3 || elements[0]["tag"] != "markdown" || elements[1]["tag"] != "div" || elements[2]["tag"] != "div" {
+		t.Fatalf("debug logs card elements = %#v, want breadcrumb markdown then summary/log div blocks", elements)
 	}
 	buttons := cardButtonsForTest(ff.replyCards[len(ff.replyCards)-1])
 	if len(buttons) != 2 {

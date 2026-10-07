@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	appcards "feidex/internal/adapter/feishu/cards"
+	menuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/feishu"
 
 	"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher/callback"
@@ -260,7 +261,7 @@ func (s Service) replyGoalClearedCard(msg *feishu.InboundMessage, sessionKey, th
 		color = "green"
 		title = "Goal cleared"
 	}
-	card := s.app.Renderer().SimpleStatusCard(title, color, s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalBackButtons(sessionKey))
+	card := s.renderGoalPageCard(title, color, body, sessionKey, nil)
 	_, err := s.app.Outbound.ReplyCard(s.app.Context(), msg.MessageID, card, s.app.ReplyInThreadEnabled(msg.ChatType))
 	s.recordContext(sessionKey, threadID, msg)
 	return err
@@ -271,7 +272,17 @@ func (s Service) renderGoalCard(sessionKey, threadID string, goal *conversation.
 		return s.renderGoalCreateCard(sessionKey, threadID)
 	}
 	body := renderGoalBody(*goal)
-	return s.app.Renderer().SimpleStatusCard("Goal "+goalStatusLabel(goal.Status), goalStatusColor(goal.Status), s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalButtons(sessionKey, threadID, goal.Status))
+	return s.renderGoalPageCard("Goal "+goalStatusLabel(goal.Status), goalStatusColor(goal.Status), body, sessionKey, goalButtons(sessionKey, threadID, goal.Status))
+}
+
+// renderGoalPageCard assembles a goal page card through the shared page
+// constructor: breadcrumb and final back control come from the declared
+// menu.goal node.
+func (s Service) renderGoalPageCard(title, color, body, sessionKey string, buttons []feishu.Button) map[string]any {
+	return menuutil.PageCard{
+		Node: "menu.goal", SessionKey: sessionKey, Title: title, Color: color,
+		Body: body, Buttons: buttons,
+	}.Render()
 }
 
 func (s Service) renderGoalSavedCard(goal *conversation.ThreadGoal) map[string]any {
@@ -404,15 +415,12 @@ func goalButtons(sessionKey, threadID string, status conversation.ThreadGoalStat
 			Value: map[string]any{"action": "goal.resume", "session_key": sessionKey, "thread_id": threadID},
 		})
 	}
-	buttons = append(buttons,
-		feishu.Button{
-			Text:  "清除",
-			Type:  "danger",
-			Name:  "goal_clear",
-			Value: map[string]any{"action": "goal.clear", "session_key": sessionKey, "thread_id": threadID},
-		},
-		goalBackButtons(sessionKey)[0],
-	)
+	buttons = append(buttons, feishu.Button{
+		Text:  "清除",
+		Type:  "danger",
+		Name:  "goal_clear",
+		Value: map[string]any{"action": "goal.clear", "session_key": sessionKey, "thread_id": threadID},
+	})
 	return buttons
 }
 
@@ -426,7 +434,7 @@ func (s Service) renderGoalReplaceConfirmCard(sessionKey, threadID string, exist
 		"新 goal:",
 		strings.TrimSpace(objective),
 	}, "\n")
-	return s.app.Renderer().SimpleStatusCard("Replace goal?", "orange", s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), []feishu.Button{
+	pageButtons := []feishu.Button{
 		{
 			Text: "替换当前 goal",
 			Type: "danger",
@@ -448,7 +456,8 @@ func (s Service) renderGoalReplaceConfirmCard(sessionKey, threadID string, exist
 				"thread_id":   threadID,
 			},
 		},
-	})
+	}
+	return s.renderGoalPageCard("Replace goal?", "orange", body, sessionKey, pageButtons)
 }
 
 func (s Service) renderGoalEditCard(sessionKey, threadID string, goal conversation.ThreadGoal) map[string]any {
@@ -500,11 +509,7 @@ func (s Service) renderGoalCreateCard(sessionKey, threadID string) map[string]an
 }
 
 func (s Service) renderGoalObjectiveFormCard(opts goalObjectiveFormOptions) map[string]any {
-	card := appcards.NewMarkdownBodyCard(opts.Title, "blue")
-	appcards.AppendMarkdownBodyCardElement(card, map[string]any{
-		"tag":     "markdown",
-		"content": s.app.MenuCardBodyForSession(opts.SessionKey, "menu.goal", opts.Body),
-	})
+	elements := []map[string]any{}
 	objectiveInput := map[string]any{
 		"tag":         "input",
 		"name":        "objective",
@@ -539,8 +544,13 @@ func (s Service) renderGoalObjectiveFormCard(opts goalObjectiveFormOptions) map[
 		"vertical_spacing":   "8px",
 		"elements":           append([]map[string]any{objectiveInput}, buttonRows...),
 	}
-	appcards.AppendMarkdownBodyCardElement(card, form)
-	return card
+	elements = append(elements, form)
+	return menuutil.MarkdownPageCard{
+		Node: "menu.goal", SessionKey: opts.SessionKey, Title: opts.Title, Color: "blue",
+		Body:       opts.Body,
+		Elements:   elements,
+		BackAction: firstNonEmpty(opts.CancelAction, "menu.tools"),
+	}.Render()
 }
 
 func markFirstButtonAsSubmit(row map[string]any) {
@@ -599,7 +609,7 @@ func (s Service) CompleteGoalClearAction(action *feishu.CardAction) (*callback.C
 	}
 	return &callback.CardActionTriggerResponse{
 		Toast: &callback.Toast{Type: "success", Content: goalClearedToast(cleared)},
-		Card:  rawCard(s.app.Renderer().SimpleStatusCard(title, color, s.app.MenuCardBodyForSession(sessionKey, "menu.goal", body), goalBackButtons(sessionKey))),
+		Card:  rawCard(s.renderGoalPageCard(title, color, body, sessionKey, nil)),
 	}, nil
 }
 

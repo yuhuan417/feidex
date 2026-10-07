@@ -5,7 +5,7 @@ func appendFeatureBindingsTools(bindings map[string]featureBinding, inputs Featu
 		Commands:      map[string]featureCommandBinding{"review": inputs.command("review")},
 		RenderActions: []string{"menu.review"},
 		Render:        inputs.render("menu.review"),
-		PortActions:   []string{"menu.review", "menu.review.uncommitted", "menu.review.base", "menu.review.commit", "menu.review.custom"},
+		PortActions:   []string{"menu.review", "review.start.uncommitted", "review.start.base", "review.start.commit", "review.start.custom"},
 	}
 	bindings["menu.quiet"] = featureBinding{
 		Commands:    map[string]featureCommandBinding{"quiet": inputs.command("quiet")},

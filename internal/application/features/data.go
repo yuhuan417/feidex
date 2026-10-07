@@ -110,10 +110,10 @@ var registry = []Spec{
 		},
 		ActionNames: []ActionName{
 			"menu.review",
-			"menu.review.uncommitted",
-			"menu.review.base",
-			"menu.review.commit",
-			"menu.review.custom",
+			"review.start.uncommitted",
+			"review.start.base",
+			"review.start.commit",
+			"review.start.custom",
 		},
 	},
 	{
@@ -148,6 +148,9 @@ var registry = []Spec{
 		Kind:     SpecKindCapability,
 		Backends: []string{appruntime.BackendCodex},
 		Commands: []CommandSpec{{ID: "goal", Names: []string{"/goal"}, HelpGroup: "常用工具", HelpEntries: []HelpCommandSpec{{Command: "/goal", Summary: "查看或创建当前 thread 的长期任务目标。"}, {Command: "/goal <objective>", Summary: "设置长期任务目标。"}, {Command: "/goal pause", Summary: "暂停当前 goal。"}, {Command: "/goal resume", Summary: "恢复当前 goal。"}, {Command: "/goal clear", Summary: "清除当前 goal。"}, {Command: "/goal edit", Summary: "编辑当前 goal。"}}, Backends: map[string]CommandBackendSpec{appruntime.BackendClaude: {HideInHelp: true}}}},
+		Nodes: []MenuNode{
+			{Action: "menu.goal", Label: "任务目标", Parent: "menu.tools"},
+		},
 		MenuItems: []MenuItemSpec{
 			{GroupAction: "menu.tools", Action: "menu.goal", Label: "任务目标", Slash: "/goal", Kind: MenuItemDirect, IncludeParentAction: true},
 		},
@@ -264,8 +267,8 @@ var registry = []Spec{
 		MenuGroup: &MenuGroupSpec{Action: "menu.thread", Label: "线程管理", Description: "查看当前线程状态，并通过下拉切换线程。", ShowInRoot: true},
 		ActionNames: []ActionName{
 			"menu.thread",
-			"menu.new",
-			"menu.fork",
+			"thread.new.start",
+			"thread.fork.start",
 		},
 	},
 	{
@@ -324,7 +327,6 @@ var registry = []Spec{
 			{Action: "workspace.permission_mode.menu", Label: "默认权限", Parent: "menu.workspace"},
 			{Action: "workspace.delete.menu", Label: "删除工作区", Parent: "menu.workspace"},
 			{Action: "workspace.delete.confirm", Label: "确认删除", Parent: "workspace.delete.menu"},
-			{Action: "workspace.binding.unbind", Label: "解除本群绑定", Parent: "menu.workspace"},
 		},
 		MenuGroup: &MenuGroupSpec{Action: "menu.workspace", Label: "工作区管理", Description: "查看当前工作区状态，并通过下拉切换工作区。", ShowInRoot: true},
 		ActionNames: []ActionName{

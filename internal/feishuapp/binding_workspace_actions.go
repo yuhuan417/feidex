@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	appmenuutil "feidex/internal/adapter/feishu/menuutil"
 	"feidex/internal/config"
 	"feidex/internal/textutil"
 	"fmt"
@@ -111,8 +112,10 @@ func (s bindingService) renderBindingWorkspaceSettingCard(sessionKey string, bin
 			},
 		})
 	}
-	buttons = append(buttons, groupBindingBackButton(sessionKey))
-	return s.renderer(setting.Title, "blue", menuCardBody(setting.MenuAction, body), buttons), nil
+	return appmenuutil.PageCard{
+		Node: setting.MenuAction, SessionKey: sessionKey, Title: setting.Title, Color: "blue",
+		Body: body, Buttons: buttons,
+	}.Render(), nil
 }
 
 type bindingWorkspaceSettingSpec struct {

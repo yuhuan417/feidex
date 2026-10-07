@@ -39,44 +39,50 @@ func moduleRootForTest(t *testing.T) string {
 // 返回工作区管理, ...) or as a second copy of the shared text. The label is a
 // functional contract, not just copy: both orderings that keep the back control
 // last match on it, so a renamed back button also silently stops being the final
-// card action.
+// card action. The scan covers the packages that actually render cards.
 func TestMenuBackButtonLabelsUseTheSharedLabel(t *testing.T) {
-	root := filepath.Join(moduleRootForTest(t), "internal", "app")
+	moduleRoot := moduleRootForTest(t)
+	scanRoots := []string{
+		filepath.Join(moduleRoot, "internal", "feishuapp"),
+		filepath.Join(moduleRoot, "internal", "adapter", "feishu"),
+	}
 	fset := token.NewFileSet()
 	scanned := 0
 	var offenders []string
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+	for _, root := range scanRoots {
+		scanErr := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			file, parseErr := parser.ParseFile(fset, path, nil, 0)
+			if parseErr != nil {
+				return parseErr
+			}
+			scanned++
+			ast.Inspect(file, func(node ast.Node) bool {
+				literal, ok := node.(*ast.BasicLit)
+				if !ok || literal.Kind != token.STRING {
+					return true
+				}
+				value, unquoteErr := strconv.Unquote(literal.Value)
+				if unquoteErr != nil || !strings.HasPrefix(value, "返回") {
+					return true
+				}
+				rel, _ := filepath.Rel(moduleRoot, path)
+				offenders = append(offenders, rel+":"+strconv.Itoa(fset.Position(literal.Pos()).Line)+" "+strconv.Quote(value))
+				return true
+			})
 			return nil
-		}
-		file, parseErr := parser.ParseFile(fset, path, nil, 0)
-		if parseErr != nil {
-			return parseErr
-		}
-		scanned++
-		ast.Inspect(file, func(node ast.Node) bool {
-			literal, ok := node.(*ast.BasicLit)
-			if !ok || literal.Kind != token.STRING {
-				return true
-			}
-			value, unquoteErr := strconv.Unquote(literal.Value)
-			if unquoteErr != nil || !strings.HasPrefix(value, "返回") {
-				return true
-			}
-			rel, _ := filepath.Rel(root, path)
-			offenders = append(offenders, rel+":"+strconv.Itoa(fset.Position(literal.Pos()).Line)+" "+strconv.Quote(value))
-			return true
 		})
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("scanning %s: %v", root, err)
+		if scanErr != nil {
+			t.Fatalf("scanning %s: %v", root, scanErr)
+		}
 	}
 	if scanned == 0 {
-		t.Fatalf("no Go files scanned under %s", root)
+		t.Fatalf("no Go files scanned under %v", scanRoots)
 	}
 	if len(offenders) > 0 {
 		t.Fatalf("menu back controls must reference feishu.MenuBackButtonText (%q) instead of a literal:\n  %s",

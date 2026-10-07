@@ -20,9 +20,9 @@ import (
 	"strings"
 	"sync"
 
-	appcards "feidex/internal/adapter/feishu/cards"
 	appdebugview "feidex/internal/adapter/feishu/debugview"
 	appdelivery "feidex/internal/adapter/feishu/delivery"
+	menuutil "feidex/internal/adapter/feishu/menuutil"
 	appthreadview "feidex/internal/adapter/feishu/threadview"
 	turnitem "feidex/internal/adapter/feishu/turnitem"
 	apppathpick "feidex/internal/adapter/filesystem/pathpicker"
@@ -520,11 +520,8 @@ func (s DebugService) RenderDebugAccessDeniedCard(sessionKey, userID string) map
 // RenderDebugLogsCard renders the debug logs card.
 func (s DebugService) RenderDebugLogsCard(sessionKey string) map[string]any {
 	lines := logcontrol.RecentLines(DebugLogRecentLimit)
-	card := appcards.NewMarkdownBodyCard("调试日志", "blue")
 	var logBlock map[string]any
 	summaryLines := []string{
-		"当前位置：" + strings.Join(s.app.DebugMenuBreadcrumbLabels(DebugLogPreviewAction), " / "),
-		"",
 		fmt.Sprintf("最近服务端 slog 日志（内存缓冲，最新 %d 条）。", DebugLogRecentLimit),
 		"当前日志级别: " + RuntimeLogLevelText(),
 	}
@@ -541,19 +538,20 @@ func (s DebugService) RenderDebugLogsCard(sessionKey string) map[string]any {
 		}
 		logBlock = DebugLogPlainTextBlock(logText, false)
 	}
-	appcards.AppendMarkdownBodyCardElement(card, DebugLogPlainTextBlock(strings.Join(summaryLines, "\n"), true))
+	elements := []map[string]any{DebugLogPlainTextBlock(strings.Join(summaryLines, "\n"), true)}
 	if logBlock != nil {
-		appcards.AppendMarkdownBodyCardElement(card, logBlock)
+		elements = append(elements, logBlock)
 	}
 
-	buttons := []feishu.Button{
-		{Text: s.app.DebugCommandLabel("刷新日志", "/debug logs"), Type: "default", Value: map[string]any{"action": "menu.debug.logs", "session_key": sessionKey}},
-		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.group.system", "session_key": sessionKey}},
-	}
-	for _, btn := range buttons {
-		appcards.AppendMarkdownBodyCardElement(card, appcards.BuildMarkdownBodyCardActionElement([]feishu.Button{btn}))
-	}
-	return card
+	return menuutil.MarkdownPageCard{
+		Node: "menu.debug.logs", SessionKey: sessionKey, Title: "调试日志", Color: "blue",
+		Elements: elements,
+		Buttons: []feishu.Button{{
+			Text:  s.app.DebugCommandLabel("刷新日志", "/debug logs"),
+			Type:  "default",
+			Value: map[string]any{"action": "menu.debug.logs", "session_key": sessionKey},
+		}},
+	}.Render()
 }
 
 // ---------------------------------------------------------------------------
@@ -669,9 +667,10 @@ func (s UsageService) RenderUsageCard(sessionKey string) map[string]any {
 	if sess != nil && strings.TrimSpace(sess.ActiveThreadID) != "" {
 		body = s.app.DebugConversationBackend().RenderUsageBody(sess)
 	}
-	return s.app.DebugRenderer().SimpleStatusCard("Token Usage", "blue", s.app.DebugMenuCardBody("menu.usage", body), []feishu.Button{
-		{Text: feishu.MenuBackButtonText, Type: "default", Value: map[string]any{"action": "menu.tools", "session_key": sessionKey}},
-	})
+	return menuutil.PageCard{
+		Node: "menu.usage", SessionKey: sessionKey, Title: "Token Usage", Color: "blue",
+		Body: body,
+	}.Render()
 }
 
 // RenderClaudeUsageBody renders the Claude usage body.
