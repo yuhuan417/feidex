@@ -129,13 +129,16 @@ func BuildConversationThreadsCard(sessionKey string, view ConversationThreadsCar
 			initialOption,
 		))
 	}
+	// This page owns up to five controls, so the rows are laid out here rather
+	// than through MarkdownPageCard.Buttons: that field renders every control
+	// into one row, which squeezes them past readability on this card.
+	elements = append(elements, appcards.BuildMarkdownBodyCardActionElements(view.Buttons)...)
 	return appmenuutil.MarkdownPageCard{
 		Node: "menu.thread", Backend: view.Backend, SessionKey: sessionKey,
 		Title:    strings.TrimSpace(view.Title),
 		Color:    "blue",
 		Body:     strings.Join(view.BodyLines, "\n"),
 		Elements: elements,
-		Buttons:  view.Buttons,
 	}.Render()
 }
 

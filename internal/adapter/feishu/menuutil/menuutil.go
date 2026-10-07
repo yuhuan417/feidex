@@ -242,8 +242,11 @@ type MarkdownPageCard struct {
 	// Body is optional leading markdown rendered together with the
 	// breadcrumb; empty renders the breadcrumb line alone.
 	Body string
-	// Buttons are forward controls rendered as one action row between the
-	// page elements and the back control.
+	// Buttons are forward controls rendered as a single action row between the
+	// page elements and the back control. A page that owns more than two
+	// controls should lay them out through Elements with
+	// cards.BuildMarkdownBodyCardActionElements instead, so each control keeps
+	// its own row; sharing one row squeezes them past readability.
 	Buttons []feishu.Button
 	// Elements are the page's own elements between breadcrumb and back.
 	Elements []map[string]any
