@@ -514,6 +514,12 @@ func parseWireMessage(line []byte) (any, error) {
 	case "control_response":
 		var msg wireControlResponse
 		return msg, json.Unmarshal(line, &msg)
+	case "tool_progress":
+		// A heartbeat for a tool that has been running for a while: it repeats
+		// the parent tool_use_id with an -heartbeat-N suffix plus an elapsed
+		// count, and carries nothing the bridge acts on. Dropped silently, as
+		// the frame arrives once per long-running tool and is not an error.
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unknown message type: %s", base.Type)
 	}
