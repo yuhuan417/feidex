@@ -3,8 +3,10 @@ package clauderuntime
 import (
 	"context"
 	"errors"
+	"feidex/internal/claudecli"
 	"feidex/internal/domain/conversation"
 	"reflect"
+	"strings"
 	"testing"
 
 	domainmodelconfig "feidex/internal/domain/modelconfig"
@@ -80,5 +82,68 @@ func TestModelConfigSafeBoundaryIncludesApprovalsAndBackgroundWork(t *testing.T)
 				t.Fatalf("reason = %q", got)
 			}
 		})
+	}
+}
+
+// TestModelConfigBoundaryClearsWhenBackgroundWorkDrains pins the self-healing
+// half of the boundary: the pending counts are a snapshot from the last turn
+// end, so they have to fall back to zero once the CLI reports that nothing is
+// live. Without it the boundary blocks every submission, and a deferred
+// submission means no later turn can ever refresh the counts.
+func TestModelConfigBoundaryClearsWhenBackgroundWorkDrains(t *testing.T) {
+	s := NewService(Deps{})
+	current := &SessionState{SessionKey: "target", Turns: map[int]*TurnState{}, BackgroundTasks: map[string]*BackgroundTaskState{}}
+	current.PendingBackgroundAgentCount = 2
+	current.PendingWorkflowCount = 1
+	if reason := s.modelChangeBlockedReason(current); reason == "" {
+		t.Fatal("pending work should block the model change")
+	}
+
+	s.HandleBackgroundTasksChanged(current, claudecli.BackgroundTasksChangedEvent{TaskIDs: []string{"task-1"}})
+	if reason := s.modelChangeBlockedReason(current); reason == "" {
+		t.Fatal("a live background task should still block the model change")
+	}
+
+	s.HandleBackgroundTasksChanged(current, claudecli.BackgroundTasksChangedEvent{})
+	if reason := s.modelChangeBlockedReason(current); reason != "" {
+		t.Fatalf("empty live set should release the boundary, got %q", reason)
+	}
+	if current.PendingBackgroundAgentCount != 0 || current.PendingWorkflowCount != 0 {
+		t.Fatalf("stale counts = %d/%d, want 0/0", current.PendingBackgroundAgentCount, current.PendingWorkflowCount)
+	}
+}
+
+// TestInterruptReleasesTheModelConfigBoundary covers the documented escape
+// hatch: the deferral notice tells the user to retry or /stop, so /stop has to
+// leave the session able to start again.
+func TestInterruptReleasesTheModelConfigBoundary(t *testing.T) {
+	s := NewService(Deps{})
+	current := &SessionState{
+		SessionKey: "target", Turns: map[int]*TurnState{}, BackgroundTasks: map[string]*BackgroundTaskState{},
+		Session: claudecli.NewSession(),
+	}
+	current.PendingWorkflowCount = 1
+	current.BackgroundTasks["task-1"] = &BackgroundTaskState{Live: true}
+	s.sessions["target"] = current
+
+	if reason := s.modelChangeBlockedReason(current); reason == "" {
+		t.Fatal("pending work should block the model change")
+	}
+	// The synthetic session is never started, so Interrupt reports ErrNotStarted
+	// after it has already released the boundary.
+	_ = s.Interrupt(context.Background(), "target")
+	// InterruptPending stays set until the interrupted turn actually completes,
+	// so the guard may still report the turn. What must be gone is the
+	// background-work boundary that nothing else could clear.
+	if current.PendingBackgroundAgentCount != 0 || current.PendingWorkflowCount != 0 {
+		t.Fatalf("counts = %d/%d after interrupt, want 0/0", current.PendingBackgroundAgentCount, current.PendingWorkflowCount)
+	}
+	for taskID, task := range current.BackgroundTasks {
+		if task != nil && task.Live {
+			t.Fatalf("task %s still live after interrupt", taskID)
+		}
+	}
+	if reason := s.modelChangeBlockedReason(current); strings.Contains(reason, "后台任务") {
+		t.Fatalf("background boundary survived the interrupt: %q", reason)
 	}
 }

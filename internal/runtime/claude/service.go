@@ -705,6 +705,20 @@ func (s *Service) Interrupt(ctx context.Context, sessionKey string) error {
 	}
 	state.Mu.Lock()
 	state.InterruptPending = true
+	// /stop is the documented way out of a deferred model change ("消息已保留在
+	// 队首，请修正模型配置后发送新消息重试队列，或 /stop 取消"). The pending
+	// counts and live task flags are a snapshot from the last turn end, so an
+	// interrupted turn can leave them set with nothing left to clear them: the
+	// boundary would then block every later submission with no way back. The
+	// user asked to stop, so the boundary is cleared here; the CLI re-reports
+	// the live set through background_tasks_changed if anything still runs.
+	state.PendingBackgroundAgentCount = 0
+	state.PendingWorkflowCount = 0
+	for _, task := range state.BackgroundTasks {
+		if task != nil {
+			task.Live = false
+		}
+	}
 	state.Mu.Unlock()
 	return state.Session.Interrupt(ctx)
 }
@@ -1345,6 +1359,15 @@ func (s *Service) HandleBackgroundTasksChanged(state *SessionState, event claude
 		// Keep an unnotified task target until task_notification arrives. Claude
 		// does not guarantee snapshot/bookend ordering.
 		task.Live = false
+	}
+	if len(live) == 0 {
+		// This event REPLACEs the live set, so an empty payload means no
+		// background work remains and the counts taken at the last turn end are
+		// stale. Leaving them would block the model change that waits for this
+		// work to drain — and with every submission deferred, no later turn
+		// could ever refresh them.
+		state.PendingBackgroundAgentCount = 0
+		state.PendingWorkflowCount = 0
 	}
 }
 
