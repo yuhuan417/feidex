@@ -208,12 +208,14 @@ func (c *Config) Normalize(baseDir string) error {
 		return err
 	}
 	c.Claude.Effort = claudeEffort
+	// feidex drives Claude from Feishu with no terminal to answer permission
+	// prompts, so the CLI is always launched with permissions skipped. The
+	// stored value is not a knob: a config that sets it false is normalized
+	// back to true rather than failing to load.
+	c.Claude.DangerouslySkipPermissions = true
 	c.Claude.PermissionMode = normalizeClaudePermissionMode(c.Claude.PermissionMode)
 	if !isSupportedClaudePermissionMode(c.Claude.PermissionMode) {
 		return fmt.Errorf("unsupported claude.permission_mode %q", c.Claude.PermissionMode)
-	}
-	if c.Claude.PermissionMode == "bypassPermissions" && !c.Claude.DangerouslySkipPermissions {
-		return errors.New("claude.permission_mode=bypassPermissions requires claude.dangerously_skip_permissions = true")
 	}
 	c.Claude.SystemPrompt = strings.TrimSpace(c.Claude.SystemPrompt)
 	level, err := NormalizeLogLevel(c.Log.Level)
@@ -288,9 +290,6 @@ func (c *Config) Normalize(baseDir string) error {
 		ws.ClaudePermissionMode = normalizeOptionalClaudePermissionMode(ws.ClaudePermissionMode)
 		if ws.ClaudePermissionMode != "" && !isSupportedClaudePermissionMode(ws.ClaudePermissionMode) {
 			return fmt.Errorf("workspace %q has unsupported claude_permission_mode %q", ws.ID, ws.ClaudePermissionMode)
-		}
-		if ws.ClaudePermissionMode == "bypassPermissions" && !c.Claude.DangerouslySkipPermissions {
-			return fmt.Errorf("workspace %q claude_permission_mode=bypassPermissions requires claude.dangerously_skip_permissions = true", ws.ID)
 		}
 		if _, ok := seen[ws.ID]; ok {
 			return fmt.Errorf("duplicate workspace id %q", ws.ID)
@@ -463,10 +462,16 @@ func normalizeBackendName(value string) string {
 	}
 }
 
+// normalizeClaudePermissionMode resolves the global [claude] setting, which is
+// the root of the permission chain: it has no layer above it, so unset and the
+// literal "default" land on the product posture — unattended, i.e.
+// bypassPermissions, matching config.Default(). Workspace and session values go
+// through normalizeOptionalClaudePermissionMode instead, where "default" keeps
+// its meaning of "follow the layer above".
 func normalizeClaudePermissionMode(value string) string {
 	switch strings.TrimSpace(value) {
 	case "", "default":
-		return "default"
+		return "bypassPermissions"
 	case "acceptEdits", "plan", "bypassPermissions":
 		return strings.TrimSpace(value)
 	default:
@@ -483,12 +488,18 @@ func isSupportedClaudePermissionMode(value string) bool {
 	}
 }
 
+// normalizeOptionalClaudePermissionMode resolves a workspace setting. Unset and
+// the literal "default" both mean "follow the layer above", so they are kept as
+// written rather than pinned to a copy of the global mode.
 func normalizeOptionalClaudePermissionMode(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
+	switch strings.TrimSpace(value) {
+	case "", "default":
+		return strings.TrimSpace(value)
+	case "acceptEdits", "plan", "bypassPermissions":
+		return strings.TrimSpace(value)
+	default:
+		return strings.TrimSpace(value)
 	}
-	return normalizeClaudePermissionMode(value)
 }
 
 var supportedClaudeEfforts = []string{"low", "medium", "high", "xhigh", "max"}

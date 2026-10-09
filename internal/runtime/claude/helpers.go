@@ -370,6 +370,8 @@ func RenderApprovalPresentation(workspaceID string, req *claudecli.PermissionReq
 func NormalizePermissionMode(value string) string {
 	switch strings.TrimSpace(value) {
 	case "", "default":
+		// The literal is preserved: at session level "default" means "follow
+		// the workspace", and effectiveClaudePermissionMode walks the chain.
 		return string(appruntime.ClaudePermissionModeDefault)
 	case string(appruntime.ClaudePermissionModeAcceptEdits):
 		return string(appruntime.ClaudePermissionModeAcceptEdits)

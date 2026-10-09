@@ -362,19 +362,6 @@ func TestNormalizeRejectsInvalidWorkspaceConfigurations(t *testing.T) {
 				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
 			},
 		},
-		{
-			name: "claude bypass without dangerous flag",
-			cfg: &Config{
-				Claude:     ClaudeConfig{PermissionMode: "bypassPermissions"},
-				Workspaces: []Workspace{{ID: "default", Cwd: "."}},
-			},
-		},
-		{
-			name: "workspace claude bypass without dangerous flag",
-			cfg: &Config{
-				Workspaces: []Workspace{{ID: "default", Cwd: ".", ClaudePermissionMode: "bypassPermissions"}},
-			},
-		},
 	}
 
 	for _, tc := range cases {
@@ -800,5 +787,91 @@ func TestQuietModeValidationAndConfigFallback(t *testing.T) {
 				t.Fatalf("invalid quiet value loaded as %q, want normal fallback", loaded.Feishu.Quiet)
 			}
 		})
+	}
+}
+
+// TestClaudePermissionModeDefaultsToUnattended pins the default posture: an
+// unset permission mode — and the literal "default" that unset values used to
+// be written as — runs unattended (bypassPermissions), because feidex drives
+// Claude from Feishu with no terminal to answer permission prompts. Only an
+// explicit acceptEdits or plan narrows it.
+func TestClaudePermissionModeDefaultsToUnattended(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{"unset", "", "bypassPermissions"},
+		{"legacy default", "default", "bypassPermissions"},
+		{"explicit acceptEdits", "acceptEdits", "acceptEdits"},
+		{"explicit plan", "plan", "plan"},
+		{"explicit bypass", "bypassPermissions", "bypassPermissions"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeClaudePermissionMode(tt.value); got != tt.want {
+				t.Fatalf("normalizeClaudePermissionMode(%q) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLoadPinsSkipPermissions covers the two halves of the always-on rule: a
+// config that tries to turn the skip flag off is normalized back to true
+// instead of failing to load, and the global mode — the root of the permission
+// chain — lands on the unattended posture when it is unset or "default".
+func TestLoadPinsSkipPermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	raw := `
+[claude]
+permission_mode = "default"
+dangerously_skip_permissions = false
+
+[[workspace]]
+id = "default"
+cwd = "."
+claude_permission_mode = "default"
+`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.Claude.DangerouslySkipPermissions {
+		t.Fatal("claude.dangerously_skip_permissions = false, want it pinned to true")
+	}
+	if cfg.Claude.PermissionMode != "bypassPermissions" {
+		t.Fatalf("claude.permission_mode = %q, want bypassPermissions", cfg.Claude.PermissionMode)
+	}
+	// At workspace level "default" is not a posture, it is "follow the layer
+	// above", so it must survive loading as written instead of being pinned.
+	if len(cfg.Workspaces) != 1 || cfg.Workspaces[0].ClaudePermissionMode != "default" {
+		t.Fatalf("workspace mode = %+v, want the literal default (follows the global setting)", cfg.Workspaces)
+	}
+}
+
+// TestLoadKeepsEmptyWorkspaceModeInheriting keeps the migration shape: an empty
+// workspace value still inherits the global mode rather than pinning a copy.
+func TestLoadKeepsEmptyWorkspaceModeInheriting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	raw := `
+[claude]
+permission_mode = "acceptEdits"
+
+[[workspace]]
+id = "default"
+cwd = "."
+claude_permission_mode = ""
+`
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.Workspaces) != 1 || cfg.Workspaces[0].ClaudePermissionMode != "" {
+		t.Fatalf("workspace mode = %+v, want an empty (inheriting) value", cfg.Workspaces)
 	}
 }

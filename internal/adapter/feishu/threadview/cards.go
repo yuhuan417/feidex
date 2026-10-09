@@ -59,13 +59,28 @@ func currentThreadLabel(sess *conversation.Session) string {
 }
 
 func effectiveClaudePermissionMode(sess *conversation.Session, ws *config.Workspace, cfg config.ClaudeConfig) string {
-	if sess != nil && strings.TrimSpace(sess.ActiveClaudePermissionMode) != "" {
-		return normalizeClaudePermissionModeValue(sess.ActiveClaudePermissionMode)
+	if sess != nil {
+		if mode := explicitClaudePermissionMode(sess.ActiveClaudePermissionMode); mode != "" {
+			return mode
+		}
 	}
-	if ws != nil && strings.TrimSpace(ws.ClaudePermissionMode) != "" {
-		return normalizeClaudePermissionModeValue(ws.ClaudePermissionMode)
+	if ws != nil {
+		if mode := explicitClaudePermissionMode(ws.ClaudePermissionMode); mode != "" {
+			return mode
+		}
 	}
 	return normalizeClaudePermissionModeValue(cfg.PermissionMode)
+}
+
+// explicitClaudePermissionMode returns the mode a layer pins. Unset and the
+// literal "default" both mean "follow the layer above", so they report empty
+// and the caller keeps walking up the chain.
+func explicitClaudePermissionMode(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "default" {
+		return ""
+	}
+	return normalizeClaudePermissionModeValue(value)
 }
 
 func normalizeClaudePermissionModeValue(value string) string {

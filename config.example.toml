@@ -66,6 +66,8 @@ model = "sonnet"
 # effort = "medium"
 # small_model = "haiku"
 # subagent_model = "sonnet"
+# default（或留空）= 参考上一层的配置。这一层是链的根，没有上一层，所以落到无人值守的
+# bypassPermissions——feidex 在飞书里驱动 Claude，没有终端能回答权限询问。
 permission_mode = "bypassPermissions"
 permission_prompt_tool_stdio = true
 # disable_plugins = true

@@ -30,7 +30,7 @@ service_name = "feidex"
 # command = "claude"
 # model = "sonnet"
 # model_options = ["deepseek-v4-pro"]
-# permission_mode = "bypassPermissions"
+# permission_mode = "bypassPermissions"  # default / 留空 = 参考上一层；全局层没有上一层，落到 bypassPermissions
 
 [daemon]
 service_name = "feidex"
@@ -179,8 +179,11 @@ Claude Code 后端配置：
   - reasoning effort：`low`、`medium`、`high`、`xhigh`、`max`（留空 = 自动）
 - `permission_mode`
   - 权限模式：`default`、`acceptEdits`、`plan`、`bypassPermissions`
+  - `default`（或留空）= 参考上一层的配置：会话看所属 workspace，workspace 看全局 `[claude]`
+  - 全局是这条链的根、没有上一层，所以全局留空或写 `default` 时落到无人值守姿态 `bypassPermissions`（feidex 在飞书里驱动 Claude，没有终端能回答权限询问，与 `config.Default()` 一致）
+  - 只有某一层显式写 `acceptEdits` / `plan` 才会收紧，其余层继续跟随其上层的值
 - `dangerously_skip_permissions`
-  - 启用 `bypassPermissions` 前必须设为 `true`
+  - 固定为 `true`，不是可调项：Claude CLI 始终以跳过权限的方式启动，配置文件里写 `false` 会在加载时被归一回 `true`（而不是报错）
 - `disable_plugins`
   - 禁用 Claude Code 插件
 - `system_prompt`
@@ -217,7 +220,7 @@ Claude Code 后端配置：
 - `cwd`
 - `approval_policy`
 - `sandbox_mode`
-- `claude_permission_mode`（Claude 权限模式，留空跟随全局默认）
+- `claude_permission_mode`（Claude 权限模式；`default` 或留空 = 跟随全局 `[claude].permission_mode`）
 
 ## 飞书接入命令
 
