@@ -9,7 +9,6 @@ Usage:
 
 Environment overrides:
   FEIDEX_CACHE_HOME
-  FEIDEX_GOCACHE
   FEIDEX_GOMODCACHE
 EOF
 }
@@ -21,7 +20,9 @@ fi
 
 cache_home="${FEIDEX_CACHE_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/feidex}"
 
-gocache="${FEIDEX_GOCACHE:-$cache_home/go-build}"
+# The build wrapper no longer sets GOCACHE, so this is the legacy Feidex build
+# cache: it is removed when present, not used.
+gocache="$cache_home/go-build"
 gomodcache="${FEIDEX_GOMODCACHE:-$cache_home/gomodcache}"
 
 for path in \

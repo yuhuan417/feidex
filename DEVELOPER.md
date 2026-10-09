@@ -124,8 +124,8 @@ go test ./...
 
 Use the system default Go cache when it is writable. If a command needs an isolated Feidex cache, use the Feidex-standard user cache locations instead of `/tmp`; `/tmp` may be backed by tmpfs and can exhaust memory on large Go builds.
 
-- `GOCACHE=${XDG_CACHE_HOME:-$HOME/.cache}/feidex/go-build`
-- `GOMODCACHE=${XDG_CACHE_HOME:-$HOME/.cache}/feidex/gomodcache`
+- `GOCACHE`: leave it alone. `scripts/with_tmp_go_cache.sh` does not set it, so builds use Go's own default build cache, which is the fast, shared one.
+- `GOMODCACHE=${XDG_CACHE_HOME:-$HOME/.cache}/feidex/gomodcache` — the wrapper isolates the module cache only.
 
 Do not invent task-specific cache directories such as random `go-build-*` or `probe-*` paths under `/tmp`.
 
@@ -147,7 +147,7 @@ Notes:
 - The cleanup script also removes the historical `/tmp/feidex-gocache` and `/tmp/feidex-gomodcache` directories if they exist.
 - The script name is historical; `with_tmp_go_cache.sh` no longer uses `/tmp` by default.
 - Use `FEIDEX_CACHE_HOME` when you intentionally need to move both Feidex cache directories together.
-- Use `FEIDEX_GOCACHE` and `FEIDEX_GOMODCACHE` only when you intentionally need non-standard locations.
+- Use `FEIDEX_GOMODCACHE` only when you intentionally need a non-standard module cache location.
 
 ### Local Integration Tests
 

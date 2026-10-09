@@ -12,9 +12,11 @@ Examples:
   ./scripts/with_tmp_go_cache.sh go test ./...
   ./scripts/with_tmp_go_cache.sh go build -o bin/feidex ./cmd/feidex
 
+Runs the command with the Feidex module cache. GOCACHE is deliberately left
+alone: Go's default build cache is the fast, shared one.
+
 Environment overrides:
   FEIDEX_CACHE_HOME
-  FEIDEX_GOCACHE
   FEIDEX_GOMODCACHE
 EOF
 }
@@ -26,9 +28,8 @@ fi
 
 cache_home="${FEIDEX_CACHE_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/feidex}"
 
-export GOCACHE="${FEIDEX_GOCACHE:-$cache_home/go-build}"
 export GOMODCACHE="${FEIDEX_GOMODCACHE:-$cache_home/gomodcache}"
 
-mkdir -p "$GOCACHE" "$GOMODCACHE"
+mkdir -p "$GOMODCACHE"
 
 exec "$@"
