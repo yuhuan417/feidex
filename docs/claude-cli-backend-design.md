@@ -395,6 +395,7 @@ Claude 的交互请求（`can_use_tool`、`AskUserQuestion`、`ExitPlanMode`）�
   - 实测同时复现了本项目的原始问题：prompt 顺序为 `system/task_started` → `result`（主 turn 正常结束）→ `can_use_tool`（后台 subagent 才来要权限），即后台 Agent 的审批天然晚于父 turn 结束。
   - 探针：`internal/claudecli/probe_live_test.go`（`FEIDEX_CLAUDE_RUN_TOKEN_TESTS=1` 手动触发，默认跳过）。
 - 回答路径不依赖活跃 submission：`ResolveApproval` / `ResolveUserInput` / `ResolvePlanFeedback` 只依赖进程内的 `PendingInteraction`，`ResumeSubmissionAfterRequest` 找不到 submission 时是 no-op。
+- **模型配置以前台轮次结束为应用边界**：新一轮启动前，前台活动操作、turn startup、compaction 和未完成的前台 turn 仍阻塞配置应用；后台 Agent/workflow、后台计数与 detached pending 均不阻塞。内置模型/effort 的 live control 不清理后台任务或交互；自定义模型、辅助模型或恢复默认 effort 等初始化配置需要重建进程时，恢复同一个会话 ID，并按真实进程退出规则使旧交互失效。切模型不要求先 `/stop` 后台任务。
 
 ## 对现有代码结构的影响
 
