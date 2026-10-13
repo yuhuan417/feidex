@@ -264,11 +264,20 @@ func (s *ManagementService) CompleteWorkspaceNew(action *feishu.CardAction, sess
 }
 
 // CompleteWorkspaceClone handles workspace clone action.
+//
+// The form is opened without a delivery id on purpose. This entry point runs
+// both from a card action and from the /workspace clone slash command, and the
+// two disagree about which message the form card ends up in: a card action's
+// response replaces its own message in place, while the slash-command bridge
+// sends the response as a brand-new message. Seeding action.MessageID would
+// record the inbound text message on the slash path, and every later
+// progress/result patch would fail with 230001 "This message is NOT a card".
+// The submit handler records the form card the user actually clicked instead.
 func (s *ManagementService) CompleteWorkspaceClone(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	msg := s.CommandMessageFromAction(action, sessionKey, "/workspace clone")
 	_, _, ws := s.currentWorkspaceForMessage(msg)
 	payload := ClonePayload{RootPath: s.Deps.Planning.DefaultWorkspaceCloneRoot(ws), SelectedParentDir: firstNonEmpty(s.Deps.Planning.DefaultWorkspaceCloneParent(ws), "/"), CloneMode: CloneModeWorkspace}
-	pending, err := s.Deps.Workflow.Open("workspace_clone", sessionKey, action.UserID, action.MessageID, payload)
+	pending, err := s.Deps.Workflow.Open("workspace_clone", sessionKey, action.UserID, "", payload)
 	if err != nil {
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
 	}
@@ -276,6 +285,11 @@ func (s *ManagementService) CompleteWorkspaceClone(action *feishu.CardAction, se
 }
 
 // CompleteWorkspaceWorktree opens the worktree creation card from the menu.
+//
+// Unlike CompleteWorkspaceClone this is reached only from the workspace.worktree
+// card action, so action.MessageID is the menu message the response replaces in
+// place and is a valid delivery id for the form. If a slash-command entry is
+// ever added here, it must pass "" instead — see CompleteWorkspaceClone for why.
 func (s *ManagementService) CompleteWorkspaceWorktree(action *feishu.CardAction, sessionKey string) (*callback.CardActionTriggerResponse, error) {
 	msg := s.CommandMessageFromAction(action, sessionKey, "/workspace new worktree")
 	_, _, ws := s.currentWorkspaceForMessage(msg)

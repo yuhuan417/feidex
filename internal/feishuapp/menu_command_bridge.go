@@ -16,6 +16,15 @@ func parseSessionKeyMeta(sessionKey string) (chatType, chatID, rootMessageID, us
 	return chatType, chatID, rootMessageID, userID
 }
 
+// commandActionFromMessage synthesizes a CardAction so slash-command handlers
+// can share the card-action code paths.
+//
+// MessageID is the message the user typed the command in, NOT "the card this
+// action came from". On the slash path that is a plain text message, and
+// Feishu rejects im.message.patch on it with 230001 "This message is NOT a
+// card". Handlers that later patch a message must not treat this value as a
+// card id; pass "" when opening a form and let the submit handler record the
+// card it actually lands on.
 func commandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
 	if actionValue == nil {
 		actionValue = map[string]any{}

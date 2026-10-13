@@ -328,6 +328,7 @@ func TestIsLocalCommand(t *testing.T) {
 func TestHandleCommandWorkspaceCloneWithoutURLOpensForm(t *testing.T) {
 	a, ff, _ := newTestApp(t)
 	msg := &feishu.InboundMessage{MessageID: "msg-clone", ChatID: "chat-clone", ChatType: "p2p", UserID: "user-1"}
+	ff.replyCardIDs = []string{"p2p-clone-form-card"}
 	if err := a.bindings.Commands.Handle(msg, "/workspace clone"); err != nil {
 		t.Fatalf("HandleInboundCommand(/workspace clone) error = %v", err)
 	}
@@ -337,6 +338,27 @@ func TestHandleCommandWorkspaceCloneWithoutURLOpensForm(t *testing.T) {
 	}
 	if body := cardMarkdownContent(t, cards[0]); !strings.Contains(body, "从仓库创建") || !strings.Contains(body, "Git 地址") {
 		t.Fatalf("/workspace clone reply body = %q, want clone form", body)
+	}
+	// Progress and result cards patch this request's own message, and Feishu
+	// only patches cards. The delivered form is a fresh reply here — the
+	// slash-command entry is not a card action, so action.MessageID is the
+	// user's text message ("msg-clone") and must not be stored as the patch
+	// target. Seeding it made every later patch fail with 230001
+	// "This message is NOT a card". The form's own message id is only known
+	// once the user clicks submit on it; see
+	// TestWorkspaceCloneSubmitRecordsFormCardMessageID.
+	foundPending := false
+	for _, pending := range a.State().PendingRequests() {
+		if pending.Kind != "workspace_clone" || !strings.Contains(pending.SessionKey, "chat-clone") {
+			continue
+		}
+		foundPending = true
+		if pending.FeishuMsgID != "" {
+			t.Fatalf("pending FeishuMsgID = %q, want empty at open (it would be the command message %q, which is not a card)", pending.FeishuMsgID, msg.MessageID)
+		}
+	}
+	if !foundPending {
+		t.Fatalf("missing workspace_clone pending request: %+v", a.State().PendingRequests())
 	}
 }
 

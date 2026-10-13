@@ -723,6 +723,80 @@ func TestWorkspaceCloneSubmitFromMenuRunsAsyncAndPatchesSuccess(t *testing.T) {
 	}
 }
 
+// TestWorkspaceCloneSubmitRecordsFormCardMessageID guards the id provenance
+// rule for the p2p /workspace clone slash command: the delivery id is the
+// form card the user clicks submit on, never the inbound command message.
+// Seeding the command message made every later progress/result patch fail with
+// 230001 "This message is NOT a card".
+func TestWorkspaceCloneSubmitRecordsFormCardMessageID(t *testing.T) {
+	a, ff, _ := newTestApp(t)
+	baseDir := t.TempDir()
+	currentDir := filepath.Join(baseDir, "current")
+	parentDir := filepath.Join(baseDir, "parents")
+	if err := os.MkdirAll(currentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(currentDir) error = %v", err)
+	}
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(parentDir) error = %v", err)
+	}
+	a.cfg.Workspaces[0].Cwd = currentDir
+
+	ff.replyCardIDs = []string{"p2p-clone-form-card"}
+	msg := &feishu.InboundMessage{MessageID: "msg-clone", ChatID: "chat-clone", ChatType: "p2p", UserID: "user-1"}
+	if err := a.bindings.Commands.Handle(msg, "/workspace clone"); err != nil {
+		t.Fatalf("HandleInboundCommand(/workspace clone) error = %v", err)
+	}
+	var requestID string
+	for _, pending := range a.State().PendingRequests() {
+		if pending.Kind == "workspace_clone" {
+			requestID = pending.ID
+			if pending.FeishuMsgID == msg.MessageID {
+				t.Fatalf("pending FeishuMsgID = %q, must not be the inbound command message", pending.FeishuMsgID)
+			}
+		}
+	}
+	if requestID == "" {
+		t.Fatalf("missing workspace_clone pending request: %+v", a.State().PendingRequests())
+	}
+
+	origClone := workspaceGitClone
+	defer func() { workspaceGitClone = origClone }()
+	workspaceGitClone = func(_ context.Context, _, targetDir string, _ appworkspacecmd.CloneProgressReporter) error {
+		return os.MkdirAll(filepath.Join(targetDir, ".git"), 0o755)
+	}
+	a.bindings.WorkspaceManagement = buildWorkspaceManagementForTest(a, NewBindingScope(a.State(), a.configView().normalizeSessionKey, a.bindings.Primary, a.FrontendID()))
+
+	// The delivery id is recorded synchronously by Workflow.Start, before the
+	// clone starts in the background, so it can be asserted as soon as the
+	// submit callback returns.
+	if _, err := a.bindings.WorkspaceManagement.CompleteWorkspaceCloneSubmit(&feishu.CardAction{
+		UserID:      "user-1",
+		ChatID:      "chat-clone",
+		MessageID:   "p2p-clone-form-card",
+		ActionValue: map[string]any{"request_id": requestID},
+		FormValue: map[string]any{
+			"repo_url":     "git@github.com:example/repo.git",
+			"workspace_id": "repo-copy",
+			"parent_dir":   parentDir,
+		},
+	}); err != nil {
+		t.Fatalf("CompleteWorkspaceCloneSubmit() error = %v", err)
+	}
+	pending := a.store.PendingByID(requestID)
+	if pending == nil {
+		t.Fatalf("pending %q vanished after submit", requestID)
+	}
+	if pending.FeishuMsgID != "p2p-clone-form-card" {
+		t.Fatalf("pending FeishuMsgID = %q, want %q (the form card the submit action came from)", pending.FeishuMsgID, "p2p-clone-form-card")
+	}
+	// The clone finishes on a runtime goroutine that reads workspaceGitClone
+	// below. Wait for it before returning so the deferred restore does not race
+	// with it.
+	waitForTestCondition(t, "workspace clone success patch", func() bool {
+		return len(ff.patchedCardsSnapshot()) > 0
+	})
+}
+
 func TestWorkspaceCloneSubmitCanCreateWorktree(t *testing.T) {
 	a, ff, fc := newTestApp(t)
 	ff.botName = "Feidex Bot"

@@ -86,6 +86,10 @@ func RawCard(card map[string]any) *callback.Card {
 
 // CommandActionFromMessage builds a CardAction from an inbound message and
 // optional action value overrides.
+//
+// MessageID is the message the command was typed in, not a card host: on the
+// slash path it is plain text and cannot be patched (230001 "This message is
+// NOT a card"). See the same note on feishuapp.commandActionFromMessage.
 func CommandActionFromMessage(msg *feishu.InboundMessage, actionValue map[string]any) *feishu.CardAction {
 	if actionValue == nil {
 		actionValue = map[string]any{}
