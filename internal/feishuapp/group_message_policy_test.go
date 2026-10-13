@@ -302,6 +302,7 @@ func TestGroupWorkspaceCloneWithoutURLIsHandledAsLocalCommand(t *testing.T) {
 		t.Fatalf("SaveAgentBinding() error = %v", err)
 	}
 
+	ff.replyCardIDs = []string{"clone-form-card"}
 	a.HandleFeishuMessage(&feishu.InboundMessage{
 		MessageID:     "clone-1",
 		ChatID:        "chat-clone",
@@ -323,6 +324,13 @@ func TestGroupWorkspaceCloneWithoutURLIsHandledAsLocalCommand(t *testing.T) {
 	for _, pending := range a.State().PendingRequests() {
 		if pending.Kind == "workspace_clone" && strings.Contains(pending.SessionKey, "chat-clone") {
 			foundPending = true
+			// Progress and result cards patch this request's own message, and
+			// Feishu only patches cards: the id has to be the delivered form,
+			// not the command message the user sent (patching that one failed
+			// with 230001 "This message is NOT a card").
+			if pending.FeishuMsgID != "clone-form-card" {
+				t.Fatalf("pending FeishuMsgID = %q, want the delivered clone form card", pending.FeishuMsgID)
+			}
 		}
 	}
 	if !foundPending {

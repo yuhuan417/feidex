@@ -208,14 +208,20 @@ func (s bindingService) beginBindingWorkspaceClone(msg *feishu.InboundMessage, s
 		Kind:        "workspace_clone",
 		SessionKey:  sessionKey,
 		OwnerUserID: strings.TrimSpace(msg.UserID),
-		FeishuMsgID: strings.TrimSpace(msg.MessageID),
 	}, payload, 10*time.Minute)
 	if err != nil {
 		return err
 	}
 	card := s.deps.WorkspacePresentation.RenderWorkspaceCloneCard(sessionKey, request.ID, payload)
-	_, err = s.deps.replyCardWithID(context.Background(), msg.MessageID, card, false)
-	return err
+	cardMessageID, err := s.deps.replyCardWithID(context.Background(), msg.MessageID, card, false)
+	if err != nil {
+		return err
+	}
+	// The clone flow patches this request's own message with the progress and
+	// result cards, and Feishu only accepts a patch on a card. Record where the
+	// form was delivered; seeding the command message instead makes every later
+	// patch fail with 230001 "This message is NOT a card".
+	return s.deps.Forms.SaveDraft(request.ID, nil, "", 0, cardMessageID)
 }
 
 func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) error {
