@@ -705,18 +705,10 @@ func (s *Service) Interrupt(ctx context.Context, sessionKey string) error {
 	}
 	state.Mu.Lock()
 	state.InterruptPending = true
-	// /stop is the documented way out of a deferred model change ("消息已保留在
-	// 队首，请修正模型配置后发送新消息重试队列，或 /stop 取消"), and it is the
-	// only lever that reliably releases the boundary: the pending counts are a
-	// snapshot from the last turn end, so an interrupted turn leaves them set
-	// with nothing left to refresh them, and every later submission is deferred.
-	//
-	// Clearing unconditionally is deliberate. An interrupt does terminate
-	// background agents — the CLI reports an empty live set plus a "stopped"
-	// task notification — but a background shell task keeps running and is
-	// never re-reported, so a later model change can restart the process and
-	// drop such a task without a notification. Being able to send a message at
-	// all wins over keeping that task.
+	// Preserve /stop bookkeeping cleanup. Interrupt terminates background
+	// agents, but shell tasks may continue without being re-reported. Model
+	// configuration waits only for foreground completion, independently of
+	// these background counters; InterruptPending stays set until completion.
 	state.PendingBackgroundAgentCount = 0
 	state.PendingWorkflowCount = 0
 	for _, task := range state.BackgroundTasks {
@@ -1366,11 +1358,8 @@ func (s *Service) HandleBackgroundTasksChanged(state *SessionState, event claude
 		task.Live = false
 	}
 	if len(live) == 0 {
-		// This event REPLACEs the live set, so an empty payload means no
-		// background work remains and the counts taken at the last turn end are
-		// stale. Leaving them would block the model change that waits for this
-		// work to drain — and with every submission deferred, no later turn
-		// could ever refresh them.
+		// An empty replacement live set makes the last turn-end background
+		// counts stale. Reconcile them independently of model configuration.
 		state.PendingBackgroundAgentCount = 0
 		state.PendingWorkflowCount = 0
 	}

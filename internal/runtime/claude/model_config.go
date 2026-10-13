@@ -74,26 +74,12 @@ func (s *Service) modelChangeBlockedReason(current *SessionState) string {
 			}
 		}
 	}
-	s.mu.Lock()
-	for _, pending := range s.pending {
-		if pending != nil && pending.Session == current {
-			s.mu.Unlock()
-			return "当前会话仍有待处理审批或表单"
-		}
-	}
-	s.mu.Unlock()
+	// Background agents and their detached interactions can outlive the
+	// foreground turn. Only foreground work blocks the next turn's settings.
 	current.Mu.Lock()
 	defer current.Mu.Unlock()
 	if len(current.Turns) > 0 || current.CurrentTurnNumber != 0 || current.InterruptPending {
 		return "当前轮尚未结束"
-	}
-	if current.PendingBackgroundAgentCount > 0 || current.PendingWorkflowCount > 0 {
-		return "当前会话仍有后台任务"
-	}
-	for _, task := range current.BackgroundTasks {
-		if task != nil && task.Live && !task.Notified {
-			return "当前会话仍有后台任务"
-		}
 	}
 	return ""
 }

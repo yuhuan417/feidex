@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"feidex/internal/claudecli"
+	"feidex/internal/config"
 	"feidex/internal/domain/conversation"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 )
@@ -53,55 +57,169 @@ func TestModelConfigAcknowledgmentStopsOnFailure(t *testing.T) {
 	}
 }
 
-func TestModelConfigSafeBoundaryIncludesApprovalsAndBackgroundWork(t *testing.T) {
-	for _, kind := range []string{"turn", "interrupt", "approval", "background", "workflow", "background_count", "app_operation", "idle"} {
-		t.Run(kind, func(t *testing.T) {
+func TestModelConfigSafeBoundaryOnlyBlocksForegroundWork(t *testing.T) {
+	for _, tc := range []struct {
+		kind    string
+		blocked bool
+	}{
+		{"turn", true}, {"current_turn", true}, {"interrupt", true}, {"foreground_approval", true},
+		{"app_operation", true}, {"compacting", true}, {"turn_starting", true},
+		{"detached_approval", false}, {"background", false}, {"notified_background", false},
+		{"workflow", false}, {"background_count", false}, {"stale_counts", false}, {"idle", false},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
 			current := &SessionState{SessionKey: "target", Turns: map[int]*TurnState{}, BackgroundTasks: map[string]*BackgroundTaskState{}}
 			s := NewService(Deps{})
-			switch kind {
+			switch tc.kind {
 			case "turn":
 				current.Turns[1] = &TurnState{TurnID: "turn"}
+			case "current_turn":
+				current.CurrentTurnNumber = 1
 			case "interrupt":
 				current.InterruptPending = true
-			case "approval":
+			case "foreground_approval":
+				current.Turns[1] = &TurnState{TurnID: "turn"}
+				s.pending["request"] = &PendingInteraction{Session: current}
+			case "detached_approval":
 				s.pending["request"] = &PendingInteraction{Session: current}
 			case "background":
 				current.BackgroundTasks["task"] = &BackgroundTaskState{Live: true}
+			case "notified_background":
+				current.BackgroundTasks["task"] = &BackgroundTaskState{Live: true, Notified: true}
 			case "workflow":
 				current.PendingWorkflowCount = 1
 			case "background_count":
 				current.PendingBackgroundAgentCount = 1
+			case "stale_counts":
+				current.PendingBackgroundAgentCount, current.PendingWorkflowCount = 3, 2
 			case "app_operation":
 				s.deps.Lookup.GetSession = func(string) *conversation.Session { return &conversation.Session{} }
 				s.deps.Lookup.SessionHasActiveOps = func(*conversation.Session) bool { return true }
+			case "compacting", "turn_starting":
+				status := conversation.SessionStatusCompacting
+				if tc.kind == "turn_starting" {
+					status = conversation.SessionStatusTurnStarting
+				}
+				s.deps.Lookup.GetSession = func(string) *conversation.Session { return &conversation.Session{Status: string(status)} }
+				s.deps.Lookup.SessionHasActiveOps = func(*conversation.Session) bool { return false }
 			case "idle":
 				s.pending["other"] = &PendingInteraction{Session: &SessionState{SessionKey: "other"}}
 				current.BackgroundTasks["done"] = &BackgroundTaskState{Live: false, Notified: true}
 			}
-			if got := s.modelChangeBlockedReason(current); (got == "") != (kind == "idle") {
+			if got := s.modelChangeBlockedReason(current); (got != "") != tc.blocked {
 				t.Fatalf("reason = %q", got)
 			}
 		})
 	}
 }
 
-// TestModelConfigBoundaryClearsWhenBackgroundWorkDrains pins the self-healing
-// half of the boundary: the pending counts are a snapshot from the last turn
-// end, so they have to fall back to zero once the CLI reports that nothing is
-// live. Without it the boundary blocks every submission, and a deferred
-// submission means no later turn can ever refresh the counts.
-func TestModelConfigBoundaryClearsWhenBackgroundWorkDrains(t *testing.T) {
+func TestEnsureSessionAppliesModelConfigAfterForegroundCompletesWithBackgroundWork(t *testing.T) {
+	for _, kind := range []string{"model", "effort", "custom_model", "auxiliary_model", "default_effort"} {
+		t.Run(kind, func(t *testing.T) {
+			// This local protocol fixture acknowledges controls without starting
+			// a real Claude turn or consuming tokens.
+			command := filepath.Join(t.TempDir(), "claude")
+			const script = `#!/bin/sh
+while IFS= read -r line; do
+  printf '%s\n' "$line" >> "$0.requests"
+  request_id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+  printf '{"type":"control_response","response":{"subtype":"success","request_id":"%s","response":{}}}\n' "$request_id"
+done
+`
+			if err := os.WriteFile(command, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			s := NewService(Deps{})
+			s.UpdateConfig(config.ClaudeConfig{Command: command, Model: "sonnet", Effort: "high"})
+			t.Cleanup(func() { _ = s.Close() })
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			ws := &config.Workspace{ID: "workspace", Cwd: t.TempDir()}
+			const conversationID = "existing-conversation"
+			if _, err := s.EnsureSession(ctx, "target", ws, conversationID, ""); err != nil {
+				t.Fatal(err)
+			}
+			current, err := s.SessionState("target")
+			if err != nil {
+				t.Fatal(err)
+			}
+			current.Mu.Lock()
+			current.Turns[1] = &TurnState{}
+			current.CurrentTurnNumber = 1
+			current.PendingBackgroundAgentCount, current.PendingWorkflowCount = 2, 1
+			current.BackgroundTasks["agent"] = &BackgroundTaskState{Live: true}
+			current.Mu.Unlock()
+			pending := &PendingInteraction{Session: current}
+			s.storePending("detached", pending)
+			desired := config.ClaudeConfig{Command: command, Model: "sonnet", Effort: "high"}
+			restart := false
+			switch kind {
+			case "model":
+				desired.Model = "opus"
+			case "effort":
+				desired.Effort = "low"
+			case "custom_model":
+				desired.Model, restart = "custom-model", true
+			case "auxiliary_model":
+				desired.SubagentModel, restart = "haiku", true
+			case "default_effort":
+				desired.Effort, restart = "", true
+			}
+			s.UpdateConfig(desired)
+			if _, err := s.EnsureSession(ctx, "target", ws, conversationID, ""); !errors.Is(err, claudecli.ErrModelConfigApply) {
+				t.Fatalf("active foreground model change error = %v", err)
+			}
+			s.HandleTurnComplete(current, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true})
+			id, err := s.EnsureSession(ctx, "target", ws, conversationID, "")
+			if err != nil || id != conversationID {
+				t.Fatalf("foreground completed: id = %q, error = %v", id, err)
+			}
+			next, err := s.SessionState("target")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (next != current) != restart {
+				t.Fatalf("process replaced = %v, want %v", next != current, restart)
+			}
+			next.Mu.Lock()
+			applied := next.AppliedModelConfig
+			next.Mu.Unlock()
+			if applied != modelSettingsFromConfig(desired, desired.Model) {
+				t.Fatalf("applied config = %#v", applied)
+			}
+			s.mu.Lock()
+			remaining := s.pending["detached"]
+			s.mu.Unlock()
+			if (!restart && remaining != pending) || (restart && remaining != nil) {
+				t.Fatalf("pending interaction after change = %p, restart = %v", remaining, restart)
+			}
+			requests, err := os.ReadFile(command + ".requests")
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantInitializations := 1
+			if restart {
+				wantInitializations = 2
+			}
+			if got := strings.Count(string(requests), `"subtype":"initialize"`); got != wantInitializations {
+				t.Fatalf("initializations = %d, want %d", got, wantInitializations)
+			}
+		})
+	}
+}
+
+func TestBackgroundWorkDrainReconcilesCountsWithoutBlockingModelConfig(t *testing.T) {
 	s := NewService(Deps{})
 	current := &SessionState{SessionKey: "target", Turns: map[int]*TurnState{}, BackgroundTasks: map[string]*BackgroundTaskState{}}
 	current.PendingBackgroundAgentCount = 2
 	current.PendingWorkflowCount = 1
-	if reason := s.modelChangeBlockedReason(current); reason == "" {
-		t.Fatal("pending work should block the model change")
+	if reason := s.modelChangeBlockedReason(current); reason != "" {
+		t.Fatalf("background work must not block model configuration: %q", reason)
 	}
 
 	s.HandleBackgroundTasksChanged(current, claudecli.BackgroundTasksChangedEvent{TaskIDs: []string{"task-1"}})
-	if reason := s.modelChangeBlockedReason(current); reason == "" {
-		t.Fatal("a live background task should still block the model change")
+	if reason := s.modelChangeBlockedReason(current); reason != "" {
+		t.Fatalf("live background task must not block model configuration: %q", reason)
 	}
 
 	s.HandleBackgroundTasksChanged(current, claudecli.BackgroundTasksChangedEvent{})
@@ -113,10 +231,9 @@ func TestModelConfigBoundaryClearsWhenBackgroundWorkDrains(t *testing.T) {
 	}
 }
 
-// TestInterruptReleasesTheModelConfigBoundary covers the documented escape
-// hatch: the deferral notice tells the user to retry or /stop, so /stop has to
-// leave the session able to start again.
-func TestInterruptReleasesTheModelConfigBoundary(t *testing.T) {
+// Interrupt retains its background bookkeeping cleanup, while its foreground
+// pending flag blocks configuration until turn completion is confirmed.
+func TestInterruptClearsBackgroundBookkeepingAndBlocksUntilCompletion(t *testing.T) {
 	s := NewService(Deps{})
 	current := &SessionState{
 		SessionKey: "target", Turns: map[int]*TurnState{}, BackgroundTasks: map[string]*BackgroundTaskState{},
@@ -126,15 +243,14 @@ func TestInterruptReleasesTheModelConfigBoundary(t *testing.T) {
 	current.BackgroundTasks["task-1"] = &BackgroundTaskState{Live: true}
 	s.sessions["target"] = current
 
-	if reason := s.modelChangeBlockedReason(current); reason == "" {
-		t.Fatal("pending work should block the model change")
+	if reason := s.modelChangeBlockedReason(current); reason != "" {
+		t.Fatalf("background work must not block model configuration: %q", reason)
 	}
 	// The synthetic session is never started, so Interrupt reports ErrNotStarted
-	// after it has already released the boundary.
+	// after it has already cleared background bookkeeping.
 	_ = s.Interrupt(context.Background(), "target")
 	// InterruptPending stays set until the interrupted turn actually completes,
-	// so the guard may still report the turn. What must be gone is the
-	// background-work boundary that nothing else could clear.
+	// so model configuration must still wait for turn completion.
 	if current.PendingBackgroundAgentCount != 0 || current.PendingWorkflowCount != 0 {
 		t.Fatalf("counts = %d/%d after interrupt, want 0/0", current.PendingBackgroundAgentCount, current.PendingWorkflowCount)
 	}
@@ -143,7 +259,7 @@ func TestInterruptReleasesTheModelConfigBoundary(t *testing.T) {
 			t.Fatalf("task %s still live after interrupt", taskID)
 		}
 	}
-	if reason := s.modelChangeBlockedReason(current); strings.Contains(reason, "后台任务") {
-		t.Fatalf("background boundary survived the interrupt: %q", reason)
+	if reason := s.modelChangeBlockedReason(current); reason != "当前轮尚未结束" {
+		t.Fatalf("pending interrupt boundary = %q", reason)
 	}
 }

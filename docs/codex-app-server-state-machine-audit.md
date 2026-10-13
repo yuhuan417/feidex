@@ -228,6 +228,11 @@
 - SM-25 后台 goal 自动续跑不经过本地 turn/start，不能承诺下一次自动续跑采用新配置。SM-26 未回答的异步问题不阻塞目标配置保存，答案继续沿用原 thread 的普通 continuation 路径。
 - 这是对 DEVELOPER.md 原模型配置 idle-only 产品策略的有意调整，未放宽 backend 切换/维护的限制，也不通过重置会话制造空闲状态。
 
+#### 2026-10-13 Claude 模型应用的前台边界
+
+- Claude 本地启动下一轮前，只以前台工作已结束作为模型配置应用边界；后台 Agent/workflow、历史计数和 detached pending 不再阻塞。live control 保留现有交互；初始化配置重建进程时恢复同一会话 ID，旧交互仍只在真实 teardown 时失效。
+- 这是对 DEVELOPER.md 中 Claude 后台任务/pending 阻塞策略的有意调整。核对 SM-04/05/06 与 SM-09/10/11/22/23：Codex 的 turn 终态、steer 归属、interrupt 确认与 pending → replied → resolved 契约保持不变；不把消息展示完成视为 Codex turn 终态，也未放宽 backend 切换或维护限制。
+
 ### SM-05 `TurnSteerContinuation`
 
 - 结论: `兼容实现`
