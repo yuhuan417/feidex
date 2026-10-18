@@ -93,6 +93,23 @@ func TestPermissionIssueFromError(t *testing.T) {
 	}
 }
 
+func TestPermissionIssueIgnoresTroubleshooterOnContentErrors(t *testing.T) {
+	var codeErr larkcore.CodeError
+	if err := json.Unmarshal([]byte(`{
+		"code": 230099,
+		"msg": "Failed to create card content, ext=ErrCode: 200570; ErrMsg: card contains invalid image keys",
+		"error": {
+			"log_id": "log-2",
+			"troubleshooter": "https://open.feishu.cn/search?code=230099"
+		}
+	}`), &codeErr); err != nil {
+		t.Fatalf("Unmarshal(CodeError) error = %v", err)
+	}
+	if issue := permissionIssueFromCodeError("im.message.patch", codeErr.Code, codeErr.Msg, &codeErr, nil, nil); issue != nil {
+		t.Fatalf("content validation error misclassified as permission issue: %+v", issue)
+	}
+}
+
 func TestAnnouncementAPIErrorProvidesPermissionIssue(t *testing.T) {
 	err := &AnnouncementAPIError{
 		Op:   "docx.chat_announcement_block.list",

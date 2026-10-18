@@ -31,7 +31,11 @@ const (
 	previewListPageSize          = 200
 )
 
-var localFileLinkRe = regexp.MustCompile(`\[[^\]]+\]\(([^)\n]+)\)`)
+// localFileLinkRe matches both links and markdown images. The optional leading
+// ! is consumed so an image whose target gets rewritten to a Drive URL is
+// downgraded to a normal link: Feishu cards only accept an uploaded img_key in
+// ![alt](...), and a Drive URL there fails the whole card patch.
+var localFileLinkRe = regexp.MustCompile(`!?\[[^\]]+\]\(([^)\n]+)\)`)
 var previewLineSuffixRe = regexp.MustCompile(`^(.*?)(:\d+(?::\d+)?)$`)
 var previewLineAnchorFragmentRe = regexp.MustCompile(`^#L\d+(?:C\d+)?$`)
 
