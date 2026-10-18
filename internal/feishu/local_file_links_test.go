@@ -172,6 +172,33 @@ func TestDriveLocalFileLinkRewriterRewriteTextReplacesLocalMarkdownLinks(t *test
 	}
 }
 
+func TestDriveLocalFileLinkRewriterDowngradesLocalMarkdownImageToLink(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "chart.svg"), []byte("<svg></svg>\n"), 0o644); err != nil {
+		t.Fatalf("write svg: %v", err)
+	}
+	api := &fakePreviewAPI{}
+	rewriter := NewDriveLocalFileLinkRewriter(api, LocalFileLinkConfig{
+		ProcessCWD: root,
+	})
+
+	got, err := rewriter.RewriteText(context.Background(), LocalFileLinkRewriteRequest{
+		Text:         "看图 ![chart](chart.svg)",
+		WorkspaceCWD: root,
+		ChatID:       "oc_123",
+		UserID:       "ou_123",
+	})
+	if err != nil {
+		t.Fatalf("RewriteText returned error: %v", err)
+	}
+	if strings.Contains(got, "![") {
+		t.Fatalf("image syntax survived rewrite: %q", got)
+	}
+	if !strings.Contains(got, "[chart.svg](https://drive.example/file-1)") {
+		t.Fatalf("expected image downgraded to a plain link, got %q", got)
+	}
+}
+
 func TestDriveLocalFileLinkRewriterRewriteTextReplacesLocalNonMarkdownLinks(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {

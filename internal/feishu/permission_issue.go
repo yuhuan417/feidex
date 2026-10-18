@@ -187,7 +187,10 @@ func permissionIssueLikelyRelevant(issue *PermissionIssue) bool {
 	if issue == nil {
 		return false
 	}
-	if len(issue.PermissionViolations) > 0 || len(issue.Helps) > 0 || strings.TrimSpace(issue.Troubleshooter) != "" {
+	// A troubleshooter link is attached to most Feishu API errors, including
+	// content validation failures, so its presence alone does not make an
+	// error a permission problem.
+	if len(issue.PermissionViolations) > 0 || len(issue.Helps) > 0 {
 		return true
 	}
 	return isFeishuAuthOrPermissionFailure(nil, strings.TrimSpace(fmt.Sprintf("%s %s %s", issue.Message, issue.Cause, flattenPermissionIssueDetails(issue))))
