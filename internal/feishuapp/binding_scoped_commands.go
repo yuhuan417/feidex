@@ -4,7 +4,6 @@ import (
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	appconversation "feidex/internal/application/conversation"
 	applicationrouting "feidex/internal/application/routing"
-	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/routing"
 	"feidex/internal/textutil"
 
@@ -267,13 +266,10 @@ func (s bindingService) commandModel(msg *feishu.InboundMessage, args []string) 
 		}
 		return s.commandCurrentBotGroupConfig(msg, []string{role, args[2]})
 	case "option":
-		if s.deps.ConfiguredBackend() != domainbackend.BackendClaude {
-			return fmt.Errorf("/model option 仅适用于 Claude backend")
-		}
 		if len(args) != 3 {
 			return fmt.Errorf("usage: /model option add|remove MODEL_ID")
 		}
-		return s.commandClaudeModelOption(msg, args[1:])
+		return s.commandModelOption(msg, args[1:])
 	default:
 		return fmt.Errorf("usage: /model | /model set MODEL|default | /model effort EFFORT|default | /model plan|review|subagent|small set MODEL|default")
 	}

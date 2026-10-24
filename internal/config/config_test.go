@@ -289,6 +289,27 @@ func TestNormalizeClaudeModelOptions(t *testing.T) {
 	}
 }
 
+func TestNormalizeCodexModelOptions(t *testing.T) {
+	cfg := &Config{
+		Codex: CodexConfig{
+			ModelOptions: []string{" claude-opus-4.6 ", "", "gemini-3-pro", "claude-opus-4.6"},
+		},
+		Workspaces: []Workspace{{ID: "default", Cwd: "."}},
+	}
+	if err := cfg.Normalize(t.TempDir()); err != nil {
+		t.Fatalf("Normalize() error = %v", err)
+	}
+	want := []string{"claude-opus-4.6", "gemini-3-pro"}
+	if len(cfg.Codex.ModelOptions) != len(want) {
+		t.Fatalf("Codex.ModelOptions = %+v, want %+v", cfg.Codex.ModelOptions, want)
+	}
+	for i := range want {
+		if cfg.Codex.ModelOptions[i] != want[i] {
+			t.Fatalf("Codex.ModelOptions = %+v, want %+v", cfg.Codex.ModelOptions, want)
+		}
+	}
+}
+
 func TestNormalizeRejectsClaudeAutoPermissionMode(t *testing.T) {
 	cases := []struct {
 		name string

@@ -1,14 +1,17 @@
 package feishuapp
 
 import (
+	"context"
 	domainbackend "feidex/internal/domain/backend"
 	"feidex/internal/domain/conversation"
 	catalog "feidex/internal/domain/modelconfig"
 	"feidex/internal/domain/routing"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"feidex/internal/adapter/feishu/modelconfig"
 	"feidex/internal/claudecli"
@@ -880,5 +883,190 @@ func TestModelConfigChunkButtonsHelpers(t *testing.T) {
 	row := modelconfig.ModelCardActionRow([]feishu.Button{{Text: "Button", Value: map[string]any{"action": "pick"}}})
 	if tag, _ := row["tag"].(string); tag != "column_set" {
 		t.Fatalf("modelconfig.ModelCardActionRow() = %#v", row)
+	}
+}
+
+func codexModelCatalogFixture() catalog.ModelListResult {
+	return catalog.ModelListResult{Data: []catalog.ModelListEntry{{
+		ID:                     "gpt-5",
+		DisplayName:            "GPT-5",
+		IsDefault:              true,
+		DefaultReasoningEffort: "medium",
+		SupportedReasoningEfforts: []catalog.ModelReasoningEffortEntry{
+			{ReasoningEffort: "medium"},
+		},
+	}}}
+}
+
+func TestCompleteCodexModelOptionAddAndRemovePersistConfig(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	selectBackendForTest(a, domainbackend.BackendCodex)
+	a.cfg.Feishu.Backend = domainbackend.BackendCodex
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		if method == "model/list" {
+			*out.(*catalog.ModelListResult) = codexModelCatalogFixture()
+			return nil
+		}
+		return fmt.Errorf("unexpected codex method %q", method)
+	}
+
+	resp, err := a.bindings.BackendConfiguration.CompleteModelOptionAdd(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": "feishu:chat:chat",
+			"menu_action": "menu.model",
+		},
+		FormValue: map[string]any{"model_id": " deepseek-v4-pro "},
+	})
+	if err != nil {
+		t.Fatalf("CompleteModelOptionAdd() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("CompleteModelOptionAdd() response = %#v", resp)
+	}
+	if got := a.cfg.Codex.ModelOptions; len(got) != 1 || got[0] != "deepseek-v4-pro" {
+		t.Fatalf("Codex model options after add = %+v", got)
+	}
+	loaded, err := config.Load(a.cfgPath)
+	if err != nil {
+		t.Fatalf("Load(config) error = %v", err)
+	}
+	if got := loaded.Codex.ModelOptions; len(got) != 1 || got[0] != "deepseek-v4-pro" {
+		t.Fatalf("persisted Codex model options = %+v", got)
+	}
+	if resp.Card == nil {
+		t.Fatalf("CompleteModelOptionAdd() response missing refreshed card")
+	}
+	optionTexts := claudeSelectOptionTextsForTest(t, resp.Card.Data.(map[string]any), "model_config_select_model")
+	found := false
+	for _, text := range optionTexts {
+		if strings.Contains(text, "deepseek-v4-pro") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("refreshed model select options = %+v, want the added candidate", optionTexts)
+	}
+
+	resp, err = a.bindings.BackendConfiguration.CompleteModelOptionRemove(&feishu.CardAction{
+		ActionValue: map[string]any{
+			"session_key": "feishu:chat:chat",
+			"menu_action": "menu.model",
+		},
+		InputValue: "deepseek-v4-pro",
+	})
+	if err != nil {
+		t.Fatalf("CompleteModelOptionRemove() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("CompleteModelOptionRemove() response = %#v", resp)
+	}
+	if got := a.cfg.Codex.ModelOptions; len(got) != 0 {
+		t.Fatalf("Codex model options after remove = %+v", got)
+	}
+}
+
+func TestCompleteModelOptionAddRoutesByActiveBackend(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	selectBackendForTest(a, domainbackend.BackendClaude)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+
+	resp, err := a.bindings.BackendConfiguration.CompleteModelOptionAdd(&feishu.CardAction{
+		ActionValue: map[string]any{"session_key": "feishu:chat:chat"},
+		FormValue:   map[string]any{"model_id": "deepseek-v4-pro"},
+	})
+	if err != nil {
+		t.Fatalf("CompleteModelOptionAdd() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("CompleteModelOptionAdd() on Claude backend = %#v, want success", resp)
+	}
+	if got := a.cfg.Claude.ModelOptions; len(got) != 1 || got[0] != "deepseek-v4-pro" {
+		t.Fatalf("Claude model options = %+v, want the add routed to the Claude list", got)
+	}
+	if got := a.cfg.Codex.ModelOptions; len(got) != 0 {
+		t.Fatalf("Codex model options = %+v, want untouched", got)
+	}
+}
+
+func TestRenderModelConfigCardShowsConfiguredCandidateAsCurrent(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Codex.ModelOptions = []string{"claude-opus-4.6"}
+	a.cfg.Codex.Model = "claude-opus-4.6"
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		if method == "model/list" {
+			*out.(*catalog.ModelListResult) = codexModelCatalogFixture()
+			return nil
+		}
+		return fmt.Errorf("unexpected codex method %q", method)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := a.bindings.ModelCommands.FetchModelList(ctx)
+	if err != nil {
+		t.Fatalf("FetchModelList() error = %v", err)
+	}
+	if len(result.Data) != 2 || result.Data[1].ID != "claude-opus-4.6" {
+		t.Fatalf("fetched catalog = %+v, want the candidate appended", result.Data)
+	}
+
+	card := a.bindings.ModelCommands.RenderModelConfigCard(result, nil, "feishu:chat:chat", "menu.model")
+	body := cardMarkdownContent(t, card)
+	if !strings.Contains(body, "当前模型: `claude-opus-4.6`") {
+		t.Fatalf("model card body = %q, want the configured candidate as current model", body)
+	}
+	optionTexts := claudeSelectOptionTextsForTest(t, card, "model_config_select_model")
+	marked := false
+	for _, text := range optionTexts {
+		if text == "claude-opus-4.6" {
+			t.Fatalf("model select options = %+v, want the current candidate marked", optionTexts)
+		}
+		if strings.HasPrefix(text, "当前 · ") && strings.Contains(text, "claude-opus-4.6") {
+			marked = true
+		}
+	}
+	if !marked {
+		t.Fatalf("model select options = %+v, want a 当前-marked candidate entry", optionTexts)
+	}
+	effortTexts := claudeSelectOptionTextsForTest(t, card, "model_config_select_effort")
+	if len(effortTexts) != 1 {
+		t.Fatalf("effort select options = %+v, want only the default option for a candidate model", effortTexts)
+	}
+}
+
+func TestRenderBindingCodexModelConfigCardIncludesOptionConfig(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Codex.ModelOptions = []string{"claude-opus-4.6"}
+	fc.callHook = func(_ context.Context, method string, _ any, out any) error {
+		if method == "model/list" {
+			*out.(*catalog.ModelListResult) = codexModelCatalogFixture()
+			return nil
+		}
+		return fmt.Errorf("unexpected codex method %q", method)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := a.bindings.ModelCommands.FetchModelList(ctx)
+	if err != nil {
+		t.Fatalf("FetchModelList() error = %v", err)
+	}
+	groupCard := a.bindings.BindingCommands.renderBindingCodexModelConfigCard("feishu:group:g1", &state.AgentBinding{}, result)
+	if got := modelConfigFormCountForTest(t, groupCard); got != 1 {
+		t.Fatalf("group model config form count = %d, want 1", got)
+	}
+	optionTexts := claudeSelectOptionTextsForTest(t, groupCard, "codex_model_option_remove_select")
+	if len(optionTexts) != 1 || optionTexts[0] != "claude-opus-4.6" {
+		t.Fatalf("group remove select options = %+v, want the configured candidate", optionTexts)
+	}
+	modelTexts := claudeSelectOptionTextsForTest(t, groupCard, "model_config_select_model")
+	found := false
+	for _, text := range modelTexts {
+		if strings.Contains(text, "claude-opus-4.6") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("group model select options = %+v, want the configured candidate", modelTexts)
 	}
 }

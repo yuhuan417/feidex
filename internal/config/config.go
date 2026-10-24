@@ -56,20 +56,21 @@ type ResolvedFrontend struct {
 }
 
 type CodexConfig struct {
-	Command                 string `toml:"command"`
-	Transport               string `toml:"transport"`
-	WSURL                   string `toml:"ws_url"`
-	WSBearerToken           string `toml:"ws_bearer_token"`
-	ExperimentalAPI         bool   `toml:"experimental_api"`
-	ServiceName             string `toml:"service_name"`
-	AppServerDir            string `toml:"app_server_dir"`
-	Model                   string `toml:"model"`
-	ReasoningEffort         string `toml:"reasoning_effort"`
-	PlanModel               string `toml:"plan_model"`
-	PlanReasoningEffort     string `toml:"plan_reasoning_effort"`
-	ReviewModel             string `toml:"review_model"`
-	SubagentModel           string `toml:"subagent_model"`
-	SubagentReasoningEffort string `toml:"subagent_reasoning_effort"`
+	Command                 string   `toml:"command"`
+	Transport               string   `toml:"transport"`
+	WSURL                   string   `toml:"ws_url"`
+	WSBearerToken           string   `toml:"ws_bearer_token"`
+	ExperimentalAPI         bool     `toml:"experimental_api"`
+	ServiceName             string   `toml:"service_name"`
+	AppServerDir            string   `toml:"app_server_dir"`
+	Model                   string   `toml:"model"`
+	ReasoningEffort         string   `toml:"reasoning_effort"`
+	PlanModel               string   `toml:"plan_model"`
+	PlanReasoningEffort     string   `toml:"plan_reasoning_effort"`
+	ReviewModel             string   `toml:"review_model"`
+	SubagentModel           string   `toml:"subagent_model"`
+	SubagentReasoningEffort string   `toml:"subagent_reasoning_effort"`
+	ModelOptions            []string `toml:"model_options"`
 }
 
 type ClaudeConfig struct {
@@ -192,6 +193,7 @@ func (c *Config) Normalize(baseDir string) error {
 	c.Codex.ReviewModel = strings.TrimSpace(c.Codex.ReviewModel)
 	c.Codex.SubagentModel = strings.TrimSpace(c.Codex.SubagentModel)
 	c.Codex.SubagentReasoningEffort = strings.TrimSpace(c.Codex.SubagentReasoningEffort)
+	c.Codex.ModelOptions = normalizeStringList(c.Codex.ModelOptions)
 	c.Claude.Command = strings.TrimSpace(c.Claude.Command)
 	if c.Claude.Command == "" {
 		c.Claude.Command = "claude"

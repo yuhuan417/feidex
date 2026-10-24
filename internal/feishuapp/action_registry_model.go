@@ -129,9 +129,9 @@ func modelCardAction(inputs ModelCardActionInputs, name string, action *feishu.C
 		case "model.config.select_effort":
 			return svc.completeBindingEffortSet(action, sessionKey, value)
 		case "model.config.add_option":
-			return svc.completeClaudeModelOption(action, sessionKey, true)
+			return svc.completeModelOption(action, sessionKey, true)
 		case "model.config.remove_option":
-			return svc.completeClaudeModelOption(action, sessionKey, false)
+			return svc.completeModelOption(action, sessionKey, false)
 		case "model.plan_config.set_model", "model.plan_config.select_model", "model.plan_config.set_effort", "model.plan_config.select_effort":
 			return warningCard("该项是 bot frontend 默认配置，请私聊该 bot 使用"), nil
 		default:
@@ -167,9 +167,9 @@ func modelCardAction(inputs ModelCardActionInputs, name string, action *feishu.C
 	case "model.config.select_model":
 		return inputs.BackendConfiguration.CompleteGlobalModelSet(action, value)
 	case "model.config.add_option":
-		return inputs.BackendConfiguration.CompleteClaudeModelOptionAdd(action)
+		return inputs.BackendConfiguration.CompleteModelOptionAdd(action)
 	case "model.config.remove_option":
-		return inputs.BackendConfiguration.CompleteClaudeModelOptionRemove(action)
+		return inputs.BackendConfiguration.CompleteModelOptionRemove(action)
 	case "model.config.set_effort":
 		return inputs.BackendConfiguration.CompleteGlobalReasoningEffortSet(action, actionStringValue(action, "reasoning_effort"))
 	case "model.config.select_effort":

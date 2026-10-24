@@ -31,7 +31,7 @@ const DefaultOptionValue = "__default__"
 const ClaudeDefaultModelAlias = "sonnet"
 
 // ModelCommandUsage is the usage string for the /model command.
-const ModelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default> | /model plan set <model-id|default> | /model plan effort <effort|default> | /model review set <model-id|default> | /model subagent set <model-id|default> | /model subagent effort <effort|default> | /model small set <model-id|default>"
+const ModelCommandUsage = "/model | /model set <model-id|default> | /model effort <effort|default> | /model plan set <model-id|default> | /model plan effort <effort|default> | /model review set <model-id|default> | /model subagent set <model-id|default> | /model subagent effort <effort|default> | /model small set <model-id|default> | /model option add|remove MODEL_ID"
 
 // EffortCommandUsage is the usage string for the /effort command.
 const EffortCommandUsage = "/effort | /effort <effort|default>"
@@ -256,6 +256,71 @@ func ConfiguredPlanReasoningEffort(cfg *config.Config) string {
 	return strings.TrimSpace(cfg.Codex.PlanReasoningEffort)
 }
 
+// ConfiguredCodexModelOptions returns the configured extra Codex model picker options.
+func ConfiguredCodexModelOptions(cfg *config.Config) []string {
+	if cfg == nil {
+		return nil
+	}
+	return NormalizeCodexModelOptions(cfg.Codex.ModelOptions)
+}
+
+// NormalizeCodexModelOptions trims, drops empties, and de-duplicates Codex model picker options.
+func NormalizeCodexModelOptions(values []string) []string {
+	return NormalizeModelOptions(values)
+}
+
+// NormalizeModelOptions trims, drops empties, and de-duplicates backend model
+// picker options; both Codex and Claude candidate lists share this shape.
+func NormalizeModelOptions(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+// MergeCodexModelOptions appends the configured candidate models to the
+// app-server catalog. The Codex `model/list` response only carries the
+// app-server built-in OpenAI catalog and never enumerates models from a custom
+// provider endpoint, so configured candidates are merged here as synthesized
+// entries without reasoning-effort metadata; cards then offer and validate
+// them like any catalog model while effort pickers fall back to "follow default".
+func MergeCodexModelOptions(result catalog.ModelListResult, cfg *config.Config) catalog.ModelListResult {
+	extras := ConfiguredCodexModelOptions(cfg)
+	if len(extras) == 0 {
+		return result
+	}
+	seen := make(map[string]struct{}, len(result.Data)+len(extras))
+	merged := make([]catalog.ModelListEntry, 0, len(result.Data)+len(extras))
+	for _, item := range result.Data {
+		seen[item.ID] = struct{}{}
+		seen[item.Model] = struct{}{}
+		merged = append(merged, item)
+	}
+	for _, model := range extras {
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		merged = append(merged, catalog.ModelListEntry{
+			ID:          model,
+			Model:       model,
+			DisplayName: model,
+			Description: "配置的候选模型（来自 model_options）",
+		})
+	}
+	return catalog.ModelListResult{Data: merged}
+}
+
 // Catalog policy lives in application/modelconfig. These aliases preserve the
 // transitional package API while keeping the owner out of internal/app.
 var (
@@ -379,20 +444,7 @@ func NormalizeClaudeModelValue(value string) string {
 
 // NormalizeClaudeModelOptions trims, drops empties, and de-duplicates Claude model picker options.
 func NormalizeClaudeModelOptions(values []string) []string {
-	out := make([]string, 0, len(values))
-	seen := map[string]struct{}{}
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	return out
+	return NormalizeModelOptions(values)
 }
 
 // ClaudeModelPickerOptions builds the Claude model candidate list: the built-in
@@ -456,14 +508,19 @@ func ClaudeModelSelectOptions(cfg *config.Config, current string) []cards.Select
 // ModelConfigService — Codex model methods
 // ---------------------------------------------------------------------------
 
-// FetchModelList fetches the Codex model catalog.
+// FetchModelList fetches the Codex model catalog and merges the configured
+// candidate models into it, so every card and validation path sees one list.
 func (s ModelConfigService) FetchModelList(ctx context.Context) (catalog.ModelListResult, error) {
 	var result catalog.ModelListResult
 	client, err := s.RequireCodexClient()
 	if err != nil {
 		return result, err
 	}
-	return client.ListModels(ctx, 100)
+	result, err = client.ListModels(ctx, 100)
+	if err != nil {
+		return result, err
+	}
+	return MergeCodexModelOptions(result, s.configSnapshot()), nil
 }
 
 // FetchPlanCollaborationModePreset fetches the plan collaboration-mode preset.
@@ -595,6 +652,7 @@ func (s ModelConfigService) RenderModelConfigCard(result catalog.ModelListResult
 		effortInitialOption,
 	))
 
+	elements = append(elements, RenderCodexModelOptionConfigElements(cfg, sessionKey, menuAction)...)
 	elements = append(elements, ModelCardActionRow([]feishu.Button{
 		{
 			Text:  "配置辅助模型",
@@ -863,6 +921,28 @@ func (s ModelConfigService) CommandCodexModel(msg *feishu.InboundMessage, args [
 				return s.ReplyText(context.Background(), msg.MessageID, "已保存 Codex subagent reasoning effort；待下次新建或恢复 thread 生效", s.ReplyInThreadEnabled(msg.ChatType))
 			}
 			return fmt.Errorf("usage: /model subagent set MODEL|default | /model subagent effort EFFORT|default")
+		case "option":
+			if len(args) != 3 {
+				return fmt.Errorf("usage: %s", ModelCommandUsage)
+			}
+			switch strings.TrimSpace(args[1]) {
+			case "add":
+				action.FormValue = map[string]any{"model_id": strings.TrimSpace(args[2])}
+				resp, err := s.CompleteCodexModelOptionAdd(action)
+				if err != nil {
+					return err
+				}
+				return s.ReplyCommandActionResponse(msg, resp)
+			case "remove", "delete", "rm":
+				action.FormValue = map[string]any{"model_id": strings.TrimSpace(args[2])}
+				resp, err := s.CompleteCodexModelOptionRemove(action)
+				if err != nil {
+					return err
+				}
+				return s.ReplyCommandActionResponse(msg, resp)
+			default:
+				return fmt.Errorf("usage: %s", ModelCommandUsage)
+			}
 		default:
 			return fmt.Errorf("usage: %s", ModelCommandUsage)
 		}
@@ -1014,14 +1094,26 @@ func normalizeClearableValue(value string) string {
 }
 
 func renderClaudeModelOptionConfigElements(cfg *config.Config, sessionKey, menuAction string) []map[string]any {
-	configuredOptions := ConfiguredClaudeModelOptions(cfg)
+	return modelOptionConfigElements(cfg, sessionKey, menuAction, "claude", ConfiguredClaudeModelOptions(cfg))
+}
+
+// RenderCodexModelOptionConfigElements renders the Codex candidate-model
+// management controls, mirroring the Claude card structure.
+func RenderCodexModelOptionConfigElements(cfg *config.Config, sessionKey, menuAction string) []map[string]any {
+	return modelOptionConfigElements(cfg, sessionKey, menuAction, "codex", ConfiguredCodexModelOptions(cfg))
+}
+
+// modelOptionConfigElements renders the shared candidate-model management
+// controls: an add form plus a remove select, namespaced per backend so the
+// two cards never collide on element names.
+func modelOptionConfigElements(cfg *config.Config, sessionKey, menuAction, prefix string, configuredOptions []string) []map[string]any {
 	elements := []map[string]any{
 		{"tag": "markdown", "content": "管理候选模型"},
 	}
 	addRows := cards.BuildMarkdownBodyCardActionElements([]feishu.Button{{
 		Text: "添加候选模型",
 		Type: "primary",
-		Name: "claude_model_option_add_submit",
+		Name: prefix + "_model_option_add_submit",
 		Value: map[string]any{
 			"action":      "model.config.add_option",
 			"session_key": sessionKey,
@@ -1033,7 +1125,7 @@ func renderClaudeModelOptionConfigElements(cfg *config.Config, sessionKey, menuA
 	}
 	elements = append(elements, map[string]any{
 		"tag":                "form",
-		"name":               "claude_model_option_add_form",
+		"name":               prefix + "_model_option_add_form",
 		"direction":          "vertical",
 		"horizontal_spacing": "8px",
 		"vertical_spacing":   "8px",
@@ -1061,7 +1153,7 @@ func renderClaudeModelOptionConfigElements(cfg *config.Config, sessionKey, menuA
 	elements = append(elements,
 		map[string]any{"tag": "markdown", "content": "移除候选模型"},
 		cards.BuildSelectStaticElement(
-			"claude_model_option_remove_select",
+			prefix+"_model_option_remove_select",
 			"选择后立即移除候选模型",
 			map[string]any{
 				"action":      "model.config.remove_option",
@@ -1107,6 +1199,50 @@ func (s ModelConfigService) UpdateClaudeAuxiliaryConfig(values map[routing.Setti
 // is busy.
 func (s ModelConfigService) UpdateClaudeModelOptionsConfig(value string, add bool) error {
 	return s.Options.Set(value, add)
+}
+
+// UpdateCodexModelOptionsConfig persists Codex picker option changes. Like the
+// Claude variant this is a picker-only change and is allowed while busy; the
+// repository routes the write to the active backend's candidate list.
+func (s ModelConfigService) UpdateCodexModelOptionsConfig(value string, add bool) error {
+	return s.Options.Set(value, add)
+}
+
+// CompleteCodexModelOptionAdd handles the Codex picker option add form.
+func (s ModelConfigService) CompleteCodexModelOptionAdd(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return s.completeCodexModelOptionSet(action, true)
+}
+
+// CompleteCodexModelOptionRemove handles the Codex picker option remove select.
+func (s ModelConfigService) CompleteCodexModelOptionRemove(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	return s.completeCodexModelOptionSet(action, false)
+}
+
+func (s ModelConfigService) completeCodexModelOptionSet(action *feishu.CardAction, add bool) (*callback.CardActionTriggerResponse, error) {
+	sessionKey := actionSessionKey(action)
+	menuAction := actionStringValue(action, "menu_action")
+	if strings.TrimSpace(menuAction) == "" {
+		menuAction = "menu.model"
+	}
+	model := actionSelectedStringValue(action, "model_id", "codex_model_option_remove_select")
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请输入或选择 model id"}}, nil
+	}
+	if err := s.UpdateCodexModelOptionsConfig(model, add); err != nil {
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	}
+	verb := "移除"
+	if add {
+		verb = "添加"
+	}
+	resp := &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已" + verb + " Codex 候选模型 `" + model + "`"}}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if result, err := s.FetchModelList(ctx); err == nil {
+		resp.Card = rawCard(s.RenderModelConfigCard(result, nil, sessionKey, menuAction))
+	}
+	return resp, nil
 }
 
 func (s ModelConfigService) updateClaudeModelConfig(values map[routing.Setting]string, ignoreCurrentMessage bool) error {

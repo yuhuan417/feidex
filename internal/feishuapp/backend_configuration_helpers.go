@@ -86,6 +86,12 @@ func buildBackendConfigurationService(inputs BackendConfigurationInputs) appback
 			CompleteCodexGlobalReasoningEffortSet: func(action *feishu.CardAction, value string) (*callback.CardActionTriggerResponse, error) {
 				return modelCommands.CompleteCodexGlobalReasoningEffortSet(action, value)
 			},
+			CompleteModelOptionAdd: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+				return modelCommands.CompleteCodexModelOptionAdd(action)
+			},
+			CompleteModelOptionRemove: func(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+				return modelCommands.CompleteCodexModelOptionRemove(action)
+			},
 
 			FetchModelList:                   modelCommands.FetchModelList,
 			FetchPlanCollaborationModePreset: modelCommands.FetchPlanCollaborationModePreset,

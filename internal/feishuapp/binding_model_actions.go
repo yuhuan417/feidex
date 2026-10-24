@@ -50,6 +50,7 @@ func (s bindingService) renderBindingModelConfigCard(sessionKey string, binding 
 }
 
 func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, binding *state.AgentBinding, result catalog.ModelListResult) map[string]any {
+	cfg := configReadCopy(s.deps.Config, s.deps.ConfigMu)
 	if binding == nil {
 		binding = &state.AgentBinding{}
 	}
@@ -156,6 +157,7 @@ func (s bindingService) renderBindingCodexModelConfigCard(sessionKey string, bin
 		effortOptions,
 		effortInitialOption,
 	))
+	elements = append(elements, appmodelconfig.RenderCodexModelOptionConfigElements(cfg, sessionKey, "menu.model")...)
 	elements = append(elements, appmodelconfig.ModelCardActionRow([]feishu.Button{
 		{
 			Text:  "配置辅助模型",
@@ -357,7 +359,7 @@ func (s bindingService) completeBindingAuxiliaryModelSet(action *feishu.CardActi
 	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已保存当前群内辅助模型配置；待对应会话边界生效"}, Card: rawCard(card)}, nil
 }
 
-func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, sessionKey string, add bool) (*callback.CardActionTriggerResponse, error) {
+func (s bindingService) completeModelOption(action *feishu.CardAction, sessionKey string, add bool) (*callback.CardActionTriggerResponse, error) {
 	value := ""
 	if action != nil && action.FormValue != nil {
 		if raw, ok := action.FormValue["model_id"]; ok {
@@ -371,8 +373,18 @@ func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, ses
 		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "warning", Content: "请输入或选择 model id"}}, nil
 	}
 	service := s.deps.ModelCommands
-	if err := service.UpdateClaudeModelOptionsConfig(value, add); err != nil {
-		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+	backend := s.deps.ConfiguredBackend()
+	switch domainbackend.NormalizeBackend(backend) {
+	case domainbackend.BackendCodex:
+		if err := service.UpdateCodexModelOptionsConfig(value, add); err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+		}
+	case domainbackend.BackendClaude:
+		if err := service.UpdateClaudeModelOptionsConfig(value, add); err != nil {
+			return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: err.Error()}}, nil
+		}
+	default:
+		return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "error", Content: unsupportedGroupModelBackendMessage(backend)}}, nil
 	}
 	msg := commandMessageFromAction(s.scope, action, sessionKey, "/model")
 	binding, err := s.deps.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
@@ -384,10 +396,10 @@ func (s bindingService) completeClaudeModelOption(action *feishu.CardAction, ses
 	if add {
 		verb = "添加"
 	}
-	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已" + verb + " Claude 候选模型 `" + value + "`"}, Card: rawCard(card)}, nil
+	return &callback.CardActionTriggerResponse{Toast: &callback.Toast{Type: "success", Content: "已" + verb + " " + backendLabel(backend) + " 候选模型 `" + value + "`"}, Card: rawCard(card)}, nil
 }
 
-func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, args []string) error {
+func (s bindingService) commandModelOption(msg *feishu.InboundMessage, args []string) error {
 	if len(args) != 2 {
 		return fmt.Errorf("usage: /model option add|remove MODEL_ID")
 	}
@@ -398,9 +410,19 @@ func (s bindingService) commandClaudeModelOption(msg *feishu.InboundMessage, arg
 	if !strings.EqualFold(strings.TrimSpace(args[0]), "add") && !strings.EqualFold(strings.TrimSpace(args[0]), "remove") && !strings.EqualFold(strings.TrimSpace(args[0]), "delete") && !strings.EqualFold(strings.TrimSpace(args[0]), "rm") {
 		return fmt.Errorf("usage: /model option add|remove MODEL_ID")
 	}
+	add := strings.EqualFold(strings.TrimSpace(args[0]), "add")
 	service := s.deps.ModelCommands
-	if err := service.UpdateClaudeModelOptionsConfig(value, strings.EqualFold(strings.TrimSpace(args[0]), "add")); err != nil {
-		return err
+	switch domainbackend.NormalizeBackend(s.deps.ConfiguredBackend()) {
+	case domainbackend.BackendCodex:
+		if err := service.UpdateCodexModelOptionsConfig(value, add); err != nil {
+			return err
+		}
+	case domainbackend.BackendClaude:
+		if err := service.UpdateClaudeModelOptionsConfig(value, add); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("%s", unsupportedGroupModelBackendMessage(s.deps.ConfiguredBackend()))
 	}
 	binding, err := s.deps.RoutingConfiguration.EnsureBinding(msg.ChatType, msg.ChatID)
 	if err != nil {
@@ -512,4 +534,16 @@ func unsupportedGroupModelBackendMessage(backend string) string {
 		return "当前 frontend 还没有设置 backend，请先选择。"
 	}
 	return "不支持的 backend: `" + backend + "`。"
+}
+
+// backendLabel returns the user-facing backend name used in toasts and copy.
+func backendLabel(backend string) string {
+	switch domainbackend.NormalizeBackend(backend) {
+	case domainbackend.BackendCodex:
+		return "Codex"
+	case domainbackend.BackendClaude:
+		return "Claude"
+	default:
+		return strings.TrimSpace(backend)
+	}
 }

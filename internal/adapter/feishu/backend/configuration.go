@@ -55,6 +55,8 @@ type ConfigurationClaudeDeps struct {
 type ConfigurationCodexDeps struct {
 	CompleteCodexGlobalModelSet           func(*feishu.CardAction, string) (*callback.CardActionTriggerResponse, error)
 	CompleteCodexGlobalReasoningEffortSet func(*feishu.CardAction, string) (*callback.CardActionTriggerResponse, error)
+	CompleteModelOptionAdd                func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error)
+	CompleteModelOptionRemove             func(*feishu.CardAction) (*callback.CardActionTriggerResponse, error)
 	FetchModelList                        func(ctx context.Context) (catalog.ModelListResult, error)
 	FetchPlanCollaborationModePreset      func(ctx context.Context) (*catalog.CollaborationModeMask, error)
 	RenderModelConfigCard                 func(result catalog.ModelListResult, planPreset *catalog.CollaborationModeMask, sessionKey, menuAction string) map[string]any
@@ -125,6 +127,38 @@ func (s ConfigurationService) CompleteClaudeModelOptionRemove(action *feishu.Car
 		return nil, fmt.Errorf("Claude model option remove handler not configured")
 	}
 	return s.deps.Claude.CompleteModelOptionRemove(action)
+}
+
+// CompleteModelOptionAdd completes a candidate-model add action, dispatching
+// by backend so each backend's card manages its own candidate list.
+func (s ConfigurationService) CompleteModelOptionAdd(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	switch configuredBackend(s.Permissions) {
+	case domainbackend.BackendCodex:
+		if s.deps.Codex.CompleteModelOptionAdd == nil {
+			return nil, fmt.Errorf("Codex model operations not configured")
+		}
+		return s.deps.Codex.CompleteModelOptionAdd(action)
+	case domainbackend.BackendClaude:
+		return s.CompleteClaudeModelOptionAdd(action)
+	default:
+		return unsupportedBackendActionResponse(configuredBackend(s.Permissions)), nil
+	}
+}
+
+// CompleteModelOptionRemove completes a candidate-model remove action,
+// dispatching by backend.
+func (s ConfigurationService) CompleteModelOptionRemove(action *feishu.CardAction) (*callback.CardActionTriggerResponse, error) {
+	switch configuredBackend(s.Permissions) {
+	case domainbackend.BackendCodex:
+		if s.deps.Codex.CompleteModelOptionRemove == nil {
+			return nil, fmt.Errorf("Codex model operations not configured")
+		}
+		return s.deps.Codex.CompleteModelOptionRemove(action)
+	case domainbackend.BackendClaude:
+		return s.CompleteClaudeModelOptionRemove(action)
+	default:
+		return unsupportedBackendActionResponse(configuredBackend(s.Permissions)), nil
+	}
 }
 
 func (s ConfigurationService) FetchModelList(ctx context.Context) (catalog.ModelListResult, error) {

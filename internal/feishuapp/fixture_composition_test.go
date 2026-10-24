@@ -331,7 +331,7 @@ func prepareTestApp(a *Frontend) *Frontend {
 		Admission:  ModelWriteAdmission(a.bindings.FrontendQuery), Frontend: a.FrontendID(),
 		Publisher: ModelDefaultsPublisher(a.runtimeOwner, a.Config(), a.ConfigMu()),
 	}
-	a.bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: configSource}}
+	a.bindings.ModelOptions = modelconfig.OptionsService{Repository: configadapter.ModelOptionsRepository{Source: configSource, Backend: func() string { return a.configView().configuredBackend() }}}
 	a.bindings.ModelCommands = BuildModelCommands(ModelCommandInputs{
 		Defaults: &a.bindings.ModelDefaults, Options: &a.bindings.ModelOptions, Snapshots: a.bindings.ModelSnapshots,
 		Config: a.Config(), ConfigMu: a.ConfigMu(), State: a.State(), RuntimeOwner: a.runtimeOwner,

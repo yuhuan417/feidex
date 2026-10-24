@@ -54,6 +54,12 @@ service_name = "feidex"
 # review_model = "gpt-5.4"
 # subagent_model = "gpt-5.4-mini"
 # subagent_reasoning_effort = "medium"
+# Extra model ids shown in the Codex /model picker. Codex app-server only
+# reports its built-in OpenAI catalog, so third-party models available on a
+# custom provider endpoint must be listed here. You can also manage this from
+# Feishu with /model option add <model-id> or the /model card. A candidate
+# model carries no reasoning-effort metadata, so effort follows the default.
+# model_options = ["claude-opus-4.6", "gemini-3-pro"]
 # app_server_dir = "/srv/shared-codex-dir"
 
 # ── Claude backend settings ──
