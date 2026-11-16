@@ -5,14 +5,15 @@ import "strings"
 type SubmissionStatus string
 
 const (
-	SubmissionStatusQueued           SubmissionStatus = "queued"
-	SubmissionStatusRunning          SubmissionStatus = "running"
-	SubmissionStatusWaitingApproval  SubmissionStatus = "waiting_approval"
-	SubmissionStatusWaitingUserInput SubmissionStatus = "waiting_user_input"
-	SubmissionStatusCompleted        SubmissionStatus = "completed"
-	SubmissionStatusInterrupted      SubmissionStatus = "interrupted"
-	SubmissionStatusFailed           SubmissionStatus = "failed"
-	SubmissionStatusDiscarded        SubmissionStatus = "discarded"
+	SubmissionStatusQueued            SubmissionStatus = "queued"
+	SubmissionStatusRunning           SubmissionStatus = "running"
+	SubmissionStatusWaitingApproval   SubmissionStatus = "waiting_approval"
+	SubmissionStatusWaitingUserInput  SubmissionStatus = "waiting_user_input"
+	SubmissionStatusWaitingBackground SubmissionStatus = "waiting_background"
+	SubmissionStatusCompleted         SubmissionStatus = "completed"
+	SubmissionStatusInterrupted       SubmissionStatus = "interrupted"
+	SubmissionStatusFailed            SubmissionStatus = "failed"
+	SubmissionStatusDiscarded         SubmissionStatus = "discarded"
 )
 
 func (s SubmissionStatus) String() string {
@@ -32,6 +33,8 @@ func NormalizeSubmissionStatus(value string) SubmissionStatus {
 		return SubmissionStatusWaitingApproval
 	case SubmissionStatusWaitingUserInput.String():
 		return SubmissionStatusWaitingUserInput
+	case SubmissionStatusWaitingBackground.String():
+		return SubmissionStatusWaitingBackground
 	case SubmissionStatusCompleted.String():
 		return SubmissionStatusCompleted
 	case SubmissionStatusInterrupted.String():

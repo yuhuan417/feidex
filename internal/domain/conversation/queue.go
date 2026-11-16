@@ -10,12 +10,26 @@ func RefreshActiveStatus(sess *Session) {
 		return
 	}
 	if HasActiveOperations(sess) {
-		sess.Status = SessionStatusTurnStarting.String()
+		hasBackgroundWorkflow := false
+		hasForegroundOperation := false
+		hasActiveTurn := false
 		for _, op := range sess.ActiveOperations {
-			if op.TurnID != "" {
-				sess.Status = SessionStatusTurnInProgress.String()
-				break
+			if op.Kind == OpKindBackgroundWorkflow {
+				hasBackgroundWorkflow = true
+				continue
 			}
+			hasForegroundOperation = true
+			if op.TurnID != "" {
+				hasActiveTurn = true
+			}
+		}
+		switch {
+		case hasActiveTurn:
+			sess.Status = SessionStatusTurnInProgress.String()
+		case hasBackgroundWorkflow && !hasForegroundOperation:
+			sess.Status = SessionStatusWaitingBackground.String()
+		default:
+			sess.Status = SessionStatusTurnStarting.String()
 		}
 		return
 	}

@@ -109,21 +109,22 @@ type fakeClaudeCore struct {
 	forkResults      []fakeClaudeEnsureResult
 	startTurnResults []error
 
-	ensureCalls         []fakeClaudeEnsureCall
-	forkCalls           []fakeClaudeForkCall
-	startTurnCalls      []fakeClaudeStartTurnCall
-	startSteerTurnCalls []fakeClaudeStartTurnCall
-	interruptCalls      []string
-	setModelCalls       []fakeClaudeSetModelCall
-	setEffortCalls      []fakeClaudeSetEffortCall
-	setModelApplied     bool
-	setEffortApplied    bool
-	permissionModeCalls []fakeClaudePermissionModeCall
-	permissionModeErr   error
-	approvalCalls       []fakeClaudeApprovalCall
-	userInputCalls      []fakeClaudeUserInputCall
-	planCalls           []fakeClaudePlanCall
-	cancelCalls         []fakeClaudeCancelCall
+	ensureCalls                  []fakeClaudeEnsureCall
+	forkCalls                    []fakeClaudeForkCall
+	startTurnCalls               []fakeClaudeStartTurnCall
+	startSteerTurnCalls          []fakeClaudeStartTurnCall
+	backgroundWorkflowSteerCalls []fakeClaudeStartTurnCall
+	interruptCalls               []string
+	setModelCalls                []fakeClaudeSetModelCall
+	setEffortCalls               []fakeClaudeSetEffortCall
+	setModelApplied              bool
+	setEffortApplied             bool
+	permissionModeCalls          []fakeClaudePermissionModeCall
+	permissionModeErr            error
+	approvalCalls                []fakeClaudeApprovalCall
+	userInputCalls               []fakeClaudeUserInputCall
+	planCalls                    []fakeClaudePlanCall
+	cancelCalls                  []fakeClaudeCancelCall
 }
 
 type fakeClaudeEnsureResult struct {
@@ -243,6 +244,18 @@ func (f *fakeClaudeCore) StartSteerTurn(_ context.Context, sessionKey, threadID,
 		prompt:     prompt,
 	})
 	return nil
+}
+
+func (f *fakeClaudeCore) AddBackgroundWorkflowSteer(sessionKey, threadID string, sub *domainsubmission.Submission) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if sub == nil {
+		return false
+	}
+	f.backgroundWorkflowSteerCalls = append(f.backgroundWorkflowSteerCalls, fakeClaudeStartTurnCall{
+		sessionKey: sessionKey, threadID: threadID, prompt: sub.InputText,
+	})
+	return true
 }
 
 func (f *fakeClaudeCore) Interrupt(_ context.Context, sessionKey string) error {
@@ -1871,6 +1884,63 @@ func TestTryClaudeReplyContinuationUsesActiveSessionDespiteStaleLink(t *testing.
 	updated := a.store.GetSession(sessionKey)
 	if updated == nil || len(updated.ActiveOperations) != 2 || updated.ActiveTurnID != "claude-turn-current" || updated.ActiveSubmissionID != "sub-running" {
 		t.Fatalf("session after stale-link continuation = %+v", updated)
+	}
+}
+
+func TestReplyToCurrentClaudeWorkflowSteersWhileBackgroundWorkflowWaits(t *testing.T) {
+	a, _, _ := newTestApp(t)
+	a.cfg.Feishu.Backend = domainbackend.BackendClaude
+	runtimeViewOf(a.runtimeOwner).setCodex(nil)
+	claude := &fakeClaudeCore{ensureSessionID: "claude-thread-1"}
+	runtimeViewOf(a.runtimeOwner).setClaudeCore(claude)
+
+	const sessionKey = "feishu:chat:chat-1"
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID, ActiveThreadID: "claude-thread-1",
+		ActiveThreadWorkspaceID: a.cfg.Workspaces[0].ID, ActiveSubmissionID: "sub-parent",
+		Status: conversation.SessionStatusWaitingBackground.String(),
+		ActiveOperations: []conversation.SessionActiveOperation{{
+			Kind: conversation.OpKindBackgroundWorkflow, SubmissionID: "sub-parent", ThreadID: "claude-thread-1",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.store.CreateSubmission(&domainsubmission.Submission{
+		ID: "sub-parent", SessionKey: sessionKey, WorkspaceID: a.cfg.Workspaces[0].ID,
+		ThreadID: "claude-thread-1", InputText: "original request", Status: domainsubmission.SubmissionStatusWaitingBackground.String(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.store.UpsertMessageLink(&state.MessageLink{
+		Backend: domainbackend.BackendClaude, MessageID: "root-msg", SessionKey: sessionKey,
+		ThreadID: "claude-thread-1", TurnID: "claude-turn-completed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	a.HandleFeishuMessage(&feishu.InboundMessage{
+		MessageID: "reply-waiting", ChatID: "chat-1", ChatType: "group", UserID: "user-1",
+		Text: "please include this too", RootMessageID: "root-msg", ParentMessageID: "parent-msg",
+	})
+
+	if len(claude.startSteerTurnCalls) != 0 {
+		t.Fatalf("steer calls while no Claude turn is active = %#v", claude.startSteerTurnCalls)
+	}
+	sess := a.store.GetSession(sessionKey)
+	if sess == nil || len(sess.Queue) != 0 || sess.Status != conversation.SessionStatusWaitingBackground.String() {
+		t.Fatalf("session after reply = %+v, want workflow steer and waiting background status", sess)
+	}
+	if len(claude.backgroundWorkflowSteerCalls) != 1 || claude.backgroundWorkflowSteerCalls[0].prompt != "please include this too" {
+		t.Fatalf("workflow steer calls = %#v", claude.backgroundWorkflowSteerCalls)
+	}
+	var workflowSteer *domainsubmission.Submission
+	for _, op := range sess.ActiveOperations {
+		if op.Kind == conversation.OpKindBackgroundWorkflow && op.SubmissionID != "sub-parent" {
+			workflowSteer = a.store.GetSubmission(op.SubmissionID)
+		}
+	}
+	if workflowSteer == nil || workflowSteer.InputText != "please include this too" || workflowSteer.Status != domainsubmission.SubmissionStatusWaitingBackground.String() {
+		t.Fatalf("workflow steer submission = %+v", workflowSteer)
 	}
 }
 

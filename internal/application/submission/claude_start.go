@@ -194,6 +194,177 @@ func (s SubmissionQueueService) StartNextClaudeSubmissionWithFailureNoticeEx(ses
 	return nil
 }
 
+// ContinueClaudeBackgroundWorkflow starts a new Claude CLI turn for the same
+// submission after all background agents spawned by its previous turn finish.
+func (s SubmissionQueueService) ContinueClaudeBackgroundWorkflow(sessionKey, threadID, submissionID, prompt string) error {
+	a := s.Deps
+	sess := a.AppState.Session(sessionKey)
+	sub := a.AppState.Submission(submissionID)
+	if sess == nil || sub == nil || sub.Finalized {
+		return fmt.Errorf("background workflow submission is no longer active")
+	}
+	if strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) || !conversation.HasBackgroundWorkflow(sess) {
+		return fmt.Errorf("background workflow session state changed before continuation")
+	}
+	ws := a.Workspace(sub.WorkspaceID)
+	if ws == nil {
+		return fmt.Errorf("workspace %q not found", sub.WorkspaceID)
+	}
+	claude := a.ClaudeClient()
+	if claude == nil {
+		return fmt.Errorf("claude backend not initialized")
+	}
+	snapshot, err := s.modelSnapshot(sess, sub)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(a.context(), 30*time.Second)
+	resumedThreadID, err := claude.EnsureSession(ctx, sessionKey, ws, threadID, snapshot.Model)
+	cancel()
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(resumedThreadID) != strings.TrimSpace(threadID) {
+		return fmt.Errorf("Claude resumed a different session: got %q, want %q", resumedThreadID, threadID)
+	}
+	_, turnID, err := s.startClaudeSubmissionAttempt(claude, sessionKey, sess, sub, resumedThreadID, strings.TrimSpace(prompt), false)
+	if err != nil {
+		if strings.TrimSpace(turnID) != "" {
+			if _, _, rollbackErr := s.rollbackClaudeSubmissionStartState(sessionKey, sub, turnID, true); rollbackErr != nil {
+				return fmt.Errorf("start continuation: %v; rollback: %w", err, rollbackErr)
+			}
+		}
+		return err
+	}
+	return nil
+}
+
+func (s SubmissionQueueService) AddClaudeBackgroundWorkflowSteer(sessionKey, threadID string, sub *domainsubmission.Submission) error {
+	if sub == nil || strings.TrimSpace(sub.ID) == "" {
+		return fmt.Errorf("background workflow steer submission is missing")
+	}
+	a := s.Deps
+	sess := a.AppState.Session(sessionKey)
+	if sess == nil || strings.TrimSpace(sess.ActiveThreadID) != strings.TrimSpace(threadID) ||
+		strings.TrimSpace(sess.ActiveTurnID) != "" || !conversation.HasBackgroundWorkflow(sess) {
+		return fmt.Errorf("Claude background workflow is no longer waiting")
+	}
+	claude := a.ClaudeClient()
+	registrar, ok := claude.(interface {
+		AddBackgroundWorkflowSteer(sessionKey, threadID string, sub *domainsubmission.Submission) bool
+	})
+	if !ok {
+		return fmt.Errorf("Claude background workflow steer is unavailable")
+	}
+	sub.ThreadID = strings.TrimSpace(threadID)
+	sub.TurnID = ""
+	sub.Status = domainsubmission.SubmissionStatusWaitingBackground.String()
+	if err := a.AppState.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) {
+		if current == nil || current.Finalized {
+			return
+		}
+		current.ThreadID = sub.ThreadID
+		current.TurnID = ""
+		current.Status = sub.Status
+	}); err != nil {
+		return err
+	}
+	_, err := a.AppState.UpdateSession(sessionKey, func(current *conversation.Session) {
+		conversation.UpsertActiveOperation(current, conversation.SessionActiveOperation{
+			Kind: conversation.OpKindBackgroundWorkflow, SubmissionID: sub.ID, ThreadID: threadID,
+		})
+		current.Status = conversation.SessionStatusWaitingBackground.String()
+	})
+	if err != nil {
+		_ = a.AppState.FinalizeSubmission(sub.ID, domainsubmission.SubmissionStatusFailed.String())
+		a.ClearSubmissionProcessingReactions(sub)
+		return err
+	}
+	if !registrar.AddBackgroundWorkflowSteer(sessionKey, threadID, sub) {
+		_ = a.AppState.FinalizeSubmission(sub.ID, domainsubmission.SubmissionStatusFailed.String())
+		a.ClearSubmissionProcessingReactions(sub)
+		_, _ = a.AppState.UpdateSession(sessionKey, func(current *conversation.Session) {
+			conversation.RemoveActiveOperation(current, sub.ID, "")
+			conversation.RefreshActiveStatus(current)
+		})
+		return fmt.Errorf("Claude background workflow stopped accepting steer input")
+	}
+	a.ReplyContinuation.RecordSubmissionSourceLinks(sub)
+	a.MarkSubmissionRunningReactions(sub)
+	return nil
+}
+
+func (s SubmissionQueueService) FailClaudeBackgroundWorkflow(sessionKey, threadID, submissionID, message string) {
+	sub := s.Deps.AppState.Submission(submissionID)
+	if sub == nil || sub.Finalized {
+		return
+	}
+	steers := s.backgroundWorkflowSteerSubmissions(sessionKey, submissionID)
+	for _, steer := range steers {
+		_ = s.Deps.AppState.FinalizeSubmission(steer.ID, domainsubmission.SubmissionStatusFailed.String())
+		s.Deps.ClearSubmissionProcessingReactions(steer)
+	}
+	if len(steers) > 0 {
+		_, _ = s.Deps.AppState.UpdateSession(sessionKey, func(sess *conversation.Session) {
+			for _, steer := range steers {
+				conversation.RemoveActiveOperation(sess, steer.ID, "")
+			}
+		})
+	}
+	s.HandleSubmissionStartFailure(sessionKey, threadID, sub, fmt.Errorf("%s", strings.TrimSpace(message)), true)
+}
+
+func (s SubmissionQueueService) CancelClaudeBackgroundWorkflow(sessionKey, threadID, submissionID string) {
+	a := s.Deps
+	sub := a.AppState.Submission(submissionID)
+	if sub == nil || sub.Finalized {
+		return
+	}
+	if err := a.AppState.FinalizeSubmission(submissionID, domainsubmission.SubmissionStatusInterrupted.String()); err != nil {
+		slog.Error("cancel Claude background workflow submission failed", "submission_id", submissionID, "error", err)
+		return
+	}
+	a.ClearSubmissionProcessingReactions(sub)
+	steers := s.backgroundWorkflowSteerSubmissions(sessionKey, submissionID)
+	for _, steer := range steers {
+		_ = a.AppState.FinalizeSubmission(steer.ID, domainsubmission.SubmissionStatusInterrupted.String())
+		a.ClearSubmissionProcessingReactions(steer)
+	}
+	if _, err := a.AppState.UpdateSession(sessionKey, func(sess *conversation.Session) {
+		conversation.RemoveActiveOperation(sess, submissionID, "")
+		for _, steer := range steers {
+			conversation.RemoveActiveOperation(sess, steer.ID, "")
+		}
+		conversation.RefreshActiveStatus(sess)
+	}); err != nil {
+		slog.Error("cancel Claude background workflow session failed", "submission_id", submissionID, "error", err)
+	}
+	a.RuntimeState.ClearPendingTurnBindingForSubmission(threadID, submissionID)
+	a.RuntimeMaintenance.CleanupSubmissionRuntimeState(sub)
+	if nextSessionKey := s.NextQueuedSessionKey(sessionKey); nextSessionKey != "" {
+		runSessionAsync(a, nextSessionKey, func() {
+			s.StartNextSubmissionAsync(nextSessionKey, "backgroundWorkflowCancelled")
+		})
+	}
+}
+
+func (s SubmissionQueueService) backgroundWorkflowSteerSubmissions(sessionKey, parentSubmissionID string) []*domainsubmission.Submission {
+	sess := s.Deps.AppState.Session(sessionKey)
+	if sess == nil {
+		return nil
+	}
+	var steers []*domainsubmission.Submission
+	for _, op := range sess.ActiveOperations {
+		if op.Kind != conversation.OpKindBackgroundWorkflow || strings.TrimSpace(op.SubmissionID) == strings.TrimSpace(parentSubmissionID) {
+			continue
+		}
+		if sub := s.Deps.AppState.Submission(op.SubmissionID); sub != nil && !sub.Finalized {
+			steers = append(steers, sub)
+		}
+	}
+	return steers
+}
+
 func (s SubmissionQueueService) startClaudeSubmissionAttempt(claude QueueClaudeClient, sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, claudeThreadID, prompt string, steer bool) (*conversation.Session, string, error) {
 	a := s.Deps
 	appState := a.AppState
@@ -343,7 +514,9 @@ func (s SubmissionQueueService) bindClaudeSubmissionStartState(sessionKey string
 			ThreadID:     claudeThreadID,
 			TurnID:       turnID,
 		}
-		if conversation.HasActiveOperations(current) {
+		if conversation.FindActiveOperationBySubmission(current, sub.ID) != nil {
+			conversation.UpsertActiveOperation(current, op)
+		} else if conversation.HasActiveOperations(current) {
 			conversation.PrependActiveOperation(current, op)
 		} else {
 			conversation.UpsertActiveOperation(current, op)

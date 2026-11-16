@@ -1017,5 +1017,6 @@ func testClaudeRuntimePorts(a *Frontend, cfg config.ClaudeConfig) appclauderunti
 		BackendFailure: a.bindings.BackendFailure, Usage: a.bindings.Usage,
 		TurnMetadata: a.bindings.TurnMetadata, ConversationQuery: a.bindings.ConversationQuery,
 		Conversations: a.bindings.Conversations,
+		Submissions:   a.bindings.Submissions, AsyncRunner: a.asyncRunner,
 	})
 }

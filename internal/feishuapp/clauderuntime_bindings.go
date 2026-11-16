@@ -6,7 +6,9 @@ import (
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	domainturn "feidex/internal/domain/turn"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	codexadapter "feidex/internal/adapter/backend/codex"
@@ -49,6 +51,8 @@ type ClaudeRuntimePortInputs struct {
 	TurnMetadata          turnmeta.Service
 	ConversationQuery     applicationconversation.Query
 	Conversations         *applicationconversation.Service
+	Submissions           *submission.SubmissionQueueService
+	AsyncRunner           func(func())
 }
 
 func ClaudeRuntimePorts(inputs ClaudeRuntimePortInputs) appclauderuntime.Deps {
@@ -112,6 +116,31 @@ func ClaudeRuntimePorts(inputs ClaudeRuntimePortInputs) appclauderuntime.Deps {
 					turns.FinishSteerSubmission(submissionID, status)
 				})
 			},
+			SuspendTurnForBackgroundTasks: func(threadID, turnID string) bool {
+				sessionKey, _ := findSubmissionByTurn(submissionLookup, threadID, turnID)
+				if strings.TrimSpace(sessionKey) == "" {
+					return false
+				}
+				var suspended bool
+				runSessionOnActor(sessionActors, sessionKey, func() {
+					suspended = turns.SuspendTurnForBackgroundTasks(threadID, turnID)
+				})
+				return suspended
+			},
+			FailBackgroundWorkflow: func(sessionKey, threadID, submissionID, message string) {
+				runSessionOnActor(sessionActors, sessionKey, func() {
+					if inputs.Submissions != nil {
+						inputs.Submissions.FailClaudeBackgroundWorkflow(sessionKey, threadID, submissionID, message)
+					}
+				})
+			},
+			CancelBackgroundWorkflow: func(sessionKey, threadID, submissionID string) {
+				runSessionOnActor(sessionActors, sessionKey, func() {
+					if inputs.Submissions != nil {
+						inputs.Submissions.CancelClaudeBackgroundWorkflow(sessionKey, threadID, submissionID)
+					}
+				})
+			},
 			FailClaudeSessionWork: func(sessionKey, threadID string, err error) {
 				runSessionOnActor(sessionActors, sessionKey, func() {
 					failClaudeSessionActiveWork(backendFailure, sessionKey, threadID, err)
@@ -163,6 +192,20 @@ func ClaudeRuntimePorts(inputs ClaudeRuntimePortInputs) appclauderuntime.Deps {
 			SendBackgroundTaskNotification: func(ctx context.Context, target appclauderuntime.BackgroundTaskTarget, event claudecli.BackgroundTaskEvent) {
 				backgroundTasks.Send(ctx, target, event)
 			},
+			ContinueBackgroundWorkflow: func(ctx context.Context, sessionKey, threadID, submissionID, prompt string) error {
+				if inputs.Submissions == nil {
+					return fmt.Errorf("Claude submission service unavailable")
+				}
+				admitted := runSessionAsync(&runtimeOwner.Lifecycle, inputs.AsyncRunner, sessionActors, sessionKey, func() {
+					if err := inputs.Submissions.ContinueClaudeBackgroundWorkflow(sessionKey, threadID, submissionID, prompt); err != nil {
+						inputs.Submissions.FailClaudeBackgroundWorkflow(sessionKey, threadID, submissionID, err.Error())
+					}
+				})
+				if !admitted {
+					return fmt.Errorf("Claude background workflow continuation could not be scheduled")
+				}
+				return nil
+			},
 		},
 		Interactive: appclauderuntime.InteractiveDeps{
 			SendClaudeApprovalCard: func(requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
@@ -202,6 +245,9 @@ func ClaudeRuntimePorts(inputs ClaudeRuntimePortInputs) appclauderuntime.Deps {
 			},
 			SessionHasActiveOps: func(sess *conversation.Session) bool {
 				return conversation.HasActiveOperations(sess)
+			},
+			SessionHasForegroundOps: func(sess *conversation.Session) bool {
+				return conversation.HasForegroundActiveOperations(sess)
 			},
 			NextLocalID: func(prefix string) (string, error) {
 				return stateStore.NextLocalID(prefix)

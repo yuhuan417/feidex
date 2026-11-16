@@ -17,6 +17,32 @@ func TestActiveOperationLifecycleKeepsForegroundFieldsInSync(t *testing.T) {
 	}
 }
 
+func TestBackgroundWorkflowKeepsSubmissionInFlightWithoutNativeTurn(t *testing.T) {
+	sess := &Session{ActiveThreadID: "thread-1"}
+	UpsertActiveOperation(sess, SessionActiveOperation{
+		Kind: OpKindSubmission, SubmissionID: "sub-1", ThreadID: "thread-1", TurnID: "turn-1",
+	})
+	if !SuspendSubmissionForBackgroundWorkflow(sess, "sub-1", "thread-1") {
+		t.Fatal("SuspendSubmissionForBackgroundWorkflow() = false")
+	}
+	if !HasBackgroundWorkflow(sess) || !HasInFlightSubmission(sess) || HasForegroundActiveOperations(sess) {
+		t.Fatalf("background workflow state = %+v", sess)
+	}
+	if sess.ActiveTurnID != "" || sess.ActiveSubmissionID != "sub-1" || sess.Status != SessionStatusWaitingBackground.String() {
+		t.Fatalf("legacy fields/status after suspension = %+v", sess)
+	}
+	RefreshActiveStatus(sess)
+	if sess.Status != SessionStatusWaitingBackground.String() {
+		t.Fatalf("refreshed status = %q, want waiting_background", sess.Status)
+	}
+	UpsertActiveOperation(sess, SessionActiveOperation{
+		Kind: OpKindSubmission, SubmissionID: "sub-1", ThreadID: "thread-1", TurnID: "turn-2",
+	})
+	if HasBackgroundWorkflow(sess) || FindActiveOperationByTurn(sess, "turn-2") == nil || sess.ActiveTurnID != "turn-2" {
+		t.Fatalf("resumed workflow state = %+v", sess)
+	}
+}
+
 func TestBackendLineageIsScopedByBackend(t *testing.T) {
 	sess := &Session{ActiveThreadID: "codex-thread", ActiveThreadWorkspaceID: "ws", ActiveThreadApprovalPolicy: "never"}
 	StoreBackendThread(sess, "codex")

@@ -42,7 +42,8 @@ type Dependencies struct {
 
 	// StartSteerSubmission starts a steer submission that sends a message
 	// into the current conversation without creating a separate CLI turn.
-	StartSteerSubmission StartSubmissionFunc
+	StartSteerSubmission       StartSubmissionFunc
+	AddBackgroundWorkflowSteer func(sessionKey, threadID string, sub *domainsubmission.Submission) error
 
 	// ResolveInboundAttachments resolves attachments from inbound messages.
 	ResolveInboundAttachments ResolveInboundAttachmentsFunc
@@ -252,6 +253,18 @@ func (s *Service) TryClaudeReplyContinuation(msg *application.InboundMessage, li
 	if sub == nil {
 		return false, nil
 	}
+	if strings.TrimSpace(sess.ActiveTurnID) == "" && conversation.HasBackgroundWorkflow(sess) {
+		if s.Deps.AddBackgroundWorkflowSteer == nil {
+			return false, fmt.Errorf("Claude background workflow steer unavailable")
+		}
+		if err := s.Deps.AddBackgroundWorkflowSteer(sessionKey, strings.TrimSpace(sess.ActiveThreadID), sub); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	if strings.TrimSpace(sess.ActiveTurnID) == "" {
+		return false, nil
+	}
 	if err := s.StartClaudeContinuationSubmission(sessionKey, sub, false); err != nil {
 		return false, err
 	}
@@ -367,6 +380,12 @@ func (s *Service) StartClaudeContinuationSubmission(sessionKey string, sub *doma
 	sess := s.Deps.GetSession(sessionKey)
 	if sess == nil {
 		return fmt.Errorf("session %q missing", sessionKey)
+	}
+	if strings.TrimSpace(sess.ActiveTurnID) == "" && conversation.HasBackgroundWorkflow(sess) {
+		if s.Deps.AddBackgroundWorkflowSteer == nil {
+			return fmt.Errorf("Claude background workflow steer unavailable")
+		}
+		return s.Deps.AddBackgroundWorkflowSteer(sessionKey, strings.TrimSpace(sess.ActiveThreadID), sub)
 	}
 	ws := s.Deps.Workspace(sub.WorkspaceID)
 	if ws == nil {
