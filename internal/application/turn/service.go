@@ -33,6 +33,7 @@ type StateProvider interface {
 	SaveSession(sess *conversation.Session) error
 	MarkSubmissionRunning(id, threadID, turnID string) error
 	FinalizeSubmission(id, status string) error
+	UpdateSubmission(id string, mutate func(*domainsubmission.Submission)) error
 	UpdateSession(key string, mutate func(*conversation.Session)) (*conversation.Session, error)
 }
 
@@ -43,6 +44,7 @@ type RuntimeStateProvider interface {
 	BindTurnSubmission(threadID, turnID, sessionKey, submissionID string)
 	MarkTurnStartedAt(turnID string, startedAt time.Time)
 	ClearPendingTurnBindingForSubmission(threadID, submissionID string)
+	ClearTurnBinding(turnID string)
 	TurnFinalFooterLines(turnID string, completedAt time.Time) []string
 }
 
@@ -147,6 +149,51 @@ type DiagnosticsProvider interface {
 type Service struct{ deps Dependencies }
 
 func NewService(deps Dependencies) Service { return Service{deps: deps} }
+
+// SuspendTurnForBackgroundTasks closes the completed Claude CLI turn while
+// keeping its user submission active until the background workflow is joined.
+func (w Service) SuspendTurnForBackgroundTasks(threadID, turnID string) bool {
+	threadID, turnID = strings.TrimSpace(threadID), strings.TrimSpace(turnID)
+	if threadID == "" || turnID == "" {
+		return false
+	}
+	sessionKey, sub := w.deps.Queue.FindSubmissionByTurn(threadID, turnID)
+	if sub == nil || sub.Finalized {
+		return false
+	}
+	if err := w.deps.State.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) {
+		if current == nil || current.Finalized {
+			return
+		}
+		current.Status = domainsubmission.SubmissionStatusWaitingBackground.String()
+		current.TurnID = ""
+		current.ThreadID = threadID
+	}); err != nil {
+		slog.Error("suspend background workflow submission update failed", "submission_id", sub.ID, "turn_id", turnID, "error", err)
+		return false
+	}
+	suspended := false
+	updated, err := w.deps.State.UpdateSession(sessionKey, func(sess *conversation.Session) {
+		suspended = conversation.SuspendSubmissionForBackgroundWorkflow(sess, sub.ID, threadID)
+	})
+	if err != nil || !suspended || updated == nil || !conversation.HasBackgroundWorkflow(updated) {
+		_ = w.deps.State.UpdateSubmission(sub.ID, func(current *domainsubmission.Submission) {
+			if current == nil || current.Finalized {
+				return
+			}
+			current.Status = domainsubmission.SubmissionStatusRunning.String()
+			current.TurnID = turnID
+		})
+		if err != nil {
+			slog.Error("suspend background workflow session update failed", "submission_id", sub.ID, "turn_id", turnID, "error", err)
+		}
+		return false
+	}
+	w.deps.Streams.FlushTurnStream(w.deps.Runtime.Context(), threadID, turnID)
+	w.deps.Bindings.ClearPendingTurnBindingForSubmission(threadID, sub.ID)
+	w.deps.Bindings.ClearTurnBinding(turnID)
+	return true
+}
 
 // ---------------------------------------------------------------------------
 // Helpers

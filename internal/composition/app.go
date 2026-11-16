@@ -854,6 +854,7 @@ func NewFrontend(scope FrontendScope) (*feishuapp.Frontend, error) {
 		BackendFailure: bindings.BackendFailure, Usage: bindings.Usage,
 		TurnMetadata: bindings.TurnMetadata, ConversationQuery: bindings.ConversationQuery,
 		Conversations: bindings.Conversations,
+		Submissions:   bindings.Submissions, AsyncRunner: asyncRunner,
 	}
 	feishuapp.InstallFeishuPolicies(feishuapp.FeishuPolicyInputs{
 		Client: feishuClient, GroupMessages: bindings.GroupMessages, Context: frontend.Context,

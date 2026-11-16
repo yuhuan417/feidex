@@ -3,6 +3,7 @@ package conversation
 import (
 	"feidex/internal/domain/conversation"
 	"feidex/internal/domain/interaction"
+	domainsubmission "feidex/internal/domain/submission"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,8 @@ import (
 type StartupRepository interface {
 	Sessions() []*conversation.Session
 	SaveSession(*conversation.Session) error
+	Submission(string) *domainsubmission.Submission
+	FinalizeSubmission(string, string) error
 	PendingRequests() []*interaction.PendingRequest
 	UpdatePending(string, func(*interaction.PendingRequest)) error
 }
@@ -28,6 +31,16 @@ func (s StartupState) Reset() error {
 		}
 		if strings.TrimSpace(sess.WorkspaceID) == "" {
 			sess.WorkspaceID = s.DefaultWorkspaceID()
+		}
+		for _, op := range sess.ActiveOperations {
+			if strings.TrimSpace(op.Kind) != conversation.OpKindBackgroundWorkflow || strings.TrimSpace(op.SubmissionID) == "" {
+				continue
+			}
+			if sub := s.Repository.Submission(op.SubmissionID); sub != nil && !sub.Finalized {
+				if err := s.Repository.FinalizeSubmission(sub.ID, domainsubmission.SubmissionStatusInterrupted.String()); err != nil {
+					return fmt.Errorf("interrupt startup background workflow %s: %w", sub.ID, err)
+				}
+			}
 		}
 		conversation.ResetActiveOperations(sess)
 		sess.Queue, sess.StagedImages = nil, nil

@@ -13,6 +13,7 @@ import (
 	domainmodelconfig "feidex/internal/domain/modelconfig"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +63,7 @@ type SessionState struct {
 	BackgroundTasks             map[string]*BackgroundTaskState
 	PendingBackgroundAgentCount int
 	PendingWorkflowCount        int
+	BackgroundWorkflow          *BackgroundWorkflowState
 	LastTurnDurationMs          int64
 	LastTurnBudgetTokens        int
 	LastTurnBudgetLimit         int
@@ -76,6 +78,7 @@ type SessionState struct {
 // the delivery fields needed after turn completion.
 type BackgroundTaskTarget struct {
 	SessionKey       string
+	SubmissionID     string
 	WorkspaceID      string
 	ChatID           string
 	TriggerMessageID string
@@ -93,9 +96,26 @@ type BackgroundTaskTarget struct {
 // BackgroundTaskState tracks one background task until its completion
 // notification is delivered.
 type BackgroundTaskState struct {
-	Target   BackgroundTaskTarget
-	Notified bool
-	Live     bool
+	Target                 BackgroundTaskTarget
+	Completion             *claudecli.BackgroundTaskEvent
+	Notified               bool
+	Live                   bool
+	ConsumedByContinuation bool
+}
+
+type BackgroundWorkflowState struct {
+	SubmissionID       string
+	ThreadID           string
+	TurnID             string
+	SteerSubmissionIDs []string
+	SteerInputs        []BackgroundWorkflowSteerInput
+	Waiting            bool
+	Continuing         bool
+}
+
+type BackgroundWorkflowSteerInput struct {
+	SubmissionID string
+	Text         string
 }
 
 // TurnState holds the runtime state for a single turn within a session.
@@ -158,11 +178,14 @@ func (t InteractionTarget) Detached() bool {
 }
 
 type LifecycleDeps struct {
-	BindClaudeSessionThread func(sessionKey, turnID, threadID string)
-	FinishTurn              func(threadID, turnID, status string)
-	FinishSteerSubmission   func(submissionID, status string)
-	FailClaudeSessionWork   func(sessionKey, threadID string, err error)
-	FailBackendActiveWork   func(backend, sessionKey, threadID, message string)
+	BindClaudeSessionThread       func(sessionKey, turnID, threadID string)
+	FinishTurn                    func(threadID, turnID, status string)
+	FinishSteerSubmission         func(submissionID, status string)
+	SuspendTurnForBackgroundTasks func(threadID, turnID string) bool
+	FailBackgroundWorkflow        func(sessionKey, threadID, submissionID, message string)
+	CancelBackgroundWorkflow      func(sessionKey, threadID, submissionID string)
+	FailClaudeSessionWork         func(sessionKey, threadID string, err error)
+	FailBackendActiveWork         func(backend, sessionKey, threadID, message string)
 }
 
 type TurnStreamDeps struct {
@@ -194,6 +217,7 @@ type DeliveryDeps struct {
 	SendFinalMessages              func(ctx context.Context, sub *domainsubmission.Submission, text string, footerLines []string, inThread bool, reuseMessageIDs []string) []appdelivery.SentReplyChunk
 	ReplyInThread                  func(sub *domainsubmission.Submission) bool
 	SendBackgroundTaskNotification func(context.Context, BackgroundTaskTarget, claudecli.BackgroundTaskEvent)
+	ContinueBackgroundWorkflow     func(context.Context, string, string, string, string) error
 }
 
 type InteractiveDeps struct {
@@ -214,11 +238,12 @@ type InteractiveDeps struct {
 }
 
 type LookupDeps struct {
-	FindSubmissionByTurn func(threadID, turnID string) (string, *domainsubmission.Submission)
-	GetSession           func(sessionKey string) *conversation.Session
-	SessionHasActiveOps  func(sess *conversation.Session) bool
-	NextLocalID          func(prefix string) (string, error)
-	WorkspaceCwd         func(workspaceID string) string
+	FindSubmissionByTurn    func(threadID, turnID string) (string, *domainsubmission.Submission)
+	GetSession              func(sessionKey string) *conversation.Session
+	SessionHasActiveOps     func(sess *conversation.Session) bool
+	SessionHasForegroundOps func(sess *conversation.Session) bool
+	NextLocalID             func(prefix string) (string, error)
+	WorkspaceCwd            func(workspaceID string) string
 }
 
 type PermissionDeps struct {
@@ -281,6 +306,63 @@ func (s *Service) FinishSteerSubmission(submissionID, status string) {
 	if s != nil && s.deps.Lifecycle.FinishSteerSubmission != nil {
 		s.deps.Lifecycle.FinishSteerSubmission(submissionID, status)
 	}
+}
+
+func (s *Service) SuspendTurnForBackgroundTasks(threadID, turnID string) bool {
+	return s != nil && s.deps.Lifecycle.SuspendTurnForBackgroundTasks != nil &&
+		s.deps.Lifecycle.SuspendTurnForBackgroundTasks(threadID, turnID)
+}
+
+func (s *Service) FailBackgroundWorkflow(sessionKey, threadID, submissionID, message string) {
+	if s != nil && s.deps.Lifecycle.FailBackgroundWorkflow != nil {
+		s.deps.Lifecycle.FailBackgroundWorkflow(sessionKey, threadID, submissionID, message)
+	}
+}
+
+func (s *Service) CancelBackgroundWorkflow(sessionKey, submissionID string) bool {
+	if s == nil || s.deps.Lifecycle.CancelBackgroundWorkflow == nil {
+		return false
+	}
+	s.mu.Lock()
+	state := s.sessions[strings.TrimSpace(sessionKey)]
+	s.mu.Unlock()
+	if state == nil {
+		return false
+	}
+	state.Mu.Lock()
+	workflow := state.BackgroundWorkflow
+	if workflow == nil || workflow.SubmissionID != strings.TrimSpace(submissionID) {
+		state.Mu.Unlock()
+		return false
+	}
+	threadID := strings.TrimSpace(workflow.ThreadID)
+	state.BackgroundWorkflow = nil
+	state.Mu.Unlock()
+	s.deps.Lifecycle.CancelBackgroundWorkflow(strings.TrimSpace(sessionKey), threadID, strings.TrimSpace(submissionID))
+	return true
+}
+
+func (s *Service) AddBackgroundWorkflowSteer(sessionKey, threadID string, sub *domainsubmission.Submission) bool {
+	if s == nil || sub == nil || strings.TrimSpace(sub.ID) == "" || strings.TrimSpace(sub.InputText) == "" {
+		return false
+	}
+	s.mu.Lock()
+	state := s.sessions[strings.TrimSpace(sessionKey)]
+	s.mu.Unlock()
+	if state == nil {
+		return false
+	}
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
+	workflow := state.BackgroundWorkflow
+	if workflow == nil || !workflow.Waiting || workflow.Continuing || strings.TrimSpace(workflow.ThreadID) != strings.TrimSpace(threadID) {
+		return false
+	}
+	workflow.SteerSubmissionIDs = append(workflow.SteerSubmissionIDs, strings.TrimSpace(sub.ID))
+	workflow.SteerInputs = append(workflow.SteerInputs, BackgroundWorkflowSteerInput{
+		SubmissionID: strings.TrimSpace(sub.ID), Text: strings.TrimSpace(sub.InputText),
+	})
+	return true
 }
 
 func (s *Service) FailClaudeSessionWork(sessionKey, threadID string, err error) {
@@ -400,6 +482,13 @@ func (s *Service) SendBackgroundTaskNotification(ctx context.Context, target Bac
 	}
 }
 
+func (s *Service) ContinueBackgroundWorkflow(ctx context.Context, sessionKey, threadID, submissionID, prompt string) error {
+	if s == nil || s.deps.Delivery.ContinueBackgroundWorkflow == nil {
+		return fmt.Errorf("Claude background workflow continuation unavailable")
+	}
+	return s.deps.Delivery.ContinueBackgroundWorkflow(ctx, sessionKey, threadID, submissionID, prompt)
+}
+
 func (s *Service) SendClaudeApprovalCard(requestID, sessionKey string, sub *domainsubmission.Submission, presentation appapproval.Presentation) error {
 	if s == nil || s.deps.Interactive.SendClaudeApprovalCard == nil {
 		return fmt.Errorf("approval card delivery unavailable")
@@ -447,6 +536,13 @@ func (s *Service) SessionHasActiveOps(sess *conversation.Session) bool {
 		return false
 	}
 	return s.deps.Lookup.SessionHasActiveOps(sess)
+}
+
+func (s *Service) SessionHasForegroundOps(sess *conversation.Session) bool {
+	if s == nil || s.deps.Lookup.SessionHasForegroundOps == nil {
+		return s.SessionHasActiveOps(sess)
+	}
+	return s.deps.Lookup.SessionHasForegroundOps(sess)
 }
 
 func (s *Service) NextLocalID(prefix string) (string, error) {
@@ -1301,6 +1397,7 @@ func (s *Service) HandleBackgroundTaskEvent(state *SessionState, event claudecli
 		s.updateBackgroundTask(state, event)
 	case "task_notification":
 		s.notifyBackgroundTaskCompleted(state, event)
+		s.continueBackgroundWorkflowIfReady(state)
 	}
 }
 
@@ -1397,6 +1494,7 @@ func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudec
 	}
 	if turnID != "" {
 		if _, sub := s.FindSubmissionByTurn(threadID, turnID); sub != nil {
+			target.SubmissionID = strings.TrimSpace(sub.ID)
 			target.WorkspaceID = strings.TrimSpace(sub.WorkspaceID)
 			target.ChatID = strings.TrimSpace(sub.ChatID)
 			target.TriggerMessageID = strings.TrimSpace(sub.TriggerMessageID)
@@ -1437,6 +1535,8 @@ func (s *Service) recordBackgroundTaskStarted(state *SessionState, event claudec
 	task.Target = target
 	task.Live = true
 	task.Notified = false
+	task.Completion = nil
+	task.ConsumedByContinuation = false
 	state.Mu.Unlock()
 }
 
@@ -1469,6 +1569,8 @@ func (s *Service) notifyBackgroundTaskCompleted(state *SessionState, event claud
 		return
 	}
 	task.Notified = true
+	completion := event
+	task.Completion = &completion
 	if event.IsBackgrounded {
 		task.Target.IsBackgrounded = true
 	}
@@ -1479,6 +1581,113 @@ func (s *Service) notifyBackgroundTaskCompleted(state *SessionState, event claud
 		event.Description = target.Description
 	}
 	s.SendBackgroundTaskNotification(s.context(), target, event)
+}
+
+func (s *Service) continueBackgroundWorkflowIfReady(state *SessionState) {
+	if state == nil {
+		return
+	}
+	state.Mu.Lock()
+	workflow := state.BackgroundWorkflow
+	if workflow == nil || !workflow.Waiting || workflow.Continuing {
+		state.Mu.Unlock()
+		return
+	}
+	var pending int
+	var completed []claudecli.BackgroundTaskEvent
+	var consumed []*BackgroundTaskState
+	for _, task := range state.BackgroundTasks {
+		if task == nil || task.Target.SubmissionID != workflow.SubmissionID || !task.Target.IsBackgrounded {
+			continue
+		}
+		if !task.Notified {
+			pending++
+			continue
+		}
+		if task.Completion != nil && !task.ConsumedByContinuation {
+			completed = append(completed, *task.Completion)
+			consumed = append(consumed, task)
+		}
+	}
+	if pending != 0 {
+		state.Mu.Unlock()
+		return
+	}
+	for _, task := range consumed {
+		task.ConsumedByContinuation = true
+	}
+	workflow.Continuing = true
+	sessionKey := strings.TrimSpace(state.SessionKey)
+	threadID := strings.TrimSpace(workflow.ThreadID)
+	submissionID := strings.TrimSpace(workflow.SubmissionID)
+	steerInputs := append([]BackgroundWorkflowSteerInput(nil), workflow.SteerInputs...)
+	state.Mu.Unlock()
+	sort.Slice(completed, func(i, j int) bool { return completed[i].TaskID < completed[j].TaskID })
+
+	prompt := backgroundWorkflowContinuationPrompt(completed, steerInputs)
+	if err := s.ContinueBackgroundWorkflow(s.context(), sessionKey, threadID, submissionID, prompt); err != nil {
+		slog.Error("Claude background workflow continuation failed",
+			"session_key", sessionKey,
+			"thread_id", threadID,
+			"submission_id", submissionID,
+			"error", err,
+		)
+		s.FailBackgroundWorkflow(sessionKey, threadID, submissionID, err.Error())
+		state.Mu.Lock()
+		if state.BackgroundWorkflow == workflow {
+			state.BackgroundWorkflow = nil
+		}
+		state.Mu.Unlock()
+		return
+	}
+	state.Mu.Lock()
+	if state.BackgroundWorkflow == workflow {
+		workflow.Waiting = false
+		workflow.Continuing = false
+	}
+	state.Mu.Unlock()
+}
+
+func (s *Service) hasPendingBackgroundTasks(state *SessionState, submissionID string) bool {
+	if state == nil || strings.TrimSpace(submissionID) == "" {
+		return false
+	}
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
+	for _, task := range state.BackgroundTasks {
+		if task != nil && strings.TrimSpace(task.Target.SubmissionID) == strings.TrimSpace(submissionID) &&
+			task.Target.IsBackgrounded && !task.Notified {
+			return true
+		}
+	}
+	return false
+}
+
+func backgroundWorkflowContinuationPrompt(events []claudecli.BackgroundTaskEvent, steerInputs []BackgroundWorkflowSteerInput) string {
+	var lines []string
+	for i, event := range events {
+		status := strings.TrimSpace(event.Status)
+		if status == "" {
+			status = "completed"
+		}
+		lines = append(lines, fmt.Sprintf("%d. 状态：%s", i+1, status))
+		if description := strings.TrimSpace(event.Description); description != "" {
+			lines = append(lines, "   任务："+description)
+		}
+		if summary := strings.TrimSpace(event.Summary); summary != "" {
+			lines = append(lines, "   结果："+summary)
+		}
+		if outputFile := strings.TrimSpace(event.OutputFile); outputFile != "" {
+			lines = append(lines, "   输出文件："+outputFile)
+		}
+	}
+	if len(steerInputs) > 0 {
+		lines = append(lines, "用户在同一工作流继续期间补充的要求：")
+		for i, input := range steerInputs {
+			lines = append(lines, fmt.Sprintf("%d. %s", i+1, strings.TrimSpace(input.Text)))
+		}
+	}
+	return "上一轮启动的后台 Agent 任务已经结束。请读取并核对下列结果（必要时查看输出文件），继续完成用户原始请求。上一轮的答复不是整个工作流的最终答复。完成剩余工作后再给用户最终答复。\n\n" + strings.Join(lines, "\n")
 }
 
 func (s *Service) backgroundTask(state *SessionState, event claudecli.BackgroundTaskEvent) *BackgroundTaskState {
@@ -1699,6 +1908,7 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 	if turn == nil || strings.TrimSpace(turn.TurnID) == "" {
 		return
 	}
+	_, completedSubmission := s.FindSubmissionByTurn(threadID, turn.TurnID)
 
 	// Record usage
 	s.RecordClaudeThreadUsage(threadID, event.Usage)
@@ -1708,6 +1918,38 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 	}
 	if event.Error != nil {
 		s.RecordTurnError(threadID, turn.TurnID, event.Error.Error())
+	}
+	if event.Success {
+		if sessionKey, sub := s.FindSubmissionByTurn(threadID, turn.TurnID); sub != nil && s.hasPendingBackgroundTasks(state, sub.ID) {
+			if s.SuspendTurnForBackgroundTasks(threadID, turn.TurnID) {
+				state.Mu.Lock()
+				var steerSubmissionIDs []string
+				var steerInputs []BackgroundWorkflowSteerInput
+				if current := state.BackgroundWorkflow; current != nil && current.SubmissionID == strings.TrimSpace(sub.ID) {
+					steerSubmissionIDs = append(steerSubmissionIDs, current.SteerSubmissionIDs...)
+					steerInputs = append(steerInputs, current.SteerInputs...)
+				}
+				state.BackgroundWorkflow = &BackgroundWorkflowState{
+					SubmissionID:       strings.TrimSpace(sub.ID),
+					ThreadID:           threadID,
+					TurnID:             strings.TrimSpace(turn.TurnID),
+					SteerSubmissionIDs: steerSubmissionIDs,
+					SteerInputs:        steerInputs,
+					Waiting:            true,
+				}
+				if steerID := strings.TrimSpace(turn.SteerSubmissionID); steerID != "" {
+					state.BackgroundWorkflow.SteerSubmissionIDs = append(state.BackgroundWorkflow.SteerSubmissionIDs, steerID)
+				}
+				state.Mu.Unlock()
+				slog.Info("Claude foreground turn completed with background agents; keeping submission open",
+					"session_key", sessionKey,
+					"submission_id", sub.ID,
+					"thread_id", threadID,
+					"turn_id", turn.TurnID,
+				)
+				return
+			}
+		}
 	}
 
 	// Handle delivered text completion (both success and error with prior streamed text)
@@ -1796,11 +2038,21 @@ func (s *Service) handleTurnComplete(state *SessionState, event claudecli.TurnCo
 		}
 	}
 	s.FinishTurn(threadID, turn.TurnID, status)
+	state.Mu.Lock()
+	var completedSteerSubmissionIDs []string
+	if workflow := state.BackgroundWorkflow; workflow != nil && completedSubmission != nil && workflow.SubmissionID == strings.TrimSpace(completedSubmission.ID) {
+		completedSteerSubmissionIDs = append(completedSteerSubmissionIDs, workflow.SteerSubmissionIDs...)
+		state.BackgroundWorkflow = nil
+	}
+	state.Mu.Unlock()
 
 	// Finalize the steer submission if one was attached to this turn.
 	// The steer message was processed as part of this conversation round,
 	// so its submission completes together with the turn.
 	if steerID := strings.TrimSpace(turn.SteerSubmissionID); steerID != "" {
+		s.FinishSteerSubmission(steerID, status)
+	}
+	for _, steerID := range completedSteerSubmissionIDs {
 		s.FinishSteerSubmission(steerID, status)
 	}
 }

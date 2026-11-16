@@ -5,11 +5,12 @@ import "strings"
 type SessionStatus string
 
 const (
-	SessionStatusIdle           SessionStatus = "idle"
-	SessionStatusQueued         SessionStatus = "queued"
-	SessionStatusTurnStarting   SessionStatus = "turn_starting"
-	SessionStatusTurnInProgress SessionStatus = "turn_in_progress"
-	SessionStatusCompacting     SessionStatus = "compacting"
+	SessionStatusIdle              SessionStatus = "idle"
+	SessionStatusQueued            SessionStatus = "queued"
+	SessionStatusTurnStarting      SessionStatus = "turn_starting"
+	SessionStatusTurnInProgress    SessionStatus = "turn_in_progress"
+	SessionStatusWaitingBackground SessionStatus = "waiting_background"
+	SessionStatusCompacting        SessionStatus = "compacting"
 )
 
 func (s SessionStatus) String() string {
@@ -29,6 +30,8 @@ func NormalizeSessionStatus(value string) SessionStatus {
 		return SessionStatusTurnStarting
 	case SessionStatusTurnInProgress.String():
 		return SessionStatusTurnInProgress
+	case SessionStatusWaitingBackground.String():
+		return SessionStatusWaitingBackground
 	case SessionStatusCompacting.String():
 		return SessionStatusCompacting
 	default:

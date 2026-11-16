@@ -2,6 +2,7 @@ package clauderuntime
 
 import (
 	"context"
+	appdelivery "feidex/internal/adapter/feishu/delivery"
 	"feidex/internal/domain/conversation"
 	domainsubmission "feidex/internal/domain/submission"
 	"strings"
@@ -321,6 +322,124 @@ func TestBackgroundTaskNotificationStillDeliversAfterTurnDuration(t *testing.T) 
 	svc.HandleBackgroundTaskEvent(runtimeState, claudecli.BackgroundTaskEvent{Subtype: "task_notification", TaskID: "task-1", Status: "completed", IsBackgrounded: true})
 	if delivered != 1 {
 		t.Fatalf("notification count = %d, want 1", delivered)
+	}
+}
+
+func TestSuccessfulTurnWaitsForBackgroundAgentThenRequestsContinuation(t *testing.T) {
+	var (
+		finishCalls                                                             int
+		finalCalls                                                              int
+		continueCalls                                                           int
+		continuedSession, continuedThread, continuedSubmission, continuedPrompt string
+	)
+	svc := NewService(Deps{
+		Lifecycle: LifecycleDeps{
+			SuspendTurnForBackgroundTasks: func(threadID, turnID string) bool { return threadID == "thread-1" && turnID == "turn-1" },
+			FinishTurn:                    func(string, string, string) { finishCalls++ },
+		},
+		Delivery: DeliveryDeps{
+			SendFinalMessages: func(context.Context, *domainsubmission.Submission, string, []string, bool, []string) []appdelivery.SentReplyChunk {
+				finalCalls++
+				return nil
+			},
+			ContinueBackgroundWorkflow: func(_ context.Context, sessionKey, threadID, submissionID, prompt string) error {
+				continueCalls++
+				continuedSession, continuedThread, continuedSubmission, continuedPrompt = sessionKey, threadID, submissionID, prompt
+				return nil
+			},
+		},
+		Lookup: LookupDeps{
+			FindSubmissionByTurn: func(threadID, turnID string) (string, *domainsubmission.Submission) {
+				if threadID != "thread-1" || turnID != "turn-1" {
+					return "", nil
+				}
+				return "session-1", &domainsubmission.Submission{ID: "sub-1", SessionKey: "session-1"}
+			},
+		},
+	})
+	state := &SessionState{
+		SessionKey: "session-1", SessionID: "thread-1", CurrentTurnNumber: 1,
+		Turns: map[int]*TurnState{1: {TurnNumber: 1, TurnID: "turn-1"}},
+		BackgroundTasks: map[string]*BackgroundTaskState{
+			"task-1": {Target: BackgroundTaskTarget{SubmissionID: "sub-1", TaskID: "task-1", Description: "inspect tests", IsBackgrounded: true}, Live: true},
+			"task-2": {Target: BackgroundTaskTarget{SubmissionID: "sub-1", TaskID: "task-2", Description: "inspect runtime", IsBackgrounded: true}, Live: true},
+		},
+	}
+	svc.mu.Lock()
+	svc.sessions["session-1"] = state
+	svc.mu.Unlock()
+
+	svc.handleTurnComplete(state, claudecli.TurnCompleteEvent{TurnNumber: 1, Success: true})
+	if finishCalls != 0 || finalCalls != 0 {
+		t.Fatalf("premature completion: finish=%d final=%d", finishCalls, finalCalls)
+	}
+	state.Mu.Lock()
+	waiting := state.BackgroundWorkflow
+	state.Mu.Unlock()
+	if waiting == nil || !waiting.Waiting || waiting.SubmissionID != "sub-1" {
+		t.Fatalf("background workflow = %#v, want waiting sub-1", waiting)
+	}
+	if !svc.AddBackgroundWorkflowSteer("session-1", "thread-1", &domainsubmission.Submission{ID: "sub-steer", InputText: "also check the failure path"}) {
+		t.Fatal("AddBackgroundWorkflowSteer() = false")
+	}
+
+	svc.HandleBackgroundTaskEvent(state, claudecli.BackgroundTaskEvent{
+		Subtype: "task_notification", TaskID: "task-1", Status: "completed", Summary: "found the regression", IsBackgrounded: true,
+	})
+	if continueCalls != 0 {
+		t.Fatalf("continuation ran with a background task still pending: %d calls", continueCalls)
+	}
+	svc.HandleBackgroundTaskEvent(state, claudecli.BackgroundTaskEvent{
+		Subtype: "task_notification", TaskID: "task-2", Status: "completed", Summary: "found the runtime path", IsBackgrounded: true,
+	})
+	svc.HandleBackgroundTaskEvent(state, claudecli.BackgroundTaskEvent{
+		Subtype: "task_notification", TaskID: "task-1", Status: "completed", IsBackgrounded: true,
+	})
+	if continueCalls != 1 {
+		t.Fatalf("continuation calls = %d, want 1", continueCalls)
+	}
+	if continuedSession != "session-1" || continuedThread != "thread-1" || continuedSubmission != "sub-1" ||
+		!strings.Contains(continuedPrompt, "found the regression") || !strings.Contains(continuedPrompt, "also check the failure path") {
+		t.Fatalf("continuation request = %q/%q/%q prompt=%q", continuedSession, continuedThread, continuedSubmission, continuedPrompt)
+	}
+}
+
+func TestCancelBackgroundWorkflowPreventsLateNotificationContinuation(t *testing.T) {
+	var cancelled int
+	var continued int
+	svc := NewService(Deps{
+		Lifecycle: LifecycleDeps{
+			CancelBackgroundWorkflow: func(sessionKey, threadID, submissionID string) {
+				if sessionKey == "session-1" && threadID == "thread-1" && submissionID == "sub-1" {
+					cancelled++
+				}
+			},
+		},
+		Delivery: DeliveryDeps{
+			ContinueBackgroundWorkflow: func(context.Context, string, string, string, string) error {
+				continued++
+				return nil
+			},
+		},
+	})
+	state := &SessionState{
+		SessionKey: "session-1", SessionID: "thread-1",
+		BackgroundWorkflow: &BackgroundWorkflowState{SubmissionID: "sub-1", ThreadID: "thread-1", Waiting: true},
+		BackgroundTasks: map[string]*BackgroundTaskState{
+			"task-1": {Target: BackgroundTaskTarget{SubmissionID: "sub-1", TaskID: "task-1", IsBackgrounded: true}},
+		},
+	}
+	svc.mu.Lock()
+	svc.sessions["session-1"] = state
+	svc.mu.Unlock()
+	if !svc.CancelBackgroundWorkflow("session-1", "sub-1") || cancelled != 1 {
+		t.Fatalf("cancel result/callback = %v/%d", cancelled == 1, cancelled)
+	}
+	svc.HandleBackgroundTaskEvent(state, claudecli.BackgroundTaskEvent{
+		Subtype: "task_notification", TaskID: "task-1", Status: "completed", IsBackgrounded: true,
+	})
+	if continued != 0 {
+		t.Fatalf("late task notification scheduled %d continuations after cancel", continued)
 	}
 }
 

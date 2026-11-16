@@ -2,6 +2,7 @@ package feishuapp
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	retryview "feidex/internal/adapter/feishu/autoretry"
@@ -50,6 +51,26 @@ func (r conversationRuntimeControl) Interrupted(key string, sess *conversation.S
 }
 func (r conversationRuntimeControl) Interrupt(ctx context.Context, key string, sess *conversation.Session) error {
 	return interruptConversation(r.conversations, r.runtime, ctx, key, sess)
+}
+func (r conversationRuntimeControl) CancelBackgroundWorkflow(key string, sess *conversation.Session) bool {
+	if sess == nil {
+		return false
+	}
+	var submissionID string
+	for _, op := range sess.ActiveOperations {
+		if strings.TrimSpace(op.Kind) == conversation.OpKindBackgroundWorkflow {
+			submissionID = strings.TrimSpace(op.SubmissionID)
+			break
+		}
+	}
+	if submissionID == "" {
+		return false
+	}
+	core := r.runtime.currentBackend().runtime.currentClaudeCore()
+	canceller, ok := core.(interface {
+		CancelBackgroundWorkflow(string, string) bool
+	})
+	return ok && canceller.CancelBackgroundWorkflow(key, submissionID)
 }
 
 type ConversationControlInputs struct {

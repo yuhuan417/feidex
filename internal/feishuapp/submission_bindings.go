@@ -108,6 +108,12 @@ func (a claudeClientAdapter) StartTurn(ctx context.Context, sessionKey, threadID
 func (a claudeClientAdapter) StartSteerTurn(ctx context.Context, sessionKey, threadID, turnID, prompt, steerSubmissionID string) error {
 	return a.claude.StartSteerTurn(ctx, sessionKey, threadID, turnID, prompt, steerSubmissionID)
 }
+func (a claudeClientAdapter) AddBackgroundWorkflowSteer(sessionKey, threadID string, sub *domainsubmission.Submission) bool {
+	registrar, ok := a.claude.(interface {
+		AddBackgroundWorkflowSteer(sessionKey, threadID string, sub *domainsubmission.Submission) bool
+	})
+	return ok && registrar.AddBackgroundWorkflowSteer(sessionKey, threadID, sub)
+}
 
 // ---------------------------------------------------------------------------
 // Full adapter types for providers that need app access

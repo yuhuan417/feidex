@@ -25,6 +25,7 @@ type RuntimeControl interface {
 	Reconcile(string, *conversation.Session) *conversation.Session
 	Interrupted(string, *conversation.Session) *conversation.Session
 	Interrupt(context.Context, string, *conversation.Session) error
+	CancelBackgroundWorkflow(string, *conversation.Session) bool
 }
 type ConversationControl interface {
 	StartWorkspaceThread(string, *conversation.Session, *workspace.Workspace) (*conversation.ThreadBinding, error)
@@ -170,6 +171,21 @@ func (s Controls) Stop(key string) (StopResult, error) {
 	}
 	activeKey, sess = s.target(keys)
 	result.CancelledRetry = s.cancelRetries(keys, activeKey, sess) || result.CancelledRetry
+	if !activeInterrupt(sess) {
+		for _, candidate := range keys {
+			waiting := s.Repository.Session(candidate)
+			if waiting != nil && conversation.HasBackgroundWorkflow(waiting) {
+				activeKey, sess = candidate, waiting
+				break
+			}
+		}
+	}
+	if !activeInterrupt(sess) && sess != nil && conversation.HasBackgroundWorkflow(sess) {
+		if s.Runtime.CancelBackgroundWorkflow(activeKey, sess) {
+			result.Interrupted = true
+			return result, nil
+		}
+	}
 	if !activeInterrupt(sess) {
 		if result.Discarded == 0 && !result.CancelledRetry {
 			return result, fmt.Errorf("当前没有运行中的任务")

@@ -395,6 +395,12 @@ Claude 的交互请求（`can_use_tool`、`AskUserQuestion`、`ExitPlanMode`）�
   - 实测同时复现了本项目的原始问题：prompt 顺序为 `system/task_started` → `result`（主 turn 正常结束）→ `can_use_tool`（后台 subagent 才来要权限），即后台 Agent 的审批天然晚于父 turn 结束。
   - 探针：`internal/claudecli/probe_live_test.go`（`FEIDEX_CLAUDE_RUN_TOKEN_TESTS=1` 手动触发，默认跳过）。
 - 回答路径不依赖活跃 submission：`ResolveApproval` / `ResolveUserInput` / `ResolvePlanFeedback` 只依赖进程内的 `PendingInteraction`，`ResumeSubmissionAfterRequest` 找不到 submission 时是 no-op。
+- **`result` 与父 submission 的完成是两层边界**：Claude `result` 只完成当前原生 CLI turn。若该 turn 为同一 submission 启动了仍未完成的后台 Agent，Feidex 将 submission 保持为 `waiting_background`，不发送最终答复、不 finalize，也不启动该 session 的排队输入。所有关联 Agent 收到 `task_notification` 后，Feidex 在同一 Claude session 启动一个新 CLI turn，并把 task summary / output file 作为 continuation 输入；只有续跑 turn 才能完成原 submission。没有关联到活跃 submission 的恢复/ambient Agent 仍只发送独立完成卡，不创建父 workflow。
+  - continuation 是新 Claude CLI turn，不声称在已收到 `result` 的原生 turn 内恢复；Feidex 的父 submission 跨多个 CLI turn 保持未完成。
+  - 回复当前 workflow 消息的补充要求始终属于该 workflow：原生 turn 仍活动时走 Claude steer；后台等待间隙先记录到 workflow continuation 输入，和 Agent 结果一起交给后续 turn。直接输入消息，以及回复已结束 workflow 的消息，走普通 queue。
+  - `/stop` 可在等待期把父 submission 标记为 interrupted 并阻止迟到的 task notification 自动续跑；后台 Agent 自身仍由 Claude CLI 管理。
+  - Feidex 整体重启后无法可靠恢复进程内 task map；启动恢复会把持久化的 `waiting_background` submission 标为 interrupted，避免父 workflow 永久悬挂。
+  - 排队准入仍把 joined workflow 当作 in-flight submission。模型设置只保存为 desired 状态；续跑开始时、所有关联 Agent 已结束后，才按设置边界应用，因此初始化配置导致的进程重建不会杀掉仍在执行的 Agent。
 - **模型配置以前台轮次结束为应用边界**：新一轮启动前，前台活动操作、turn startup、compaction 和未完成的前台 turn 仍阻塞配置应用；后台 Agent/workflow、后台计数与 detached pending 均不阻塞。内置模型/effort 的 live control 不清理后台任务或交互；自定义模型、辅助模型或恢复默认 effort 等初始化配置需要重建进程时，恢复同一个会话 ID，并按真实进程退出规则使旧交互失效。切模型不要求先 `/stop` 后台任务。
 
 ## 对现有代码结构的影响

@@ -50,6 +50,9 @@ func ContinuationPorts(
 	deps.StartSteerSubmission = func(sessionKey string, sess *conversation.Session, sub *domainsubmission.Submission, ws *config.Workspace, notifyFailure bool) error {
 		return queue.StartNextClaudeSubmissionWithFailureNoticeEx(sessionKey, sess, sub, ws, notifyFailure, true)
 	}
+	deps.AddBackgroundWorkflowSteer = func(sessionKey, threadID string, sub *domainsubmission.Submission) error {
+		return queue.AddClaudeBackgroundWorkflowSteer(sessionKey, threadID, sub)
+	}
 	deps.ResolveInboundAttachments = func(msg *feishu.InboundMessage, workspaceID, sessionKey string) ([]domainsubmission.SubmissionAttachment, error) {
 		return resolveInboundAttachments(cfg, contextFn, client, msg, workspaceID, sessionKey)
 	}

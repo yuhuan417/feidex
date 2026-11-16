@@ -65,7 +65,7 @@ func TestModelConfigSafeBoundaryOnlyBlocksForegroundWork(t *testing.T) {
 		{"turn", true}, {"current_turn", true}, {"interrupt", true}, {"foreground_approval", true},
 		{"app_operation", true}, {"compacting", true}, {"turn_starting", true},
 		{"detached_approval", false}, {"background", false}, {"notified_background", false},
-		{"workflow", false}, {"background_count", false}, {"stale_counts", false}, {"idle", false},
+		{"workflow", false}, {"joined_background_workflow", false}, {"background_count", false}, {"stale_counts", false}, {"idle", false},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			current := &SessionState{SessionKey: "target", Turns: map[int]*TurnState{}, BackgroundTasks: map[string]*BackgroundTaskState{}}
@@ -88,6 +88,11 @@ func TestModelConfigSafeBoundaryOnlyBlocksForegroundWork(t *testing.T) {
 				current.BackgroundTasks["task"] = &BackgroundTaskState{Live: true, Notified: true}
 			case "workflow":
 				current.PendingWorkflowCount = 1
+			case "joined_background_workflow":
+				sess := &conversation.Session{Status: conversation.SessionStatusWaitingBackground.String(), ActiveOperations: []conversation.SessionActiveOperation{{Kind: conversation.OpKindBackgroundWorkflow, SubmissionID: "sub"}}}
+				s.deps.Lookup.GetSession = func(string) *conversation.Session { return sess }
+				s.deps.Lookup.SessionHasActiveOps = conversation.HasActiveOperations
+				s.deps.Lookup.SessionHasForegroundOps = conversation.HasForegroundActiveOperations
 			case "background_count":
 				current.PendingBackgroundAgentCount = 1
 			case "stale_counts":

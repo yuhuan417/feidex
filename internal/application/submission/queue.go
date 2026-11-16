@@ -311,10 +311,13 @@ func (s SubmissionQueueService) EnqueueSubmission(msg *application.InboundMessag
 	autoRetryBlocked := s.hasAutoRetryWorkAhead(appState, sess)
 	serialBindingBlocked := s.hasSerialBindingWorkAhead(appState, sess)
 	allowsAdditional := a.InflightAllowsAdditional(mode) && serialGroupExecutionKey(sess) == ""
-	shouldAttemptStart := !autoRetryBlocked && !serialBindingBlocked && (!hasInFlight || allowsAdditional)
-	willWaitInQueue := queueLenBefore > 0 || autoRetryBlocked || serialBindingBlocked || (hasInFlight && !allowsAdditional)
+	backgroundWorkflowBlocked := conversation.HasBackgroundWorkflow(sess)
+	shouldAttemptStart := !backgroundWorkflowBlocked && !autoRetryBlocked && !serialBindingBlocked && (!hasInFlight || allowsAdditional)
+	willWaitInQueue := queueLenBefore > 0 || backgroundWorkflowBlocked || autoRetryBlocked || serialBindingBlocked || (hasInFlight && !allowsAdditional)
 	if willWaitInQueue {
-		sess.Status = conversation.SessionStatusQueued.String()
+		if !backgroundWorkflowBlocked {
+			sess.Status = conversation.SessionStatusQueued.String()
+		}
 	}
 	slog.Debug("submission enqueue begin",
 		"session_key", sessionKey,
@@ -575,7 +578,7 @@ func (s SubmissionQueueService) StartNextSubmissionWithFailureNotice(sessionKey 
 				nextMode = a.ConfiguredInflightMode()
 			}
 		}
-		if conversation.HasInFlightSubmission(sess) && !a.InflightAllowsAdditional(nextMode) {
+		if conversation.HasBackgroundWorkflow(sess) || (conversation.HasInFlightSubmission(sess) && !a.InflightAllowsAdditional(nextMode)) {
 			slog.Debug("startNextSubmission skipped",
 				"session_key", sessionKey,
 				"has_session", true,

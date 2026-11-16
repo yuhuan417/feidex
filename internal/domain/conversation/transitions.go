@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	OpKindSubmission = "submission"
-	OpKindTurn       = "turn"
+	OpKindSubmission         = "submission"
+	OpKindTurn               = "turn"
+	OpKindBackgroundWorkflow = "background_workflow"
 )
 
 func ClearThreadContext(sess *Session) {
@@ -286,6 +287,58 @@ func HasActiveOperations(sess *Session) bool {
 	return len(sess.ActiveOperations) > 0
 }
 
+// HasForegroundActiveOperations excludes workflows waiting only for detached
+// Claude background work. Those workflows still block new submissions.
+func HasForegroundActiveOperations(sess *Session) bool {
+	if sess == nil {
+		return false
+	}
+	EnsureActiveOperations(sess)
+	for _, op := range sess.ActiveOperations {
+		if strings.TrimSpace(op.Kind) != OpKindBackgroundWorkflow {
+			return true
+		}
+	}
+	return false
+}
+
+func HasBackgroundWorkflow(sess *Session) bool {
+	if sess == nil {
+		return false
+	}
+	EnsureActiveOperations(sess)
+	for _, op := range sess.ActiveOperations {
+		if strings.TrimSpace(op.Kind) == OpKindBackgroundWorkflow {
+			return true
+		}
+	}
+	return false
+}
+
+// SuspendSubmissionForBackgroundWorkflow keeps a submission active while
+// clearing the native turn binding that has already completed.
+func SuspendSubmissionForBackgroundWorkflow(sess *Session, submissionID, threadID string) bool {
+	if sess == nil {
+		return false
+	}
+	EnsureActiveOperations(sess)
+	submissionID = strings.TrimSpace(submissionID)
+	threadID = strings.TrimSpace(threadID)
+	for i := range sess.ActiveOperations {
+		op := &sess.ActiveOperations[i]
+		if submissionID == "" || strings.TrimSpace(op.SubmissionID) != submissionID {
+			continue
+		}
+		op.Kind = OpKindBackgroundWorkflow
+		op.ThreadID = firstNonEmpty(threadID, strings.TrimSpace(op.ThreadID))
+		op.TurnID = ""
+		SyncLegacyActiveFields(sess)
+		sess.Status = SessionStatusWaitingBackground.String()
+		return true
+	}
+	return false
+}
+
 func HasInFlightSubmission(sess *Session) bool {
 	if sess == nil {
 		return false
@@ -443,6 +496,25 @@ func FindActiveOperationByThread(sess *Session, threadID string) *SessionActiveO
 	for i := len(sess.ActiveOperations) - 1; i >= 0; i-- {
 		op := sess.ActiveOperations[i]
 		if strings.TrimSpace(op.ThreadID) == threadID {
+			cp := op
+			return &cp
+		}
+	}
+	return nil
+}
+
+func FindActiveOperationBySubmission(sess *Session, submissionID string) *SessionActiveOperation {
+	if sess == nil {
+		return nil
+	}
+	EnsureActiveOperations(sess)
+	submissionID = strings.TrimSpace(submissionID)
+	if submissionID == "" {
+		return nil
+	}
+	for i := len(sess.ActiveOperations) - 1; i >= 0; i-- {
+		op := sess.ActiveOperations[i]
+		if strings.TrimSpace(op.SubmissionID) == submissionID {
 			cp := op
 			return &cp
 		}
