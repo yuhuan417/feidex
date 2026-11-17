@@ -1,6 +1,6 @@
 # 架构与开发
 
-本文是当前代码基线的导航文档。工程契约（仓库结构、构建产物、缓存和变更边界）以 [DEVELOPER.md](../DEVELOPER.md) 为准；Codex App Server 的协议约束见 [状态机审计](codex-app-server-state-machine-audit.md)；最终目标架构和完成判定见 [长期架构目标与边界](architecture-refactor-proposal.md)。
+本文是当前代码基线的导航文档。工程契约（仓库结构、构建产物、缓存和变更边界）以 [DEVELOPER.md](../DEVELOPER.md) 为准；Codex App Server 的协议约束见 [状态机审计](codex-app-server-state-machine-audit.md)；backend 设计见 [Claude CLI Backend Design](claude-cli-backend-design.md) 和 [DSH Backend Design](dsh-backend-design.md)；最终目标架构和完成判定见 [长期架构目标与边界](architecture-refactor-proposal.md)。
 
 ## 目录结构
 
