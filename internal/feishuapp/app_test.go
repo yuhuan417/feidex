@@ -3640,6 +3640,51 @@ func TestRenderThreadsCardShowsThreadActionsAndShortIDsForActiveCodexThread(t *t
 	}
 }
 
+func TestRenderThreadsCardUsesCurrentGroupBindingWorkspace(t *testing.T) {
+	a, _, fc := newTestApp(t)
+	a.cfg.Workspaces = append(a.cfg.Workspaces, config.Workspace{ID: "alt", Cwd: t.TempDir(), ApprovalPolicy: "never", SandboxMode: "read-only"})
+	msg := &feishu.InboundMessage{ChatID: "chat-1", ChatType: "group", UserID: "user-1"}
+	sessionKey := a.configView().makeSessionKey(msg)
+	if err := a.State().SaveAgentBinding(&state.AgentBinding{
+		ID:          defaultBindingID(a.FrontendID(), "group", msg.ChatID),
+		FrontendID:  a.FrontendID(),
+		ChatType:    "group",
+		ChatID:      msg.ChatID,
+		WorkspaceID: "alt",
+		Status:      state.AgentBindingStatusActive.String(),
+	}); err != nil {
+		t.Fatalf("SaveAgentBinding() error = %v", err)
+	}
+	if err := a.store.UpsertSession(&conversation.Session{
+		Key: sessionKey, ChatType: "group", ChatID: msg.ChatID,
+		WorkspaceID: a.cfg.Workspaces[0].ID,
+	}); err != nil {
+		t.Fatalf("UpsertSession() error = %v", err)
+	}
+
+	var queriedCWD string
+	fc.callHook = func(_ context.Context, method string, params any, out any) error {
+		if method != "thread/list" {
+			t.Fatalf("unexpected method: %s", method)
+		}
+		if query, ok := params.(map[string]any); ok {
+			if cwd, ok := query["cwd"].(string); ok && queriedCWD == "" {
+				queriedCWD = cwd
+			}
+		}
+		result := out.(*codexrpc.ThreadListResult)
+		result.Data = []codexrpc.ThreadListEntry{{ID: "thread-alt", Cwd: a.cfg.Workspaces[1].Cwd}}
+		return nil
+	}
+
+	if _, err := renderThreadsCardForTest(a, sessionKey, false); err != nil {
+		t.Fatalf("renderThreadsCard() error = %v", err)
+	}
+	if queriedCWD != a.cfg.Workspaces[1].Cwd {
+		t.Fatalf("thread/list cwd = %q, want current group binding cwd %q", queriedCWD, a.cfg.Workspaces[1].Cwd)
+	}
+}
+
 func TestRenderThreadsCardExplainsMissingThreadActionsWithoutActiveCodexThread(t *testing.T) {
 	a, _, fc := newTestApp(t)
 	sessionKey := "feishu:chat:chat"

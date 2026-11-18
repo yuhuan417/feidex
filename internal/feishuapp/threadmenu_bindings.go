@@ -85,7 +85,10 @@ func BuildThreadMenuDependencies(inputs ThreadMenuInputs) appthreadmenu.Dependen
 		AppStateFn:         func() appthreadmenu.StateProvider { return state }, EffectiveSessionKeyFn: effectiveSessionKey,
 		ConversationBackendFn: func() appthreadmenu.ConversationBackendProvider {
 			return threadMenuConversationBackendAdapter{
-				threadCards:   threadCardInputs{Repository: state, Config: runtimeDeps.cfg, Backend: backend, Conversations: conversations},
+				threadCards: threadCardInputs{
+					Repository: state, Config: runtimeDeps.cfg, Backend: backend,
+					Conversations: conversations, WorkspaceSelection: workspaceSelection,
+				},
 				conversations: conversations, runtimeDeps: runtimeDeps,
 			}
 		},

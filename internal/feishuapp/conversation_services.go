@@ -8,6 +8,7 @@ import (
 	"feidex/internal/adapter/feishu/threadview"
 	appstate "feidex/internal/adapter/storage/json/scoped"
 	"feidex/internal/application/conversation"
+	workspaceapp "feidex/internal/application/workspace"
 	"feidex/internal/compositionkit"
 	"feidex/internal/config"
 	domainbackend "feidex/internal/domain/backend"
@@ -64,19 +65,28 @@ func ConversationPorts(inputs ConversationPortInputs) conversation.Dependencies 
 }
 
 type threadCardInputs struct {
-	Repository    *appstate.Store
-	Config        *config.Config
-	Backend       func() string
-	Conversations *conversation.Service
+	Repository         *appstate.Store
+	Config             *config.Config
+	Backend            func() string
+	Conversations      *conversation.Service
+	WorkspaceSelection workspaceapp.SelectionService
 }
 
 func renderThreadsCard(inputs threadCardInputs, key string, all bool) (map[string]any, error) {
 	sess := inputs.Repository.Session(key)
+	workspaceID := ""
+	// Group workspace selection is persisted on the current Bot binding. It
+	// intentionally does not rewrite an existing session until the next user
+	// input, so resolve it before falling back to the session snapshot here.
+	if selected := inputs.WorkspaceSelection.BindingWorkspace(key, sess); selected != "" {
+		workspaceID = selected
+	}
+	if workspaceID == "" && sess != nil {
+		workspaceID = strings.TrimSpace(sess.WorkspaceID)
+	}
 	ws := &inputs.Config.Workspaces[0]
-	if sess != nil {
-		if selected := config.FindWorkspace(inputs.Config, sess.WorkspaceID); selected != nil {
-			ws = selected
-		}
+	if selected := config.FindWorkspace(inputs.Config, workspaceID); selected != nil {
+		ws = selected
 	}
 	items, err := inputs.Conversations.ListWorkspaceThreads(key, ws, all)
 	if err != nil {

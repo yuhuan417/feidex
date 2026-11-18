@@ -817,6 +817,7 @@ func renderThreadsCardForTest(a *Frontend, key string, all bool) (map[string]any
 	backend := ConfiguredBackendBuilder(a.Config(), a.ConfigMu(), a.runtimeOwner.Backend, a.FrontendID(), a.frontendConfigIndex)
 	return renderThreadsCard(threadCardInputs{
 		Repository: a.State(), Config: a.Config(), Backend: backend, Conversations: a.bindings.Conversations,
+		WorkspaceSelection: a.bindings.WorkspaceSelection,
 	}, key, all)
 }
 
