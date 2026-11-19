@@ -4,7 +4,6 @@ import (
 	"context"
 
 	appstate "feidex/internal/adapter/storage/json/scoped"
-	"feidex/internal/application"
 	"feidex/internal/application/backendfailure"
 	"feidex/internal/application/backendmaintenance"
 	"feidex/internal/application/conversation"
@@ -30,7 +29,6 @@ type BackendRuntimeDeps struct {
 	frontendID string
 	runtime    runtimeView
 
-	dispatcher        application.Dispatcher
 	sessionActors     *frontendruntime.SessionActors
 	contextFn         func() context.Context
 	conversationQuery conversation.Query
@@ -62,9 +60,6 @@ func (a *Frontend) BackendRuntimeDeps() BackendRuntimeDeps {
 		contextFn:  a.Context,
 	}
 	if a.runtimeOwner != nil {
-		if a.runtimeOwner.Dispatcher != nil {
-			d.dispatcher = *a.runtimeOwner.Dispatcher
-		}
 		d.sessionActors = a.runtimeOwner.SessionActors
 	}
 	if a.bindings != nil {

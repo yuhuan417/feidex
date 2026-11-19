@@ -44,6 +44,7 @@
 - Plan 确认是 completed turn 之后的本地表单，TurnID 留空以便保留卡片；其创建、准入、失效与实现指令由 application Plan owner 处理。当前仍有工作或其他待处理交互时不创建确认，也不延后再弹出。
 - Review 表单状态由 application Review owner 处理，处理中的重复提交不得再次创建 submission。Git 查询和 backend 启动继续遵守快速 callback ack 与异步执行契约。
 - transport failure 是失去后端权威终态后的异常收口路径：session、submission、interaction 先原子提交，再刷新卡片与清理 runtime。普通 Codex `error` 通知仍只记录错误上下文，不能提前结束 turn。
+- Codex recovery、restart 和 upgrade 创建的新 client 必须把 notification/server request 交给当前 frontend runtime owner 的已组装 dispatcher；不能保留 composition 初始化前的零值 dispatcher 快照。`internal/feishuapp/codex_dispatch_rebuild_test.go` 覆盖提前构造 upgrade ports 后重建 client，验证审批 pending → replied → resolved、final item 卡片和 `turn/completed` 清理；SM-04、SM-09 的权威终点保持不变。
 
 ## 审计口径
 

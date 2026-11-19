@@ -85,7 +85,14 @@ func newInputDispatcher(inputs DispatcherInputs) application.Dispatcher {
 	})
 }
 func dispatchInput(d BackendRuntimeDeps, input application.Input) (application.Result, error) {
-	dispatcher := d.dispatcher
+	// Recovery and maintenance ports capture runtime dependencies before
+	// composition installs the dispatcher. Keep its single owner authoritative
+	// so clients rebuilt through those ports use the completed frontend graph.
+	owner := d.runtime.owner
+	if owner == nil || owner.Dispatcher == nil {
+		return application.Result{}, fmt.Errorf("frontend %q input dispatcher is not initialized", d.frontendID)
+	}
+	dispatcher := owner.Dispatcher
 	var result application.Result
 	var err error
 	if d.sessionActors == nil {
